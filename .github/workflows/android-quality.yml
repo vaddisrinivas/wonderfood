@@ -1,0 +1,41 @@
+name: Android Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  data-room:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Room unit tests
+        run: ./gradlew :core:data:testDebugUnitTest
+
+      - name: Run Room migration tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          script: ./gradlew :core:data:connectedDebugAndroidTest
+
+      - name: Archive Room schemas
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: room-schemas
+          path: core/data/schemas

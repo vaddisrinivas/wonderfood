@@ -13,11 +13,13 @@ object WonderFoodDatabaseFactory {
         name: String = DATABASE_NAME,
     ): WonderFoodDatabase =
         Room.databaseBuilder(context.applicationContext, WonderFoodDatabase::class.java, name)
+            .addMigrations(*WonderFoodMigrations.ALL)
             .addCallback(foreignKeyCallback)
             .build()
 
     fun createInMemory(context: Context): WonderFoodDatabase =
         Room.inMemoryDatabaseBuilder(context.applicationContext, WonderFoodDatabase::class.java)
+            .addMigrations(*WonderFoodMigrations.ALL)
             .addCallback(foreignKeyCallback)
             .build()
 

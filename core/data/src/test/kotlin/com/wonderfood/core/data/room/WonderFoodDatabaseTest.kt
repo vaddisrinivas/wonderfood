@@ -105,6 +105,19 @@ class WonderFoodDatabaseTest {
     }
 
     @Test
+    fun transactionRollsBackWhenLaterWriteViolatesConstraint() = runTest {
+        assertConstraintFails {
+            database.inTransaction {
+                dao.upsertPage(page("page-rollback", "Rollback test", PageKind.FOOD))
+                dao.insertFood(food("food-rollback", "missing-page", "Should not persist"))
+            }
+        }
+
+        assertEquals(null, dao.getPage("page-rollback"))
+        assertEquals(null, dao.getFood("food-rollback"))
+    }
+
+    @Test
     fun schemaHasExpectedTablesAndIndexes() {
         val tables = database.openHelper.readableDatabase.query(
             "SELECT name FROM sqlite_master WHERE type = 'table'",
