@@ -26,6 +26,8 @@ import com.wonderfood.app.data.categorizeFood
 import com.wonderfood.app.data.classifyStorageZone
 import com.wonderfood.app.health.HealthConnectGateway
 import com.wonderfood.app.health.HealthExportResult
+import com.wonderfood.app.integration.capture.FoodCaptureGateway
+import com.wonderfood.app.integration.capture.FoodCaptureStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +42,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val liteLlmInterpreter = LiteLlmFoodInterpreter()
     private val liteLlmSettings = LiteLlmSettings(appContext)
     private val health = HealthConnectGateway(appContext)
+    private val captureGateway = FoodCaptureGateway(appContext)
     private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(WonderFoodUiState(section = readSelectedSection()))
@@ -218,16 +221,26 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         if (uri == null) return
         _uiState.update { it.copy(isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            val receiptId = store.insertReceiptCapture(uri.toString(), status = ReceiptStatus.SAVED)
+            val capture = captureGateway.stageReceiptPhoto(uri)
+            val privateUri = capture.privateUri ?: uri
+            val receiptId = store.insertReceiptCapture(
+                imageUri = privateUri.toString(),
+                rawText = capture.evidenceText,
+                status = if (capture.status == FoodCaptureStatus.STAGED) ReceiptStatus.SAVED else ReceiptStatus.NEEDS_TEXT,
+            )
             val sourceMessageId = store.insertMessage(ChatRole.USER, "Attached receipt photo.")
             val memory = store.readMemory()
             val config = liteLlmSettings.read()
-            val turn = liteLlmInterpreter.interpretReceiptPhoto(appContext, uri, memory, config)
+            val turn = if (capture.status == FoodCaptureStatus.STAGED) {
+                liteLlmInterpreter.interpretReceiptPhoto(appContext, privateUri, memory, config)
+            } else {
+                null
+            }
             if (turn == null) {
-                store.updateReceiptStatus(receiptId, rawText = "", status = ReceiptStatus.NEEDS_TEXT)
+                store.updateReceiptStatus(receiptId, rawText = capture.evidenceText, status = ReceiptStatus.NEEDS_TEXT)
                 store.insertMessage(
                     ChatRole.ASSISTANT,
-                    "I saved the receipt photo. This LiteLLM model did not return receipt items, so paste the visible receipt lines and I will draft groceries.",
+                    "I saved a private copy of the receipt. OCR or AI did not finish, so paste the visible lines or retry the capture when the provider is available.",
                 )
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             } else {

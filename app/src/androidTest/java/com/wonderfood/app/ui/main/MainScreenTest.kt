@@ -51,7 +51,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Open settings").performClick()
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food OS").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Taste profile").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Taste").assertIsDisplayed()
     }
 
     @Test

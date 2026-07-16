@@ -132,6 +132,7 @@ import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.Recipe
 import com.wonderfood.app.data.ReceiptCapture
 import com.wonderfood.app.data.StorageZone
+import com.wonderfood.app.integration.capture.FoodCaptureContracts
 import com.wonderfood.app.theme.WonderFoodTheme
 import com.wonderfood.app.theme.WonderFoodThemeMode
 import java.time.Instant
@@ -201,7 +202,7 @@ fun MainScreen(
         onPickRecipeImage = { recipeId ->
             pendingRecipeImageId = recipeId
             recipePhotoLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                FoodCaptureContracts.imageOnlyRequest(),
             )
         },
         onDeleteMeal = viewModel::deleteMealLog,
@@ -216,7 +217,7 @@ fun MainScreen(
         onThemeModeChange = onThemeModeChange,
         onPickReceiptPhoto = {
             receiptPhotoLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                FoodCaptureContracts.imageOnlyRequest(),
             )
         },
         onRecordVoiceNote = {
