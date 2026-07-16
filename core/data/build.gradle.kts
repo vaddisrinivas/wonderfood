@@ -9,4 +9,5 @@ kotlin {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:engine"))
+    testImplementation(libs.junit)
 }
