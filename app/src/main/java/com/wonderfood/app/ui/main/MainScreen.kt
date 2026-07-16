@@ -11,6 +11,7 @@ import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -97,6 +98,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -531,7 +534,7 @@ private fun MainWorkspace(
             }
         }
         if (showAiCapture) {
-            AiCaptureDialog(
+            AiCaptureSheet(
                 input = state.input,
                 isWorking = state.isWorking,
                 onInputChange = onInputChange,
@@ -2934,58 +2937,7 @@ private fun EmptyState(title: String, subtitle: String) {
 }
 
 @Composable
-private fun Composer(
-    input: String,
-    isWorking: Boolean,
-    onInputChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onPickReceiptPhoto: () -> Unit,
-    onRecordVoiceNote: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onPickReceiptPhoto, enabled = !isWorking) {
-                Icon(Icons.Rounded.AddAPhoto, contentDescription = "Attach receipt photo")
-            }
-            IconButton(onClick = onRecordVoiceNote, enabled = !isWorking) {
-                Icon(Icons.Rounded.Mic, contentDescription = "Add voice note")
-            }
-            OutlinedTextField(
-                value = input,
-                onValueChange = onInputChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Tell AI what changed...") },
-                minLines = 1,
-                maxLines = 4,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { onSend() }),
-                shape = RoundedCornerShape(8.dp),
-            )
-            Button(
-                onClick = onSend,
-                enabled = input.isNotBlank() && !isWorking,
-                modifier = Modifier.height(56.dp),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(if (isWorking) "..." else "Send")
-            }
-        }
-    }
-}
-
-@Composable
-private fun AiCaptureDialog(
+private fun AiCaptureSheet(
     input: String,
     isWorking: Boolean,
     onInputChange: (String) -> Unit,
@@ -2994,32 +2946,115 @@ private fun AiCaptureDialog(
     onRecordVoiceNote: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Ask WonderFood") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Capture a food change, receipt, or voice note for review.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.34f))
+            .clickable(onClick = onDismiss)
+            .padding(12.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            shadowElevation = 10.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ask WonderFood", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Food change, receipt, or voice note.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = onPickReceiptPhoto,
+                        enabled = !isWorking,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Rounded.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Receipt")
+                    }
+                    OutlinedButton(
+                        onClick = onRecordVoiceNote,
+                        enabled = !isWorking,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Rounded.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Voice")
+                    }
+                }
+
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = onInputChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "AI capture text" },
+                    placeholder = { Text("Tell AI what changed...") },
+                    minLines = 2,
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { onSend() }),
+                    shape = RoundedCornerShape(12.dp),
                 )
-                Composer(
-                    input = input,
-                    isWorking = isWorking,
-                    onInputChange = onInputChange,
-                    onSend = onSend,
-                    onPickReceiptPhoto = onPickReceiptPhoto,
-                    onRecordVoiceNote = onRecordVoiceNote,
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "AI reviews before saving.",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = onSend,
+                        enabled = input.isNotBlank() && !isWorking,
+                        modifier = Modifier.height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isWorking) "..." else "Send")
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
-    )
+        }
+    }
 }
 
 @Composable

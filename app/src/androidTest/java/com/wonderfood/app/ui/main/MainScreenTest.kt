@@ -38,8 +38,15 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Open settings").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
         composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Attach receipt photo").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Close").performClick()
+        composeTestRule.onNodeWithText("Receipt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Voice").assertIsDisplayed()
+        val inputWidth = composeTestRule
+            .onNodeWithContentDescription("AI capture text")
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .width
+        assertTrue("AI capture input should not collapse", inputWidth > 500f)
+        composeTestRule.onNodeWithContentDescription("Close AI capture").performClick()
         composeTestRule.onNodeWithContentDescription("Open settings").performClick()
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food OS").assertIsDisplayed()
