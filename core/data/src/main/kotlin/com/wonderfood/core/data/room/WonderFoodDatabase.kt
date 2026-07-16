@@ -36,7 +36,7 @@ import androidx.room.withTransaction
 )
 @TypeConverters(WonderFoodRoomConverters::class)
 abstract class WonderFoodDatabase : RoomDatabase() {
-    abstract fun wonderFoodDao(): WonderFoodDao
+    internal abstract fun wonderFoodDao(): WonderFoodDao
 
     suspend fun <T> inTransaction(block: suspend () -> T): T =
         withTransaction(block)
