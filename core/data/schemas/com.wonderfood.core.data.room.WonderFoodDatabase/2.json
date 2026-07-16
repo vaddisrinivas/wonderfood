@@ -1,0 +1,3861 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "203f60f671224c418d5728e3d16ce998",
+    "entities": [
+      {
+        "tableName": "sources",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `label` TEXT NOT NULL, `external_id` TEXT, `uri` TEXT, `captured_at` TEXT, `truth_state` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "externalId",
+            "columnName": "external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "uri",
+            "columnName": "uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sources_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sources_kind` ON `${TABLE_NAME}` (`kind`)"
+          },
+          {
+            "name": "index_sources_kind_external_id",
+            "unique": true,
+            "columnNames": [
+              "kind",
+              "external_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sources_kind_external_id` ON `${TABLE_NAME}` (`kind`, `external_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "pages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `kind` TEXT NOT NULL, `entity_type` TEXT, `entity_id` TEXT, `aliases` TEXT NOT NULL, `relation_ids` TEXT NOT NULL, `attachment_ids` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entityType",
+            "columnName": "entity_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "entityId",
+            "columnName": "entity_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "aliases",
+            "columnName": "aliases",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationIds",
+            "columnName": "relation_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attachmentIds",
+            "columnName": "attachment_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pages_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pages_kind` ON `${TABLE_NAME}` (`kind`)"
+          },
+          {
+            "name": "index_pages_entity_type_entity_id",
+            "unique": false,
+            "columnNames": [
+              "entity_type",
+              "entity_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pages_entity_type_entity_id` ON `${TABLE_NAME}` (`entity_type`, `entity_id`)"
+          },
+          {
+            "name": "index_pages_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pages_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_pages_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pages_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "foods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `name` TEXT NOT NULL, `status` TEXT NOT NULL, `alias_ids` TEXT NOT NULL, `stock_lot_ids` TEXT NOT NULL, `nutrition_snapshot_ids` TEXT NOT NULL, `attachment_ids` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aliasIds",
+            "columnName": "alias_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stockLotIds",
+            "columnName": "stock_lot_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nutritionSnapshotIds",
+            "columnName": "nutrition_snapshot_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attachmentIds",
+            "columnName": "attachment_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_foods_page_id",
+            "unique": true,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_foods_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_foods_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_foods_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_foods_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_foods_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_foods_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_foods_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_foods_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_foods_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "food_aliases",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `food_id` TEXT NOT NULL, `name` TEXT NOT NULL, `locale` TEXT, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locale",
+            "columnName": "locale",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_food_aliases_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_aliases_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          },
+          {
+            "name": "index_food_aliases_food_id_name_locale",
+            "unique": true,
+            "columnNames": [
+              "food_id",
+              "name",
+              "locale"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_food_aliases_food_id_name_locale` ON `${TABLE_NAME}` (`food_id`, `name`, `locale`)"
+          },
+          {
+            "name": "index_food_aliases_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_aliases_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_food_aliases_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_aliases_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "stock_lots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `food_id` TEXT NOT NULL, `purchased_on` TEXT, `expires_on` TEXT, `location` TEXT, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `quantity_amount` REAL, `quantity_unit` TEXT NOT NULL, `quantity_truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "purchasedOn",
+            "columnName": "purchased_on",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "expiresOn",
+            "columnName": "expires_on",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quantity.amount",
+            "columnName": "quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "quantity.unit",
+            "columnName": "quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity.truthState",
+            "columnName": "quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_stock_lots_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stock_lots_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          },
+          {
+            "name": "index_stock_lots_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stock_lots_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_stock_lots_expires_on",
+            "unique": false,
+            "columnNames": [
+              "expires_on"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stock_lots_expires_on` ON `${TABLE_NAME}` (`expires_on`)"
+          },
+          {
+            "name": "index_stock_lots_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stock_lots_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_stock_lots_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stock_lots_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "nutrition_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `subject_type` TEXT NOT NULL, `subject_id` TEXT NOT NULL, `captured_at` TEXT, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `basis_type` TEXT NOT NULL, `basis_description` TEXT, `basis_quantity_amount` REAL, `basis_quantity_unit` TEXT NOT NULL, `basis_quantity_truth_state` TEXT NOT NULL, `nutrition_energy_kcal` REAL, `nutrition_protein_grams` REAL, `nutrition_carbohydrate_grams` REAL, `nutrition_fat_grams` REAL, `nutrition_fiber_grams` REAL, `nutrition_sugar_grams` REAL, `nutrition_sodium_milligrams` REAL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectType",
+            "columnName": "subject_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectId",
+            "columnName": "subject_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "basis.type",
+            "columnName": "basis_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "basis.description",
+            "columnName": "basis_description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "basis.quantity.amount",
+            "columnName": "basis_quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "basis.quantity.unit",
+            "columnName": "basis_quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "basis.quantity.truthState",
+            "columnName": "basis_quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "values.energyKcal",
+            "columnName": "nutrition_energy_kcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.proteinGrams",
+            "columnName": "nutrition_protein_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.carbohydrateGrams",
+            "columnName": "nutrition_carbohydrate_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.fatGrams",
+            "columnName": "nutrition_fat_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.fiberGrams",
+            "columnName": "nutrition_fiber_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.sugarGrams",
+            "columnName": "nutrition_sugar_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "values.sodiumMilligrams",
+            "columnName": "nutrition_sodium_milligrams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_nutrition_snapshots_subject_type_subject_id",
+            "unique": false,
+            "columnNames": [
+              "subject_type",
+              "subject_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_nutrition_snapshots_subject_type_subject_id` ON `${TABLE_NAME}` (`subject_type`, `subject_id`)"
+          },
+          {
+            "name": "index_nutrition_snapshots_captured_at",
+            "unique": false,
+            "columnNames": [
+              "captured_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_nutrition_snapshots_captured_at` ON `${TABLE_NAME}` (`captured_at`)"
+          },
+          {
+            "name": "index_nutrition_snapshots_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_nutrition_snapshots_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_nutrition_snapshots_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_nutrition_snapshots_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "recipes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `status` TEXT NOT NULL, `prep_minutes` INTEGER, `cook_minutes` INTEGER, `nutrition_snapshot_ids` TEXT NOT NULL, `attachment_ids` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `servings_quantity_amount` REAL, `servings_quantity_unit` TEXT NOT NULL, `servings_quantity_truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "prepMinutes",
+            "columnName": "prep_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cookMinutes",
+            "columnName": "cook_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "nutritionSnapshotIds",
+            "columnName": "nutrition_snapshot_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attachmentIds",
+            "columnName": "attachment_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "servings.amount",
+            "columnName": "servings_quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "servings.unit",
+            "columnName": "servings_quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "servings.truthState",
+            "columnName": "servings_quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recipes_page_id",
+            "unique": true,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_recipes_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_recipes_title",
+            "unique": false,
+            "columnNames": [
+              "title"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipes_title` ON `${TABLE_NAME}` (`title`)"
+          },
+          {
+            "name": "index_recipes_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipes_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_recipes_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipes_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_recipes_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipes_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "recipe_ingredients",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `recipe_id` TEXT NOT NULL, `food_id` TEXT, `display_name` TEXT NOT NULL, `preparation` TEXT, `optional` INTEGER NOT NULL, `substitute_food_ids` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `quantity_amount` REAL, `quantity_unit` TEXT NOT NULL, `quantity_truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`recipe_id`) REFERENCES `recipes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipeId",
+            "columnName": "recipe_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preparation",
+            "columnName": "preparation",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "optional",
+            "columnName": "optional",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "substituteFoodIds",
+            "columnName": "substitute_food_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quantity.amount",
+            "columnName": "quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "quantity.unit",
+            "columnName": "quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity.truthState",
+            "columnName": "quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recipe_ingredients_recipe_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredients_recipe_id` ON `${TABLE_NAME}` (`recipe_id`)"
+          },
+          {
+            "name": "index_recipe_ingredients_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredients_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          },
+          {
+            "name": "index_recipe_ingredients_recipe_id_display_name",
+            "unique": true,
+            "columnNames": [
+              "recipe_id",
+              "display_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_recipe_ingredients_recipe_id_display_name` ON `${TABLE_NAME}` (`recipe_id`, `display_name`)"
+          },
+          {
+            "name": "index_recipe_ingredients_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredients_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_recipe_ingredients_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredients_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "recipes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "recipe_ingredient_substitutes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recipe_ingredient_id` TEXT NOT NULL, `food_id` TEXT NOT NULL, PRIMARY KEY(`recipe_ingredient_id`, `food_id`), FOREIGN KEY(`recipe_ingredient_id`) REFERENCES `recipe_ingredients`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "recipeIngredientId",
+            "columnName": "recipe_ingredient_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "recipe_ingredient_id",
+            "food_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recipe_ingredient_substitutes_recipe_ingredient_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_ingredient_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredient_substitutes_recipe_ingredient_id` ON `${TABLE_NAME}` (`recipe_ingredient_id`)"
+          },
+          {
+            "name": "index_recipe_ingredient_substitutes_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_ingredient_substitutes_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "recipe_ingredients",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_ingredient_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "recipe_steps",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `recipe_id` TEXT NOT NULL, `step_order` INTEGER NOT NULL, `instruction` TEXT NOT NULL, `duration_minutes` INTEGER, `attachment_ids` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`recipe_id`) REFERENCES `recipes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipeId",
+            "columnName": "recipe_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stepOrder",
+            "columnName": "step_order",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instruction",
+            "columnName": "instruction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMinutes",
+            "columnName": "duration_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "attachmentIds",
+            "columnName": "attachment_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recipe_steps_recipe_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_steps_recipe_id` ON `${TABLE_NAME}` (`recipe_id`)"
+          },
+          {
+            "name": "index_recipe_steps_recipe_id_step_order",
+            "unique": true,
+            "columnNames": [
+              "recipe_id",
+              "step_order"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_recipe_steps_recipe_id_step_order` ON `${TABLE_NAME}` (`recipe_id`, `step_order`)"
+          },
+          {
+            "name": "index_recipe_steps_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_steps_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_recipe_steps_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recipe_steps_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "recipes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meal_plans",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `name` TEXT NOT NULL, `starts_on` TEXT NOT NULL, `ends_on` TEXT NOT NULL, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startsOn",
+            "columnName": "starts_on",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endsOn",
+            "columnName": "ends_on",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meal_plans_page_id",
+            "unique": true,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_meal_plans_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_meal_plans_starts_on_ends_on",
+            "unique": false,
+            "columnNames": [
+              "starts_on",
+              "ends_on"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_plans_starts_on_ends_on` ON `${TABLE_NAME}` (`starts_on`, `ends_on`)"
+          },
+          {
+            "name": "index_meal_plans_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_plans_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_meal_plans_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_plans_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_meal_plans_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_plans_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "plan_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `meal_plan_id` TEXT NOT NULL, `date` TEXT NOT NULL, `meal_slot` TEXT NOT NULL, `recipe_id` TEXT, `food_id` TEXT, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `quantity_amount` REAL, `quantity_unit` TEXT NOT NULL, `quantity_truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`meal_plan_id`) REFERENCES `meal_plans`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`recipe_id`) REFERENCES `recipes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mealPlanId",
+            "columnName": "meal_plan_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mealSlot",
+            "columnName": "meal_slot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipeId",
+            "columnName": "recipe_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quantity.amount",
+            "columnName": "quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "quantity.unit",
+            "columnName": "quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity.truthState",
+            "columnName": "quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_plan_entries_meal_plan_id",
+            "unique": false,
+            "columnNames": [
+              "meal_plan_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_meal_plan_id` ON `${TABLE_NAME}` (`meal_plan_id`)"
+          },
+          {
+            "name": "index_plan_entries_recipe_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_recipe_id` ON `${TABLE_NAME}` (`recipe_id`)"
+          },
+          {
+            "name": "index_plan_entries_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          },
+          {
+            "name": "index_plan_entries_date_meal_slot",
+            "unique": false,
+            "columnNames": [
+              "date",
+              "meal_slot"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_date_meal_slot` ON `${TABLE_NAME}` (`date`, `meal_slot`)"
+          },
+          {
+            "name": "index_plan_entries_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_plan_entries_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_plan_entries_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_plan_entries_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "meal_plans",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "meal_plan_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "recipes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meal_logs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `occurred_at` TEXT NOT NULL, `meal_slot` TEXT NOT NULL, `plan_entry_id` TEXT, `food_ids` TEXT NOT NULL, `recipe_ids` TEXT NOT NULL, `nutrition_snapshot_ids` TEXT NOT NULL, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`plan_entry_id`) REFERENCES `plan_entries`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurred_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mealSlot",
+            "columnName": "meal_slot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planEntryId",
+            "columnName": "plan_entry_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "foodIds",
+            "columnName": "food_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipeIds",
+            "columnName": "recipe_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nutritionSnapshotIds",
+            "columnName": "nutrition_snapshot_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meal_logs_page_id",
+            "unique": false,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_meal_logs_plan_entry_id",
+            "unique": false,
+            "columnNames": [
+              "plan_entry_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_plan_entry_id` ON `${TABLE_NAME}` (`plan_entry_id`)"
+          },
+          {
+            "name": "index_meal_logs_occurred_at",
+            "unique": false,
+            "columnNames": [
+              "occurred_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_occurred_at` ON `${TABLE_NAME}` (`occurred_at`)"
+          },
+          {
+            "name": "index_meal_logs_meal_slot",
+            "unique": false,
+            "columnNames": [
+              "meal_slot"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_meal_slot` ON `${TABLE_NAME}` (`meal_slot`)"
+          },
+          {
+            "name": "index_meal_logs_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_meal_logs_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_meal_logs_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_logs_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "plan_entries",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "plan_entry_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meal_log_foods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`meal_log_id` TEXT NOT NULL, `food_id` TEXT NOT NULL, PRIMARY KEY(`meal_log_id`, `food_id`), FOREIGN KEY(`meal_log_id`) REFERENCES `meal_logs`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "mealLogId",
+            "columnName": "meal_log_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "meal_log_id",
+            "food_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meal_log_foods_meal_log_id",
+            "unique": false,
+            "columnNames": [
+              "meal_log_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_foods_meal_log_id` ON `${TABLE_NAME}` (`meal_log_id`)"
+          },
+          {
+            "name": "index_meal_log_foods_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_foods_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "meal_logs",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "meal_log_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meal_log_recipes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`meal_log_id` TEXT NOT NULL, `recipe_id` TEXT NOT NULL, PRIMARY KEY(`meal_log_id`, `recipe_id`), FOREIGN KEY(`meal_log_id`) REFERENCES `meal_logs`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`recipe_id`) REFERENCES `recipes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "mealLogId",
+            "columnName": "meal_log_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recipeId",
+            "columnName": "recipe_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "meal_log_id",
+            "recipe_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meal_log_recipes_meal_log_id",
+            "unique": false,
+            "columnNames": [
+              "meal_log_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_recipes_meal_log_id` ON `${TABLE_NAME}` (`meal_log_id`)"
+          },
+          {
+            "name": "index_meal_log_recipes_recipe_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_recipes_recipe_id` ON `${TABLE_NAME}` (`recipe_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "meal_logs",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "meal_log_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "recipes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meal_log_nutrition_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`meal_log_id` TEXT NOT NULL, `nutrition_snapshot_id` TEXT NOT NULL, PRIMARY KEY(`meal_log_id`, `nutrition_snapshot_id`), FOREIGN KEY(`meal_log_id`) REFERENCES `meal_logs`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`nutrition_snapshot_id`) REFERENCES `nutrition_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "mealLogId",
+            "columnName": "meal_log_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nutritionSnapshotId",
+            "columnName": "nutrition_snapshot_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "meal_log_id",
+            "nutrition_snapshot_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meal_log_nutrition_snapshots_meal_log_id",
+            "unique": false,
+            "columnNames": [
+              "meal_log_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_nutrition_snapshots_meal_log_id` ON `${TABLE_NAME}` (`meal_log_id`)"
+          },
+          {
+            "name": "index_meal_log_nutrition_snapshots_nutrition_snapshot_id",
+            "unique": false,
+            "columnNames": [
+              "nutrition_snapshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meal_log_nutrition_snapshots_nutrition_snapshot_id` ON `${TABLE_NAME}` (`nutrition_snapshot_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "meal_logs",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "meal_log_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "nutrition_snapshots",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "nutrition_snapshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "shopping_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `food_id` TEXT, `recipe_id` TEXT, `reason` TEXT, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `quantity_amount` REAL, `quantity_unit` TEXT NOT NULL, `quantity_truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`food_id`) REFERENCES `foods`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`recipe_id`) REFERENCES `recipes`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foodId",
+            "columnName": "food_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recipeId",
+            "columnName": "recipe_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quantity.amount",
+            "columnName": "quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "quantity.unit",
+            "columnName": "quantity_unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity.truthState",
+            "columnName": "quantity_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_shopping_items_page_id",
+            "unique": false,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_shopping_items_food_id",
+            "unique": false,
+            "columnNames": [
+              "food_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_food_id` ON `${TABLE_NAME}` (`food_id`)"
+          },
+          {
+            "name": "index_shopping_items_recipe_id",
+            "unique": false,
+            "columnNames": [
+              "recipe_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_recipe_id` ON `${TABLE_NAME}` (`recipe_id`)"
+          },
+          {
+            "name": "index_shopping_items_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_shopping_items_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_shopping_items_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_shopping_items_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "foods",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "food_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "recipes",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recipe_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "receipts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `page_id` TEXT NOT NULL, `merchant_name` TEXT, `purchased_at` TEXT, `item_ids` TEXT NOT NULL, `attachment_ids` TEXT NOT NULL, `status` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `subtotal_amount` REAL, `subtotal_currency_code` TEXT, `subtotal_truth_state` TEXT, `total_amount` REAL, `total_currency_code` TEXT, `total_truth_state` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`page_id`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageId",
+            "columnName": "page_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchantName",
+            "columnName": "merchant_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "purchasedAt",
+            "columnName": "purchased_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "itemIds",
+            "columnName": "item_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attachmentIds",
+            "columnName": "attachment_ids",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "subtotal.amount",
+            "columnName": "subtotal_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "subtotal.currencyCode",
+            "columnName": "subtotal_currency_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "subtotal.truthState",
+            "columnName": "subtotal_truth_state",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "total.amount",
+            "columnName": "total_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "total.currencyCode",
+            "columnName": "total_currency_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "total.truthState",
+            "columnName": "total_truth_state",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_receipts_page_id",
+            "unique": false,
+            "columnNames": [
+              "page_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipts_page_id` ON `${TABLE_NAME}` (`page_id`)"
+          },
+          {
+            "name": "index_receipts_purchased_at",
+            "unique": false,
+            "columnNames": [
+              "purchased_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipts_purchased_at` ON `${TABLE_NAME}` (`purchased_at`)"
+          },
+          {
+            "name": "index_receipts_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipts_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_receipts_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipts_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_receipts_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipts_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "pages",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "page_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "receipt_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`receipt_id` TEXT NOT NULL, `shopping_item_id` TEXT NOT NULL, PRIMARY KEY(`receipt_id`, `shopping_item_id`), FOREIGN KEY(`receipt_id`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`shopping_item_id`) REFERENCES `shopping_items`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "receiptId",
+            "columnName": "receipt_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shoppingItemId",
+            "columnName": "shopping_item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "receipt_id",
+            "shopping_item_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_receipt_items_receipt_id",
+            "unique": false,
+            "columnNames": [
+              "receipt_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipt_items_receipt_id` ON `${TABLE_NAME}` (`receipt_id`)"
+          },
+          {
+            "name": "index_receipt_items_shopping_item_id",
+            "unique": false,
+            "columnNames": [
+              "shopping_item_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_receipt_items_shopping_item_id` ON `${TABLE_NAME}` (`shopping_item_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "receipts",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "receipt_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "shopping_items",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "shopping_item_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "food_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `subject_type` TEXT NOT NULL, `subject_id` TEXT NOT NULL, `type` TEXT NOT NULL, `occurred_at` TEXT NOT NULL, `note` TEXT, `truth_state` TEXT NOT NULL, `event_quantity_quantity_amount` REAL, `event_quantity_quantity_unit` TEXT, `event_quantity_quantity_truth_state` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectType",
+            "columnName": "subject_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectId",
+            "columnName": "subject_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurred_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity.amount",
+            "columnName": "event_quantity_quantity_amount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "quantity.unit",
+            "columnName": "event_quantity_quantity_unit",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "quantity.truthState",
+            "columnName": "event_quantity_quantity_truth_state",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_food_events_subject_type_subject_id",
+            "unique": false,
+            "columnNames": [
+              "subject_type",
+              "subject_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_events_subject_type_subject_id` ON `${TABLE_NAME}` (`subject_type`, `subject_id`)"
+          },
+          {
+            "name": "index_food_events_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_events_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_food_events_occurred_at",
+            "unique": false,
+            "columnNames": [
+              "occurred_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_events_occurred_at` ON `${TABLE_NAME}` (`occurred_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "food_actions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `idempotency_key` TEXT NOT NULL, `subject_type` TEXT NOT NULL, `subject_id` TEXT NOT NULL, `action_type` TEXT NOT NULL, `occurred_at` TEXT NOT NULL, `payload` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idempotencyKey",
+            "columnName": "idempotency_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectType",
+            "columnName": "subject_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subjectId",
+            "columnName": "subject_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionType",
+            "columnName": "action_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurred_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_food_actions_subject_type_subject_id",
+            "unique": false,
+            "columnNames": [
+              "subject_type",
+              "subject_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_actions_subject_type_subject_id` ON `${TABLE_NAME}` (`subject_type`, `subject_id`)"
+          },
+          {
+            "name": "index_food_actions_idempotency_key",
+            "unique": true,
+            "columnNames": [
+              "idempotency_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_food_actions_idempotency_key` ON `${TABLE_NAME}` (`idempotency_key`)"
+          },
+          {
+            "name": "index_food_actions_action_type",
+            "unique": false,
+            "columnNames": [
+              "action_type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_actions_action_type` ON `${TABLE_NAME}` (`action_type`)"
+          },
+          {
+            "name": "index_food_actions_occurred_at",
+            "unique": false,
+            "columnNames": [
+              "occurred_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_food_actions_occurred_at` ON `${TABLE_NAME}` (`occurred_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "relations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `from_type` TEXT NOT NULL, `from_id` TEXT NOT NULL, `to_type` TEXT NOT NULL, `to_id` TEXT NOT NULL, `type` TEXT NOT NULL, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fromType",
+            "columnName": "from_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fromId",
+            "columnName": "from_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toType",
+            "columnName": "to_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toId",
+            "columnName": "to_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_relations_from_type_from_id",
+            "unique": false,
+            "columnNames": [
+              "from_type",
+              "from_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_relations_from_type_from_id` ON `${TABLE_NAME}` (`from_type`, `from_id`)"
+          },
+          {
+            "name": "index_relations_to_type_to_id",
+            "unique": false,
+            "columnNames": [
+              "to_type",
+              "to_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_relations_to_type_to_id` ON `${TABLE_NAME}` (`to_type`, `to_id`)"
+          },
+          {
+            "name": "index_relations_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_relations_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_relations_from_type_from_id_to_type_to_id_type",
+            "unique": true,
+            "columnNames": [
+              "from_type",
+              "from_id",
+              "to_type",
+              "to_id",
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_relations_from_type_from_id_to_type_to_id_type` ON `${TABLE_NAME}` (`from_type`, `from_id`, `to_type`, `to_id`, `type`)"
+          },
+          {
+            "name": "index_relations_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_relations_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_relations_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_relations_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "attachments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `uri` TEXT NOT NULL, `label` TEXT, `checksum` TEXT, `truth_state` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `archived_at` TEXT, `deleted_at` TEXT, `source_id` TEXT NOT NULL, `source_kind` TEXT NOT NULL, `source_label` TEXT NOT NULL, `source_external_id` TEXT, `source_uri` TEXT, `source_captured_at` TEXT, `source_truth_state` TEXT NOT NULL, `confidence_score` REAL, `confidence_state` TEXT NOT NULL, `confidence_rationale` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uri",
+            "columnName": "uri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "checksum",
+            "columnName": "checksum",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "truthState",
+            "columnName": "truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archived_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.id",
+            "columnName": "source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.kind",
+            "columnName": "source_kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.label",
+            "columnName": "source_label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source.externalId",
+            "columnName": "source_external_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.uri",
+            "columnName": "source_uri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.capturedAt",
+            "columnName": "source_captured_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source.truthState",
+            "columnName": "source_truth_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.score",
+            "columnName": "confidence_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "confidence.state",
+            "columnName": "confidence_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence.rationale",
+            "columnName": "confidence_rationale",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attachments_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attachments_kind` ON `${TABLE_NAME}` (`kind`)"
+          },
+          {
+            "name": "index_attachments_uri",
+            "unique": true,
+            "columnNames": [
+              "uri"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_attachments_uri` ON `${TABLE_NAME}` (`uri`)"
+          },
+          {
+            "name": "index_attachments_checksum",
+            "unique": false,
+            "columnNames": [
+              "checksum"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attachments_checksum` ON `${TABLE_NAME}` (`checksum`)"
+          },
+          {
+            "name": "index_attachments_archived_at",
+            "unique": false,
+            "columnNames": [
+              "archived_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attachments_archived_at` ON `${TABLE_NAME}` (`archived_at`)"
+          },
+          {
+            "name": "index_attachments_deleted_at",
+            "unique": false,
+            "columnNames": [
+              "deleted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attachments_deleted_at` ON `${TABLE_NAME}` (`deleted_at`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '203f60f671224c418d5728e3d16ce998')"
+    ]
+  }
+}
