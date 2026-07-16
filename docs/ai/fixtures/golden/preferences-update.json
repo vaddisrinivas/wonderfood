@@ -1,0 +1,78 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "preferences",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_preferences_001",
+  "idempotency_key": "turn-local-preferences-001",
+  "status": "needs_confirmation",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "I am allergic to peanuts and prefer high protein breakfasts.",
+      "observed_at": null,
+      "confidence": 1.0
+    },
+    {
+      "evidence_id": "ev_preferences_1",
+      "type": "preference_snapshot",
+      "source_ref": "preferences:local",
+      "quote": "No allergy saved",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "preferences.update_food_preferences",
+      "summary": "Save peanut allergy and high protein breakfast preference.",
+      "payload": {
+        "changes": [
+          {
+            "field": "allergies",
+            "value": "peanuts",
+            "mode": "append",
+            "reason": "User explicitly stated an allergy."
+          },
+          {
+            "field": "protein_goal",
+            "value": "high protein breakfasts",
+            "mode": "append",
+            "reason": "User explicitly stated a preference."
+          }
+        ]
+      },
+      "evidence_refs": [
+        "ev_user_1",
+        "ev_preferences_1"
+      ],
+      "confidence": {
+        "score": 0.93,
+        "rationale": "Preference fields and values are explicit."
+      },
+      "confirmation": {
+        "required": true,
+        "level": "confirm",
+        "reason": "Allergy changes affect safety-sensitive recommendations.",
+        "prompt": "Save peanuts as an allergy?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.93,
+    "rationale": "User directly stated both preference changes."
+  },
+  "confirmation": {
+    "required": true,
+    "level": "confirm",
+    "reason": "Allergy fields require explicit confirmation.",
+    "prompt": "Confirm preference update?"
+  },
+  "warnings": [],
+  "unsupported": null
+}

@@ -1,0 +1,107 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "recipes",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_recipe_001",
+  "idempotency_key": "turn-local-recipe-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "Save a recipe: spinach egg rice bowl, serves 2.",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "recipe.save_structured",
+      "summary": "Save Spinach Egg Rice Bowl as a structured recipe.",
+      "payload": {
+        "title": "Spinach Egg Rice Bowl",
+        "servings": 2,
+        "ingredients": [
+          {
+            "name": "Spinach",
+            "quantity": null,
+            "preparation": null,
+            "matched_inventory_ref": null
+          },
+          {
+            "name": "Eggs",
+            "quantity": null,
+            "preparation": null,
+            "matched_inventory_ref": null
+          },
+          {
+            "name": "Rice",
+            "quantity": null,
+            "preparation": null,
+            "matched_inventory_ref": null
+          }
+        ],
+        "steps": [
+          "Cook rice if needed.",
+          "Cook eggs and spinach.",
+          "Assemble bowl and season to taste."
+        ],
+        "tags": [
+          "personal",
+          "bowl"
+        ],
+        "source_text_ref": "ev_user_1",
+        "nutrition": {
+          "source": "unknown"
+        }
+      },
+      "evidence_refs": [
+        "ev_user_1"
+      ],
+      "confidence": {
+        "score": 0.72,
+        "rationale": "Title and ingredients are clear, but quantities and detailed steps are inferred."
+      },
+      "confirmation": {
+        "required": true,
+        "level": "confirm",
+        "reason": "Recipe quantities and steps are incomplete.",
+        "prompt": "Save this draft recipe and edit quantities later?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.72,
+    "rationale": "Enough recipe evidence to draft, but not enough for exact quantities."
+  },
+  "confirmation": {
+    "required": true,
+    "level": "confirm",
+    "reason": "Recipe details include inferred steps.",
+    "prompt": "Save this recipe draft?"
+  },
+  "warnings": [
+    {
+      "code": "ambiguous_quantity",
+      "severity": "review",
+      "message": "Ingredient quantities were not supplied.",
+      "evidence_refs": [
+        "ev_user_1"
+      ]
+    },
+    {
+      "code": "nutrition_unverified",
+      "severity": "info",
+      "message": "No nutrition source was provided.",
+      "evidence_refs": [
+        "ev_user_1"
+      ]
+    }
+  ],
+  "unsupported": null
+}

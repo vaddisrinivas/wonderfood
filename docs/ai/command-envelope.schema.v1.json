@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wonderfood.local/schemas/ai/command-envelope.v1.json",
+  "title": "WonderFood AI Command Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_version",
+    "skill_id",
+    "skill_version",
+    "envelope_id",
+    "idempotency_key",
+    "status",
+    "evidence",
+    "commands",
+    "confidence",
+    "confirmation",
+    "warnings",
+    "unsupported"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "wf.ai.command-envelope.v1"
+    },
+    "catalog_version": {
+      "const": "wf.ai.skill-catalog.v1"
+    },
+    "skill_id": {
+      "enum": [
+        "inventory",
+        "shopping",
+        "recipes",
+        "meals",
+        "planning",
+        "preferences",
+        "receipt_parsing",
+        "nutrition_correction",
+        "navigation"
+      ]
+    },
+    "skill_version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.0$"
+    },
+    "envelope_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "commands",
+        "needs_confirmation",
+        "needs_clarification",
+        "unsupported"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "confidence": {
+      "$ref": "#/$defs/confidence"
+    },
+    "confirmation": {
+      "$ref": "#/$defs/confirmation"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    },
+    "unsupported": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "allowed_alternatives"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "message": {
+          "type": "string"
+        },
+        "allowed_alternatives": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "type",
+        "source_ref",
+        "quote",
+        "observed_at",
+        "confidence"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^ev_[a-z0-9_]+$"
+        },
+        "type": {
+          "enum": [
+            "user_text",
+            "receipt_text",
+            "receipt_image",
+            "barcode",
+            "inventory_snapshot",
+            "shopping_snapshot",
+            "recipe_snapshot",
+            "meal_snapshot",
+            "plan_snapshot",
+            "preference_snapshot",
+            "nutrition_label",
+            "provider_result",
+            "app_context"
+          ]
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quote": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "rationale"
+      ],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "level",
+        "reason",
+        "prompt"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "level": {
+          "enum": [
+            "none",
+            "review",
+            "confirm",
+            "confirm_destructive"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "evidence_refs"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "review",
+            "blocker"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ev_[a-z0-9_]+$"
+          }
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "type",
+        "summary",
+        "payload",
+        "evidence_refs",
+        "confidence",
+        "confirmation",
+        "destructive",
+        "mutation"
+      ],
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "pattern": "^cmd_[a-z0-9_]+$"
+        },
+        "type": {
+          "enum": [
+            "inventory.add_lot",
+            "inventory.adjust_quantity",
+            "inventory.move_lot",
+            "inventory.archive_lot",
+            "shopping.add_item",
+            "shopping.mark_item_bought",
+            "shopping.remove_item",
+            "recipe.save_structured",
+            "recipe.update_structured",
+            "recipe.archive",
+            "meal.log",
+            "meal.record_inventory_use",
+            "meal.record_leftovers",
+            "planning.create_meal_plan",
+            "planning.update_meal_plan_entry",
+            "planning.mark_entry_status",
+            "preferences.update_food_preferences",
+            "preferences.clear_field",
+            "receipt.attach_parse",
+            "receipt.propose_items",
+            "nutrition.correct_inventory_item",
+            "nutrition.correct_meal_log",
+            "nutrition.mark_unknown",
+            "navigation.open_destination",
+            "navigation.open_detail",
+            "navigation.search"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^ev_[a-z0-9_]+$"
+          }
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "confirmation": {
+          "$ref": "#/$defs/confirmation"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "mutation": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
