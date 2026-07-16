@@ -2,6 +2,8 @@ package com.wonderfood.core.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
+import org.junit.Ignore
 import org.junit.Test
 
 class WonderFoodSnapshotCodecTest {
@@ -14,6 +16,40 @@ class WonderFoodSnapshotCodecTest {
 
         assertTrue(encoded.contains("\"energyKcal\":null"))
         assertEquals(snapshot, decoded)
+    }
+
+    @Test
+    fun snapshotEncodingPinsCurrentSchemaVersion() {
+        val encoded = WonderFoodSnapshotCodec.encode(sampleSnapshot())
+        val decoded = WonderFoodSnapshotCodec.decode(encoded)
+
+        assertTrue(encoded.contains("\"schemaVersion\":${WonderFoodSnapshotCodec.CURRENT_SCHEMA_VERSION}"))
+        assertEquals(WonderFoodSnapshotCodec.CURRENT_SCHEMA_VERSION, decoded.schemaVersion)
+    }
+
+    @Test
+    fun unknownEnumNamesDecodeToUnknownForForwardCompatibleReaders() {
+        val encoded = WonderFoodSnapshotCodec.encode(sampleSnapshot())
+            .replaceFirst("\"status\":\"ACTIVE\"", "\"status\":\"FUTURE_FOOD_STATUS\"")
+            .replaceFirst("\"unit\":\"PACKAGE\"", "\"unit\":\"FUTURE_UNIT\"")
+            .replaceFirst("\"type\":\"STOCK_ADDED\"", "\"type\":\"FUTURE_EVENT\"")
+
+        val decoded = WonderFoodSnapshotCodec.decode(encoded)
+
+        assertEquals(FoodStatus.UNKNOWN, decoded.foods.single().status)
+        assertEquals(FoodUnit.UNKNOWN, decoded.stockLots.single().quantity.unit)
+        assertEquals(FoodEventType.UNKNOWN, decoded.foodEvents.single().type)
+    }
+
+    @Ignore("WF-D03 limitation: codec currently preserves unsupported schemaVersion instead of rejecting it.")
+    @Test
+    fun futureSchemaVersionIsRejectedBeforeDomainUse() {
+        val encoded = WonderFoodSnapshotCodec.encode(sampleSnapshot())
+            .replace("\"schemaVersion\":${WonderFoodSnapshotCodec.CURRENT_SCHEMA_VERSION}", "\"schemaVersion\":999")
+
+        assertThrows(IllegalArgumentException::class.java) {
+            WonderFoodSnapshotCodec.decode(encoded)
+        }
     }
 
     private fun sampleSnapshot(): WonderFoodSnapshot {
