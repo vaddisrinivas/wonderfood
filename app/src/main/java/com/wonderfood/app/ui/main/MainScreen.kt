@@ -1,6 +1,7 @@
 package com.wonderfood.app.ui.main
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.Activity
@@ -55,9 +56,9 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Kitchen
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.Storefront
@@ -68,29 +69,25 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -268,26 +265,21 @@ private fun WonderFoodScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        val showPermanentDrawer = maxWidth >= 760.dp
-        val showCalendarPane = maxWidth >= 840.dp
-        val compactWide = maxWidth < 940.dp
-        val drawerWidth = if (compactWide) 236.dp else 288.dp
+        val showNavigationRail = maxWidth >= 720.dp
+        val showCalendarPane = maxWidth >= 980.dp && state.section == FoodSection.PLAN && state.detailTarget == null
+        val compactWide = maxWidth < 1040.dp
         val calendarWidth = if (compactWide) 248.dp else 336.dp
 
-        if (showPermanentDrawer) {
+        if (showNavigationRail) {
             Row(Modifier.fillMaxSize()) {
-                DrawerPanel(
-                    state = state,
+                FoodNavigationRail(
                     selected = state.section,
                     onSectionSelected = onSectionSelected,
-                    modifier = Modifier.width(drawerWidth).fillMaxHeight(),
                 )
                 MainWorkspace(
                     state = state,
-                    showMenu = false,
                     showBottomNavigation = false,
                     showInlineCalendar = !showCalendarPane,
-                    onMenuClick = {},
                     onInputChange = onInputChange,
                     onSend = onSend,
                     onSectionSelected = onSectionSelected,
@@ -329,10 +321,8 @@ private fun WonderFoodScreen(
         } else {
             MainWorkspace(
                 state = state,
-                showMenu = false,
                 showBottomNavigation = true,
                 showInlineCalendar = true,
-                onMenuClick = {},
                 onInputChange = onInputChange,
                 onSend = onSend,
                 onSectionSelected = onSectionSelected,
@@ -366,160 +356,23 @@ private fun WonderFoodScreen(
 }
 
 @Composable
-private fun DrawerPanel(
-    state: WonderFoodUiState,
+private fun FoodNavigationRail(
     selected: FoodSection,
     onSectionSelected: (FoodSection) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    BoxWithConstraints(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surface)
-            .safeDrawingPadding()
-            .padding(12.dp),
-    ) {
-        val compact = maxHeight < 520.dp
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 14.dp),
-        ) {
-            BrandBlock(state = state, compact = compact)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            FoodSection.entries.forEach { section ->
-                DrawerNavRow(
-                    section = section,
-                    selected = selected == section,
-                    count = state.memory.countFor(section),
-                    compact = compact,
-                    onClick = { onSectionSelected(section) },
-                )
-            }
-        Spacer(Modifier.weight(1f))
-        if (!compact) {
-            DrawerStatusCard(
-                title = state.aiStatus,
-                subtitle = "Local SQLite, editable AI instructions",
-            )
-        }
-        }
-    }
-}
-
-@Composable
-private fun DrawerNavRow(
-    section: FoodSection,
-    selected: Boolean,
-    count: Int,
-    compact: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
+    NavigationRail(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(if (compact) 44.dp else 56.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            .fillMaxHeight()
+            .safeDrawingPadding(),
+        containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(section.icon, contentDescription = null, modifier = Modifier.size(if (compact) 20.dp else 24.dp))
-            Text(
-                section.label,
-                modifier = Modifier.weight(1f),
-                style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (count > 0) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
-                    Text(
-                        count.toString(),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BrandBlock(state: WonderFoodUiState, compact: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(
-                modifier = Modifier.size(if (compact) 40.dp else 48.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Rounded.Kitchen,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
-            Column {
-                Text(
-                    "WonderFood",
-                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    "Kitchen memory",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (!compact) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MiniMetric("Food", state.memory.inventory.size + state.memory.groceries.size, Modifier.weight(1f))
-                MiniMetric("Meals", state.memory.mealLogs.size + state.memory.mealPlans.size, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniMetric(label: String, value: Int, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-    ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(value.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
-private fun DrawerStatusCard(title: String, subtitle: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.tertiaryContainer,
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null)
-                Text(title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+        FoodSection.entries.forEach { section ->
+            NavigationRailItem(
+                selected = selected == section,
+                onClick = { onSectionSelected(section) },
+                icon = { Icon(section.icon, contentDescription = section.label) },
+                label = { Text(section.label) },
+                alwaysShowLabel = true,
             )
         }
     }
@@ -528,10 +381,8 @@ private fun DrawerStatusCard(title: String, subtitle: String) {
 @Composable
 private fun MainWorkspace(
     state: WonderFoodUiState,
-    showMenu: Boolean,
     showBottomNavigation: Boolean,
     showInlineCalendar: Boolean,
-    onMenuClick: () -> Unit,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onSectionSelected: (FoodSection) -> Unit,
@@ -560,6 +411,15 @@ private fun MainWorkspace(
     onRequestHealthConnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var secondaryPane by rememberSaveable { mutableStateOf<SecondaryPane?>(null) }
+    var showAiCapture by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showAiCapture || secondaryPane != null || state.detailTarget != null) {
+        when {
+            showAiCapture -> showAiCapture = false
+            secondaryPane != null -> secondaryPane = null
+            else -> onCloseDetail()
+        }
+    }
     Box(
         modifier = modifier
             .safeDrawingPadding()
@@ -573,17 +433,39 @@ private fun MainWorkspace(
         ) {
             TopBar(
                 state = state,
-                showMenu = showMenu,
-                onMenuClick = onMenuClick,
+                onSearchClick = { secondaryPane = SecondaryPane.SEARCH },
+                onSettingsClick = { secondaryPane = SecondaryPane.SETTINGS },
+                onAiClick = { showAiCapture = true },
             )
-            if (state.section == FoodSection.PANTRY || state.section == FoodSection.BUY) {
+            if (state.section == FoodSection.KITCHEN || state.section == FoodSection.SHOP) {
                 KitchenSnapshot(memory = state.memory)
             }
-            if (showMenu) {
-                SectionTabs(selected = state.section, onSelected = onSectionSelected)
-            }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (state.detailTarget != null) {
+                when {
+                    secondaryPane == SecondaryPane.SEARCH -> SearchContent(
+                        memory = state.memory,
+                        onBack = { secondaryPane = null },
+                        onOpenDetail = { target ->
+                            secondaryPane = null
+                            onOpenDetail(target)
+                        },
+                    )
+                    secondaryPane == SecondaryPane.SETTINGS -> PreferencesContent(
+                        memory = state.memory,
+                        preferences = state.preferencesForm,
+                        aiConfig = state.aiConfigForm,
+                        aiStatus = state.aiStatus,
+                        healthStatus = state.healthStatus,
+                        themeMode = themeMode,
+                        onChange = onPreferencesChange,
+                        onSave = onSavePreferences,
+                        onAiConfigChange = onAiConfigChange,
+                        onSaveAiConfig = onSaveAiConfig,
+                        onThemeModeChange = onThemeModeChange,
+                        onRequestHealthConnect = onRequestHealthConnect,
+                        onBack = { secondaryPane = null },
+                    )
+                    state.detailTarget != null -> {
                     DetailPage(
                         target = state.detailTarget,
                         memory = state.memory,
@@ -599,15 +481,16 @@ private fun MainWorkspace(
                         onDeleteMeal = onDeleteMeal,
                         onExportLatestMeal = onExportLatestMeal,
                     )
-                } else when (state.section) {
-                    FoodSection.PANTRY -> PantryContent(
+                    }
+                    else -> when (state.section) {
+                    FoodSection.KITCHEN -> PantryContent(
                         items = state.memory.inventory,
                         onOpen = { item ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id))
                         },
                         onDelete = onDeleteInventory,
                     )
-                    FoodSection.BUY -> GroceryContent(
+                    FoodSection.SHOP -> GroceryContent(
                         items = state.memory.groceries,
                         onOpen = { item ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.GROCERY, id = item.id))
@@ -615,11 +498,15 @@ private fun MainWorkspace(
                         onBought = onMarkGroceryBought,
                         onDelete = onDeleteGrocery,
                     )
-                    FoodSection.MEALS -> MealsContent(
+                    FoodSection.TODAY -> TodayContent(
+                        memory = state.memory,
+                        onOpenDetail = onOpenDetail,
+                        onDeleteMeal = onDeleteMeal,
+                    )
+                    FoodSection.PLAN -> PlanContent(
                         memory = state.memory,
                         showCalendar = showInlineCalendar,
                         onOpenDetail = onOpenDetail,
-                        onDeleteMeal = onDeleteMeal,
                     )
                     FoodSection.RECIPES -> RecipesContent(
                         memory = state.memory,
@@ -629,20 +516,7 @@ private fun MainWorkspace(
                         onDelete = onDeleteRecipe,
                         onCook = onCookRecipe,
                     )
-                    FoodSection.PREFS -> PreferencesContent(
-                        memory = state.memory,
-                        preferences = state.preferencesForm,
-                        aiConfig = state.aiConfigForm,
-                        aiStatus = state.aiStatus,
-                        healthStatus = state.healthStatus,
-                        themeMode = themeMode,
-                        onChange = onPreferencesChange,
-                        onSave = onSavePreferences,
-                        onAiConfigChange = onAiConfigChange,
-                        onSaveAiConfig = onSaveAiConfig,
-                        onThemeModeChange = onThemeModeChange,
-                        onRequestHealthConnect = onRequestHealthConnect,
-                    )
+                    }
                 }
             }
             if (state.pendingDraft != null) {
@@ -656,37 +530,38 @@ private fun MainWorkspace(
                 FoodBottomNavigation(selected = state.section, onSelected = onSectionSelected)
             }
         }
-        FloatingAiDock(
-            input = state.input,
-            isWorking = state.isWorking,
-            bottomPadding = if (showBottomNavigation) 88.dp else 16.dp,
-            onInputChange = onInputChange,
-            onSend = onSend,
-            onPickReceiptPhoto = onPickReceiptPhoto,
-            onRecordVoiceNote = onRecordVoiceNote,
-            modifier = Modifier.align(Alignment.BottomEnd),
-        )
+        if (showAiCapture) {
+            AiCaptureDialog(
+                input = state.input,
+                isWorking = state.isWorking,
+                onInputChange = onInputChange,
+                onSend = {
+                    onSend()
+                    showAiCapture = false
+                },
+                onPickReceiptPhoto = onPickReceiptPhoto,
+                onRecordVoiceNote = onRecordVoiceNote,
+                onDismiss = { showAiCapture = false },
+            )
+        }
     }
 }
 
 @Composable
 private fun TopBar(
     state: WonderFoodUiState,
-    showMenu: Boolean,
-    onMenuClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAiClick: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val compact = maxWidth < 560.dp
+        val title = if (state.section == FoodSection.TODAY) todayTitle() else state.section.label
         if (compact) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (showMenu) {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Rounded.Menu, contentDescription = "Open drawer")
-                    }
-                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        todayTitle(),
+                        title,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -700,21 +575,25 @@ private fun TopBar(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                IconButton(onClick = onSearchClick) {
+                    Icon(Icons.Rounded.Search, contentDescription = "Search WonderFood")
+                }
+                IconButton(onClick = onAiClick) {
+                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = "Open AI capture")
+                }
+                IconButton(onClick = onSettingsClick) {
+                    Icon(Icons.Rounded.Settings, contentDescription = "Open settings")
+                }
             }
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (showMenu) {
-                        IconButton(onClick = onMenuClick) {
-                            Icon(Icons.Rounded.Menu, contentDescription = "Open drawer")
-                        }
-                    }
                     Column {
-                        Text(todayTitle(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text(
                             state.section.subtitle,
                             style = MaterialTheme.typography.bodySmall,
@@ -722,6 +601,17 @@ private fun TopBar(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onSearchClick) {
+                        Icon(Icons.Rounded.Search, contentDescription = "Search WonderFood")
+                    }
+                    IconButton(onClick = onAiClick) {
+                        Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = "Open AI capture")
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Open settings")
                     }
                 }
             }
@@ -801,38 +691,6 @@ private fun SnapshotCard(label: String, value: Int, color: Color, modifier: Modi
 }
 
 @Composable
-private fun SectionTabs(selected: FoodSection, onSelected: (FoodSection) -> Unit) {
-    BoxWithConstraints {
-        if (maxWidth < 520.dp) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                FoodSection.entries.forEach { section ->
-                    SectionIconTab(
-                        section = section,
-                        selected = selected == section,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSelected(section) },
-                    )
-                }
-            }
-        } else {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(FoodSection.entries) { section ->
-                    FilterChip(
-                        selected = selected == section,
-                        onClick = { onSelected(section) },
-                        label = { Text(section.label) },
-                        leadingIcon = { Icon(section.icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun FoodBottomNavigation(selected: FoodSection, onSelected: (FoodSection) -> Unit) {
     NavigationBar(
         modifier = Modifier.fillMaxWidth(),
@@ -851,30 +709,7 @@ private fun FoodBottomNavigation(selected: FoodSection, onSelected: (FoodSection
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SectionIconTab(
-    section: FoodSection,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Surface(
-        modifier = modifier.height(46.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                section.icon,
-                contentDescription = section.label,
-                modifier = Modifier.size(22.dp),
-                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                alwaysShowLabel = true,
             )
         }
     }
@@ -1198,17 +1033,51 @@ private fun GroceryContent(
 }
 
 @Composable
-private fun MealsContent(
+private fun TodayContent(
     memory: FoodMemory,
-    showCalendar: Boolean,
     onOpenDetail: (FoodDetailTarget) -> Unit,
     onDeleteMeal: (Long) -> Unit,
 ) {
-    val plans = memory.mealPlans
-    val meals = memory.mealLogs
+    val today = LocalDate.now().toEpochDay()
+    val todayMeals = memory.mealLogs.filter { it.loggedDateEpochDay == today }
+    val todayPlanEntries = memory.mealPlanEntries.filter { it.dateEpochDay == today }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             TodayDashboard(memory = memory, onOpenDetail = onOpenDetail)
+        }
+        if (todayPlanEntries.isEmpty() && todayMeals.isEmpty()) {
+            item { EmptyState("Today is open.", "Log what happened, cook from the kitchen, or ask for a plan.") }
+        }
+        if (todayPlanEntries.isNotEmpty()) {
+            item { SectionLabel("Planned today") }
+            items(todayPlanEntries, key = { it.id }) { entry ->
+                TodayPlanEntryCard(
+                    entry = entry,
+                    onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = today)) },
+                )
+            }
+        }
+        if (todayMeals.isNotEmpty()) item { SectionLabel("Logged today") }
+        items(todayMeals, key = { it.id }) { meal ->
+            MealCard(
+                meal = meal,
+                onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.MEAL, id = meal.id)) },
+                onDelete = { onDeleteMeal(meal.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlanContent(
+    memory: FoodMemory,
+    showCalendar: Boolean,
+    onOpenDetail: (FoodDetailTarget) -> Unit,
+) {
+    val plans = memory.mealPlans
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            PlanSummaryCard(memory = memory)
         }
         if (showCalendar) {
             item {
@@ -1221,25 +1090,123 @@ private fun MealsContent(
                 )
             }
         }
-        if (plans.isEmpty() && meals.isEmpty()) {
-            item { EmptyState("No meals yet.", "Log a meal or ask for a plan.") }
+        if (plans.isEmpty()) {
+            item { EmptyState("No meal plan yet.", "Create a draft plan from recipes and kitchen items.") }
+        } else {
+            item { SectionLabel("Plans") }
         }
-        if (plans.isNotEmpty()) item { SectionLabel("Plans") }
         items(plans, key = { it.id }) { plan ->
             MealPlanCard(
                 plan = plan,
                 onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.PLAN, id = plan.id)) },
             )
         }
-        if (meals.isNotEmpty()) item { SectionLabel("Meal logs") }
-        items(meals, key = { it.id }) { meal ->
-            MealCard(
-                meal = meal,
-                onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.MEAL, id = meal.id)) },
-                onDelete = { onDeleteMeal(meal.id) },
-            )
+        item { SectionLabel("Plan versus actual") }
+        items(calendarSlots(memory), key = { it.date.toEpochDay() }) { day ->
+            CalendarDayCard(day = day, onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = day.date.toEpochDay())) })
         }
     }
+}
+
+@Composable
+private fun TodayPlanEntryCard(entry: MealPlanEntry, onOpen: () -> Unit) {
+    MemoryCard(
+        title = "${entry.slot.label}: ${entry.title}",
+        subtitle = entry.calorieTarget?.let { "$it kcal target" } ?: "Planned meal",
+        accent = MaterialTheme.colorScheme.secondaryContainer,
+        image = foodEmoji(entry.title),
+        onOpen = onOpen,
+    )
+}
+
+@Composable
+private fun PlanSummaryCard(memory: FoodMemory) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ObjectImage(image = "🗓️", color = MaterialTheme.colorScheme.surface, size = 56.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Meal plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "${memory.mealPlans.size} plan${memory.mealPlans.size.pluralWord}, ${memory.mealPlanEntries.size} scheduled meal${memory.mealPlanEntries.size.pluralWord}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            MetricPill("🛒", "${memory.groceries.count { it.status == GroceryStatus.NEEDED }} to buy")
+        }
+    }
+}
+
+@Composable
+private fun SearchContent(
+    memory: FoodMemory,
+    onBack: () -> Unit,
+    onOpenDetail: (FoodDetailTarget) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val allResults = remember(memory) { memory.globalSearchResults() }
+    val visible = remember(allResults, query) {
+        val clean = query.trim()
+        if (clean.isBlank()) {
+            allResults.take(12)
+        } else {
+            allResults.filter { result ->
+                result.title.contains(clean, ignoreCase = true) ||
+                    result.subtitle.contains(clean, ignoreCase = true)
+            }
+        }
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 12.dp),
+    ) {
+        item {
+            DetailShell(
+                image = "🔎",
+                title = "Search",
+                subtitle = "Kitchen, plans, recipes, shopping, receipts",
+                onBack = onBack,
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search WonderFood") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                )
+            }
+        }
+        item {
+            SectionLabel(if (query.isBlank()) "Recent food objects" else "${visible.size} result${visible.size.pluralWord}")
+        }
+        if (visible.isEmpty()) {
+            item { EmptyState("No matches.", "Try a food, recipe, meal, receipt, or shopping item.") }
+        }
+        items(visible, key = { "${it.kind}-${it.id}-${it.title}" }) { result ->
+            SearchResultCard(result = result, onOpen = { onOpenDetail(result.target) })
+        }
+    }
+}
+
+@Composable
+private fun SearchResultCard(result: SearchResult, onOpen: () -> Unit) {
+    MemoryCard(
+        title = result.title,
+        subtitle = result.subtitle,
+        accent = MaterialTheme.colorScheme.surfaceVariant,
+        image = result.image,
+        onOpen = onOpen,
+    )
 }
 
 @Composable
@@ -1559,12 +1526,21 @@ private fun PreferencesContent(
     onSaveAiConfig: () -> Unit,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
     onRequestHealthConnect: () -> Unit,
+    onBack: () -> Unit,
 ) {
     var panel by remember { mutableStateOf(MorePanel.TASTE) }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 12.dp),
     ) {
+        item {
+            DetailShell(
+                image = "⚙️",
+                title = "Settings",
+                subtitle = "Taste, AI, health, data, theme",
+                onBack = onBack,
+            ) {}
+        }
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3009,90 +2985,41 @@ private fun Composer(
 }
 
 @Composable
-private fun FloatingAiDock(
+private fun AiCaptureDialog(
     input: String,
     isWorking: Boolean,
-    bottomPadding: androidx.compose.ui.unit.Dp,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onPickReceiptPhoto: () -> Unit,
     onRecordVoiceNote: () -> Unit,
-    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val shouldExpand = expanded || input.isNotBlank()
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = bottomPadding),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        if (shouldExpand) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onPickReceiptPhoto, enabled = !isWorking) {
-                    Icon(Icons.Rounded.AddAPhoto, contentDescription = "Attach receipt photo")
-                }
-                IconButton(onClick = onRecordVoiceNote, enabled = !isWorking) {
-                    Icon(Icons.Rounded.Mic, contentDescription = "Add voice note")
-                }
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = onInputChange,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Ask AI or dictate food changes") },
-                    minLines = 1,
-                    maxLines = 4,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
-                    shape = RoundedCornerShape(8.dp),
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ask WonderFood") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Capture a food change, receipt, or voice note for review.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
-                    onClick = {
-                        onSend()
-                        expanded = false
-                    },
-                    enabled = input.isNotBlank() && !isWorking,
-                    modifier = Modifier.height(56.dp),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = { expanded = false }) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Collapse AI")
-                }
+                Composer(
+                    input = input,
+                    isWorking = isWorking,
+                    onInputChange = onInputChange,
+                    onSend = onSend,
+                    onPickReceiptPhoto = onPickReceiptPhoto,
+                    onRecordVoiceNote = onRecordVoiceNote,
+                )
             }
-        } else {
-            Row(
-                modifier = Modifier.padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onPickReceiptPhoto, enabled = !isWorking) {
-                    Icon(Icons.Rounded.AddAPhoto, contentDescription = "Attach receipt photo")
-                }
-                IconButton(onClick = onRecordVoiceNote, enabled = !isWorking) {
-                    Icon(Icons.Rounded.Mic, contentDescription = "Add voice note")
-                }
-                Button(
-                    onClick = { expanded = true },
-                    enabled = !isWorking,
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("AI")
-                }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -3103,33 +3030,100 @@ private fun zoneColor(zone: StorageZone): Color =
         StorageZone.PANTRY -> MaterialTheme.colorScheme.secondaryContainer
     }
 
-private fun FoodMemory.countFor(section: FoodSection): Int =
-    when (section) {
-        FoodSection.PANTRY -> inventory.size
-        FoodSection.BUY -> groceries.count { it.status == GroceryStatus.NEEDED }
-        FoodSection.MEALS -> mealLogs.size + mealPlans.size
-        FoodSection.RECIPES -> recipes.size
-        FoodSection.PREFS -> if (preferences.isEmpty) 0 else 1
+private fun FoodMemory.globalSearchResults(): List<SearchResult> =
+    buildList {
+        inventory.sortedByDescending { it.updatedAtMillis }.forEach { item ->
+            add(
+                SearchResult(
+                    kind = "kitchen",
+                    id = item.id,
+                    title = item.name,
+                    subtitle = "Kitchen • ${item.zone.label} • ${item.quantity.ifBlank { "quantity unknown" }}",
+                    image = foodEmoji(item.name),
+                    target = FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id),
+                ),
+            )
+        }
+        groceries.sortedByDescending { it.updatedAtMillis }.forEach { item ->
+            add(
+                SearchResult(
+                    kind = "shop",
+                    id = item.id,
+                    title = item.name,
+                    subtitle = "Shop • ${item.status.name.lowercase()} • ${item.quantity.ifBlank { "as needed" }}",
+                    image = foodEmoji(item.name),
+                    target = FoodDetailTarget(FoodDetailKind.GROCERY, id = item.id),
+                ),
+            )
+        }
+        recipes.sortedByDescending { it.updatedAtMillis }.forEach { recipe ->
+            add(
+                SearchResult(
+                    kind = "recipe",
+                    id = recipe.id,
+                    title = recipe.title,
+                    subtitle = "Recipe • ${recipe.tags.ifBlank { "untagged" }}",
+                    image = recipe.imageUri ?: foodEmoji(recipe.title),
+                    target = FoodDetailTarget(FoodDetailKind.RECIPE, id = recipe.id),
+                ),
+            )
+        }
+        mealLogs.sortedByDescending { it.updatedAtMillis }.forEach { meal ->
+            add(
+                SearchResult(
+                    kind = "meal",
+                    id = meal.id,
+                    title = meal.title,
+                    subtitle = "Today • ${meal.mealSlot.label} • ${meal.loggedDateEpochDay.epochDayShortDate()}",
+                    image = foodEmoji(meal.title),
+                    target = FoodDetailTarget(FoodDetailKind.MEAL, id = meal.id),
+                ),
+            )
+        }
+        mealPlans.sortedByDescending { it.updatedAtMillis }.forEach { plan ->
+            add(
+                SearchResult(
+                    kind = "plan",
+                    id = plan.id,
+                    title = plan.title,
+                    subtitle = "Plan • ${plan.status.name.lowercase()}",
+                    image = "🗓️",
+                    target = FoodDetailTarget(FoodDetailKind.PLAN, id = plan.id),
+                ),
+            )
+        }
+        receipts.sortedByDescending { it.createdAtMillis }.forEach { receipt ->
+            add(
+                SearchResult(
+                    kind = "receipt",
+                    id = receipt.id,
+                    title = "Receipt ${receipt.id}",
+                    subtitle = "Shop • ${receipt.status.name.lowercase()} • ${receipt.createdAtMillis.shortDate()}",
+                    image = "🧾",
+                    target = FoodDetailTarget(FoodDetailKind.RECEIPT, id = receipt.id),
+                ),
+            )
+        }
     }
 
 private val FoodSection.icon: ImageVector
     get() =
         when (this) {
-            FoodSection.PANTRY -> Icons.Rounded.Inventory2
-            FoodSection.BUY -> Icons.Rounded.ShoppingCart
-            FoodSection.MEALS -> Icons.Rounded.CalendarMonth
+            FoodSection.TODAY -> Icons.Rounded.Restaurant
+            FoodSection.KITCHEN -> Icons.Rounded.Kitchen
+            FoodSection.PLAN -> Icons.Rounded.CalendarMonth
             FoodSection.RECIPES -> Icons.Rounded.Restaurant
-            FoodSection.PREFS -> Icons.Rounded.Settings
+            FoodSection.SHOP -> Icons.Rounded.ShoppingCart
         }
 
 private val FoodSection.subtitle: String
     get() =
         when (this) {
-            FoodSection.PANTRY -> "Fridge, freezer, pantry"
-            FoodSection.BUY -> "Cart into kitchen"
-            FoodSection.MEALS -> "Plan, log, sync"
+            FoodSection.TODAY -> "Plan, log, sync"
+            FoodSection.KITCHEN -> "Fridge, freezer, pantry"
+            FoodSection.PLAN -> "Future meals"
             FoodSection.RECIPES -> "Personal recipes"
-            FoodSection.PREFS -> "Taste, rules, AI"
+            FoodSection.SHOP -> "Cart into kitchen"
         }
 
 private val WonderFoodThemeMode.displayLabel: String
@@ -3227,6 +3221,20 @@ private fun String.cleanIngredientName(): String =
     replace(Regex("""^[\s\-•*\d./]+"""), "")
         .replace(Regex("""\b(cups?|tbsp|tsp|teaspoons?|tablespoons?|grams?|g|kg|ml|liters?|large|medium|small|cooked|dry|fresh)\b""", RegexOption.IGNORE_CASE), "")
         .trim()
+
+private enum class SecondaryPane {
+    SEARCH,
+    SETTINGS,
+}
+
+private data class SearchResult(
+    val kind: String,
+    val id: Long,
+    val title: String,
+    val subtitle: String,
+    val image: String,
+    val target: FoodDetailTarget,
+)
 
 private data class CalendarSlot(
     val date: LocalDate,

@@ -40,8 +40,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val liteLlmInterpreter = LiteLlmFoodInterpreter()
     private val liteLlmSettings = LiteLlmSettings(appContext)
     private val health = HealthConnectGateway(appContext)
+    private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _uiState = MutableStateFlow(WonderFoodUiState())
+    private val _uiState = MutableStateFlow(WonderFoodUiState(section = readSelectedSection()))
     val uiState: StateFlow<WonderFoodUiState> = _uiState.asStateFlow()
 
     val healthPermissionContract = health.permissionContract()
@@ -61,7 +62,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun selectSection(section: FoodSection) {
-        _uiState.update { it.copy(section = section, detailTarget = null) }
+        setSection(section)
     }
 
     fun openDetail(target: FoodDetailTarget) {
@@ -107,22 +108,22 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             val message = when (command.action) {
                 WonderFoodVoiceAction.OPEN_SECTION -> {
                     val section = command.section.toFoodSection()
-                    _uiState.update { it.copy(section = section, detailTarget = null) }
+                    setSection(section)
                     "Opened ${section.label}."
                 }
                 WonderFoodVoiceAction.SHOW_NUMBERS -> {
-                    _uiState.update { it.copy(section = FoodSection.MEALS, detailTarget = null) }
+                    setSection(FoodSection.TODAY)
                     "Opened today's numbers."
                 }
                 WonderFoodVoiceAction.LOG_WATER -> store.logWater(command.amount?.toInt() ?: 250, source = "google_assistant")
                 WonderFoodVoiceAction.START_SHOPPING -> {
                     store.logFoodEvent(FoodEventType.SHOP, source = "google_assistant", confidence = FoodEventConfidence.EXACT, note = "Started shopping")
-                    _uiState.update { it.copy(section = FoodSection.BUY, detailTarget = null) }
+                    setSection(FoodSection.SHOP)
                     "Started shopping."
                 }
                 WonderFoodVoiceAction.DONE_SHOPPING -> {
                     store.logFoodEvent(FoodEventType.SHOP, source = "google_assistant", confidence = FoodEventConfidence.EXACT, note = "Finished shopping")
-                    _uiState.update { it.copy(section = FoodSection.BUY, detailTarget = null) }
+                    setSection(FoodSection.SHOP)
                     "Finished shopping."
                 }
                 WonderFoodVoiceAction.START_COOKING -> {
@@ -140,13 +141,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                             detailTarget = recipe?.let { found -> FoodDetailTarget(FoodDetailKind.RECIPE, id = found.id) },
                         )
                     }
+                    saveSelectedSection(FoodSection.RECIPES)
                     "Started cooking ${recipe?.title ?: command.recipeName.ifBlank { "recipe" }}."
                 }
                 WonderFoodVoiceAction.DONE_COOKING -> {
                     val recipe = store.readMemory().recipes.findVoiceRecipe(command.recipeName)
                     if (recipe == null) {
                         store.logFoodEvent(FoodEventType.COOK, source = "google_assistant", confidence = FoodEventConfidence.ESTIMATED, note = "Finished cooking ${command.recipeName}")
-                        _uiState.update { it.copy(section = FoodSection.RECIPES, detailTarget = null) }
+                        setSection(FoodSection.RECIPES)
                         "Finished cooking."
                     } else {
                         store.cookRecipe(recipe.id)
@@ -166,7 +168,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         ),
                         sourceMessageId = null,
                     )
-                    _uiState.update { it.copy(section = FoodSection.MEALS, detailTarget = null) }
+                    setSection(FoodSection.TODAY)
                     "Logged meal: $title."
                 }
                 WonderFoodVoiceAction.ADD_GROCERY -> {
@@ -184,7 +186,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         ),
                         sourceMessageId = null,
                     )
-                    _uiState.update { it.copy(section = FoodSection.BUY, detailTarget = null) }
+                    setSection(FoodSection.SHOP)
                     "Added $item to shopping list."
                 }
             }
@@ -406,12 +408,33 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             )
         }
     }
+
+    private fun setSection(section: FoodSection) {
+        saveSelectedSection(section)
+        _uiState.update { it.copy(section = section, detailTarget = null) }
+    }
+
+    private fun saveSelectedSection(section: FoodSection) {
+        shellPrefs.edit().putString(KEY_SELECTED_SECTION, section.name).apply()
+    }
+
+    private fun readSelectedSection(): FoodSection =
+        runCatching {
+            FoodSection.valueOf(
+                shellPrefs.getString(KEY_SELECTED_SECTION, FoodSection.TODAY.name).orEmpty(),
+            )
+        }.getOrDefault(FoodSection.TODAY)
+
+    private companion object {
+        const val SHELL_PREFS_NAME = "wonderfood_shell"
+        const val KEY_SELECTED_SECTION = "selected_section"
+    }
 }
 
 data class WonderFoodUiState(
     val memory: FoodMemory = FoodMemory(),
     val input: String = "",
-    val section: FoodSection = FoodSection.MEALS,
+    val section: FoodSection = FoodSection.TODAY,
     val pendingDraft: FoodDraft? = null,
     val pendingSourceMessageId: Long? = null,
     val aiStatus: String = "AI: checking",
@@ -440,23 +463,23 @@ enum class FoodDetailKind {
 }
 
 enum class FoodSection(val label: String) {
-    PANTRY("Kitchen"),
-    BUY("List"),
-    MEALS("Today"),
+    TODAY("Today"),
+    KITCHEN("Kitchen"),
+    PLAN("Plan"),
     RECIPES("Recipes"),
-    PREFS("More"),
+    SHOP("Shop"),
 }
 
 private fun String.toFoodSection(): FoodSection {
     val text = lowercase()
     return when {
-        text in listOf("today", "meals", "meal", "calendar", "numbers", "health") -> FoodSection.MEALS
-        text in listOf("kitchen", "pantry", "fridge", "freezer", "inventory") -> FoodSection.PANTRY
-        text in listOf("buy", "list", "shopping", "groceries", "grocery") -> FoodSection.BUY
+        text in listOf("today", "meals", "meal", "numbers", "health") -> FoodSection.TODAY
+        text in listOf("kitchen", "pantry", "fridge", "freezer", "inventory") -> FoodSection.KITCHEN
+        text in listOf("plan", "plans", "calendar", "week", "month") -> FoodSection.PLAN
+        text in listOf("buy", "list", "shopping", "shop", "groceries", "grocery") -> FoodSection.SHOP
         text in listOf("recipe", "recipes", "cook", "cooking") -> FoodSection.RECIPES
-        text in listOf("more", "settings", "ai", "data", "taste", "preferences") -> FoodSection.PREFS
-        text in listOf("chat", "ask") -> FoodSection.MEALS
-        else -> FoodSection.MEALS
+        text in listOf("chat", "ask", "more", "settings", "ai", "data", "taste", "preferences") -> FoodSection.TODAY
+        else -> FoodSection.TODAY
     }
 }
 
