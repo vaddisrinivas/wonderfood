@@ -220,6 +220,110 @@ class RoomFoodCommandRepositoryTest {
         )
     }
 
+    @Test
+    fun unconfirmedCorrectionLeavesLotAndHistoryUnchanged() = runTest {
+        executor.execute(createFoodCommand("idem-create"))
+        executor.execute(addStockLotCommand("idem-lot", stockLot("lot-oats", amount = 2.0)))
+
+        val result = executor.execute(
+            FoodCommand.CorrectStockLot(
+                idempotencyKey = IdempotencyKey("idem-correct"),
+                requestedAt = IsoTimestamp("2026-07-16T13:00:00Z"),
+                source = source(),
+                confidence = confidence(),
+                stockLotId = StockLotId("lot-oats"),
+                quantity = Quantity(1.0, FoodUnit.EACH, TruthState.USER_CONFIRMED),
+                status = StockLotStatus.LOW,
+                location = "front shelf",
+                reason = "counted it",
+            ),
+            confirmed = false,
+        )
+
+        assertTrue(result is FoodCommandExecutionResult.NeedsConfirmation)
+        val lot = dao.getStockLot("lot-oats")
+        assertEquals(2.0, lot?.quantity?.amount)
+        assertEquals(StockLotStatus.AVAILABLE, lot?.status)
+        assertEquals("pantry shelf", lot?.location)
+        assertEquals(
+            listOf(FoodEventType.STOCK_ADDED),
+            dao.observeFoodEventsForSubject("STOCK_LOT", "lot-oats").first().map { it.type },
+        )
+        assertEquals(
+            listOf("AddStockLot"),
+            dao.observeFoodActionsForSubject("STOCK_LOT", "lot-oats").first().map { it.actionType },
+        )
+    }
+
+    @Test
+    fun confirmedCorrectionCreatesHistoryWithoutDeletingLot() = runTest {
+        executor.execute(createFoodCommand("idem-create"))
+        executor.execute(addStockLotCommand("idem-lot", stockLot("lot-oats", amount = 2.0)))
+
+        val result = executor.execute(
+            FoodCommand.CorrectStockLot(
+                idempotencyKey = IdempotencyKey("idem-correct"),
+                requestedAt = IsoTimestamp("2026-07-16T13:00:00Z"),
+                source = source(),
+                confidence = confidence(),
+                stockLotId = StockLotId("lot-oats"),
+                quantity = Quantity(0.0, FoodUnit.EACH, TruthState.USER_CONFIRMED),
+                status = null,
+                location = "front shelf",
+                reason = "counted it",
+            ),
+            confirmed = true,
+        )
+
+        assertTrue(result is FoodCommandExecutionResult.Applied)
+        val lot = dao.getStockLot("lot-oats")
+        assertEquals(0.0, lot?.quantity?.amount)
+        assertEquals(StockLotStatus.OUT, lot?.status)
+        assertEquals("front shelf", lot?.location)
+        assertEquals(null, lot?.deletedAt)
+        assertEquals(
+            listOf(FoodEventType.STOCK_ADDED, FoodEventType.STOCK_CORRECTED),
+            dao.observeFoodEventsForSubject("STOCK_LOT", "lot-oats").first().map { it.type },
+        )
+        assertEquals(
+            listOf("AddStockLot", "CorrectStockLot"),
+            dao.observeFoodActionsForSubject("STOCK_LOT", "lot-oats").first().map { it.actionType },
+        )
+    }
+
+    @Test
+    fun failedMergeLeavesLotsEventsAndActionsUnchanged() = runTest {
+        executor.execute(createFoodCommand("idem-create"))
+        executor.execute(addStockLotCommand("idem-source", stockLot("lot-source", amount = 3.0)))
+
+        val result = executor.execute(
+            FoodCommand.MergeStockLots(
+                idempotencyKey = IdempotencyKey("idem-merge"),
+                requestedAt = IsoTimestamp("2026-07-16T13:00:00Z"),
+                source = source(),
+                confidence = confidence(),
+                sourceStockLotId = StockLotId("lot-source"),
+                targetStockLotId = StockLotId("missing-lot"),
+                reason = "same container",
+            ),
+            confirmed = true,
+        )
+
+        assertTrue(result is FoodCommandExecutionResult.Rejected)
+        val source = dao.getStockLot("lot-source")
+        assertEquals(3.0, source?.quantity?.amount)
+        assertEquals(StockLotStatus.AVAILABLE, source?.status)
+        assertEquals(null, dao.getStockLot("missing-lot"))
+        assertEquals(
+            listOf(FoodEventType.STOCK_ADDED),
+            dao.observeFoodEventsForSubject("STOCK_LOT", "lot-source").first().map { it.type },
+        )
+        assertEquals(
+            emptyList<String>(),
+            dao.observeFoodActionsForSubject("STOCK_LOT", "missing-lot").first().map { it.actionType },
+        )
+    }
+
     private fun createFoodCommand(key: String): FoodCommand.CreateFoodGraph {
         val pageId = PageId("page-oats")
         val foodId = FoodId("food-oats")

@@ -10,6 +10,8 @@ import com.wonderfood.core.model.FoodEventId
 import com.wonderfood.core.model.FoodEventType
 import com.wonderfood.core.model.FoodId
 import com.wonderfood.core.model.FoodStatus
+import com.wonderfood.core.model.FoodUnit
+import com.wonderfood.core.model.IsoDate
 import com.wonderfood.core.model.IsoTimestamp
 import com.wonderfood.core.model.Page
 import com.wonderfood.core.model.PageId
@@ -18,7 +20,6 @@ import com.wonderfood.core.model.Quantity
 import com.wonderfood.core.model.Source
 import com.wonderfood.core.model.SourceId
 import com.wonderfood.core.model.SourceKind
-import com.wonderfood.core.model.FoodUnit
 import com.wonderfood.core.model.StockLot
 import com.wonderfood.core.model.StockLotId
 import com.wonderfood.core.model.StockLotStatus
@@ -135,6 +136,80 @@ class FoodCommandExecutorTest {
         assertEquals(listOf("ConsumeStockLot"), repository.actions.values.map { it.actionType })
     }
 
+    @Test
+    fun confirmationPolicyCoversEveryCommandType() {
+        val expectations = listOf(
+            createFoodCommand("idem-create") to (false to CommandRisk.REVIEW),
+            addStockLotCommand("idem-add", stockLot("lot-add")) to (false to CommandRisk.REVIEW),
+            archiveFoodCommand("idem-archive-food") to (true to CommandRisk.DESTRUCTIVE),
+            archiveStockLotCommand("idem-archive-lot") to (true to CommandRisk.DESTRUCTIVE),
+            FoodCommand.MoveStockLot(idempotencyKey("idem-move"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "fridge") to (false to CommandRisk.REVIEW),
+            FoodCommand.OpenStockLot(idempotencyKey("idem-open"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "opened for breakfast") to (false to CommandRisk.REVIEW),
+            consumeStockLotCommand("idem-consume-exact", exact = true) to (true to CommandRisk.CONFIRM),
+            consumeStockLotCommand("idem-consume-uncertain", exact = false) to (false to CommandRisk.REVIEW),
+            FoodCommand.DiscardStockLot(idempotencyKey("idem-discard"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "spoiled") to (true to CommandRisk.DESTRUCTIVE),
+            FoodCommand.CorrectStockLot(idempotencyKey("idem-correct"), timestamp(), source(), confidence(), StockLotId("lot-oats"), quantity(1.0), null, null, "counted it") to (true to CommandRisk.CONFIRM),
+            FoodCommand.MarkStockLotLow(idempotencyKey("idem-low"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "almost out") to (false to CommandRisk.REVIEW),
+            FoodCommand.MarkStockLotOut(idempotencyKey("idem-out"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "finished") to (true to CommandRisk.CONFIRM),
+            FoodCommand.PutAwayStockLot(idempotencyKey("idem-put-away"), timestamp(), source(), confidence(), StockLotId("lot-oats"), "pantry") to (false to CommandRisk.REVIEW),
+            FoodCommand.MergeStockLots(idempotencyKey("idem-merge"), timestamp(), source(), confidence(), StockLotId("lot-source"), StockLotId("lot-target"), "same container") to (true to CommandRisk.DESTRUCTIVE),
+            FoodCommand.UndoFoodAction(idempotencyKey("idem-undo"), timestamp(), source(), confidence(), FoodActionId("action-1"), "mistake") to (true to CommandRisk.CONFIRM),
+        )
+
+        val coveredActionTypes = expectations.map { it.first.actionType() }.toSet()
+        assertEquals(
+            setOf(
+                "AddStockLot",
+                "ArchiveFood",
+                "ArchiveStockLot",
+                "ConsumeStockLot",
+                "CorrectStockLot",
+                "CreateFoodGraph",
+                "DiscardStockLot",
+                "MarkStockLotLow",
+                "MarkStockLotOut",
+                "MergeStockLots",
+                "MoveStockLot",
+                "OpenStockLot",
+                "PutAwayStockLot",
+                "UndoFoodAction",
+            ),
+            coveredActionTypes,
+        )
+        expectations.forEach { (command, expected) ->
+            val requirement = command.confirmationRequirement()
+            assertEquals(command.actionType(), expected.first, requirement.required)
+            assertEquals(command.actionType(), expected.second, requirement.risk)
+        }
+    }
+
+    @Test
+    fun validationRejectsBadCommandsBeforeTransaction() = runTest {
+        val badCommands = listOf(
+            archiveFoodCommand("bad-archive-food").copy(reason = ""),
+            archiveStockLotCommand("bad-archive-lot").copy(reason = ""),
+            FoodCommand.MoveStockLot(idempotencyKey("bad-move"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            FoodCommand.OpenStockLot(idempotencyKey("bad-open"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            consumeStockLotCommand("bad-consume-exact", exact = true).copy(quantity = quantity(null)),
+            FoodCommand.DiscardStockLot(idempotencyKey("bad-discard"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            FoodCommand.CorrectStockLot(idempotencyKey("bad-correct-empty"), timestamp(), source(), confidence(), StockLotId("lot-oats"), null, null, null, "no fields"),
+            FoodCommand.CorrectStockLot(idempotencyKey("bad-correct-blank-location"), timestamp(), source(), confidence(), StockLotId("lot-oats"), null, null, "", "blank location"),
+            FoodCommand.MarkStockLotLow(idempotencyKey("bad-low"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            FoodCommand.MarkStockLotOut(idempotencyKey("bad-out"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            FoodCommand.PutAwayStockLot(idempotencyKey("bad-put-away"), timestamp(), source(), confidence(), StockLotId("lot-oats"), ""),
+            FoodCommand.MergeStockLots(idempotencyKey("bad-merge"), timestamp(), source(), confidence(), StockLotId("lot-same"), StockLotId("lot-same"), "same"),
+            FoodCommand.UndoFoodAction(idempotencyKey("bad-undo"), timestamp(), source(), confidence(), FoodActionId("action-1"), ""),
+        )
+
+        badCommands.forEach { command ->
+            val result = executor.execute(command, confirmed = true)
+            assertTrue(command.actionType(), result is FoodCommandExecutionResult.Rejected)
+        }
+        assertEquals(0, repository.transactionCalls)
+        assertEquals(0, repository.actions.size)
+        assertEquals(emptyList<FoodEventType>(), repository.eventTypes)
+    }
+
     private fun createFoodCommand(key: String): FoodCommand.CreateFoodGraph {
         val pageId = PageId("page-oats")
         val foodId = FoodId("food-oats")
@@ -183,20 +258,66 @@ class FoodCommandExecutorTest {
         )
     }
 
-    private fun consumeStockLotCommand(key: String, exact: Boolean) =
-        FoodCommand.ConsumeStockLot(
-            idempotencyKey = IdempotencyKey(key),
+    private fun addStockLotCommand(key: String, stockLot: StockLot) =
+        FoodCommand.AddStockLot(
+            idempotencyKey = idempotencyKey(key),
             requestedAt = timestamp(),
             source = source(),
-            confidence = Confidence(score = 1.0, state = TruthState.USER_CONFIRMED, rationale = "test"),
+            confidence = confidence(),
+            stockLot = stockLot,
+        )
+
+    private fun archiveFoodCommand(key: String) =
+        FoodCommand.ArchiveFood(
+            idempotencyKey = idempotencyKey(key),
+            requestedAt = timestamp(),
+            source = source(),
+            confidence = confidence(),
+            foodId = FoodId("food-oats"),
+            reason = "duplicate",
+        )
+
+    private fun archiveStockLotCommand(key: String) =
+        FoodCommand.ArchiveStockLot(
+            idempotencyKey = idempotencyKey(key),
+            requestedAt = timestamp(),
+            source = source(),
+            confidence = confidence(),
             stockLotId = StockLotId("lot-oats"),
-            quantity = Quantity(
-                amount = if (exact) 1.0 else null,
-                unit = FoodUnit.EACH,
-                truthState = if (exact) TruthState.USER_CONFIRMED else TruthState.ESTIMATED,
-            ),
+            reason = "duplicate",
+        )
+
+    private fun consumeStockLotCommand(key: String, exact: Boolean) =
+        FoodCommand.ConsumeStockLot(
+            idempotencyKey = idempotencyKey(key),
+            requestedAt = timestamp(),
+            source = source(),
+            confidence = confidence(),
+            stockLotId = StockLotId("lot-oats"),
+            quantity = quantity(if (exact) 1.0 else null),
             exact = exact,
             reason = "used for breakfast",
+        )
+
+    private fun stockLot(id: String) =
+        StockLot(
+            id = StockLotId(id),
+            foodId = FoodId("food-oats"),
+            quantity = quantity(1.0),
+            purchasedOn = IsoDate("2026-07-16"),
+            expiresOn = IsoDate("2026-07-23"),
+            location = "pantry",
+            status = StockLotStatus.AVAILABLE,
+            source = source(),
+            confidence = confidence(),
+            truthState = TruthState.USER_CONFIRMED,
+        )
+
+    private fun quantity(amount: Double?) =
+        Quantity(
+            amount = amount,
+            unit = FoodUnit.EACH,
+            truthState = if (amount == null) TruthState.ESTIMATED else TruthState.USER_CONFIRMED,
         )
 
     private fun audit(id: String, key: String, subject: EntityRef, actionType: String) =
@@ -214,7 +335,11 @@ class FoodCommandExecutorTest {
             truthState = TruthState.USER_CONFIRMED,
         )
 
+    private fun idempotencyKey(value: String) = IdempotencyKey(value)
+
     private fun timestamp() = IsoTimestamp("2026-07-16T10:00:00Z")
+
+    private fun confidence() = Confidence(score = 1.0, state = TruthState.USER_CONFIRMED, rationale = "test")
 
     private fun source() = Source(
         id = SourceId("source-user"),
@@ -240,8 +365,12 @@ class FoodCommandExecutorTest {
         val lotStatuses = linkedMapOf<String, String>()
         val eventTypes = mutableListOf<FoodEventType>()
         var createFoodCalls = 0
+        var transactionCalls = 0
 
-        override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+        override suspend fun <T> withTransaction(block: suspend () -> T): T {
+            transactionCalls += 1
+            return block()
+        }
 
         override suspend fun findActionById(actionId: FoodActionId): FoodActionAudit? = actions[actionId]
 
