@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://open{?feature}" />
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.LOG_WATER"
+        app:queryPatterns="@array/assistant_log_water_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/water{?ml}" />
+            <parameter
+                android:name="ml"
+                android:key="ml"
+                android:mimeType="https://schema.org/Number" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.ADD_GROCERY"
+        app:queryPatterns="@array/assistant_add_grocery_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/grocery/add{?item}" />
+            <parameter
+                android:name="item"
+                android:key="item"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.LOG_MEAL"
+        app:queryPatterns="@array/assistant_log_meal_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/meal/log{?meal}" />
+            <parameter
+                android:name="meal"
+                android:key="meal"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.START_COOKING"
+        app:queryPatterns="@array/assistant_start_cooking_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/cooking/start{?recipe}" />
+            <parameter
+                android:name="recipe"
+                android:key="recipe"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <shortcut
+        android:shortcutId="today"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_today">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://open/today"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="today" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="numbers"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_numbers">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://open/numbers"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="numbers" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="kitchen"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_kitchen">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://open/kitchen"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="kitchen" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shopping"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_shopping">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://open/shopping"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="shopping" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="recipes"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_recipes">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://open/recipes"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="recipes" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="log_water_250"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_log_water">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://voice/water?ml=250"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="start_shopping"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_start_shopping">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://voice/shopping/start"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="done_shopping"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_done_shopping">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="wonderfood://voice/shopping/done"
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity" />
+    </shortcut>
+
+</shortcuts>

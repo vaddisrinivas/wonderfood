@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">WonderFood</string>
+    <string name="shortcut_today">Today</string>
+    <string name="shortcut_numbers">Numbers</string>
+    <string name="shortcut_kitchen">Kitchen</string>
+    <string name="shortcut_shopping">Shopping list</string>
+    <string name="shortcut_recipes">Recipes</string>
+    <string name="shortcut_log_water">Log water</string>
+    <string name="shortcut_start_shopping">Start shopping</string>
+    <string name="shortcut_done_shopping">Done shopping</string>
+    <string name="shortcut_start_cooking">Start cooking</string>
+    <string name="shortcut_log_meal">Log meal</string>
+
+    <string-array name="assistant_log_water_queries">
+        <item>log $ml ml water in WonderFood</item>
+        <item>add $ml milliliters water to WonderFood</item>
+        <item>WonderFood log $ml ml water</item>
+    </string-array>
+    <string-array name="assistant_add_grocery_queries">
+        <item>add $item to my WonderFood shopping list</item>
+        <item>WonderFood add $item to groceries</item>
+        <item>put $item on my WonderFood list</item>
+    </string-array>
+    <string-array name="assistant_log_meal_queries">
+        <item>log $meal in WonderFood</item>
+        <item>WonderFood log meal $meal</item>
+        <item>I ate $meal in WonderFood</item>
+    </string-array>
+    <string-array name="assistant_start_cooking_queries">
+        <item>start cooking $recipe in WonderFood</item>
+        <item>WonderFood start cooking $recipe</item>
+        <item>cook $recipe in WonderFood</item>
+    </string-array>
+</resources>
