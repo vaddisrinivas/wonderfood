@@ -44,6 +44,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val health = HealthConnectGateway(appContext)
     private val captureGateway = FoodCaptureGateway(appContext)
     private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
+    private val directActionPrefs = appContext.getSharedPreferences(DIRECT_ACTION_PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(WonderFoodUiState(section = readSelectedSection()))
     val uiState: StateFlow<WonderFoodUiState> = _uiState.asStateFlow()
@@ -106,8 +107,22 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun handleVoiceCommand(command: WonderFoodVoiceCommand) {
+        if (hasHandledDirectAction(command)) {
+            _uiState.update {
+                it.copy(
+                    isWorking = false,
+                    voiceStatus = "Already handled this assistant action.",
+                )
+            }
+            return
+        }
         _uiState.update { it.copy(isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
+            if (command.action == WonderFoodVoiceAction.AI_REVIEW) {
+                submitToAi(command.text.ifBlank { "Food note from assistant" }, "voice")
+                markDirectActionHandled(command)
+                return@launch
+            }
             val message = when (command.action) {
                 WonderFoodVoiceAction.OPEN_SECTION -> {
                     val section = command.section.toFoodSection()
@@ -192,7 +207,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     setSection(FoodSection.SHOP)
                     "Added $item to shopping list."
                 }
+                WonderFoodVoiceAction.AI_REVIEW -> error("AI review commands return before direct-action handling.")
             }
+            markDirectActionHandled(command)
             refreshFromDisk(isWorking = false)
             _uiState.update { it.copy(voiceStatus = message) }
         }
@@ -447,8 +464,23 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             )
         }.getOrDefault(FoodSection.TODAY)
 
+    private fun hasHandledDirectAction(command: WonderFoodVoiceCommand): Boolean =
+        command.idempotencyKey.isNotBlank() &&
+            directActionPrefs.getBoolean(command.directActionPreferenceKey(), false)
+
+    private fun markDirectActionHandled(command: WonderFoodVoiceCommand) {
+        if (command.idempotencyKey.isBlank()) return
+        directActionPrefs.edit()
+            .putBoolean(command.directActionPreferenceKey(), true)
+            .apply()
+    }
+
+    private fun WonderFoodVoiceCommand.directActionPreferenceKey(): String =
+        "handled:$idempotencyKey"
+
     private companion object {
         const val SHELL_PREFS_NAME = "wonderfood_shell"
+        const val DIRECT_ACTION_PREFS_NAME = "wonderfood_direct_actions"
         const val KEY_SELECTED_SECTION = "selected_section"
     }
 }
