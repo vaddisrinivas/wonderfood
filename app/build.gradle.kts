@@ -48,6 +48,11 @@ dependencies {
   androidTestImplementation(composeBom)
 
   // Core Android dependencies
+  implementation(project(":core:model"))
+  implementation(project(":core:engine"))
+  implementation(project(":core:data"))
+  implementation(project(":core:ai"))
+
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)

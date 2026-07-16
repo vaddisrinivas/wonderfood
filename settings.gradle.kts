@@ -31,3 +31,7 @@ plugins {
 
 rootProject.name = "WonderFood"
 include(":app")
+include(":core:model")
+include(":core:engine")
+include(":core:data")
+include(":core:ai")
