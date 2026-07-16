@@ -198,7 +198,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     fun send() {
         val text = _uiState.value.input.trim()
         if (text.isEmpty()) return
-        _uiState.update { it.copy(input = "", isWorking = true) }
+        _uiState.update { it.copy(input = "", isWorking = true, voiceStatus = "Text sent to AI.") }
 
         viewModelScope.launch(Dispatchers.IO) {
             submitToAi(text, "text")
@@ -390,6 +390,15 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             pendingSourceMessageId = sourceMessageId,
             isWorking = false,
         )
+        _uiState.update {
+            it.copy(
+                voiceStatus = if (turn.draft != null) {
+                    "Proposal ready. Review before saving."
+                } else {
+                    turn.reply
+                },
+            )
+        }
     }
 
     private fun refreshFromDisk(

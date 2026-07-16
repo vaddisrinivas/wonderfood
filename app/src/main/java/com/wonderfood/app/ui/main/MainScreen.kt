@@ -537,11 +537,14 @@ private fun MainWorkspace(
             AiCaptureSheet(
                 input = state.input,
                 isWorking = state.isWorking,
-                onInputChange = onInputChange,
-                onSend = {
-                    onSend()
-                    showAiCapture = false
+                status = when {
+                    state.isWorking -> "AI is reviewing this."
+                    state.pendingDraft != null -> "Proposal ready. Close this tray to review."
+                    state.voiceStatus.isNotBlank() -> state.voiceStatus
+                    else -> "AI reviews before saving."
                 },
+                onInputChange = onInputChange,
+                onSend = onSend,
                 onPickReceiptPhoto = onPickReceiptPhoto,
                 onRecordVoiceNote = onRecordVoiceNote,
                 onDismiss = { showAiCapture = false },
@@ -2940,6 +2943,7 @@ private fun EmptyState(title: String, subtitle: String) {
 private fun AiCaptureSheet(
     input: String,
     isWorking: Boolean,
+    status: String,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onPickReceiptPhoto: () -> Unit,
@@ -3036,7 +3040,7 @@ private fun AiCaptureSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "AI reviews before saving.",
+                        text = status,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.wonderfood.app.MainActivity
 import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertTrue
@@ -51,6 +52,17 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food OS").assertIsDisplayed()
         composeTestRule.onNodeWithText("Taste profile").assertIsDisplayed()
+    }
+
+    @Test
+    fun aiCaptureStaysOpenAfterSend() {
+        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+
+        composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
+        composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput("Need oats")
+        composeTestRule.onNodeWithText("Send").performClick()
+        composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
     }
 
     private fun assertTextPresent(text: String) {
