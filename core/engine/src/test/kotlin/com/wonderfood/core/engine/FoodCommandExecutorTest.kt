@@ -14,10 +14,13 @@ import com.wonderfood.core.model.IsoTimestamp
 import com.wonderfood.core.model.Page
 import com.wonderfood.core.model.PageId
 import com.wonderfood.core.model.PageKind
+import com.wonderfood.core.model.Quantity
 import com.wonderfood.core.model.Source
 import com.wonderfood.core.model.SourceId
 import com.wonderfood.core.model.SourceKind
+import com.wonderfood.core.model.FoodUnit
 import com.wonderfood.core.model.StockLot
+import com.wonderfood.core.model.StockLotId
 import com.wonderfood.core.model.StockLotStatus
 import com.wonderfood.core.model.TruthState
 import kotlinx.coroutines.test.runTest
@@ -106,6 +109,32 @@ class FoodCommandExecutorTest {
         assertEquals(2, repository.actions.size)
     }
 
+    @Test
+    fun exactConsumptionRequiresConfirmationBeforeStockMutation() = runTest {
+        repository.lotStatuses["lot-oats"] = StockLotStatus.AVAILABLE.name
+        val command = consumeStockLotCommand(key = "idem-consume-exact", exact = true)
+
+        val result = executor.execute(command, confirmed = false)
+
+        assertTrue(result is FoodCommandExecutionResult.NeedsConfirmation)
+        assertEquals(StockLotStatus.AVAILABLE.name, repository.lotStatuses["lot-oats"])
+        assertEquals(emptyList<FoodEventType>(), repository.eventTypes)
+        assertEquals(0, repository.actions.size)
+    }
+
+    @Test
+    fun uncertainConsumptionRecordsUsageProposalWithoutChangingStock() = runTest {
+        repository.lotStatuses["lot-oats"] = StockLotStatus.AVAILABLE.name
+        val command = consumeStockLotCommand(key = "idem-consume-uncertain", exact = false)
+
+        val result = executor.execute(command)
+
+        assertTrue(result is FoodCommandExecutionResult.Applied)
+        assertEquals(StockLotStatus.AVAILABLE.name, repository.lotStatuses["lot-oats"])
+        assertEquals(listOf(FoodEventType.STOCK_USAGE_PROPOSED), repository.eventTypes)
+        assertEquals(listOf("ConsumeStockLot"), repository.actions.values.map { it.actionType })
+    }
+
     private fun createFoodCommand(key: String): FoodCommand.CreateFoodGraph {
         val pageId = PageId("page-oats")
         val foodId = FoodId("food-oats")
@@ -153,6 +182,22 @@ class FoodCommandExecutorTest {
             stockLots = emptyList<StockLot>(),
         )
     }
+
+    private fun consumeStockLotCommand(key: String, exact: Boolean) =
+        FoodCommand.ConsumeStockLot(
+            idempotencyKey = IdempotencyKey(key),
+            requestedAt = timestamp(),
+            source = source(),
+            confidence = Confidence(score = 1.0, state = TruthState.USER_CONFIRMED, rationale = "test"),
+            stockLotId = StockLotId("lot-oats"),
+            quantity = Quantity(
+                amount = if (exact) 1.0 else null,
+                unit = FoodUnit.EACH,
+                truthState = if (exact) TruthState.USER_CONFIRMED else TruthState.ESTIMATED,
+            ),
+            exact = exact,
+            reason = "used for breakfast",
+        )
 
     private fun audit(id: String, key: String, subject: EntityRef, actionType: String) =
         FoodActionAudit(
@@ -240,6 +285,55 @@ class FoodCommandExecutorTest {
         override suspend fun archiveStockLot(command: FoodCommand.ArchiveStockLot): Boolean {
             if (!lotStatuses.containsKey(command.stockLotId.value)) return false
             lotStatuses[command.stockLotId.value] = StockLotStatus.ARCHIVED.name
+            return true
+        }
+
+        override suspend fun moveStockLot(command: FoodCommand.MoveStockLot): Boolean =
+            lotStatuses.containsKey(command.stockLotId.value)
+
+        override suspend fun openStockLot(command: FoodCommand.OpenStockLot): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            lotStatuses[command.stockLotId.value] = StockLotStatus.OPENED.name
+            return true
+        }
+
+        override suspend fun consumeStockLot(command: FoodCommand.ConsumeStockLot): Boolean =
+            lotStatuses.containsKey(command.stockLotId.value)
+
+        override suspend fun discardStockLot(command: FoodCommand.DiscardStockLot): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            lotStatuses[command.stockLotId.value] = StockLotStatus.DISCARDED.name
+            return true
+        }
+
+        override suspend fun correctStockLot(command: FoodCommand.CorrectStockLot): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            command.status?.let { lotStatuses[command.stockLotId.value] = it.name }
+            return true
+        }
+
+        override suspend fun markStockLotLow(command: FoodCommand.MarkStockLotLow): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            lotStatuses[command.stockLotId.value] = StockLotStatus.LOW.name
+            return true
+        }
+
+        override suspend fun markStockLotOut(command: FoodCommand.MarkStockLotOut): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            lotStatuses[command.stockLotId.value] = StockLotStatus.OUT.name
+            return true
+        }
+
+        override suspend fun putAwayStockLot(command: FoodCommand.PutAwayStockLot): Boolean {
+            if (!lotStatuses.containsKey(command.stockLotId.value)) return false
+            lotStatuses[command.stockLotId.value] = StockLotStatus.AVAILABLE.name
+            return true
+        }
+
+        override suspend fun mergeStockLots(command: FoodCommand.MergeStockLots): Boolean {
+            if (!lotStatuses.containsKey(command.sourceStockLotId.value)) return false
+            if (!lotStatuses.containsKey(command.targetStockLotId.value)) return false
+            lotStatuses[command.sourceStockLotId.value] = StockLotStatus.ARCHIVED.name
             return true
         }
 

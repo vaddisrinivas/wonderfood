@@ -32,6 +32,15 @@ public interface FoodCommandRepository {
     public suspend fun addStockLot(command: FoodCommand.AddStockLot)
     public suspend fun archiveFood(command: FoodCommand.ArchiveFood): Boolean
     public suspend fun archiveStockLot(command: FoodCommand.ArchiveStockLot): Boolean
+    public suspend fun moveStockLot(command: FoodCommand.MoveStockLot): Boolean
+    public suspend fun openStockLot(command: FoodCommand.OpenStockLot): Boolean
+    public suspend fun consumeStockLot(command: FoodCommand.ConsumeStockLot): Boolean
+    public suspend fun discardStockLot(command: FoodCommand.DiscardStockLot): Boolean
+    public suspend fun correctStockLot(command: FoodCommand.CorrectStockLot): Boolean
+    public suspend fun markStockLotLow(command: FoodCommand.MarkStockLotLow): Boolean
+    public suspend fun markStockLotOut(command: FoodCommand.MarkStockLotOut): Boolean
+    public suspend fun putAwayStockLot(command: FoodCommand.PutAwayStockLot): Boolean
+    public suspend fun mergeStockLots(command: FoodCommand.MergeStockLots): Boolean
     public suspend fun restoreFood(subject: EntityRef, restoredAt: IsoTimestamp): Boolean
     public suspend fun restoreStockLot(subject: EntityRef, restoredAt: IsoTimestamp): Boolean
     public suspend fun recordFoodEvent(
@@ -120,7 +129,67 @@ public class FoodCommandExecutor(
                 }
             }
 
+            is FoodCommand.MoveStockLot -> stockLotMutation(command, FoodEventType.STOCK_MOVED) {
+                repository.moveStockLot(command)
+            }
+
+            is FoodCommand.OpenStockLot -> stockLotMutation(command, FoodEventType.STOCK_OPENED) {
+                repository.openStockLot(command)
+            }
+
+            is FoodCommand.ConsumeStockLot -> {
+                val changed = repository.consumeStockLot(command)
+                if (!changed) {
+                    FoodCommandExecutionResult.Rejected(listOf("Stock lot ${command.stockLotId.value} cannot be consumed from current state."))
+                } else {
+                    repository.recordFoodEvent(
+                        FoodEventId(idProvider.newId("event")),
+                        command.subject,
+                        command,
+                        if (command.exact) FoodEventType.STOCK_CONSUMED else FoodEventType.STOCK_USAGE_PROPOSED,
+                        command.reason,
+                    )
+                    null
+                }
+            }
+
+            is FoodCommand.DiscardStockLot -> stockLotMutation(command, FoodEventType.STOCK_DISCARDED) {
+                repository.discardStockLot(command)
+            }
+
+            is FoodCommand.CorrectStockLot -> stockLotMutation(command, FoodEventType.STOCK_CORRECTED) {
+                repository.correctStockLot(command)
+            }
+
+            is FoodCommand.MarkStockLotLow -> stockLotMutation(command, FoodEventType.STOCK_MARKED_LOW) {
+                repository.markStockLotLow(command)
+            }
+
+            is FoodCommand.MarkStockLotOut -> stockLotMutation(command, FoodEventType.STOCK_MARKED_OUT) {
+                repository.markStockLotOut(command)
+            }
+
+            is FoodCommand.PutAwayStockLot -> stockLotMutation(command, FoodEventType.STOCK_PUT_AWAY) {
+                repository.putAwayStockLot(command)
+            }
+
+            is FoodCommand.MergeStockLots -> stockLotMutation(command, FoodEventType.STOCK_MERGED) {
+                repository.mergeStockLots(command)
+            }
+
             is FoodCommand.UndoFoodAction -> error("Undo commands are applied by undoAndAudit.")
+        }
+
+    private suspend fun stockLotMutation(
+        command: FoodCommand,
+        eventType: FoodEventType,
+        mutate: suspend () -> Boolean,
+    ): FoodCommandExecutionResult? =
+        if (!mutate()) {
+            FoodCommandExecutionResult.Rejected(listOf("Stock lot ${command.subject.id} cannot be changed from current state."))
+        } else {
+            repository.recordFoodEvent(FoodEventId(idProvider.newId("event")), command.subject, command, eventType, command.summary)
+            null
         }
 
     private suspend fun undoAndAudit(command: FoodCommand.UndoFoodAction): FoodCommandExecutionResult {

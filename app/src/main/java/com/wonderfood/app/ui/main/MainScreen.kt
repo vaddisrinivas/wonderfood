@@ -72,7 +72,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -541,6 +541,7 @@ private fun MainWorkspace(
             AiCaptureFab(
                 hasDraft = state.pendingDraft != null,
                 isWorking = state.isWorking,
+                expanded = state.section == FoodSection.TODAY || state.pendingDraft != null || state.isWorking,
                 onClick = { showAiCapture = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -642,27 +643,33 @@ private fun TopBar(
 private fun AiCaptureFab(
     hasDraft: Boolean,
     isWorking: Boolean,
+    expanded: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val label = when {
+        isWorking -> "Reviewing"
+        hasDraft -> "Review"
+        else -> "Ask"
+    }
     Box(modifier = modifier) {
-        FloatingActionButton(
+        ExtendedFloatingActionButton(
             onClick = onClick,
             modifier = Modifier
-                .height(48.dp)
-                .widthIn(min = 48.dp)
                 .navigationBarsPadding()
                 .semantics { contentDescription = "Open AI capture" },
-            shape = CircleShape,
+            expanded = expanded,
+            icon = {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Chat,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            text = { Text(label) },
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        ) {
-            Icon(
-                Icons.AutoMirrored.Rounded.Chat,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-            )
-        }
+        )
         if (hasDraft || isWorking) {
             Surface(
                 modifier = Modifier
