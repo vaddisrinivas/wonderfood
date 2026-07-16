@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.wonderfood.app.MainActivity
@@ -35,6 +36,7 @@ class MainScreenTest {
         composeTestRule.onAllNodesWithText("AI").assertCountEquals(0)
 
         composeTestRule.onNodeWithContentDescription("Search WonderFood").assertIsDisplayed()
+        composeTestRule.onAllNodesWithContentDescription("Open AI capture").assertCountEquals(1)
         composeTestRule.onNodeWithContentDescription("Open AI capture").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open settings").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
@@ -61,8 +63,28 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
         composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput("Need oats")
-        composeTestRule.onNodeWithText("Send").performClick()
+        composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
         composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Proposal ready. Review before saving.").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Ask WonderFood").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Update grocery list").assertCountEquals(1)
+    }
+
+    @Test
+    fun kitchenShowsFoodFirstControlsAndSafeSelection() {
+        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+
+        if (composeTestRule.onAllNodesWithText("Use first").fetchSemanticsNodes().isEmpty()) {
+            composeTestRule.onAllNodesWithText("Kitchen").onFirst().performClick()
+        }
+
+        composeTestRule.onNodeWithText("Use first").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Search food, category, notes").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Select").performClick()
+        composeTestRule.onNodeWithText("0 selected").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Remove").assertCountEquals(0)
     }
 
     private fun assertTextPresent(text: String) {

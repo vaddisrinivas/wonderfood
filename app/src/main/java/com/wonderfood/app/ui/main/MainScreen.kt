@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -70,6 +72,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +101,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -439,9 +443,8 @@ private fun MainWorkspace(
                 state = state,
                 onSearchClick = { secondaryPane = SecondaryPane.SEARCH },
                 onSettingsClick = { secondaryPane = SecondaryPane.SETTINGS },
-                onAiClick = { showAiCapture = true },
             )
-            if (state.section == FoodSection.KITCHEN || state.section == FoodSection.SHOP) {
+            if (state.section == FoodSection.SHOP) {
                 KitchenSnapshot(memory = state.memory)
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -523,7 +526,7 @@ private fun MainWorkspace(
                     }
                 }
             }
-            if (state.pendingDraft != null) {
+            if (state.pendingDraft != null && !showAiCapture) {
                 DraftCard(
                     draft = state.pendingDraft,
                     onAccept = onAcceptDraft,
@@ -534,13 +537,27 @@ private fun MainWorkspace(
                 FoodBottomNavigation(selected = state.section, onSelected = onSectionSelected)
             }
         }
+        if (!showAiCapture) {
+            AiCaptureFab(
+                hasDraft = state.pendingDraft != null,
+                isWorking = state.isWorking,
+                onClick = { showAiCapture = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 16.dp,
+                        bottom = if (showBottomNavigation) 92.dp else 20.dp,
+                    ),
+            )
+        }
         if (showAiCapture) {
             AiCaptureSheet(
                 input = state.input,
                 isWorking = state.isWorking,
+                draft = state.pendingDraft,
                 status = when {
                     state.isWorking -> "AI is reviewing this."
-                    state.pendingDraft != null -> "Proposal ready. Close this tray to review."
+                    state.pendingDraft != null -> "Proposal ready. Review before saving."
                     state.voiceStatus.isNotBlank() -> state.voiceStatus
                     else -> "AI reviews before saving."
                 },
@@ -548,6 +565,8 @@ private fun MainWorkspace(
                 onSend = onSend,
                 onPickReceiptPhoto = onPickReceiptPhoto,
                 onRecordVoiceNote = onRecordVoiceNote,
+                onAcceptDraft = onAcceptDraft,
+                onRejectDraft = onRejectDraft,
                 onDismiss = { showAiCapture = false },
             )
         }
@@ -559,7 +578,6 @@ private fun TopBar(
     state: WonderFoodUiState,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onAiClick: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val compact = maxWidth < 560.dp
@@ -584,9 +602,6 @@ private fun TopBar(
                 }
                 IconButton(onClick = onSearchClick) {
                     Icon(Icons.Rounded.Search, contentDescription = "Search WonderFood")
-                }
-                IconButton(onClick = onAiClick) {
-                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = "Open AI capture")
                 }
                 IconButton(onClick = onSettingsClick) {
                     Icon(Icons.Rounded.Settings, contentDescription = "Open settings")
@@ -614,14 +629,50 @@ private fun TopBar(
                     IconButton(onClick = onSearchClick) {
                         Icon(Icons.Rounded.Search, contentDescription = "Search WonderFood")
                     }
-                    IconButton(onClick = onAiClick) {
-                        Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = "Open AI capture")
-                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Rounded.Settings, contentDescription = "Open settings")
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AiCaptureFab(
+    hasDraft: Boolean,
+    isWorking: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        FloatingActionButton(
+            onClick = onClick,
+            modifier = Modifier
+                .height(48.dp)
+                .widthIn(min = 48.dp)
+                .navigationBarsPadding()
+                .semantics { contentDescription = "Open AI capture" },
+            shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.Chat,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        if (hasDraft || isWorking) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(14.dp),
+                shape = CircleShape,
+                color = if (isWorking) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                border = BorderStroke(2.dp, MaterialTheme.colorScheme.background),
+                content = {},
+            )
         }
     }
 }
@@ -942,6 +993,8 @@ private fun PantryContent(
     var categoryFilter by remember { mutableStateOf("All") }
     var sort by remember { mutableStateOf("Recent") }
     var viewMode by rememberSaveable { mutableStateOf(DatabaseViewMode.GALLERY) }
+    var selectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val categories = remember(items) { listOf("All") + items.map { it.category.ifBlank { "other" } }.distinct().sorted() }
     val visible = items
         .asSequence()
@@ -957,8 +1010,19 @@ private fun PantryContent(
             }
         }
         .toList()
+    val selectedVisibleCount = visible.count { it.id in selectedIds }
+    fun toggleSelection(id: Long) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+    LaunchedEffect(selectionMode, visible.map { it.id }) {
+        if (!selectionMode) selectedIds = emptySet()
+        selectedIds = selectedIds.intersect(visible.map { it.id }.toSet())
+    }
     if (viewMode == DatabaseViewMode.LIST) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            item {
+                KitchenUseFirstRail(items = visible, onOpen = onOpen)
+            }
             item {
                 KitchenControlPanel(
                     query = query,
@@ -973,10 +1037,26 @@ private fun PantryContent(
                     viewMode = viewMode,
                     onViewMode = { viewMode = it },
                     resultCount = visible.size,
+                    selectionMode = selectionMode,
+                    onSelectionMode = { selectionMode = it },
                 )
             }
+            if (selectionMode) {
+                item {
+                    KitchenSelectionBar(
+                        selectedCount = selectedVisibleCount,
+                        onClear = { selectedIds = emptySet() },
+                    )
+                }
+            }
             items(visible, key = { it.id }) { item ->
-                InventoryCard(item = item, onOpen = { onOpen(item) })
+                InventoryCard(
+                    item = item,
+                    selected = item.id in selectedIds,
+                    selectionMode = selectionMode,
+                    onToggleSelected = { toggleSelection(item.id) },
+                    onOpen = { if (selectionMode) toggleSelection(item.id) else onOpen(item) },
+                )
             }
         }
     } else {
@@ -986,6 +1066,9 @@ private fun PantryContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                KitchenUseFirstRail(items = visible, onOpen = onOpen)
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 KitchenControlPanel(
                     query = query,
@@ -1000,10 +1083,75 @@ private fun PantryContent(
                     viewMode = viewMode,
                     onViewMode = { viewMode = it },
                     resultCount = visible.size,
+                    selectionMode = selectionMode,
+                    onSelectionMode = { selectionMode = it },
                 )
             }
+            if (selectionMode) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    KitchenSelectionBar(
+                        selectedCount = selectedVisibleCount,
+                        onClear = { selectedIds = emptySet() },
+                    )
+                }
+            }
             gridItems(visible, key = { it.id }) { item ->
-                InventoryTile(item = item, onOpen = { onOpen(item) })
+                InventoryTile(
+                    item = item,
+                    selected = item.id in selectedIds,
+                    selectionMode = selectionMode,
+                    onToggleSelected = { toggleSelection(item.id) },
+                    onOpen = { if (selectionMode) toggleSelection(item.id) else onOpen(item) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KitchenUseFirstRail(items: List<InventoryItem>, onOpen: (InventoryItem) -> Unit) {
+    val focusItems = remember(items) {
+        items.sortedWith(
+            compareBy<InventoryItem> { it.kitchenPriorityRank() }
+                .thenBy { it.expiresAtMillis ?: Long.MAX_VALUE }
+                .thenByDescending { it.updatedAtMillis },
+        ).take(8)
+    }
+    if (focusItems.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Use first", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "${items.size} kitchen file${items.size.pluralWord}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(focusItems, key = { it.id }) { item ->
+                KitchenFocusChip(item = item, onOpen = { onOpen(item) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun KitchenFocusChip(item: InventoryItem, onOpen: () -> Unit) {
+    Surface(
+        modifier = Modifier.width(188.dp).clickable(onClick = onOpen),
+        shape = RoundedCornerShape(8.dp),
+        color = zoneColor(item.zone),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = MaterialTheme.colorScheme.surface, size = 44.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.kitchenStateLabel(), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -1023,8 +1171,11 @@ private fun KitchenControlPanel(
     viewMode: DatabaseViewMode,
     onViewMode: (DatabaseViewMode) -> Unit,
     resultCount: Int,
+    selectionMode: Boolean,
+    onSelectionMode: (Boolean) -> Unit,
 ) {
     val chips = buildList {
+        add(DatabaseChip("$resultCount visible", false) {})
         add(DatabaseChip("All zones", zoneFilter == null) { onZone(null) })
         StorageZone.entries.forEach { zone ->
             add(DatabaseChip(zone.label, zoneFilter == zone) { onZone(zone) })
@@ -1036,17 +1187,57 @@ private fun KitchenControlPanel(
             add(DatabaseChip("Sort: $option", sort == option) { onSort(option) })
         }
     }
-    DatabaseToolbar(
-        icon = "🥬",
-        title = "Kitchen files",
-        subtitle = "$resultCount visible",
-        query = query,
-        placeholder = "Search food, category, notes",
-        onQuery = onQuery,
-        viewMode = viewMode,
-        onViewModeChange = onViewMode,
-        chips = chips,
-    )
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQuery,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Search food, category, notes") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                GalleryListToggle(selected = viewMode, onSelected = onViewMode)
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    FilterChip(
+                        selected = selectionMode,
+                        onClick = { onSelectionMode(!selectionMode) },
+                        label = { Text(if (selectionMode) "Selecting" else "Select") },
+                    )
+                }
+                items(chips.size) { index ->
+                    val chip = chips[index]
+                    FilterChip(selected = chip.selected, onClick = chip.onClick, label = { Text(chip.label, maxLines = 1) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KitchenSelectionBar(selectedCount: Int, onClear: () -> Unit) {
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("✓", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "$selectedCount selected",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            AssistChip(onClick = {}, label = { Text("Plan") })
+            AssistChip(onClick = {}, label = { Text("Buy again") })
+            TextButton(onClick = onClear) { Text("Clear") }
+        }
+    }
 }
 
 @Composable
@@ -2658,37 +2849,69 @@ private fun ObjectImage(image: String, color: Color, size: androidx.compose.ui.u
 }
 
 @Composable
-private fun InventoryCard(item: InventoryItem, onOpen: () -> Unit) {
-    MemoryCard(
-        title = item.name,
-        subtitle = listOf(
-            item.quantity,
-            item.zone.label,
-            nutritionSummary(item.calories, item.proteinGrams).takeIf { item.calories != null },
-        ).filterNotNull().filter { it.isNotBlank() }.joinToString("  "),
-        accent = zoneColor(item.zone),
-        image = foodEmoji(item.name),
-        onOpen = onOpen,
-        trailing = { SourceBadge(item.source) },
-    )
+private fun InventoryCard(
+    item: InventoryItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelected: () -> Unit = {},
+    onOpen: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = zoneColor(item.zone), size = 52.dp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOf(item.quantity, item.zone.label, item.kitchenStateLabel()).filter { it.isNotBlank() }.joinToString(" • "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SourceBadge(item.source)
+                    ConfidenceBadge(if (item.calories == null) BadgeConfidence.UNKNOWN else BadgeConfidence.ESTIMATED)
+                }
+            }
+            if (selectionMode) {
+                FilterChip(selected = selected, onClick = onToggleSelected, label = { Text(if (selected) "✓" else "+") })
+            }
+        }
+    }
 }
 
 @Composable
-private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit) {
+private fun InventoryTile(
+    item: InventoryItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelected: () -> Unit = {},
+    onOpen: () -> Unit,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth().height(172.dp).clickable(onClick = onOpen),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 172.dp).clickable(onClick = onOpen),
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = zoneColor(item.zone), size = 48.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(item.zone.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         SourceBadge(item.source)
                     }
@@ -2708,10 +2931,17 @@ private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(item.category.ifBlank { "other" }, style = MaterialTheme.typography.labelMedium)
-                ConfidenceBadge(if (item.calories == null) BadgeConfidence.UNKNOWN else BadgeConfidence.ESTIMATED)
+                if (selectionMode) {
+                    FilterChip(selected = selected, onClick = onToggleSelected, label = { Text(if (selected) "✓" else "+") })
+                } else {
+                    ConfidenceBadge(if (item.calories == null) BadgeConfidence.UNKNOWN else BadgeConfidence.ESTIMATED)
+                }
             }
         }
     }
@@ -2943,13 +3173,21 @@ private fun EmptyState(title: String, subtitle: String) {
 private fun AiCaptureSheet(
     input: String,
     isWorking: Boolean,
+    draft: FoodDraft?,
     status: String,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onPickReceiptPhoto: () -> Unit,
     onRecordVoiceNote: () -> Unit,
+    onAcceptDraft: () -> Unit,
+    onRejectDraft: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+    val sendAndClearFocus = {
+        focusManager.clearFocus(force = true)
+        onSend()
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -3030,9 +3268,17 @@ private fun AiCaptureSheet(
                     minLines = 2,
                     maxLines = 5,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
+                    keyboardActions = KeyboardActions(onSend = { sendAndClearFocus() }),
                     shape = RoundedCornerShape(12.dp),
                 )
+
+                if (draft != null) {
+                    AiDraftReview(
+                        draft = draft,
+                        onAccept = onAcceptDraft,
+                        onReject = onRejectDraft,
+                    )
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -3046,15 +3292,51 @@ private fun AiCaptureSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
-                        onClick = onSend,
+                        onClick = sendAndClearFocus,
                         enabled = input.isNotBlank() && !isWorking,
-                        modifier = Modifier.height(52.dp),
+                        modifier = Modifier
+                            .height(52.dp)
+                            .semantics { contentDescription = "Send AI capture" },
                         shape = RoundedCornerShape(12.dp),
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(if (isWorking) "..." else "Send")
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiDraftReview(draft: FoodDraft, onAccept: () -> Unit, onReject: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(draft.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(draft.summary, style = MaterialTheme.typography.bodySmall)
+            draft.rows.take(4).forEach { row ->
+                Text("- $row", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val hiddenRows = draft.rows.size - 4
+            if (hiddenRows > 0) {
+                Text("+ $hiddenRows more", style = MaterialTheme.typography.labelMedium)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAccept, shape = RoundedCornerShape(8.dp)) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Accept")
+                }
+                OutlinedButton(onClick = onReject, shape = RoundedCornerShape(8.dp)) {
+                    Text("Reject")
                 }
             }
         }
@@ -3196,6 +3478,36 @@ private fun nutritionSummary(calories: Int?, protein: Double?): String =
         protein != null -> "${protein.toInt()}g protein"
         else -> "nutrition pending"
     }
+
+private fun InventoryItem.kitchenPriorityRank(): Int =
+    when {
+        expiresAtMillis != null && expiresAtMillis <= System.currentTimeMillis() + THREE_DAYS_MILLIS -> 0
+        quantity.isKitchenLowSignal() -> 1
+        calories == null && nutritionSource.isBlank() -> 2
+        else -> 3
+    }
+
+private fun InventoryItem.kitchenStateLabel(): String =
+    when {
+        expiresAtMillis != null && expiresAtMillis <= System.currentTimeMillis() -> "Expired or due now"
+        expiresAtMillis != null && expiresAtMillis <= System.currentTimeMillis() + THREE_DAYS_MILLIS -> "Use by ${expiresAtMillis.shortDate()}"
+        quantity.isKitchenLowSignal() -> "Low stock"
+        calories == null && nutritionSource.isBlank() -> "Needs nutrition"
+        category.isNotBlank() -> category
+        else -> zone.label
+    }
+
+private fun String.isKitchenLowSignal(): Boolean {
+    val text = lowercase()
+    return text == "0" ||
+        "low" in text ||
+        "empty" in text ||
+        "out" in text ||
+        "finish" in text ||
+        "last" in text
+}
+
+private const val THREE_DAYS_MILLIS: Long = 3L * 24L * 60L * 60L * 1000L
 
 private fun inventoryActionIcon(action: InventoryAction): String =
     when (action) {
