@@ -940,6 +940,7 @@ private fun PantryContent(
     var zoneFilter by remember { mutableStateOf<StorageZone?>(null) }
     var categoryFilter by remember { mutableStateOf("All") }
     var sort by remember { mutableStateOf("Recent") }
+    var viewMode by rememberSaveable { mutableStateOf(DatabaseViewMode.GALLERY) }
     val categories = remember(items) { listOf("All") + items.map { it.category.ifBlank { "other" } }.distinct().sorted() }
     val visible = items
         .asSequence()
@@ -955,28 +956,54 @@ private fun PantryContent(
             }
         }
         .toList()
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(168.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 12.dp),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            KitchenControlPanel(
-                query = query,
-                onQuery = { query = it },
-                zoneFilter = zoneFilter,
-                onZone = { zoneFilter = it },
-                categories = categories,
-                category = categoryFilter,
-                onCategory = { categoryFilter = it },
-                sort = sort,
-                onSort = { sort = it },
-                resultCount = visible.size,
-            )
+    if (viewMode == DatabaseViewMode.LIST) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            item {
+                KitchenControlPanel(
+                    query = query,
+                    onQuery = { query = it },
+                    zoneFilter = zoneFilter,
+                    onZone = { zoneFilter = it },
+                    categories = categories,
+                    category = categoryFilter,
+                    onCategory = { categoryFilter = it },
+                    sort = sort,
+                    onSort = { sort = it },
+                    viewMode = viewMode,
+                    onViewMode = { viewMode = it },
+                    resultCount = visible.size,
+                )
+            }
+            items(visible, key = { it.id }) { item ->
+                InventoryCard(item = item, onOpen = { onOpen(item) })
+            }
         }
-        gridItems(visible, key = { it.id }) { item ->
-            InventoryTile(item = item, onOpen = { onOpen(item) }, onDelete = { onDelete(item.id) })
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(168.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                KitchenControlPanel(
+                    query = query,
+                    onQuery = { query = it },
+                    zoneFilter = zoneFilter,
+                    onZone = { zoneFilter = it },
+                    categories = categories,
+                    category = categoryFilter,
+                    onCategory = { categoryFilter = it },
+                    sort = sort,
+                    onSort = { sort = it },
+                    viewMode = viewMode,
+                    onViewMode = { viewMode = it },
+                    resultCount = visible.size,
+                )
+            }
+            gridItems(visible, key = { it.id }) { item ->
+                InventoryTile(item = item, onOpen = { onOpen(item) })
+            }
         }
     }
 }
@@ -992,27 +1019,33 @@ private fun KitchenControlPanel(
     onCategory: (String) -> Unit,
     sort: String,
     onSort: (String) -> Unit,
+    viewMode: DatabaseViewMode,
+    onViewMode: (DatabaseViewMode) -> Unit,
     resultCount: Int,
 ) {
-    CompactDatabaseToolbar(
+    val chips = buildList {
+        add(DatabaseChip("All zones", zoneFilter == null) { onZone(null) })
+        StorageZone.entries.forEach { zone ->
+            add(DatabaseChip(zone.label, zoneFilter == zone) { onZone(zone) })
+        }
+        categories.forEach { option ->
+            add(DatabaseChip(option, category == option) { onCategory(option) })
+        }
+        listOf("Recent", "Name", "Zone", "Category").forEach { option ->
+            add(DatabaseChip("Sort: $option", sort == option) { onSort(option) })
+        }
+    }
+    DatabaseToolbar(
         icon = "🥬",
         title = "Kitchen files",
         subtitle = "$resultCount visible",
         query = query,
-        placeholder = "Search kitchen",
+        placeholder = "Search food, category, notes",
         onQuery = onQuery,
-    ) {
-        FilterChip(selected = zoneFilter == null, onClick = { onZone(null) }, label = { Text("All zones") })
-        StorageZone.entries.forEach { zone ->
-            FilterChip(selected = zoneFilter == zone, onClick = { onZone(zone) }, label = { Text(zone.label) })
-        }
-        categories.forEach { option ->
-            FilterChip(selected = category == option, onClick = { onCategory(option) }, label = { Text(option) })
-        }
-        listOf("Recent", "Name", "Zone", "Category").forEach { option ->
-            FilterChip(selected = sort == option, onClick = { onSort(option) }, label = { Text("Sort $option") })
-        }
-    }
+        viewMode = viewMode,
+        onViewModeChange = onViewMode,
+        chips = chips,
+    )
 }
 
 @Composable
@@ -1410,6 +1443,7 @@ private fun RecipesContent(
     var query by remember { mutableStateOf("") }
     var tagFilter by remember { mutableStateOf("All") }
     var sort by remember { mutableStateOf("Recent") }
+    var viewMode by rememberSaveable { mutableStateOf(DatabaseViewMode.GALLERY) }
     val tags = remember(recipes) {
         listOf("All") + recipes.flatMap { it.tags.split(",") }.map { it.trim() }.filter { it.isNotBlank() }.distinct().sorted()
     }
@@ -1426,32 +1460,59 @@ private fun RecipesContent(
             }
         }
         .toList()
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(190.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 12.dp),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            RecipeControlPanel(
-                query = query,
-                onQuery = { query = it },
-                tags = tags,
-                tag = tagFilter,
-                onTag = { tagFilter = it },
-                sort = sort,
-                onSort = { sort = it },
-                resultCount = visible.size,
-            )
+    if (viewMode == DatabaseViewMode.LIST) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            item {
+                RecipeControlPanel(
+                    query = query,
+                    onQuery = { query = it },
+                    tags = tags,
+                    tag = tagFilter,
+                    onTag = { tagFilter = it },
+                    sort = sort,
+                    onSort = { sort = it },
+                    viewMode = viewMode,
+                    onViewMode = { viewMode = it },
+                    resultCount = visible.size,
+                )
+            }
+            items(visible, key = { it.id }) { recipe ->
+                RecipeCard(
+                    recipe = recipe,
+                    onOpen = { onOpen(recipe) },
+                    onCook = { onCook(recipe.id) },
+                )
+            }
         }
-        gridItems(visible, key = { it.id }) { recipe ->
-            RecipeTile(
-                recipe = recipe,
-                lastHad = memory.lastHad(recipe),
-                onOpen = { onOpen(recipe) },
-                onCook = { onCook(recipe.id) },
-                onDelete = { onDelete(recipe.id) },
-            )
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(190.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                RecipeControlPanel(
+                    query = query,
+                    onQuery = { query = it },
+                    tags = tags,
+                    tag = tagFilter,
+                    onTag = { tagFilter = it },
+                    sort = sort,
+                    onSort = { sort = it },
+                    viewMode = viewMode,
+                    onViewMode = { viewMode = it },
+                    resultCount = visible.size,
+                )
+            }
+            gridItems(visible, key = { it.id }) { recipe ->
+                RecipeTile(
+                    recipe = recipe,
+                    lastHad = memory.lastHad(recipe),
+                    onOpen = { onOpen(recipe) },
+                    onCook = { onCook(recipe.id) },
+                )
+            }
         }
     }
 }
@@ -1465,57 +1526,29 @@ private fun RecipeControlPanel(
     onTag: (String) -> Unit,
     sort: String,
     onSort: (String) -> Unit,
+    viewMode: DatabaseViewMode,
+    onViewMode: (DatabaseViewMode) -> Unit,
     resultCount: Int,
 ) {
-    CompactDatabaseToolbar(
+    val chips = buildList {
+        tags.forEach { option ->
+            add(DatabaseChip(option, tag == option) { onTag(option) })
+        }
+        listOf("Recent", "Name", "Time", "Cooked").forEach { option ->
+            add(DatabaseChip("Sort: $option", sort == option) { onSort(option) })
+        }
+    }
+    DatabaseToolbar(
         icon = "📖",
         title = "Recipe files",
         subtitle = "$resultCount visible",
         query = query,
-        placeholder = "Search recipes",
+        placeholder = "Search recipes or ingredients",
         onQuery = onQuery,
-    ) {
-        tags.forEach { option ->
-            FilterChip(selected = tag == option, onClick = { onTag(option) }, label = { Text(option) })
-        }
-        listOf("Recent", "Name", "Time", "Cooked").forEach { option ->
-            FilterChip(selected = sort == option, onClick = { onSort(option) }, label = { Text("Sort $option") })
-        }
-    }
-}
-
-@Composable
-private fun CompactDatabaseToolbar(
-    icon: String,
-    title: String,
-    subtitle: String,
-    query: String,
-    placeholder: String,
-    onQuery: (String) -> Unit,
-    filters: @Composable () -> Unit,
-) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ObjectImage(icon, MaterialTheme.colorScheme.primaryContainer, 40.dp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQuery,
-                    modifier = Modifier.widthIn(min = 180.dp, max = 280.dp),
-                    placeholder = { Text(placeholder) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                )
-            }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { filters() }
-            }
-        }
-    }
+        viewMode = viewMode,
+        onViewModeChange = onViewMode,
+        chips = chips,
+    )
 }
 
 @Composable
@@ -2550,20 +2583,13 @@ private fun DetailShell(
     content: @Composable () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ObjectImage(image = image, color = MaterialTheme.colorScheme.primaryContainer, size = 64.dp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close")
-            }
-        }
+        PageHeader(
+            image = image,
+            fallback = image,
+            title = title,
+            subtitle = subtitle,
+            onClose = onBack,
+        )
         content()
     }
 }
@@ -2631,7 +2657,7 @@ private fun ObjectImage(image: String, color: Color, size: androidx.compose.ui.u
 }
 
 @Composable
-private fun InventoryCard(item: InventoryItem, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun InventoryCard(item: InventoryItem, onOpen: () -> Unit) {
     MemoryCard(
         title = item.name,
         subtitle = listOf(
@@ -2642,12 +2668,12 @@ private fun InventoryCard(item: InventoryItem, onOpen: () -> Unit, onDelete: () 
         accent = zoneColor(item.zone),
         image = foodEmoji(item.name),
         onOpen = onOpen,
-        trailing = { ConfirmIconTextButton(Icons.Rounded.Delete, "Remove", "Remove ${item.name}?", onDelete) },
+        trailing = { SourceBadge(item.source) },
     )
 }
 
 @Composable
-private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().height(172.dp).clickable(onClick = onOpen),
         shape = RoundedCornerShape(8.dp),
@@ -2658,7 +2684,7 @@ private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit, onDelete: () 
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ObjectImage(image = item.imageUri ?: foodEmoji(item.name), color = zoneColor(item.zone), size = 48.dp)
+                FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = zoneColor(item.zone), size = 48.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2684,7 +2710,7 @@ private fun InventoryTile(item: InventoryItem, onOpen: () -> Unit, onDelete: () 
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(item.category.ifBlank { "other" }, style = MaterialTheme.typography.labelMedium)
-                ConfirmIconTextButton(Icons.Rounded.Delete, "Remove", "Remove ${item.name}?", onDelete)
+                ConfidenceBadge(if (item.calories == null) BadgeConfidence.UNKNOWN else BadgeConfidence.ESTIMATED)
             }
         }
     }
@@ -2737,7 +2763,7 @@ private fun MealCard(meal: MealLog, onOpen: () -> Unit, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun RecipeCard(recipe: Recipe, onOpen: () -> Unit, onCook: () -> Unit, onDelete: () -> Unit) {
+private fun RecipeCard(recipe: Recipe, onOpen: () -> Unit, onCook: () -> Unit) {
     MemoryCard(
         title = recipe.title,
         subtitle = recipe.ingredients.take(90),
@@ -2745,10 +2771,7 @@ private fun RecipeCard(recipe: Recipe, onOpen: () -> Unit, onCook: () -> Unit, o
         image = foodEmoji(recipe.title).ifBlank { "📖" },
         onOpen = onOpen,
         trailing = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                IconTextButton(Icons.Rounded.Restaurant, "Cook", onCook)
-                ConfirmIconTextButton(Icons.Rounded.Delete, "Remove", "Remove ${recipe.title}?", onDelete)
-            }
+            IconTextButton(Icons.Rounded.Restaurant, "Cook", onCook)
         },
     )
 }
@@ -2759,7 +2782,6 @@ private fun RecipeTile(
     lastHad: Long?,
     onOpen: () -> Unit,
     onCook: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().height(210.dp).clickable(onClick = onOpen),
@@ -2768,7 +2790,7 @@ private fun RecipeTile(
     ) {
         Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                ObjectImage(recipe.imageUri ?: foodEmoji(recipe.title), MaterialTheme.colorScheme.secondaryContainer, 54.dp)
+                FoodImage(recipe.imageUri ?: foodEmoji(recipe.title), fallback = foodEmoji(recipe.title), color = MaterialTheme.colorScheme.secondaryContainer, size = 54.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(recipe.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -2794,10 +2816,7 @@ private fun RecipeTile(
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(recipe.tags.substringBefore(",").ifBlank { "recipe" }, style = MaterialTheme.typography.labelMedium)
-                Row {
-                    IconTextButton(Icons.Rounded.Restaurant, "Cook", onCook)
-                    ConfirmIconTextButton(Icons.Rounded.Delete, "Remove", "Remove ${recipe.title}?", onDelete)
-                }
+                IconTextButton(Icons.Rounded.Restaurant, "Cook", onCook)
             }
         }
     }
@@ -2812,26 +2831,6 @@ private fun ReceiptCard(receipt: ReceiptCapture, onOpen: () -> Unit) {
         image = "🧾",
         onOpen = onOpen,
     )
-}
-
-@Composable
-private fun SourceBadge(source: String) {
-    val icon = when {
-        "assistant" in source || "google" in source || "voice" in source -> "🎙"
-        "ai" in source || "chat" in source -> "AI"
-        "receipt" in source -> "🧾"
-        "seed" in source -> "•"
-        else -> ""
-    }
-    if (icon.isBlank()) return
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Text(
-            icon,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
