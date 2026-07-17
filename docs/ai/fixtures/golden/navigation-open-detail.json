@@ -1,0 +1,67 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "navigation",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_navigation_001",
+  "idempotency_key": "turn-local-navigation-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "Open the spinach recipe.",
+      "observed_at": null,
+      "confidence": 1.0
+    },
+    {
+      "evidence_id": "ev_recipe_1",
+      "type": "recipe_snapshot",
+      "source_ref": "recipe:item:spinach-egg-bowl",
+      "quote": "Spinach Egg Bowl",
+      "observed_at": null,
+      "confidence": 0.95
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "navigation.open_detail",
+      "summary": "Open Spinach Egg Bowl recipe detail.",
+      "payload": {
+        "detail_type": "recipe",
+        "target_ref": "recipe:item:spinach-egg-bowl",
+        "source_destination": "recipes"
+      },
+      "evidence_refs": [
+        "ev_user_1",
+        "ev_recipe_1"
+      ],
+      "confidence": {
+        "score": 0.91,
+        "rationale": "One matching recipe target was found."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "none",
+        "reason": "",
+        "prompt": ""
+      },
+      "destructive": false,
+      "mutation": false
+    }
+  ],
+  "confidence": {
+    "score": 0.91,
+    "rationale": "Navigation request has a clear target."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "none",
+    "reason": "",
+    "prompt": ""
+  },
+  "warnings": [],
+  "unsupported": null
+}

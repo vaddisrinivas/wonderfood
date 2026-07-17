@@ -1,0 +1,111 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "shopping",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_shopping_001",
+  "idempotency_key": "turn-local-shopping-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "Need oats, bananas, and chicken thighs for this week.",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "shopping.add_item",
+      "summary": "Add oats to the shopping list.",
+      "payload": {
+        "name": "Oats",
+        "quantity": null,
+        "category": "grain",
+        "reason": "User said they need it this week."
+      },
+      "evidence_refs": [
+        "ev_user_1"
+      ],
+      "confidence": {
+        "score": 0.92,
+        "rationale": "Item name and shopping intent are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Non-destructive shopping addition.",
+        "prompt": "Add oats to shopping?"
+      },
+      "destructive": false,
+      "mutation": true
+    },
+    {
+      "command_id": "cmd_2",
+      "type": "shopping.add_item",
+      "summary": "Add bananas to the shopping list.",
+      "payload": {
+        "name": "Bananas",
+        "quantity": null,
+        "category": "fruit",
+        "reason": "User said they need it this week."
+      },
+      "evidence_refs": [
+        "ev_user_1"
+      ],
+      "confidence": {
+        "score": 0.92,
+        "rationale": "Item name and shopping intent are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Non-destructive shopping addition.",
+        "prompt": "Add bananas to shopping?"
+      },
+      "destructive": false,
+      "mutation": true
+    },
+    {
+      "command_id": "cmd_3",
+      "type": "shopping.add_item",
+      "summary": "Add chicken thighs to the shopping list.",
+      "payload": {
+        "name": "Chicken Thighs",
+        "quantity": null,
+        "category": "protein",
+        "reason": "User said they need it this week."
+      },
+      "evidence_refs": [
+        "ev_user_1"
+      ],
+      "confidence": {
+        "score": 0.92,
+        "rationale": "Item name and shopping intent are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Non-destructive shopping addition.",
+        "prompt": "Add chicken thighs to shopping?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.92,
+    "rationale": "Need language maps cleanly to shopping additions."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "review",
+    "reason": "Non-destructive shopping additions.",
+    "prompt": "Review and add these shopping items?"
+  },
+  "warnings": [],
+  "unsupported": null
+}

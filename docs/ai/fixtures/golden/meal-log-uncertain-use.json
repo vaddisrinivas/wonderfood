@@ -1,0 +1,119 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "meals",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_meal_001",
+  "idempotency_key": "turn-local-meal-001",
+  "status": "needs_confirmation",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "Log chicken rice bowl for lunch and use the chicken.",
+      "observed_at": null,
+      "confidence": 1.0
+    },
+    {
+      "evidence_id": "ev_inventory_1",
+      "type": "inventory_snapshot",
+      "source_ref": "inventory:item:chicken-fridge",
+      "quote": "Chicken, fridge, quantity unknown",
+      "observed_at": null,
+      "confidence": 0.8
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "meal.log",
+      "summary": "Log Chicken Rice Bowl for lunch.",
+      "payload": {
+        "title": "Chicken Rice Bowl",
+        "meal_slot": "LUNCH",
+        "logged_on": "today",
+        "nutrition": {
+          "source": "unknown"
+        },
+        "external_food": false
+      },
+      "evidence_refs": [
+        "ev_user_1"
+      ],
+      "confidence": {
+        "score": 0.88,
+        "rationale": "Meal title and slot are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Meal log itself is non-destructive.",
+        "prompt": "Log this lunch?"
+      },
+      "destructive": false,
+      "mutation": true
+    },
+    {
+      "command_id": "cmd_2",
+      "type": "meal.record_inventory_use",
+      "summary": "Record chicken use after confirmation.",
+      "payload": {
+        "meal_ref": "cmd_1",
+        "uses": [
+          {
+            "inventory_item_ref": "inventory:item:chicken-fridge",
+            "quantity": null,
+            "confidence": 0.55
+          }
+        ]
+      },
+      "evidence_refs": [
+        "ev_user_1",
+        "ev_inventory_1"
+      ],
+      "confidence": {
+        "score": 0.55,
+        "rationale": "User named chicken but did not give quantity."
+      },
+      "confirmation": {
+        "required": true,
+        "level": "confirm",
+        "reason": "Inventory decrease quantity is uncertain.",
+        "prompt": "How much chicken should be deducted?"
+      },
+      "destructive": true,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.76,
+    "rationale": "Meal log is clear; pantry deduction is uncertain."
+  },
+  "confirmation": {
+    "required": true,
+    "level": "confirm",
+    "reason": "One command would decrease inventory without an exact quantity.",
+    "prompt": "Confirm the chicken quantity before updating inventory."
+  },
+  "warnings": [
+    {
+      "code": "stock_decrease_uncertain",
+      "severity": "review",
+      "message": "Inventory use requires an exact quantity or user confirmation.",
+      "evidence_refs": [
+        "ev_user_1",
+        "ev_inventory_1"
+      ]
+    },
+    {
+      "code": "nutrition_unverified",
+      "severity": "info",
+      "message": "No trusted nutrition source was provided.",
+      "evidence_refs": [
+        "ev_user_1"
+      ]
+    }
+  ],
+  "unsupported": null
+}

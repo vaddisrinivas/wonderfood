@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wonderfood.local/schemas/ai/proposal-package.v1.json",
+  "title": "WonderFood AI Proposal Package v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "origin",
+    "created_at",
+    "expires_at",
+    "command_envelope",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "wf.proposal-package.v1"
+    },
+    "proposal_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "kind",
+        "producer"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "chatgpt",
+            "custom_gpt",
+            "gpt_skill",
+            "chatgpt_app",
+            "app_link",
+            "file",
+            "share",
+            "other"
+          ]
+        },
+        "producer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "command_envelope": {
+      "$ref": "command-envelope.schema.v1.json"
+    },
+    "signature": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

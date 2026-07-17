@@ -1,0 +1,87 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "nutrition_correction",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_test_nutrition_001",
+  "idempotency_key": "test-nutrition-001",
+  "status": "needs_confirmation",
+  "evidence": [
+    {
+      "evidence_id": "ev_test_user_1",
+      "type": "user_text",
+      "source_ref": "turn:test:local",
+      "quote": "This yogurt label says 140 calories and 18g protein.",
+      "observed_at": "2026-01-15T12:00:00Z",
+      "confidence": 1.0
+    },
+    {
+      "evidence_id": "ev_test_label_1",
+      "type": "nutrition_label",
+      "source_ref": "label:photo:generic-yogurt",
+      "quote": "140 calories, protein 18g",
+      "observed_at": "2026-01-15T12:00:00Z",
+      "confidence": 0.9
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "nutrition.correct_inventory_item",
+      "summary": "Correct yogurt calories and protein from label evidence.",
+      "payload": {
+        "inventory_item_ref": "inventory:item:generic-yogurt",
+        "serving": {
+          "amount": 1,
+          "unit": "container",
+          "text": "one container"
+        },
+        "calories": 140,
+        "protein_g": 18,
+        "carbs_g": null,
+        "fat_g": null,
+        "source": "label",
+        "confidence": 0.9,
+        "evidence_label": "ev_test_label_1"
+      },
+      "evidence_refs": [
+        "ev_test_user_1",
+        "ev_test_label_1"
+      ],
+      "confidence": {
+        "score": 0.9,
+        "rationale": "User supplied label-backed values for two nutrition fields."
+      },
+      "confirmation": {
+        "required": true,
+        "level": "confirm",
+        "reason": "Nutrition correction may replace existing values.",
+        "prompt": "Update yogurt nutrition from this label?"
+      },
+      "destructive": true,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.9,
+    "rationale": "Label evidence supports the correction."
+  },
+  "confirmation": {
+    "required": true,
+    "level": "confirm",
+    "reason": "Existing nutrition values may be overwritten.",
+    "prompt": "Confirm nutrition correction?"
+  },
+  "warnings": [
+    {
+      "code": "nutrition_unverified",
+      "severity": "info",
+      "message": "Carbs and fat remain unknown because no values were provided.",
+      "evidence_refs": [
+        "ev_test_user_1",
+        "ev_test_label_1"
+      ]
+    }
+  ],
+  "unsupported": null
+}

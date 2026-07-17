@@ -1,0 +1,49 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "nutrition_correction",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_unsupported_001",
+  "idempotency_key": "turn-local-unsupported-001",
+  "status": "unsupported",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_1",
+      "type": "user_text",
+      "source_ref": "turn:user:local",
+      "quote": "Tell me what dose of supplements treats my symptoms.",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [],
+  "confidence": {
+    "score": 0.99,
+    "rationale": "The request is clearly medical advice outside the food catalog."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "none",
+    "reason": "",
+    "prompt": ""
+  },
+  "warnings": [
+    {
+      "code": "unsupported_medical_advice",
+      "severity": "blocker",
+      "message": "Medical treatment or supplement dosing is outside WonderFood AI commands.",
+      "evidence_refs": [
+        "ev_user_1"
+      ]
+    }
+  ],
+  "unsupported": {
+    "code": "unsupported_medical_advice",
+    "message": "WonderFood can track food, preferences, and label-backed nutrition, but it cannot provide treatment advice.",
+    "allowed_alternatives": [
+      "Log a meal",
+      "Save a food preference",
+      "Record label nutrition"
+    ]
+  }
+}

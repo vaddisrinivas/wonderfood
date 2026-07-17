@@ -1,0 +1,53 @@
+<resources>
+    <string name="app_name">WonderFood</string>
+    <string name="shortcut_today">Today</string>
+    <string name="shortcut_numbers">Numbers</string>
+    <string name="shortcut_kitchen">Kitchen</string>
+    <string name="shortcut_shopping">Shopping list</string>
+    <string name="shortcut_recipes">Recipes</string>
+    <string name="shortcut_log_water">Log water</string>
+    <string name="shortcut_start_shopping">Start shopping</string>
+    <string name="shortcut_done_shopping">Done shopping</string>
+    <string name="health_connect_rationale_title">WonderFood and Health Connect</string>
+    <string name="health_connect_rationale_body">WonderFood uses Health Connect only after you approve it. It reads steps, active calories, total calories, and nutrition totals so meal planning can understand your day. It can also write meals you log back to Health Connect when nutrition is available.</string>
+    <string name="done">Done</string>
+
+    <string-array name="assistant_log_water_queries">
+        <item>log $ml milliliters water in WonderFood</item>
+        <item>add $ml milliliters water to WonderFood</item>
+        <item>WonderFood log $ml milliliters water</item>
+    </string-array>
+    <string-array name="assistant_add_grocery_queries">
+        <item>add groceries to WonderFood</item>
+        <item>WonderFood add groceries</item>
+        <item>make a shopping list in WonderFood</item>
+        <item>add $text to my WonderFood shopping list</item>
+        <item>WonderFood add $text to groceries</item>
+        <item>put $text on my WonderFood list</item>
+    </string-array>
+    <string-array name="assistant_add_kitchen_item_queries">
+        <item>add $text to my WonderFood kitchen</item>
+        <item>add $text to $zone in WonderFood</item>
+        <item>put $text in my WonderFood $zone</item>
+        <item>WonderFood add $text to $zone</item>
+        <item>WonderFood put $text in $zone</item>
+    </string-array>
+    <string-array name="assistant_log_meal_queries">
+        <item>log a meal in WonderFood</item>
+        <item>WonderFood log a meal</item>
+        <item>log $meal in WonderFood</item>
+        <item>WonderFood log meal $meal</item>
+        <item>I ate $meal in WonderFood</item>
+    </string-array>
+    <string-array name="assistant_start_cooking_queries">
+        <item>start cooking $recipe in WonderFood</item>
+        <item>WonderFood start cooking $recipe</item>
+        <item>cook $recipe in WonderFood</item>
+    </string-array>
+    <string-array name="assistant_plan_meals_queries">
+        <item>plan meals in WonderFood</item>
+        <item>WonderFood plan meals</item>
+        <item>make a meal plan in WonderFood</item>
+        <item>plan this week in WonderFood</item>
+    </string-array>
+</resources>

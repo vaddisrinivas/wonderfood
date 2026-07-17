@@ -1,0 +1,62 @@
+*.iml
+.gradle
+.kotlin/
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Build artifacts
+**/build/
+build/
+captures/
+outputs/
+work/
+*.apk
+*.aab
+*.apks
+*.idsig
+
+# Local Android and signing material
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.mobileprovision
+
+# Local data, exports, and user-owned captures
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.jsonl
+*.ndjson
+*.backup
+*.bak
+exports/
+backups/
+captures/
+docs/baseline/apk/
+docs/baseline/db/*.db
+docs/baseline/screenshots/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+secrets/
+*.secret
+
+# JVM/compiler crash dumps can contain local paths and environment metadata
+hs_err_pid*.log
+replay_pid*.log
