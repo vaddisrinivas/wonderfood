@@ -73,8 +73,38 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Handled locally. AI not needed.").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Update grocery list").assertCountEquals(1)
         composeTestRule.onNodeWithText("Edit proposal").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeTestRule.onNodeWithText("Edit before saving").assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
         composeTestRule.onNodeWithText("Edit before saving").assertIsDisplayed()
         composeTestRule.onNodeWithText("Name").assertIsDisplayed()
+    }
+
+    @Test
+    fun newChatKeepsPreviousConversationReadableFromHistory() {
+        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+        val previousMessage = "Need tamarind for the history test"
+
+        composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
+        composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput(previousMessage)
+        composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            composeTestRule.onAllNodesWithText("Update grocery list").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithText("New chat").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            composeTestRule.onAllNodesWithText("New chat started. Your kitchen, recipes, groceries, plans, and settings are still saved.")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("History").performClick()
+
+        composeTestRule.onNodeWithText("Chat history").assertIsDisplayed()
+        composeTestRule.onNodeWithText(previousMessage).assertIsDisplayed()
     }
 
     @Test

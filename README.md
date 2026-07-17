@@ -11,6 +11,10 @@ and reviewable command links work without an in-app LLM.
   encrypted Google Drive backup, export, or share.
 - AI, assistant, share, and deep-link mutations are proposals. The user can edit,
   accept, or reject them before persistence.
+- AI replies and every structured proposal remain editable. Starting a new chat keeps
+  earlier conversations readable in Chat history; only the confirmed reset deletes them.
+- Receipt photos accept optional user context before analysis, and that note stays with
+  the local receipt evidence and provider request.
 - Unknown nutrition remains unknown. Provider estimates retain source and confidence.
 - External bulk proposals are bounded, validated, audited, and applied atomically.
 - No personal pantry, account, receipt, health, credential, or provider data is bundled.
@@ -43,8 +47,10 @@ Connected Android tests:
 
 ## Optional integrations
 
-- AI providers are configured in-app. API keys are encrypted with Android Keystore
-  and excluded from Android backup.
+- AI providers are configured as a deterministic Primary and one optional Fallback.
+  Each request tries Primary once, then Fallback only after failure; there is no rotation
+  or load balancing. API keys are encrypted with Android Keystore and excluded from
+  Android backup.
 - Google Drive app-data backup requires replacing `google_web_client_id` in
   `app/src/main/res/values/google_auth.xml` with a public OAuth web client ID.
 - HTTPS app links require a deployed `https://wonderfood.app/.well-known/assetlinks.json`.
@@ -73,4 +79,3 @@ Cleartext networking is denied except emulator/local-development loopback hosts.
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). The project is licensed under Apache-2.0.
-

@@ -80,20 +80,14 @@ class LiteLlmSettings(
     fun readAll(): List<LiteLlmConfig> {
         val configured = buildList {
             add(read())
-            addAll(readFallbacks())
+            readFallback()?.let(::add)
         }
         return configured
             .filter { it.isUsable }
             .distinctBy { "${it.provider.prefValue}|${it.baseUrl.trim()}|${it.model.trim()}|${it.apiVersion.trim()}" }
     }
 
-    fun readAllRoundRobin(): List<LiteLlmConfig> {
-        val configs = readAll()
-        if (configs.size <= 1) return configs
-        val startIndex = prefs.getInt(KEY_NEXT_PROVIDER_INDEX, 0).floorMod(configs.size)
-        prefs.edit { putInt(KEY_NEXT_PROVIDER_INDEX, (startIndex + 1).floorMod(configs.size)) }
-        return configs.drop(startIndex) + configs.take(startIndex)
-    }
+    fun readFallback(): LiteLlmConfig? = readFallbacks().firstOrNull()
 
     fun save(config: LiteLlmConfig) {
         prefs.edit {
@@ -106,10 +100,15 @@ class LiteLlmSettings(
     }
 
     fun saveAll(configs: List<LiteLlmConfig>) {
-        val usable = configs.filter { it.isUsable }
-        val primary = usable.firstOrNull() ?: return
+        val primary = configs.firstOrNull() ?: LiteLlmConfig("", "", DEFAULT_MODEL)
+        val fallback = configs.drop(1).firstOrNull()?.takeIf { it.isUsable }
         save(primary)
-        prefs.edit { putString(KEY_CONFIGS_JSON, usable.drop(1).toJsonArray().toString()) }
+        prefs.edit {
+            putString(
+                KEY_CONFIGS_JSON,
+                fallback?.let { listOf(it).toJsonArray().toString() }.orEmpty(),
+            )
+        }
     }
 
     fun clear() {
@@ -209,7 +208,6 @@ class LiteLlmSettings(
         const val KEY_PROVIDER = "provider"
         const val KEY_API_VERSION = "api_version"
         const val KEY_CONFIGS_JSON = "configs_json"
-        const val KEY_NEXT_PROVIDER_INDEX = "next_provider_index"
         const val DEFAULT_MODEL = "gpt-5.4-mini"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEYSTORE_ALIAS = "wonderfood_litellm_api_key_v1"
@@ -217,6 +215,3 @@ class LiteLlmSettings(
         private const val ENCRYPTED_PREFIX = "enc:v1:"
     }
 }
-
-private fun Int.floorMod(modulus: Int): Int =
-    ((this % modulus) + modulus) % modulus

@@ -67,6 +67,79 @@ class FoodChatStoreTest {
     }
 
     @Test
+    fun newChatPreservesHistoryAndResetIsExplicit() {
+        store.seedIfEmpty()
+        store.insertMessage(ChatRole.USER, "First conversation")
+        val firstChatMessages = store.readMemory().messages
+
+        store.startNewChat()
+        store.insertMessage(ChatRole.USER, "Second conversation")
+        val allMessages = store.readMemory().messages
+
+        assertTrue(allMessages.size > firstChatMessages.size)
+        assertEquals(setOf(1L, 2L), allMessages.map(ChatMessage::chatId).toSet())
+        assertTrue(allMessages.any { it.body == "First conversation" })
+        assertTrue(allMessages.any { it.body == "Second conversation" })
+        assertEquals(2L, store.readMemory().currentChatId)
+        assertEquals("Second conversation", store.readMemory().currentChatMessages.last().body)
+
+        store.clearChatHistory()
+        val reset = store.readMemory()
+        assertEquals(1, reset.messages.size)
+        assertEquals(1L, reset.currentChatId)
+        assertTrue(reset.messages.single().body.contains("reset"))
+    }
+
+    @Test
+    fun chatMessagesCanBeEditedWithoutChangingTheirConversation() {
+        val id = store.insertMessage(ChatRole.ASSISTANT, "Original reply")
+
+        assertTrue(store.updateMessage(id, "Corrected reply"))
+
+        val message = store.readMemory().messages.single()
+        assertEquals("Corrected reply", message.body)
+        assertEquals(1L, message.chatId)
+    }
+
+    @Test
+    fun v10ChatHistoryMigratesIntoTheFirstConversation() {
+        store.seedIfEmpty()
+        store.insertMessage(ChatRole.USER, "Message from the v10 database")
+        store.close()
+
+        context.openOrCreateDatabase(testDbName, Context.MODE_PRIVATE, null).use { db ->
+            db.execSQL("PRAGMA foreign_keys=OFF")
+            db.execSQL("PRAGMA legacy_alter_table=ON")
+            db.execSQL("ALTER TABLE chat_messages RENAME TO chat_messages_v11")
+            db.execSQL(
+                """
+                CREATE TABLE chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO chat_messages (id, role, body, created_at)
+                SELECT id, role, body, created_at FROM chat_messages_v11
+                """.trimIndent(),
+            )
+            db.execSQL("DROP TABLE chat_messages_v11")
+            db.version = 10
+        }
+
+        store = FoodChatStore(context, testDbName)
+        val migrated = store.readMemory()
+
+        assertEquals(11, scalarLong("PRAGMA user_version"))
+        assertTrue(migrated.messages.any { it.body == "Message from the v10 database" })
+        assertTrue(migrated.messages.all { it.chatId == 1L })
+    }
+
+    @Test
     fun compositeDraftRollsBackEveryChildWhenOneTargetCannotResolve() {
         store.applyDraft(
             InventoryDraft(listOf(FoodCandidate(name = "Eggs", quantity = "12", zone = StorageZone.FRIDGE))),
@@ -166,7 +239,7 @@ class FoodChatStoreTest {
             sourceMessageId = null,
         )
 
-        assertEquals(10, scalarLong("PRAGMA user_version"))
+        assertEquals(11, scalarLong("PRAGMA user_version"))
         assertTrue(scalarLong("SELECT COUNT(*) FROM foods WHERE canonical_name = 'toor dal'") >= 1)
         assertEquals(
             "yogurt",

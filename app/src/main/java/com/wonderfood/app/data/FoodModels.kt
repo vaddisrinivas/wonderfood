@@ -8,6 +8,7 @@ data class ChatMessage(
     val role: ChatRole,
     val body: String,
     val createdAtMillis: Long,
+    val chatId: Long = 1L,
 )
 
 enum class ChatRole {
@@ -275,7 +276,13 @@ data class FoodMemory(
     val mealPlanEntries: List<MealPlanEntry> = emptyList(),
     val receipts: List<ReceiptCapture> = emptyList(),
     val preferences: FoodPreferences = FoodPreferences(),
-)
+) {
+    val currentChatId: Long
+        get() = messages.maxOfOrNull(ChatMessage::chatId) ?: 1L
+
+    val currentChatMessages: List<ChatMessage>
+        get() = messages.filter { it.chatId == currentChatId }
+}
 
 data class FoodCandidate(
     val name: String,

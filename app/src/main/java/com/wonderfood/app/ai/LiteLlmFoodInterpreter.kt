@@ -109,7 +109,13 @@ class LiteLlmFoodInterpreter {
         return validateProviderTurn(turn, response.diagnostic)
     }
 
-    fun interpretReceiptPhoto(context: Context, uri: Uri, memory: FoodMemory, configs: List<LiteLlmConfig>): AiTurn? {
+    fun interpretReceiptPhoto(
+        context: Context,
+        uri: Uri,
+        memory: FoodMemory,
+        configs: List<LiteLlmConfig>,
+        userNote: String = "",
+    ): AiTurn? {
         if (configs.none { it.isUsable }) return null
         val dataUri = context.contentResolver.openInputStream(uri)?.use { stream ->
             val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -117,21 +123,32 @@ class LiteLlmFoodInterpreter {
             "data:$mimeType;base64,$base64"
         } ?: return null
         return configs.firstNotNullOfOrNull { config ->
-            interpretReceiptDataUri(dataUri, memory, config)
+            interpretReceiptDataUri(dataUri, memory, config, userNote)
         }
     }
 
-    fun interpretReceiptPhoto(context: Context, uri: Uri, memory: FoodMemory, config: LiteLlmConfig): AiTurn? {
+    fun interpretReceiptPhoto(
+        context: Context,
+        uri: Uri,
+        memory: FoodMemory,
+        config: LiteLlmConfig,
+        userNote: String = "",
+    ): AiTurn? {
         if (!config.isUsable) return null
         val dataUri = context.contentResolver.openInputStream(uri)?.use { stream ->
             val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
             val base64 = Base64.encodeToString(stream.readBytes(), Base64.NO_WRAP)
             "data:$mimeType;base64,$base64"
         } ?: return null
-        return interpretReceiptDataUri(dataUri, memory, config)
+        return interpretReceiptDataUri(dataUri, memory, config, userNote)
     }
 
-    private fun interpretReceiptDataUri(dataUri: String, memory: FoodMemory, config: LiteLlmConfig): AiTurn? {
+    private fun interpretReceiptDataUri(
+        dataUri: String,
+        memory: FoodMemory,
+        config: LiteLlmConfig,
+        userNote: String,
+    ): AiTurn? {
         if (!config.isUsable) return null
         val body = JSONObject()
             .put("model", config.model)
@@ -153,7 +170,13 @@ class LiteLlmFoodInterpreter {
                                             .put(
                                                 "text",
                                                 buildUserPrompt(
-                                                    text = "Extract grocery or pantry items from this receipt photo. Prefer grocery draft unless the user clearly already bought these for inventory.",
+                                                    text = buildString {
+                                                        append("Extract grocery or pantry items from this receipt photo. Prefer grocery draft unless the user clearly already bought these for inventory.")
+                                                        userNote.trim().takeIf { it.isNotBlank() }?.let { note ->
+                                                            append("\nUser-supplied receipt context: ")
+                                                            append(note)
+                                                        }
+                                                    },
                                                     memory = memory,
                                                 ),
                                             ),
@@ -175,7 +198,7 @@ class LiteLlmFoodInterpreter {
             .orEmpty()
             .trim()
         if (content.isBlank()) return null
-        return parseTurn(content, "receipt photo", memory)
+        return parseTurn(content, userNote.ifBlank { "receipt photo" }, memory)
             ?.let { turn -> (validateProviderTurn(turn, "receipt photo provider") as? LiteLlmInterpretation.Success)?.turn }
     }
 
@@ -532,7 +555,7 @@ class LiteLlmFoodInterpreter {
         val plans = memory.mealPlanEntries.take(16).joinToString { entry ->
             "${entry.id}@${entry.dateEpochDay}:${entry.slot.label}:${entry.status.name.lowercase()}:${entry.title}:${entry.calorieTarget ?: "?"}kcal source=${entry.source.ifBlank { "unknown" }}"
         }
-        val recentMessages = memory.messages.takeLast(40).joinToString("\n") { message ->
+        val recentMessages = memory.currentChatMessages.takeLast(40).joinToString("\n") { message ->
             "${message.role.name.lowercase()}: ${message.body.promptClip(420)}"
         }
         val recentActions = memory.actions.take(20).joinToString("\n") { action ->

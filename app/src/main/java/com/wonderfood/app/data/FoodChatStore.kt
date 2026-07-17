@@ -30,6 +30,7 @@ class FoodChatStore(
         createV8Tables(db)
         createV9Tables(db)
         createV10Tables(db)
+        createV11Tables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -42,6 +43,7 @@ class FoodChatStore(
         if (oldVersion < 8) migrateToV8(db)
         if (oldVersion < 9) migrateToV9(db)
         if (oldVersion < 10) migrateToV10(db)
+        if (oldVersion < 11) migrateToV11(db)
     }
 
     @Synchronized
@@ -54,7 +56,7 @@ class FoodChatStore(
     }
 
     @Synchronized
-    fun insertMessage(role: ChatRole, body: String): Long {
+    fun insertMessage(role: ChatRole, body: String, chatId: Long = currentChatId()): Long {
         val now = now()
         return writableDatabase.insert(
             "chat_messages",
@@ -63,17 +65,41 @@ class FoodChatStore(
                 put("role", role.name)
                 put("body", body)
                 put("created_at", now)
+                put("chat_id", chatId)
             },
         )
     }
 
     @Synchronized
     fun startNewChat(): Long {
-        writableDatabase.delete("chat_messages", null, null)
+        val chatId = currentChatId() + 1L
         return insertMessage(
             role = ChatRole.ASSISTANT,
             body = "New chat started. Your kitchen, recipes, groceries, plans, and settings are still saved.",
+            chatId = chatId,
         )
+    }
+
+    @Synchronized
+    fun clearChatHistory(): Long {
+        writableDatabase.delete("chat_messages", null, null)
+        return insertMessage(
+            role = ChatRole.ASSISTANT,
+            body = "Chat memory reset. Your kitchen, recipes, groceries, plans, and settings are still saved.",
+            chatId = 1L,
+        )
+    }
+
+    @Synchronized
+    fun updateMessage(id: Long, body: String): Boolean {
+        val clean = body.trim()
+        if (clean.isBlank()) return false
+        return writableDatabase.update(
+            "chat_messages",
+            ContentValues().apply { put("body", clean) },
+            "id = ?",
+            arrayOf(id.toString()),
+        ) == 1
     }
 
     @Synchronized
@@ -1826,17 +1852,26 @@ class FoodChatStore(
             arrayOf(title),
         ).use { cursor -> if (cursor.moveToFirst()) cursor.long("id") else null }
 
-    private fun readMessages(limit: Int = 200): List<ChatMessage> =
+    private fun readMessages(): List<ChatMessage> =
         readableDatabase.rawQuery(
-            "SELECT id, role, body, created_at FROM chat_messages ORDER BY id ASC LIMIT ?",
-            arrayOf(limit.toString()),
+            "SELECT id, role, body, created_at, chat_id FROM chat_messages ORDER BY id ASC",
+            emptyArray(),
         ).useRows { cursor ->
             ChatMessage(
                 id = cursor.long("id"),
                 role = runCatching { ChatRole.valueOf(cursor.string("role")) }.getOrDefault(ChatRole.ASSISTANT),
                 body = cursor.string("body"),
                 createdAtMillis = cursor.long("created_at"),
+                chatId = cursor.long("chat_id"),
             )
+        }
+
+    private fun currentChatId(): Long =
+        readableDatabase.rawQuery(
+            "SELECT COALESCE(MAX(chat_id), 1) FROM chat_messages",
+            emptyArray(),
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0).coerceAtLeast(1L) else 1L
         }
 
     private fun readActions(limit: Int = 80): List<ChatAction> =
@@ -2115,7 +2150,8 @@ class FoodChatStore(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role TEXT NOT NULL,
                 body TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                chat_id INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent(),
         )
@@ -2743,6 +2779,15 @@ class FoodChatStore(
     private fun migrateToV10(db: SQLiteDatabase) {
         createV10Tables(db)
         backfillStructuredFoodData(db)
+    }
+
+    private fun createV11Tables(db: SQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_id ON chat_messages(chat_id, id)")
+    }
+
+    private fun migrateToV11(db: SQLiteDatabase) {
+        db.addColumn("chat_messages", "chat_id INTEGER NOT NULL DEFAULT 1")
+        createV11Tables(db)
     }
 
     private data class ParsedQuantity(
@@ -3835,7 +3880,7 @@ class FoodChatStore(
 
     companion object {
         private const val DB_NAME = "wonderfood.db"
-        const val SCHEMA_VERSION = 10
+        const val SCHEMA_VERSION = 11
         private const val DB_VERSION = SCHEMA_VERSION
         private const val PREF_DIET_STYLE = "diet_style"
         private const val PREF_ALLERGIES = "allergies"

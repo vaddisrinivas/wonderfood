@@ -166,6 +166,10 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         _uiState.update { it.copy(aiConfigForm = config) }
     }
 
+    fun onAiFallbackConfigChange(config: LiteLlmConfig) {
+        _uiState.update { it.copy(aiFallbackConfigForm = config) }
+    }
+
     fun savePreferences() {
         preferenceAutoSaveJob?.cancel()
         val preferences = _uiState.value.preferencesForm
@@ -203,14 +207,15 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun saveAiConfig() {
-        val config = _uiState.value.aiConfigForm
+        val primary = _uiState.value.aiConfigForm
+        val fallback = _uiState.value.aiFallbackConfigForm
         _uiState.update { it.copy(isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            liteLlmSettings.save(config)
+            liteLlmSettings.saveAll(listOf(primary, fallback))
             refreshAiStatus()
-            store.insertMessage(ChatRole.ASSISTANT, "Saved AI provider settings.")
+            store.insertMessage(ChatRole.ASSISTANT, "Saved primary and fallback AI provider settings.")
             refreshFromDisk(isWorking = false)
-            showFeedback("AI provider settings saved.")
+            showFeedback("Primary and fallback AI providers saved.")
         }
     }
 
@@ -555,22 +560,33 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
-    fun attachReceiptPhoto(uri: Uri?) {
+    fun attachReceiptPhoto(uri: Uri?, note: String = "") {
         if (uri == null) return
+        val cleanNote = note.trim().take(2_000)
         _uiState.update { it.copy(isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
             val capture = captureGateway.stageReceiptPhoto(uri)
             val privateUri = capture.privateUri ?: uri
+            val receiptEvidence = listOfNotNull(
+                capture.evidenceText,
+                cleanNote.takeIf { it.isNotBlank() }?.let { "User note:\n$it" },
+            ).joinToString("\n\n")
             val receiptId = store.insertReceiptCapture(
                 imageUri = privateUri.toString(),
-                rawText = capture.evidenceText,
+                rawText = receiptEvidence,
                 status = if (capture.status == FoodCaptureStatus.STAGED) ReceiptStatus.SAVED else ReceiptStatus.NEEDS_TEXT,
             )
-            val sourceMessageId = store.insertMessage(ChatRole.USER, "Attached receipt photo.")
+            val sourceMessageId = store.insertMessage(
+                ChatRole.USER,
+                buildString {
+                    append("Attached receipt photo.")
+                    if (cleanNote.isNotBlank()) append("\nReceipt note: $cleanNote")
+                },
+            )
             val memory = store.readMemory()
-            val configs = liteLlmSettings.readAllRoundRobin()
+            val configs = liteLlmSettings.readAll()
             val turn = if (capture.status == FoodCaptureStatus.STAGED) {
-                interpretReceiptPhotoWithVisibleRetries(privateUri, memory, configs)
+                interpretReceiptPhotoWithVisibleRetries(privateUri, memory, configs, cleanNote)
             } else {
                 null
             }
@@ -582,7 +598,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     sourceMessageId = sourceMessageId,
                     payload = mapOf("id" to receiptId.toString(), "status" to ReceiptStatus.NEEDS_TEXT.name),
                 ) {
-                    store.updateReceiptStatus(receiptId, rawText = capture.evidenceText, status = ReceiptStatus.NEEDS_TEXT)
+                    store.updateReceiptStatus(receiptId, rawText = receiptEvidence, status = ReceiptStatus.NEEDS_TEXT)
                     "Receipt needs text."
                 }
                 store.insertMessage(
@@ -601,7 +617,10 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 ) {
                     store.updateReceiptStatus(
                         receiptId,
-                        rawText = turn.reply,
+                        rawText = listOfNotNull(
+                            cleanNote.takeIf { it.isNotBlank() }?.let { "User note:\n$it" },
+                            "Extraction:\n${turn.reply}",
+                        ).joinToString("\n\n"),
                         status = receiptStatus,
                     )
                     "Receipt page updated."
@@ -667,6 +686,24 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             store.startNewChat()
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             _uiState.update { it.copy(voiceStatus = "New chat started.") }
+        }
+    }
+
+    fun clearChatHistory() {
+        _uiState.update { it.copy(input = "", isWorking = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            store.clearChatHistory()
+            refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
+            _uiState.update { it.copy(voiceStatus = "Chat memory reset.") }
+        }
+    }
+
+    fun updateChatMessage(id: Long, body: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (store.updateMessage(id, body)) {
+                refreshFromDisk(isWorking = false)
+                showFeedback("Chat message updated.")
+            }
         }
     }
 
@@ -1429,23 +1466,27 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun refreshAiStatus() {
-        val config = liteLlmSettings.read()
-        val configs = liteLlmSettings.readAllRoundRobin()
-        val label = if (configs.isNotEmpty()) {
-            val fallbackCount = configs.size - 1
-            "AI: ${configs.first().statusLabel}" + if (fallbackCount > 0) {
-                " + $fallbackCount ${if (fallbackCount == 1) "fallback" else "fallbacks"}"
-            } else {
-                ""
-            }
+        val primary = liteLlmSettings.read()
+        val fallback = liteLlmSettings.readFallback() ?: LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL)
+        val label = if (primary.isUsable) {
+            "AI: primary ${primary.statusLabel}" + if (fallback.isUsable) " → fallback ${fallback.statusLabel}" else ""
+        } else if (fallback.isUsable) {
+            "AI: fallback ${fallback.statusLabel} (primary not configured)"
         } else {
             "AI: local fallback"
         }
-        _uiState.update { it.copy(aiStatus = label, aiConfigForm = config, savedAiConfig = config) }
+        _uiState.update {
+            it.copy(
+                aiStatus = label,
+                aiConfigForm = primary,
+                savedAiConfig = primary,
+                aiFallbackConfigForm = fallback,
+                savedAiFallbackConfig = fallback,
+            )
+        }
     }
 
-    fun testAiConnection() {
-        val config = _uiState.value.aiConfigForm
+    fun testAiConnection(config: LiteLlmConfig = _uiState.value.aiConfigForm) {
         _uiState.update { it.copy(isWorking = true, aiStatus = "Testing ${config.statusLabel}…") }
         viewModelScope.launch(Dispatchers.IO) {
             liteLlmInterpreter.testConnection(config)
@@ -1901,6 +1942,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         uri: Uri,
         memory: FoodMemory,
         configs: List<LiteLlmConfig>,
+        userNote: String,
     ): com.wonderfood.app.data.AiTurn? {
         configs.forEachIndexed { index, config ->
             val attempt = index + 1
@@ -1918,7 +1960,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     },
                 )
             }
-            liteLlmInterpreter.interpretReceiptPhoto(appContext, uri, memory, config)?.let { turn ->
+            liteLlmInterpreter.interpretReceiptPhoto(appContext, uri, memory, config, userNote)?.let { turn ->
                 _uiState.update {
                     it.copy(
                         aiAttemptStatus = "Receipt read by ${config.statusLabel}.",
@@ -2347,6 +2389,8 @@ data class WonderFoodUiState(
     val preferencesForm: FoodPreferences = FoodPreferences(),
     val aiConfigForm: LiteLlmConfig = LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL),
     val savedAiConfig: LiteLlmConfig = LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL),
+    val aiFallbackConfigForm: LiteLlmConfig = LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL),
+    val savedAiFallbackConfig: LiteLlmConfig = LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL),
     val detailTarget: FoodDetailTarget? = null,
     val voiceStatus: String = "",
     val guidedVoicePrompt: String = "",

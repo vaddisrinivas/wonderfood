@@ -18,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -263,9 +265,12 @@ fun MainScreen(
         }
     var pendingRecipeImageId by remember { mutableStateOf<Long?>(null) }
     var voiceNoteAutoAcceptForResult by rememberSaveable { mutableStateOf(false) }
+    var pendingReceiptUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var pendingReceiptNote by rememberSaveable { mutableStateOf("") }
     val receiptPhotoLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            viewModel.attachReceiptPhoto(uri)
+            pendingReceiptUri = uri
+            if (uri == null) pendingReceiptNote = ""
         }
     val recipePhotoLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -409,6 +414,8 @@ fun MainScreen(
         onAcceptDraft = viewModel::acceptDraft,
         onRejectDraft = viewModel::rejectDraft,
         onDraftChange = viewModel::updatePendingDraft,
+        onChatMessageChange = viewModel::updateChatMessage,
+        onClearChatHistory = viewModel::clearChatHistory,
         onDeleteInventory = viewModel::deleteInventory,
         onUpdateInventory = viewModel::updateInventory,
         onDeleteGrocery = viewModel::deleteGrocery,
@@ -439,6 +446,7 @@ fun MainScreen(
         onPreferencesChange = viewModel::onPreferencesChange,
         onSavePreferences = viewModel::savePreferences,
         onAiConfigChange = viewModel::onAiConfigChange,
+        onAiFallbackConfigChange = viewModel::onAiFallbackConfigChange,
         onSaveAiConfig = viewModel::saveAiConfig,
         onCreateEncryptedBackup = viewModel::createEncryptedBackup,
         onRestoreLatestEncryptedBackup = viewModel::restoreLatestEncryptedBackup,
@@ -501,6 +509,65 @@ fun MainScreen(
             onDismiss = viewModel::cancelGoogleRestorePreview,
         )
     }
+    pendingReceiptUri?.let { uri ->
+        ReceiptNoteDialog(
+            note = pendingReceiptNote,
+            onNoteChange = { pendingReceiptNote = it },
+            onAnalyze = {
+                viewModel.attachReceiptPhoto(uri, pendingReceiptNote)
+                pendingReceiptUri = null
+                pendingReceiptNote = ""
+            },
+            onDismiss = {
+                pendingReceiptUri = null
+                pendingReceiptNote = ""
+            },
+        )
+    }
+}
+
+@Composable
+private fun ReceiptNoteDialog(
+    note: String,
+    onNoteChange: (String) -> Unit,
+    onAnalyze: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add receipt context") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Optional: add the store, what you bought, corrections, or any hard-to-read lines before analysis.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { onNoteChange(it.take(2_000)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "Receipt context note" },
+                    label = { Text("Receipt note") },
+                    placeholder = { Text("Bought for pantry; line 4 is oat milk…") },
+                    minLines = 4,
+                    maxLines = 8,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Text(
+                    "The photo and this note are staged for review. Nothing is added until you approve the proposal.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onAnalyze, shape = RoundedCornerShape(8.dp)) { Text("Analyze receipt") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
@@ -613,6 +680,8 @@ private fun WonderFoodScreen(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
+    onChatMessageChange: (Long, String) -> Unit,
+    onClearChatHistory: () -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onUpdateInventory: InventoryUpdateHandler,
     onDeleteGrocery: (Long) -> Unit,
@@ -638,6 +707,7 @@ private fun WonderFoodScreen(
     onPreferencesChange: (FoodPreferences) -> Unit,
     onSavePreferences: () -> Unit,
     onAiConfigChange: (LiteLlmConfig) -> Unit,
+    onAiFallbackConfigChange: (LiteLlmConfig) -> Unit,
     onSaveAiConfig: () -> Unit,
     onCreateEncryptedBackup: (String) -> Unit,
     onRestoreLatestEncryptedBackup: (String) -> Unit,
@@ -648,7 +718,7 @@ private fun WonderFoodScreen(
     onDisconnectGoogle: () -> Unit,
     onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
-    onTestAiConnection: () -> Unit,
+    onTestAiConnection: (LiteLlmConfig) -> Unit,
     onDeleteAllAppData: () -> Unit,
     themeMode: WonderFoodThemeMode,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
@@ -688,6 +758,8 @@ private fun WonderFoodScreen(
                     onAcceptDraft = onAcceptDraft,
                     onRejectDraft = onRejectDraft,
                     onDraftChange = onDraftChange,
+                    onChatMessageChange = onChatMessageChange,
+                    onClearChatHistory = onClearChatHistory,
                     onDeleteInventory = onDeleteInventory,
                     onUpdateInventory = onUpdateInventory,
                     onDeleteGrocery = onDeleteGrocery,
@@ -713,6 +785,7 @@ private fun WonderFoodScreen(
                     onPreferencesChange = onPreferencesChange,
                     onSavePreferences = onSavePreferences,
                     onAiConfigChange = onAiConfigChange,
+                    onAiFallbackConfigChange = onAiFallbackConfigChange,
                     onSaveAiConfig = onSaveAiConfig,
                     onCreateEncryptedBackup = onCreateEncryptedBackup,
                     onRestoreLatestEncryptedBackup = onRestoreLatestEncryptedBackup,
@@ -758,6 +831,8 @@ private fun WonderFoodScreen(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
+                onChatMessageChange = onChatMessageChange,
+                onClearChatHistory = onClearChatHistory,
                 onDeleteInventory = onDeleteInventory,
                 onUpdateInventory = onUpdateInventory,
                 onDeleteGrocery = onDeleteGrocery,
@@ -783,6 +858,7 @@ private fun WonderFoodScreen(
                 onPreferencesChange = onPreferencesChange,
                 onSavePreferences = onSavePreferences,
                 onAiConfigChange = onAiConfigChange,
+                onAiFallbackConfigChange = onAiFallbackConfigChange,
                 onSaveAiConfig = onSaveAiConfig,
                 onCreateEncryptedBackup = onCreateEncryptedBackup,
                 onRestoreLatestEncryptedBackup = onRestoreLatestEncryptedBackup,
@@ -845,6 +921,8 @@ private fun MainWorkspace(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
+    onChatMessageChange: (Long, String) -> Unit,
+    onClearChatHistory: () -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onUpdateInventory: InventoryUpdateHandler,
     onDeleteGrocery: (Long) -> Unit,
@@ -870,6 +948,7 @@ private fun MainWorkspace(
     onPreferencesChange: (FoodPreferences) -> Unit,
     onSavePreferences: () -> Unit,
     onAiConfigChange: (LiteLlmConfig) -> Unit,
+    onAiFallbackConfigChange: (LiteLlmConfig) -> Unit,
     onSaveAiConfig: () -> Unit,
     onCreateEncryptedBackup: (String) -> Unit,
     onRestoreLatestEncryptedBackup: (String) -> Unit,
@@ -880,7 +959,7 @@ private fun MainWorkspace(
     onDisconnectGoogle: () -> Unit,
     onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
-    onTestAiConnection: () -> Unit,
+    onTestAiConnection: (LiteLlmConfig) -> Unit,
     onDeleteAllAppData: () -> Unit,
     themeMode: WonderFoodThemeMode,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
@@ -901,7 +980,9 @@ private fun MainWorkspace(
     var showDiscardSettings by rememberSaveable { mutableStateOf(false) }
     val sectionStateHolder = rememberSaveableStateHolder()
     val aiContext = state.aiPageContext()
-    val settingsDirty = state.preferencesForm != state.memory.preferences || state.aiConfigForm != state.savedAiConfig
+    val settingsDirty = state.preferencesForm != state.memory.preferences ||
+        state.aiConfigForm != state.savedAiConfig ||
+        state.aiFallbackConfigForm != state.savedAiFallbackConfig
     val hasFeedback = state.undoMessage.isNotBlank() || state.feedbackMessage.isNotBlank()
     val closeSecondaryPane = {
         if (secondaryPane == SecondaryPane.SETTINGS && settingsDirty) showDiscardSettings = true else secondaryPane = null
@@ -965,6 +1046,7 @@ private fun MainWorkspace(
                         memory = state.memory,
                         preferences = state.preferencesForm,
                         aiConfig = state.aiConfigForm,
+                        aiFallbackConfig = state.aiFallbackConfigForm,
                         aiStatus = state.aiStatus,
                         healthStatus = state.healthStatus,
                         healthSummary = state.healthSummary,
@@ -977,6 +1059,7 @@ private fun MainWorkspace(
                         onChange = onPreferencesChange,
                         onSave = onSavePreferences,
                         onAiConfigChange = onAiConfigChange,
+                        onAiFallbackConfigChange = onAiFallbackConfigChange,
                         onSaveAiConfig = onSaveAiConfig,
                         onCreateEncryptedBackup = onCreateEncryptedBackup,
                         onRestoreLatestEncryptedBackup = onRestoreLatestEncryptedBackup,
@@ -990,7 +1073,7 @@ private fun MainWorkspace(
                         onTestAiConnection = onTestAiConnection,
                         onDeleteAllAppData = onDeleteAllAppData,
                         onDeleteAllPlans = onDeleteAllPlans,
-                        onClearChatHistory = onNewChat,
+                        onClearChatHistory = onClearChatHistory,
                         onThemeModeChange = onThemeModeChange,
                         onRequestHealthConnect = onRequestHealthConnect,
                         onBack = { secondaryPane = null },
@@ -1162,6 +1245,7 @@ private fun MainWorkspace(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
+                onChatMessageChange = onChatMessageChange,
                 onDismiss = { showAiCapture = false },
             )
         }
@@ -1192,6 +1276,7 @@ private fun MainWorkspace(
                     Button(onClick = {
                         onPreferencesChange(state.memory.preferences)
                         onAiConfigChange(state.savedAiConfig)
+                        onAiFallbackConfigChange(state.savedAiFallbackConfig)
                         showDiscardSettings = false
                         secondaryPane = null
                     }) { Text("Discard") }
@@ -1656,6 +1741,7 @@ private fun DraftCard(
 @Composable
 private fun DraftReviewEditor(
     draft: FoodDraft,
+    showTitle: Boolean = true,
     onChange: (FoodDraft) -> Unit,
 ) {
     Column(
@@ -1664,10 +1750,23 @@ private fun DraftReviewEditor(
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Edit before saving", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        if (showTitle) {
+            Text("Edit before saving", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
         when (draft) {
             is CompositeDraft -> draft.drafts.forEachIndexed { index, child ->
-                Text("Action ${index + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Action ${index + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    if (draft.drafts.size > 1) {
+                        TextButton(onClick = { onChange(draft.copy(drafts = draft.drafts.filterIndexed { childIndex, _ -> childIndex != index })) }) {
+                            Text("Remove action")
+                        }
+                    }
+                }
                 DraftReviewEditor(child) { updated ->
                     onChange(draft.copy(drafts = draft.drafts.toMutableList().also { it[index] = updated }))
                 }
@@ -1711,6 +1810,12 @@ private fun DraftReviewEditor(
                     onChange(draft.copy(stepsText = it))
                 }
                 DraftEditorField("Tags", draft.tags, "Optional") { onChange(draft.copy(tags = it)) }
+                DraftEditorField("Servings", draft.servings?.toString().orEmpty(), "Unknown is okay", KeyboardType.Number) { value ->
+                    if (value.isBlank() || value.toIntOrNull() != null) onChange(draft.copy(servings = value.toIntOrNull()))
+                }
+                DraftEditorField("Prep minutes", draft.prepMinutes?.toString().orEmpty(), "Unknown is okay", KeyboardType.Number) { value ->
+                    if (value.isBlank() || value.toIntOrNull() != null) onChange(draft.copy(prepMinutes = value.toIntOrNull()))
+                }
             }
             is MealLogDraft -> {
                 DraftEditorField("Meal title", draft.titleText, "Required") { onChange(draft.copy(titleText = it)) }
@@ -1729,6 +1834,15 @@ private fun DraftReviewEditor(
                 DraftEditorField("Used pantry items", draft.usedItemsText, "Optional", minLines = 2) {
                     onChange(draft.copy(usedItemsText = it))
                 }
+                DraftEditorField("Protein (g)", draft.proteinGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                    if (value.isBlank() || value.toDoubleOrNull() != null) onChange(draft.copy(proteinGrams = value.toDoubleOrNull()))
+                }
+                DraftEditorField("Carbs (g)", draft.carbsGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                    if (value.isBlank() || value.toDoubleOrNull() != null) onChange(draft.copy(carbsGrams = value.toDoubleOrNull()))
+                }
+                DraftEditorField("Fat (g)", draft.fatGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                    if (value.isBlank() || value.toDoubleOrNull() != null) onChange(draft.copy(fatGrams = value.toDoubleOrNull()))
+                }
             }
             is MealPlanDraft -> {
                 DraftEditorField("Plan title", draft.titleText, "Required") { onChange(draft.copy(titleText = it)) }
@@ -1739,8 +1853,28 @@ private fun DraftReviewEditor(
                     onChange(draft.copy(groceryHint = it))
                 }
                 draft.entries.forEachIndexed { index, entry ->
+                    Text("Planned meal ${index + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     DraftEditorField("Planned meal ${index + 1}", entry.title, "Required") { title ->
                         onChange(draft.copy(entries = draft.entries.toMutableList().also { it[index] = entry.copy(title = title) }))
+                    }
+                    DraftEditorField("Day offset", entry.dayOffset.toString(), "0 is the first day", KeyboardType.Number) { value ->
+                        value.toIntOrNull()?.let { day ->
+                            onChange(draft.copy(entries = draft.entries.toMutableList().also { it[index] = entry.copy(dayOffset = day) }))
+                        }
+                    }
+                    DraftEditorField("Calorie target", entry.calorieTarget?.toString().orEmpty(), "Unknown is okay", KeyboardType.Number) { value ->
+                        if (value.isBlank() || value.toIntOrNull() != null) {
+                            onChange(draft.copy(entries = draft.entries.toMutableList().also { it[index] = entry.copy(calorieTarget = value.toIntOrNull()) }))
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        MealSlot.entries.forEach { slot ->
+                            FilterChip(
+                                selected = entry.slot == slot,
+                                onClick = { onChange(draft.copy(entries = draft.entries.toMutableList().also { it[index] = entry.copy(slot = slot) })) },
+                                label = { Text(slot.label) },
+                            )
+                        }
                     }
                 }
             }
@@ -1754,6 +1888,7 @@ private fun CandidateDraftEditor(
     showZone: Boolean,
     onChange: (List<FoodCandidate>) -> Unit,
 ) {
+    var showNutrition by rememberSaveable { mutableStateOf(false) }
     items.forEachIndexed { index, item ->
         if (items.size > 1) {
             Text("Item ${index + 1}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -1764,6 +1899,22 @@ private fun CandidateDraftEditor(
         DraftEditorField("Name", item.name, "Required") { update { candidate -> candidate.copy(name = it) } }
         DraftEditorField("Quantity", item.quantity, "Optional") { update { candidate -> candidate.copy(quantity = it) } }
         DraftEditorField("Category", item.category, "Optional") { update { candidate -> candidate.copy(category = it) } }
+        DraftEditorField("Notes", item.notes, "Optional", minLines = 2) { update { candidate -> candidate.copy(notes = it) } }
+        if (showNutrition) {
+            DraftEditorField("Serving", item.servingText, "Optional") { update { candidate -> candidate.copy(servingText = it) } }
+            DraftEditorField("Calories", item.calories?.toString().orEmpty(), "Unknown is okay", KeyboardType.Number) { value ->
+                if (value.isBlank() || value.toIntOrNull() != null) update { candidate -> candidate.copy(calories = value.toIntOrNull()) }
+            }
+            DraftEditorField("Protein (g)", item.proteinGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                if (value.isBlank() || value.toDoubleOrNull() != null) update { candidate -> candidate.copy(proteinGrams = value.toDoubleOrNull()) }
+            }
+            DraftEditorField("Carbs (g)", item.carbsGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                if (value.isBlank() || value.toDoubleOrNull() != null) update { candidate -> candidate.copy(carbsGrams = value.toDoubleOrNull()) }
+            }
+            DraftEditorField("Fat (g)", item.fatGrams?.toString().orEmpty(), "Unknown is okay", KeyboardType.Decimal) { value ->
+                if (value.isBlank() || value.toDoubleOrNull() != null) update { candidate -> candidate.copy(fatGrams = value.toDoubleOrNull()) }
+            }
+        }
         if (showZone) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 StorageZone.entries.forEach { zone ->
@@ -1775,6 +1926,22 @@ private fun CandidateDraftEditor(
                 }
             }
         }
+        if (items.size > 1) {
+            TextButton(onClick = { onChange(items.filterIndexed { itemIndex, _ -> itemIndex != index }) }) {
+                Text("Remove item ${index + 1}")
+            }
+        }
+    }
+    TextButton(onClick = { showNutrition = !showNutrition }) {
+        Text(if (showNutrition) "Hide nutrition fields" else "Edit nutrition fields")
+    }
+    OutlinedButton(
+        onClick = { onChange(items + FoodCandidate(name = "", zone = StorageZone.PANTRY)) },
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Add another item")
     }
 }
 
@@ -2966,6 +3133,7 @@ private fun PreferencesContent(
     memory: FoodMemory,
     preferences: FoodPreferences,
     aiConfig: LiteLlmConfig,
+    aiFallbackConfig: LiteLlmConfig,
     aiStatus: String,
     healthStatus: String,
     healthSummary: HealthDailySummary,
@@ -2978,6 +3146,7 @@ private fun PreferencesContent(
     onChange: (FoodPreferences) -> Unit,
     onSave: () -> Unit,
     onAiConfigChange: (LiteLlmConfig) -> Unit,
+    onAiFallbackConfigChange: (LiteLlmConfig) -> Unit,
     onSaveAiConfig: () -> Unit,
     onCreateEncryptedBackup: (String) -> Unit,
     onRestoreLatestEncryptedBackup: (String) -> Unit,
@@ -2988,7 +3157,7 @@ private fun PreferencesContent(
     onDisconnectGoogle: () -> Unit,
     onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
-    onTestAiConnection: () -> Unit,
+    onTestAiConnection: (LiteLlmConfig) -> Unit,
     onDeleteAllAppData: () -> Unit,
     onDeleteAllPlans: () -> Unit,
     onClearChatHistory: () -> Unit,
@@ -3047,10 +3216,12 @@ private fun PreferencesContent(
             AiAssistantSettings(
                 preferences = preferences,
                 aiConfig = aiConfig,
+                aiFallbackConfig = aiFallbackConfig,
                 aiStatus = aiStatus,
                 settingsSaveStatus = settingsSaveStatus,
                 onChange = onChange,
                 onAiConfigChange = onAiConfigChange,
+                onAiFallbackConfigChange = onAiFallbackConfigChange,
                 onSaveAiConfig = onSaveAiConfig,
                 onTestAiConnection = onTestAiConnection,
                 onClearChatHistory = onClearChatHistory,
@@ -3526,16 +3697,21 @@ private fun HealthConnectSnapshot(summary: HealthDailySummary) {
 private fun AiAssistantSettings(
     preferences: FoodPreferences,
     aiConfig: LiteLlmConfig,
+    aiFallbackConfig: LiteLlmConfig,
     aiStatus: String,
     settingsSaveStatus: String,
     onChange: (FoodPreferences) -> Unit,
     onAiConfigChange: (LiteLlmConfig) -> Unit,
+    onAiFallbackConfigChange: (LiteLlmConfig) -> Unit,
     onSaveAiConfig: () -> Unit,
-    onTestAiConnection: () -> Unit,
+    onTestAiConnection: (LiteLlmConfig) -> Unit,
     onClearChatHistory: () -> Unit,
 ) {
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
     var revealKey by rememberSaveable { mutableStateOf(false) }
+    var editingFallback by rememberSaveable { mutableStateOf(false) }
+    val selectedConfig = if (editingFallback) aiFallbackConfig else aiConfig
+    val onSelectedConfigChange = if (editingFallback) onAiFallbackConfigChange else onAiConfigChange
     if (settingsSaveStatus.isNotBlank()) SettingsSaveStatus(status = settingsSaveStatus)
     SettingsStatusBlock(
         icon = Icons.AutoMirrored.Rounded.Chat,
@@ -3551,10 +3727,14 @@ private fun AiAssistantSettings(
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = onSaveAiConfig, shape = RoundedCornerShape(8.dp)) {
-            Text("Save provider")
+            Text("Save providers")
         }
-        OutlinedButton(onClick = onTestAiConnection, shape = RoundedCornerShape(8.dp)) {
-            Text("Test connection")
+        OutlinedButton(
+            onClick = { onTestAiConnection(selectedConfig) },
+            enabled = selectedConfig.isUsable,
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text("Test ${if (editingFallback) "fallback" else "primary"}")
         }
         TextButton(onClick = { showAdvanced = !showAdvanced }) {
             Text(if (showAdvanced) "Hide advanced" else "Advanced")
@@ -3568,41 +3748,63 @@ private fun AiAssistantSettings(
     )
     if (showAdvanced) {
         SettingsControlGroup {
-            Text("Provider", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Request order", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Every request tries Primary once. Fallback runs only when Primary fails. There is no rotation or load balancing.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !editingFallback,
+                    onClick = { editingFallback = false; revealKey = false },
+                    label = { Text("1  Primary") },
+                )
+                FilterChip(
+                    selected = editingFallback,
+                    onClick = { editingFallback = true; revealKey = false },
+                    label = { Text("2  Fallback") },
+                )
+            }
+            Text(
+                if (editingFallback) "Fallback provider (optional)" else "Primary provider",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AiProvider.entries.forEach { provider ->
                     FilterChip(
-                        selected = aiConfig.provider == provider,
-                        onClick = { onAiConfigChange(aiConfig.copy(provider = provider)) },
+                        selected = selectedConfig.provider == provider,
+                        onClick = { onSelectedConfigChange(selectedConfig.copy(provider = provider)) },
                         label = { Text(provider.label) },
                     )
                 }
             }
             PreferenceTextField(
                 label = "Provider URL",
-                value = aiConfig.baseUrl,
+                value = selectedConfig.baseUrl,
                 placeholder = "https://...",
-                onValue = { onAiConfigChange(aiConfig.copy(baseUrl = it)) },
+                onValue = { onSelectedConfigChange(selectedConfig.copy(baseUrl = it)) },
             )
             PreferenceTextField(
-                label = if (aiConfig.provider == AiProvider.AZURE_OPENAI) "Azure deployment" else "Model",
-                value = aiConfig.model,
-                placeholder = if (aiConfig.provider == AiProvider.AZURE_OPENAI) "cc-litellm-chat-latest" else "gpt-5.4-mini",
-                onValue = { onAiConfigChange(aiConfig.copy(model = it)) },
+                label = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "Azure deployment" else "Model",
+                value = selectedConfig.model,
+                placeholder = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "cc-litellm-chat-latest" else "gpt-5.4-mini",
+                onValue = { onSelectedConfigChange(selectedConfig.copy(model = it)) },
             )
-            if (aiConfig.provider == AiProvider.AZURE_OPENAI) {
+            if (selectedConfig.provider == AiProvider.AZURE_OPENAI) {
                 PreferenceTextField(
                     label = "Azure API version",
-                    value = aiConfig.apiVersion,
+                    value = selectedConfig.apiVersion,
                     placeholder = "2025-...",
-                    onValue = { onAiConfigChange(aiConfig.copy(apiVersion = it)) },
+                    onValue = { onSelectedConfigChange(selectedConfig.copy(apiVersion = it)) },
                 )
             }
             OutlinedTextField(
-                value = aiConfig.apiKey,
-                onValueChange = { onAiConfigChange(aiConfig.copy(apiKey = it)) },
+                value = selectedConfig.apiKey,
+                onValueChange = { onSelectedConfigChange(selectedConfig.copy(apiKey = it)) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(if (aiConfig.provider == AiProvider.AZURE_OPENAI) "Azure API key" else "API key") },
+                label = { Text(if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "Azure API key" else "API key") },
                 placeholder = { Text("Encrypted on this device") },
                 visualTransformation = if (revealKey) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -3612,8 +3814,18 @@ private fun AiAssistantSettings(
                 TextButton(onClick = { revealKey = !revealKey }) {
                     Text(if (revealKey) "Hide key" else "Reveal key")
                 }
-                TextButton(onClick = { onAiConfigChange(aiConfig.copy(apiKey = "")) }) {
+                TextButton(onClick = { onSelectedConfigChange(selectedConfig.copy(apiKey = "")) }) {
                     Text("Remove key")
+                }
+            }
+            if (editingFallback) {
+                TextButton(
+                    onClick = {
+                        onAiFallbackConfigChange(LiteLlmConfig("", "", com.wonderfood.app.ai.LiteLlmSettings.DEFAULT_MODEL))
+                        revealKey = false
+                    },
+                ) {
+                    Text("Remove fallback")
                 }
             }
         }
@@ -5775,9 +5987,19 @@ private fun AiCaptureSheet(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
+    onChatMessageChange: (Long, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
+    val currentChatId = messages.maxOfOrNull(ChatMessage::chatId) ?: 1L
+    var selectedChatId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    val displayedChatId = selectedChatId ?: currentChatId
+    val displayedMessages = messages.filter { it.chatId == displayedChatId }
+    val viewingPreviousChat = displayedChatId != currentChatId
+    LaunchedEffect(currentChatId) {
+        selectedChatId = null
+    }
     val sendAndClearFocus = {
         focusManager.clearFocus(force = true)
         onSend()
@@ -5794,13 +6016,9 @@ private fun AiCaptureSheet(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -5809,7 +6027,7 @@ private fun AiCaptureSheet(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         size = 52.dp,
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             "WonderFood AI",
                             style = MaterialTheme.typography.titleLarge,
@@ -5825,22 +6043,31 @@ private fun AiCaptureSheet(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
+                    }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { showHistory = true }, enabled = messages.isNotEmpty()) {
+                        Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("History")
+                    }
                     TextButton(onClick = onNewChat, enabled = !isWorking) {
                         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("New chat")
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
-                    }
                 }
             }
 
             AiConversationTimeline(
-                messages = messages,
-                draft = draft,
+                messages = displayedMessages,
+                draft = draft.takeUnless { viewingPreviousChat },
                 draftOrigin = draftOrigin,
                 isWorking = isWorking,
                 pageContext = pageContext,
@@ -5849,23 +6076,114 @@ private fun AiCaptureSheet(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
+                onChatMessageChange = onChatMessageChange,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
             )
 
-            AiChatComposer(
-                input = input,
-                isWorking = isWorking,
-                status = status,
-                placeholder = pageContext.placeholder,
-                onInputChange = onInputChange,
-                onSend = sendAndClearFocus,
-                onPickReceiptPhoto = onPickReceiptPhoto,
-                onRecordVoiceNote = onRecordVoiceNote,
-            )
+            if (viewingPreviousChat) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Reading a previous chat", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        Button(onClick = { selectedChatId = null }, shape = RoundedCornerShape(8.dp)) {
+                            Text("Current chat")
+                        }
+                    }
+                }
+            } else {
+                AiChatComposer(
+                    input = input,
+                    isWorking = isWorking,
+                    status = status,
+                    placeholder = pageContext.placeholder,
+                    onInputChange = onInputChange,
+                    onSend = sendAndClearFocus,
+                    onPickReceiptPhoto = onPickReceiptPhoto,
+                    onRecordVoiceNote = onRecordVoiceNote,
+                )
+            }
         }
     }
+    if (showHistory) {
+        AiChatHistoryDialog(
+            messages = messages,
+            currentChatId = currentChatId,
+            selectedChatId = displayedChatId,
+            onSelect = { chatId ->
+                selectedChatId = chatId.takeUnless { it == currentChatId }
+                showHistory = false
+            },
+            onDismiss = { showHistory = false },
+        )
+    }
+}
+
+@Composable
+private fun AiChatHistoryDialog(
+    messages: List<ChatMessage>,
+    currentChatId: Long,
+    selectedChatId: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val chats = messages.groupBy(ChatMessage::chatId).toList().sortedByDescending { it.first }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Chat history") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(chats, key = { it.first }) { (chatId, chatMessages) ->
+                    val first = chatMessages.first()
+                    val preview = chatMessages.firstOrNull { it.role == ChatRole.USER }?.body
+                        ?: chatMessages.firstOrNull()?.body.orEmpty()
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(chatId) }
+                            .semantics { selected = chatId == selectedChatId },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (chatId == selectedChatId) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                if (chatId == currentChatId) "Current chat" else "Chat from ${first.createdAtMillis.shortDate()}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                preview.replace('\n', ' '),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "${chatMessages.size} messages • ${first.createdAtMillis.shortTime()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @Composable
@@ -5880,6 +6198,7 @@ private fun AiConversationTimeline(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
+    onChatMessageChange: (Long, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -5917,7 +6236,7 @@ private fun AiConversationTimeline(
                     AiTypingBubble()
                 }
             }
-            val recentMessages = messages.takeLast(40).asReversed()
+            val recentMessages = messages.asReversed()
             if (recentMessages.isEmpty()) {
                 item(key = "empty") {
                     EmptyState(
@@ -5927,7 +6246,7 @@ private fun AiConversationTimeline(
                 }
             } else {
                 items(recentMessages, key = { "message-${it.id}" }) { message ->
-                    AiThreadMessageBubble(message)
+                    AiThreadMessageBubble(message, onChatMessageChange)
                 }
             }
             item(key = "suggestions") {
@@ -5983,8 +6302,13 @@ private fun AiThreadDivider(label: String) {
 }
 
 @Composable
-private fun AiThreadMessageBubble(message: ChatMessage) {
+private fun AiThreadMessageBubble(
+    message: ChatMessage,
+    onChange: (Long, String) -> Unit,
+) {
     val isUser = message.role == ChatRole.USER
+    var editing by remember(message.id, message.body) { mutableStateOf(false) }
+    var editedBody by remember(message.id, message.body) { mutableStateOf(message.body) }
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -6013,8 +6337,42 @@ private fun AiThreadMessageBubble(message: ChatMessage) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = { editing = true }) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (isUser) "Edit" else "Edit reply")
+                }
             }
-            Surface(
+            if (editing) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp,
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = editedBody,
+                            onValueChange = { editedBody = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(if (isUser) "Your message" else "AI reply") },
+                            minLines = 3,
+                            maxLines = 10,
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    onChange(message.id, editedBody)
+                                    editing = false
+                                },
+                                enabled = editedBody.isNotBlank(),
+                                shape = RoundedCornerShape(8.dp),
+                            ) { Text("Save edit") }
+                            TextButton(onClick = { editedBody = message.body; editing = false }) { Text("Cancel") }
+                        }
+                    }
+                }
+            } else Surface(
                 shape = RoundedCornerShape(
                     topStart = if (isUser) 18.dp else 4.dp,
                     topEnd = if (isUser) 4.dp else 18.dp,
@@ -6176,6 +6534,7 @@ private fun AiDraftReview(
 ) {
     val review = draft.reviewCopy(origin)
     var editing by remember { mutableStateOf(false) }
+    val editorRequester = remember { BringIntoViewRequester() }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -6193,16 +6552,6 @@ private fun AiDraftReview(
             Text(draft.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(draft.summary, style = MaterialTheme.typography.bodySmall)
             DraftReviewMeta(draft = draft, origin = origin, compact = true)
-            draft.rows.take(4).forEach { row ->
-                Text("- $row", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            val hiddenRows = draft.rows.size - 4
-            if (hiddenRows > 0) {
-                Text("+ $hiddenRows more", style = MaterialTheme.typography.labelMedium)
-            }
-            if (editing) {
-                DraftReviewEditor(draft = draft, onChange = onChange)
-            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onAccept, shape = RoundedCornerShape(8.dp)) {
                     Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -6216,6 +6565,28 @@ private fun AiDraftReview(
                 }
                 OutlinedButton(onClick = onReject, shape = RoundedCornerShape(8.dp)) {
                     Text("Reject")
+                }
+            }
+            draft.rows.take(4).forEach { row ->
+                Text("- $row", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val hiddenRows = draft.rows.size - 4
+            if (hiddenRows > 0) {
+                Text("+ $hiddenRows more", style = MaterialTheme.typography.labelMedium)
+            }
+            if (editing) {
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(50)
+                    editorRequester.bringIntoView()
+                }
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Edit before saving",
+                        modifier = Modifier.bringIntoViewRequester(editorRequester),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    DraftReviewEditor(draft = draft, onChange = onChange, showTitle = false)
                 }
             }
         }
@@ -6903,6 +7274,8 @@ private fun WonderFoodPreview() {
             onAcceptDraft = {},
             onRejectDraft = {},
             onDraftChange = {},
+            onChatMessageChange = { _, _ -> },
+            onClearChatHistory = {},
             onDeleteInventory = {},
             onUpdateInventory = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
             onDeleteGrocery = {},
@@ -6928,6 +7301,7 @@ private fun WonderFoodPreview() {
             onPreferencesChange = {},
             onSavePreferences = {},
             onAiConfigChange = {},
+            onAiFallbackConfigChange = {},
             onSaveAiConfig = {},
             onCreateEncryptedBackup = {},
             onRestoreLatestEncryptedBackup = {},
@@ -6938,7 +7312,7 @@ private fun WonderFoodPreview() {
             onDisconnectGoogle = {},
             onExportCsv = {},
             onImportCsv = {},
-            onTestAiConnection = {},
+            onTestAiConnection = { _ -> },
             onDeleteAllAppData = {},
             themeMode = WonderFoodThemeMode.SYSTEM,
             onThemeModeChange = {},
