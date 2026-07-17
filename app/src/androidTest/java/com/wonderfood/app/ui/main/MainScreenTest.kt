@@ -118,7 +118,10 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("AI assistant").performClick()
         composeTestRule.onNodeWithText("View or edit core skill").performClick()
 
-        composeTestRule.onNodeWithText("Core AI skill").assertIsDisplayed()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithText("Core AI skill").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Core AI skill").assertExists()
         composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Reset to bundled skill"))
         composeTestRule.onNodeWithText("Reset to bundled skill").assertIsDisplayed()
     }
