@@ -65,22 +65,19 @@ class LiteLlmFoodInterpreter(
             val body = JSONObject()
                 .put("model", config.model)
                 .put("temperature", 0)
-                .put("max_tokens", 12)
+                .put("max_tokens", 32)
                 .put(
                     "messages",
                     JSONArray()
                         .put(JSONObject().put("role", "system").put("content", "Reply with a short connection check."))
                         .put(JSONObject().put("role", "user").put("content", "Say ok.")),
                 )
-            val response = postJson(config, body) ?: error("No provider response.")
-            val content = response
-                .optJSONArray("choices")
-                ?.optJSONObject(0)
-                ?.optJSONObject("message")
-                ?.optString("content")
-                .orEmpty()
-                .trim()
-            if (content.isBlank()) "Connected: ${config.statusLabel}" else "Connected: ${config.statusLabel}"
+            val response = postJsonWithDiagnostics(config, body)
+            val json = response.json ?: error(response.diagnostic)
+            require(json.assistantContent(config).isNotBlank()) {
+                "${response.diagnostic}; empty assistant content"
+            }
+            "Connected: ${config.statusLabel}"
         }
 
     fun interpret(text: String, memory: FoodMemory, config: LiteLlmConfig): AiTurn? {
@@ -102,13 +99,7 @@ class LiteLlmFoodInterpreter(
 
         val response = postJsonWithDiagnostics(config, body)
         val json = response.json ?: return LiteLlmInterpretation.Failure(response.diagnostic)
-        val content = json
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content")
-            .orEmpty()
-            .trim()
+        val content = json.assistantContent(config)
         if (content.isBlank()) {
             return LiteLlmInterpretation.Failure("${response.diagnostic}; empty assistant content")
         }
@@ -207,14 +198,8 @@ class LiteLlmFoodInterpreter(
                             ),
                     ),
             )
-        val response = postJson(config, body) ?: return null
-        val content = response
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content")
-            .orEmpty()
-            .trim()
+        val response = postJsonWithDiagnostics(config, body).json ?: return null
+        val content = response.assistantContent(config)
         if (content.isBlank()) return null
         return parseTurn(content, userNote.ifBlank { "receipt photo" }, memory)
             ?.let { turn -> turn.copy(draft = turn.draft.asReceiptDraft()) }
@@ -259,36 +244,10 @@ class LiteLlmFoodInterpreter(
         )
     }
 
-    private fun postJson(config: LiteLlmConfig, body: JSONObject): JSONObject? {
-        if (config.provider == AiProvider.ANTHROPIC) return postAnthropicJson(config, body)
-        val endpoint = config.chatCompletionsEndpoint()
-        val requestBody = body.requestBodyFor(config.provider)
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 15_000
-            readTimeout = 45_000
-            doOutput = true
-            when (config.provider) {
-                AiProvider.AZURE_OPENAI -> setRequestProperty("api-key", config.apiKey)
-                AiProvider.ANTHROPIC -> setRequestProperty("x-api-key", config.apiKey)
-                AiProvider.OPENAI_COMPATIBLE -> setRequestProperty("Authorization", "Bearer ${config.apiKey}")
-            }
-            setRequestProperty("Content-Type", "application/json")
-        }
-        return runCatching {
-            OutputStreamWriter(connection.outputStream).use { writer -> writer.write(requestBody.toString()) }
-            val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-            val text = stream.bufferedReader().use { it.readText() }
-            JSONObject(text)
-        }.getOrNull().also {
-            connection.disconnect()
-        }
-    }
-
     private fun postJsonWithDiagnostics(config: LiteLlmConfig, body: JSONObject): ProviderJsonResult {
         if (config.provider == AiProvider.ANTHROPIC) return postAnthropicJsonWithDiagnostics(config, body)
-        val endpoint = config.chatCompletionsEndpoint()
-        val requestBody = body.requestBodyFor(config.provider)
+        val endpoint = config.requestEndpoint()
+        val requestBody = body.requestBodyFor(config)
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 15_000
@@ -323,37 +282,6 @@ class LiteLlmFoodInterpreter(
                 diagnostic = "${config.statusLabel} ${error::class.java.simpleName}: ${error.message.orEmpty().safeProviderExcerpt(config.apiKey)}",
             )
         }.also {
-            connection.disconnect()
-        }
-    }
-
-    private fun postAnthropicJson(config: LiteLlmConfig, body: JSONObject): JSONObject? {
-        val endpoint = config.baseUrl.trimEnd('/') + "/v1/messages"
-        val requestBody = body.toAnthropicRequest(config)
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 15_000
-            readTimeout = 45_000
-            doOutput = true
-            setRequestProperty("x-api-key", config.apiKey)
-            setRequestProperty("anthropic-version", config.apiVersion.ifBlank { "2023-06-01" })
-            setRequestProperty("Content-Type", "application/json")
-        }
-        return runCatching {
-            OutputStreamWriter(connection.outputStream).use { writer -> writer.write(requestBody.toString()) }
-            if (connection.responseCode !in 200..299) return@runCatching null
-            val text = connection.inputStream.bufferedReader().use { it.readText() }
-            JSONObject()
-                .put(
-                    "choices",
-                    JSONArray().put(
-                        JSONObject().put(
-                            "message",
-                            JSONObject().put("content", JSONObject(text).anthropicTextContent()),
-                        ),
-                    ),
-                )
-        }.getOrNull().also {
             connection.disconnect()
         }
     }
@@ -405,31 +333,62 @@ class LiteLlmFoodInterpreter(
         }
     }
 
-    private fun LiteLlmConfig.chatCompletionsEndpoint(): String =
+    private fun LiteLlmConfig.requestEndpoint(): String =
         when (provider) {
-            AiProvider.OPENAI_COMPATIBLE -> baseUrl.trimEnd('/') + "/chat/completions"
-            AiProvider.AZURE_OPENAI -> azureChatCompletionsEndpoint()
+            AiProvider.OPENAI_COMPATIBLE -> openAiCompatibleEndpoint()
+            AiProvider.AZURE_OPENAI -> azureOpenAiEndpoint()
             AiProvider.ANTHROPIC -> baseUrl.trimEnd('/') + "/v1/messages"
         }
 
-    private fun LiteLlmConfig.azureChatCompletionsEndpoint(): String {
+    private fun LiteLlmConfig.openAiCompatibleEndpoint(): String {
         val trimmed = baseUrl.trim()
-        val endpoint = if (trimmed.contains("/chat/completions")) {
-            trimmed
-        } else {
-            val encodedDeployment = URLEncoder.encode(model.trim(), StandardCharsets.UTF_8.name())
-            trimmed.trimEnd('/') + "/openai/deployments/$encodedDeployment/chat/completions"
-        }
-        if (apiVersion.isBlank() || endpoint.contains("api-version=")) return endpoint
-        val separator = if (endpoint.contains("?")) "&" else "?"
-        val encodedVersion = URLEncoder.encode(apiVersion.trim(), StandardCharsets.UTF_8.name())
-        return "$endpoint${separator}api-version=$encodedVersion"
+        return if (usesExplicitOpenAiEndpoint()) trimmed else trimmed.appendUrlPath("chat/completions")
     }
 
-    private fun JSONObject.requestBodyFor(provider: AiProvider): JSONObject {
+    private fun LiteLlmConfig.azureOpenAiEndpoint(): String {
+        val trimmed = baseUrl.trim()
+        val endpoint = when {
+            usesExplicitOpenAiEndpoint() -> trimmed
+            usesAzureV1Api() -> trimmed.appendUrlPath("chat/completions")
+            else -> {
+                val encodedDeployment = URLEncoder.encode(model.trim(), StandardCharsets.UTF_8.name())
+                trimmed.appendUrlPath("openai/deployments/$encodedDeployment/chat/completions")
+            }
+        }
+        return endpoint.withAzureApiVersion(apiVersion)
+    }
+
+    private fun LiteLlmConfig.usesExplicitOpenAiEndpoint(): Boolean {
+        val path = baseUrl.substringBefore('?').trimEnd('/').lowercase()
+        return path.endsWith("/chat/completions") || path.endsWith("/responses")
+    }
+
+    private fun LiteLlmConfig.usesResponsesApi(): Boolean =
+        baseUrl.substringBefore('?').trimEnd('/').endsWith("/responses", ignoreCase = true)
+
+    private fun LiteLlmConfig.usesAzureV1Api(): Boolean =
+        baseUrl.substringBefore('?').trimEnd('/').lowercase().let { path ->
+            path.endsWith("/openai/v1") || "/openai/v1/" in path
+        }
+
+    private fun String.appendUrlPath(path: String): String {
+        val base = substringBefore('?').trimEnd('/')
+        val query = substringAfter('?', "")
+        return "$base/$path" + query.takeIf(String::isNotBlank)?.let { "?$it" }.orEmpty()
+    }
+
+    private fun String.withAzureApiVersion(apiVersion: String): String {
+        if (apiVersion.isBlank() || contains("api-version=", ignoreCase = true)) return this
+        val separator = if (contains("?")) "&" else "?"
+        val encodedVersion = URLEncoder.encode(apiVersion.trim(), StandardCharsets.UTF_8.name())
+        return "$this${separator}api-version=$encodedVersion"
+    }
+
+    private fun JSONObject.requestBodyFor(config: LiteLlmConfig): JSONObject {
+        if (config.usesResponsesApi()) return toResponsesRequest(config)
         val copy = JSONObject(toString())
-        if (provider == AiProvider.AZURE_OPENAI) {
-            copy.remove("model")
+        if (config.provider == AiProvider.AZURE_OPENAI) {
+            if (!config.usesAzureV1Api()) copy.remove("model")
             copy.remove("temperature")
             if (copy.has("max_tokens") && !copy.has("max_completion_tokens")) {
                 copy.put("max_completion_tokens", copy.optInt("max_tokens"))
@@ -437,6 +396,123 @@ class LiteLlmFoodInterpreter(
             }
         }
         return copy
+    }
+
+    private fun JSONObject.toResponsesRequest(config: LiteLlmConfig): JSONObject {
+        val request = JSONObject().put("model", config.model)
+        if (config.provider != AiProvider.AZURE_OPENAI && has("temperature")) {
+            request.put("temperature", opt("temperature"))
+        }
+        when {
+            has("max_output_tokens") -> request.put("max_output_tokens", opt("max_output_tokens"))
+            has("max_completion_tokens") -> request.put("max_output_tokens", opt("max_completion_tokens"))
+            has("max_tokens") -> request.put("max_output_tokens", opt("max_tokens"))
+        }
+        optJSONObject("response_format")?.let { format ->
+            request.put("text", JSONObject().put("format", JSONObject(format.toString())))
+        }
+
+        val instructions = mutableListOf<String>()
+        val input = JSONArray()
+        val sourceMessages = optJSONArray("messages") ?: JSONArray()
+        for (index in 0 until sourceMessages.length()) {
+            val message = sourceMessages.optJSONObject(index) ?: continue
+            val role = message.optString("role")
+            val content = message.opt("content")
+            if (role == "system") {
+                content.promptText().takeIf(String::isNotBlank)?.let(instructions::add)
+                continue
+            }
+            val responseContent = content.toResponsesContent()
+            if (responseContent.length() > 0) {
+                input.put(
+                    JSONObject()
+                        .put("role", role.ifBlank { "user" })
+                        .put("content", responseContent),
+                )
+            }
+        }
+        if (instructions.isNotEmpty()) request.put("instructions", instructions.joinToString("\n\n"))
+        request.put("input", input)
+        return request
+    }
+
+    private fun Any?.promptText(): String =
+        when (this) {
+            is String -> this
+            is JSONArray -> buildList {
+                for (index in 0 until length()) {
+                    val part = optJSONObject(index) ?: continue
+                    part.optString("text").takeIf(String::isNotBlank)?.let(::add)
+                }
+            }.joinToString("\n")
+            else -> ""
+        }.trim()
+
+    private fun Any?.toResponsesContent(): JSONArray {
+        val result = JSONArray()
+        when (this) {
+            is String -> result.put(JSONObject().put("type", "input_text").put("text", this))
+            is JSONArray -> {
+                for (index in 0 until length()) {
+                    val part = optJSONObject(index) ?: continue
+                    when (part.optString("type")) {
+                        "text", "input_text" -> result.put(
+                            JSONObject()
+                                .put("type", "input_text")
+                                .put("text", part.optString("text")),
+                        )
+                        "image_url", "input_image" -> {
+                            val imageUrl = when (val raw = part.opt("image_url")) {
+                                is JSONObject -> raw.optString("url")
+                                is String -> raw
+                                else -> ""
+                            }
+                            if (imageUrl.isNotBlank()) {
+                                result.put(
+                                    JSONObject()
+                                        .put("type", "input_image")
+                                        .put("image_url", imageUrl),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private fun JSONObject.assistantContent(config: LiteLlmConfig): String =
+        if (config.usesResponsesApi()) {
+            responsesTextContent()
+        } else {
+            optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content")
+                .orEmpty()
+                .trim()
+        }
+
+    private fun JSONObject.responsesTextContent(): String {
+        optString("output_text").trim().takeIf(String::isNotBlank)?.let { return it }
+        val output = optJSONArray("output") ?: return ""
+        return buildList {
+            for (outputIndex in 0 until output.length()) {
+                val message = output.optJSONObject(outputIndex) ?: continue
+                val content = message.optJSONArray("content") ?: continue
+                for (contentIndex in 0 until content.length()) {
+                    val part = content.optJSONObject(contentIndex) ?: continue
+                    if (part.optString("type") != "output_text") continue
+                    when (val text = part.opt("text")) {
+                        is String -> text
+                        is JSONObject -> text.optString("value")
+                        else -> ""
+                    }.takeIf(String::isNotBlank)?.let(::add)
+                }
+            }
+        }.joinToString("\n").trim()
     }
 
     private fun JSONObject.toAnthropicRequest(config: LiteLlmConfig): JSONObject {

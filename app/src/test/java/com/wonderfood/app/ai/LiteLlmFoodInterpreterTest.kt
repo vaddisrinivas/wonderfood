@@ -7,8 +7,11 @@ import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.ReceiptDraft
 import com.wonderfood.app.data.ReceiptItemDisposition
 import java.net.InetSocketAddress
+import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,6 +20,13 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class LiteLlmFoodInterpreterTest {
     private val servers = mutableListOf<HttpServer>()
+
+    private data class CapturedRequest(
+        val path: String,
+        val query: String?,
+        val apiKey: String?,
+        val body: String,
+    )
 
     @After
     fun tearDown() {
@@ -116,6 +126,110 @@ class LiteLlmFoodInterpreterTest {
     }
 
     @Test
+    fun connectionTestReportsProviderHttpFailureInsteadOfFalseSuccess() {
+        val apiKey = "connection-test-key"
+        val server = startServer(
+            status = 401,
+            body = """{"error":"invalid key $apiKey"}""",
+        )
+
+        val result = LiteLlmFoodInterpreter().testConnection(server.config(apiKey = apiKey))
+
+        assertTrue(result.isFailure)
+        val message = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(message.contains("HTTP 401"))
+        assertFalse(message.contains(apiKey))
+        assertTrue(message.contains("[redacted]"))
+    }
+
+    @Test
+    fun azureResponsesEndpointIsUsedDirectlyAndParsesOutputText() {
+        var captured: CapturedRequest? = null
+        val server = startServer(
+            path = "/openai/v1/responses",
+            status = 200,
+            body = responsesResponse("""{"reply":"Azure Responses works.","draft":null}"""),
+            onRequest = { captured = it },
+        )
+        val config = server.config(
+            basePath = "/openai/v1/responses",
+            provider = AiProvider.AZURE_OPENAI,
+        )
+
+        val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
+            text = "What can I cook?",
+            memory = FoodMemory(),
+            config = config,
+        )
+
+        assertTrue(result is LiteLlmInterpretation.Success)
+        assertEquals("Azure Responses works.", (result as LiteLlmInterpretation.Success).turn.reply)
+        val request = captured
+        assertNotNull(request)
+        assertEquals("/openai/v1/responses", request?.path)
+        assertEquals("test-key", request?.apiKey)
+        val body = JSONObject(request?.body.orEmpty())
+        assertEquals("test-model", body.optString("model"))
+        assertTrue(body.has("instructions"))
+        assertTrue(body.has("input"))
+        assertFalse(body.has("messages"))
+        assertFalse(body.has("response_format"))
+    }
+
+    @Test
+    fun azureV1ChatEndpointKeepsModelInRequestBody() {
+        var captured: CapturedRequest? = null
+        val server = startServer(
+            path = "/openai/v1/chat/completions",
+            status = 200,
+            body = chatResponse("""{"reply":"Azure chat works.","draft":null}"""),
+            onRequest = { captured = it },
+        )
+        val config = server.config(
+            basePath = "/openai/v1/chat/completions",
+            provider = AiProvider.AZURE_OPENAI,
+        )
+
+        val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
+            text = "What can I cook?",
+            memory = FoodMemory(),
+            config = config,
+        )
+
+        assertTrue(result is LiteLlmInterpretation.Success)
+        val request = captured
+        assertEquals("/openai/v1/chat/completions", request?.path)
+        assertEquals("test-model", JSONObject(request?.body.orEmpty()).optString("model"))
+    }
+
+    @Test
+    fun legacyAzureBaseBuildsDeploymentPathAndApiVersion() {
+        var captured: CapturedRequest? = null
+        val server = startServer(
+            path = "/openai/deployments/test-model/chat/completions",
+            status = 200,
+            body = chatResponse("""{"reply":"Legacy Azure works.","draft":null}"""),
+            onRequest = { captured = it },
+        )
+        val config = server.config(
+            provider = AiProvider.AZURE_OPENAI,
+            apiVersion = "2024-10-21",
+        )
+
+        val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
+            text = "What can I cook?",
+            memory = FoodMemory(),
+            config = config,
+        )
+
+        assertTrue(result is LiteLlmInterpretation.Success)
+        val request = captured
+        assertEquals("/openai/deployments/test-model/chat/completions", request?.path)
+        assertEquals("api-version=2024-10-21", request?.query)
+        assertFalse(JSONObject(request?.body.orEmpty()).has("model"))
+    }
+
+    @Test
     fun receiptDraftKeepsEvidenceInferenceAndNonFoodDisposition() {
         val server = startServer(
             status = 200,
@@ -175,10 +289,23 @@ class LiteLlmFoodInterpreterTest {
         assertTrue(draft.totalCents == 848L)
     }
 
-    private fun startServer(status: Int, body: String): HttpServer {
+    private fun startServer(
+        status: Int,
+        body: String,
+        path: String = "/chat/completions",
+        onRequest: (CapturedRequest) -> Unit = {},
+    ): HttpServer {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/chat/completions") { exchange ->
-            exchange.requestBody.use { it.readBytes() }
+        server.createContext(path) { exchange ->
+            val requestBody = exchange.requestBody.use { it.readBytes().toString(Charsets.UTF_8) }
+            onRequest(
+                CapturedRequest(
+                    path = exchange.requestURI.path,
+                    query = exchange.requestURI.rawQuery,
+                    apiKey = exchange.requestHeaders.getFirst("api-key"),
+                    body = requestBody,
+                ),
+            )
             exchange.respond(status, body)
         }
         server.start()
@@ -192,12 +319,18 @@ class LiteLlmFoodInterpreterTest {
         responseBody.use { it.write(bytes) }
     }
 
-    private fun HttpServer.config(apiKey: String = "test-key"): LiteLlmConfig =
+    private fun HttpServer.config(
+        apiKey: String = "test-key",
+        basePath: String = "",
+        provider: AiProvider = AiProvider.OPENAI_COMPATIBLE,
+        apiVersion: String = "",
+    ): LiteLlmConfig =
         LiteLlmConfig(
-            baseUrl = "http://127.0.0.1:${address.port}",
+            baseUrl = "http://127.0.0.1:${address.port}$basePath",
             apiKey = apiKey,
             model = "test-model",
-            provider = AiProvider.OPENAI_COMPATIBLE,
+            provider = provider,
+            apiVersion = apiVersion,
         )
 
     private fun chatResponse(content: String): String =
@@ -208,6 +341,24 @@ class LiteLlmFoodInterpreterTest {
               "message": {
                 "content": ${content.jsonQuoted()}
               }
+            }
+          ]
+        }
+        """.trimIndent()
+
+    private fun responsesResponse(content: String): String =
+        """
+        {
+          "output": [
+            {
+              "type": "message",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": ${content.jsonQuoted()}
+                }
+              ]
             }
           ]
         }

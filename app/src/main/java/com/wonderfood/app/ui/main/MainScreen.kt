@@ -4086,6 +4086,14 @@ private fun AiAssistantSettings(
     }
     val selectedConfig = if (editingFallback) aiFallbackConfig else aiConfig
     val onSelectedConfigChange = if (editingFallback) onAiFallbackConfigChange else onAiConfigChange
+    val selectedEndpointPath = selectedConfig.baseUrl.substringBefore('?').trimEnd('/').lowercase()
+    val azureEndpointSummary = when {
+        selectedConfig.provider != AiProvider.AZURE_OPENAI -> ""
+        selectedEndpointPath.endsWith("/responses") -> "Azure Responses API · full URL used exactly"
+        selectedEndpointPath.endsWith("/chat/completions") -> "Azure Chat Completions · full URL used exactly"
+        selectedEndpointPath.endsWith("/openai/v1") -> "Azure v1 Chat Completions · /chat/completions is appended"
+        else -> "Legacy Azure deployment · deployment path and API version are appended"
+    }
     if (settingsSaveStatus.isNotBlank()) SettingsSaveStatus(status = settingsSaveStatus)
     SettingsStatusBlock(
         icon = Icons.AutoMirrored.Rounded.Chat,
@@ -4193,21 +4201,35 @@ private fun AiAssistantSettings(
             PreferenceTextField(
                 label = "Provider URL",
                 value = selectedConfig.baseUrl,
-                placeholder = "https://...",
+                placeholder = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) {
+                    "https://your-resource.services.ai.azure.com/openai/v1/responses"
+                } else {
+                    "https://..."
+                },
                 onValue = { onSelectedConfigChange(selectedConfig.copy(baseUrl = it)) },
             )
             PreferenceTextField(
-                label = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "Azure deployment" else "Model",
+                label = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "Azure model / deployment" else "Model",
                 value = selectedConfig.model,
-                placeholder = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "cc-litellm-chat-latest" else "gpt-5.4-mini",
+                placeholder = if (selectedConfig.provider == AiProvider.AZURE_OPENAI) "gpt-chat-latest" else "gpt-5.4-mini",
                 onValue = { onSelectedConfigChange(selectedConfig.copy(model = it)) },
             )
             if (selectedConfig.provider == AiProvider.AZURE_OPENAI) {
+                Text(
+                    azureEndpointSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 PreferenceTextField(
                     label = "Azure API version",
                     value = selectedConfig.apiVersion,
-                    placeholder = "2025-...",
+                    placeholder = "Leave blank for v1; legacy example: 2024-10-21",
                     onValue = { onSelectedConfigChange(selectedConfig.copy(apiVersion = it)) },
+                )
+                Text(
+                    "Supported: full /openai/v1/responses, full /openai/v1/chat/completions, an /openai/v1 base, or a legacy resource base URL.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             OutlinedTextField(

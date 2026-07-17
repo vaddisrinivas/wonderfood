@@ -56,8 +56,9 @@ Connected Android tests:
 
 - AI providers are configured as a deterministic Primary and one optional Fallback.
   Each request tries Primary once, then Fallback only after failure; there is no rotation
-  or load balancing. API keys are encrypted with Android Keystore and excluded from
-  Android backup.
+  or load balancing. Azure OpenAI accepts full `/openai/v1/responses` and
+  `/openai/v1/chat/completions` URLs, an `/openai/v1` base, or a legacy resource base URL.
+  API keys are encrypted with Android Keystore and excluded from Android backup.
 - Google Drive app-data backup requires replacing `google_web_client_id` in
   `app/src/main/res/values/google_auth.xml` with a public OAuth web client ID.
 - HTTPS app links require a deployed `https://wonderfood.app/.well-known/assetlinks.json`.

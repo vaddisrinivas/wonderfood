@@ -13,6 +13,7 @@ structure.
 - Manual food, grocery, recipe, meal, plan, receipt, CSV, share, and app-command intake.
 - Editable AI conversations, persistent chat history, visible AI context, and editable proposals.
 - Deterministic Primary → Fallback provider routing with no round robin.
+- Azure OpenAI v1 Responses, v1 Chat Completions, and legacy deployment routing.
 - Receipt notes, line-level proposal review, store/price provenance, storage, expiry, and nutrition fields.
 - Bounded deep-link and proposal-package commands with atomic review and audit history.
 - Encrypted local/Google Drive backup flow, optional Health Connect, and Android automation contracts.
@@ -23,6 +24,7 @@ structure.
 - Unknown nutrition remains unset instead of appearing as zero.
 - Food imagery and emoji prefer stored identity before deterministic fallback.
 - AI prompts/skills are visible and editable under Settings → AI assistant.
+- AI connection tests report real provider HTTP errors instead of false-positive success.
 
 ### Security
 
