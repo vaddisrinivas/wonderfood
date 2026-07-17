@@ -66,7 +66,7 @@ class StructuredProposalGatewayTest {
 
     @Test
     fun providerErrorPreservesRetryInputAndEvidence() {
-        val secret = "sk-live-secret-value"
+        val secret = "test"
         val request = request(
             skillId = SkillId.SHOPPING,
             idempotencyKey = "turn-local-shopping-001",
@@ -123,7 +123,7 @@ class StructuredProposalGatewayTest {
 
     @Test
     fun secretValuesAreRedactedFromSummaries() {
-        val rawSecret = "sk-test-sensitive"
+        val rawSecret = "test-value"
         val config = LiteLlmProviderConfig(
             baseUrl = "https://litellm.example",
             model = "provider/model",

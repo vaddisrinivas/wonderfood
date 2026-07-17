@@ -1,10 +1,14 @@
 package com.wonderfood.app.data
 
+import com.wonderfood.app.LinkActionOperation
+import com.wonderfood.app.WonderFoodCommandContract
+
 data class ChatMessage(
     val id: Long,
     val role: ChatRole,
     val body: String,
     val createdAtMillis: Long,
+    val chatId: Long = 1L,
 )
 
 enum class ChatRole {
@@ -30,6 +34,11 @@ data class InventoryItem(
     val source: String,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    val imageUrl: String = "",
+    val purchaseDateEpochDay: Long? = null,
+    val purchasePriceCents: Long? = null,
+    val currencyCode: String = "USD",
+    val storeName: String = "",
 )
 
 enum class StorageZone(val label: String) {
@@ -54,6 +63,7 @@ data class GroceryItem(
     val imageUri: String?,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    val imageUrl: String = "",
 )
 
 enum class GroceryStatus {
@@ -73,15 +83,16 @@ data class Recipe(
     val imageUri: String?,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    val imageUrl: String = "",
 )
 
 data class MealLog(
     val id: Long,
     val title: String,
-    val calories: Int,
-    val proteinGrams: Double,
-    val carbsGrams: Double,
-    val fatGrams: Double,
+    val calories: Int?,
+    val proteinGrams: Double?,
+    val carbsGrams: Double?,
+    val fatGrams: Double?,
     val mealSlot: MealSlot,
     val usedItemsText: String,
     val loggedDateEpochDay: Long,
@@ -180,6 +191,11 @@ data class MealPlanEntry(
     val title: String,
     val calorieTarget: Int?,
     val status: MealPlanEntryStatus,
+    val notes: String = "",
+    val source: String = "",
+    val imageUri: String? = null,
+    val imageUrl: String = "",
+    val recipeId: Long? = null,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
 )
@@ -235,6 +251,7 @@ data class FoodPreferences(
     val proteinGoal: String = "",
     val healthNotes: String = "",
     val customAiInstructions: String = "",
+    val aiSkillOverride: String = "",
 ) {
     val isEmpty: Boolean
         get() = listOf(
@@ -248,6 +265,7 @@ data class FoodPreferences(
             proteinGoal,
             healthNotes,
             customAiInstructions,
+            aiSkillOverride,
         ).all { it.isBlank() }
 }
 
@@ -264,7 +282,13 @@ data class FoodMemory(
     val mealPlanEntries: List<MealPlanEntry> = emptyList(),
     val receipts: List<ReceiptCapture> = emptyList(),
     val preferences: FoodPreferences = FoodPreferences(),
-)
+) {
+    val currentChatId: Long
+        get() = messages.maxOfOrNull(ChatMessage::chatId) ?: 1L
+
+    val currentChatMessages: List<ChatMessage>
+        get() = messages.filter { it.chatId == currentChatId }
+}
 
 data class FoodCandidate(
     val name: String,
@@ -279,7 +303,26 @@ data class FoodCandidate(
     val nutritionSource: String = "",
     val notes: String = "",
     val imageUri: String? = null,
+    val imageUrl: String = "",
     val expiresAtMillis: Long? = null,
+    val confidence: Double = 0.75,
+    val evidence: String = "",
+    val zoneSource: String = "",
+    val expirySource: String = "",
+    val warnings: List<String> = emptyList(),
+)
+
+enum class ReceiptItemDisposition(val label: String) {
+    INVENTORY("Put away"),
+    HOUSEHOLD("Non-food"),
+    IGNORE("Ignore"),
+}
+
+data class ReceiptItemDraft(
+    val food: FoodCandidate,
+    val disposition: ReceiptItemDisposition = ReceiptItemDisposition.INVENTORY,
+    val receiptLine: String = "",
+    val linePriceCents: Long? = null,
 )
 
 sealed interface FoodDraft {
@@ -292,6 +335,63 @@ sealed interface FoodDraft {
     val title: String
     val summary: String
     val rows: List<String>
+}
+
+data class CompositeDraft(
+    val drafts: List<FoodDraft>,
+) : FoodDraft {
+    override val draftSource: DraftSource
+        get() {
+            val first = drafts.firstOrNull()?.draftSource ?: return DraftSource.CHAT
+            return if (drafts.all { it.draftSource == first }) first else DraftSource.CHAT
+        }
+    override val title: String = "Review food changes"
+    override val summary: String = "${drafts.size} linked update${if (drafts.size == 1) "" else "s"}"
+    override val rows: List<String> = drafts.flatMap { draft ->
+        listOf("${draft.title}: ${draft.summary}") + draft.rows.take(2).map { "  $it" }
+    }
+}
+
+data class LinkActionDraft(
+    val actionType: String,
+    val targetKind: String,
+    val targetRef: String = "",
+    val displayName: String = "",
+    val fields: Map<String, String> = emptyMap(),
+    val destructive: Boolean = WonderFoodCommandContract.actionSpec(actionType)?.operation == LinkActionOperation.DELETE,
+    val sensitive: Boolean = targetKind.equals("preferences", ignoreCase = true),
+) : FoodDraft {
+    override val operation: FoodOperation =
+        when (WonderFoodCommandContract.actionSpec(actionType)?.operation) {
+            LinkActionOperation.DELETE -> FoodOperation.DELETE
+            LinkActionOperation.LOG -> FoodOperation.LOG
+            LinkActionOperation.CREATE -> FoodOperation.CREATE
+            else -> FoodOperation.UPDATE
+        }
+    override val draftSource: DraftSource = DraftSource.LINK
+    override val confidence: Double = 0.55
+    override val title: String = when {
+        destructive -> "Confirm linked ${targetKind.linkActionLabel()} change"
+        sensitive -> "Review sensitive linked ${targetKind.linkActionLabel()} change"
+        else -> "Review linked ${targetKind.linkActionLabel()} change"
+    }
+    override val summary: String = buildString {
+        append(actionType)
+        val target = targetRef.ifBlank { displayName }
+        if (target.isNotBlank()) append(" for ").append(target)
+        if (fields.isNotEmpty()) append(" with ").append(fields.size).append(" field")
+            .append(if (fields.size == 1) "" else "s")
+    }
+    override val rows: List<String> = buildList {
+        add("Action: $actionType")
+        if (targetRef.isNotBlank()) add("Target id: $targetRef")
+        if (displayName.isNotBlank()) add("Target/name: $displayName")
+        fields.entries.sortedBy { it.key }.forEach { (key, value) ->
+            add("$key: $value")
+        }
+        if (destructive) add("Requires explicit accept before anything is removed.")
+        if (sensitive) add("Sensitive preference/allergy change; review carefully before accepting.")
+    }
 }
 
 enum class FoodOperation {
@@ -308,7 +408,18 @@ enum class DraftSource {
     RECEIPT_TEXT,
     RECEIPT_PHOTO,
     LOCAL_FALLBACK,
+    LINK,
 }
+
+private fun String.linkActionLabel(): String =
+    when (lowercase()) {
+        "inventory" -> "pantry"
+        "grocery" -> "shopping"
+        "meal_log" -> "meal"
+        "meal_plan" -> "meal plan"
+        "plan_entry" -> "planned meal"
+        else -> replace('_', ' ')
+    }
 
 data class InventoryDraft(
     val items: List<FoodCandidate>,
@@ -316,7 +427,10 @@ data class InventoryDraft(
     override val title: String = "Add to food memory"
     override val summary: String = "Pantry/fridge/freezer items extracted from chat."
     override val rows: List<String> = items.map { item ->
-        listOf(item.quantity, item.name, item.zone.label).filter { it.isNotBlank() }.joinToString(" - ")
+        buildList {
+            addAll(listOf(item.quantity, item.name, item.zone.label).filter { it.isNotBlank() })
+            if (item.warnings.isNotEmpty()) add("${item.warnings.size} review note${if (item.warnings.size == 1) "" else "s"}")
+        }.joinToString(" - ")
     }
 }
 
@@ -326,8 +440,67 @@ data class GroceryDraft(
     override val title: String = "Update grocery list"
     override val summary: String = "Shopping items extracted from chat."
     override val rows: List<String> = items.map { item ->
-        listOf(item.quantity, item.name).filter { it.isNotBlank() }.joinToString(" - ")
+        buildList {
+            addAll(listOf(item.quantity, item.name).filter { it.isNotBlank() })
+            if (item.warnings.isNotEmpty()) add("${item.warnings.size} review note${if (item.warnings.size == 1) "" else "s"}")
+        }.joinToString(" - ")
     }
+}
+
+data class ReceiptDraft(
+    val items: List<ReceiptItemDraft>,
+    val merchant: String = "",
+    val storeLocation: String = "",
+    val purchasedAtMillis: Long? = null,
+    val currencyCode: String = "USD",
+    val subtotalCents: Long? = null,
+    val taxCents: Long? = null,
+    val totalCents: Long? = null,
+    val rawText: String = "",
+    val receiptId: Long? = null,
+    val sourceLabel: String = "receipt",
+) : FoodDraft {
+    override val operation: FoodOperation = FoodOperation.IMPORT
+    override val draftSource: DraftSource
+        get() = if ("text" in sourceLabel.lowercase()) DraftSource.RECEIPT_TEXT else DraftSource.RECEIPT_PHOTO
+    override val confidence: Double = items
+        .map { it.food.confidence }
+        .takeIf { it.isNotEmpty() }
+        ?.average()
+        ?: 0.0
+    override val title: String = "Review purchased items"
+    override val summary: String
+        get() {
+            val inventory = items.count { it.disposition == ReceiptItemDisposition.INVENTORY }
+            val excluded = items.size - inventory
+            return buildString {
+                append(inventory).append(" item").append(if (inventory == 1) "" else "s").append(" to put away")
+                if (excluded > 0) append("; ").append(excluded).append(" excluded")
+                totalCents?.let { append(" · ").append(it.receiptMoney(currencyCode)) }
+            }
+        }
+    override val rows: List<String> = items.map { item ->
+        buildList {
+            add(item.food.imageUri ?: foodEmojiForName(item.food.name))
+            add(item.food.name)
+            add(item.disposition.label)
+            if (item.disposition == ReceiptItemDisposition.INVENTORY) add(item.food.zone.label)
+            add("${(item.food.confidence * 100).toInt()}% confidence")
+            item.linePriceCents?.let { add(it.receiptMoney(currencyCode)) }
+            item.food.expiresAtMillis?.let {
+                add(if ("printed" in item.food.expirySource || "label" in item.food.expirySource) "package date" else "best-before estimated")
+            }
+            if (item.food.calories == null) add("nutrition unknown")
+            if (item.food.warnings.isNotEmpty()) add("${item.food.warnings.size} review note${if (item.food.warnings.size == 1) "" else "s"}")
+        }.joinToString(" · ")
+    }
+}
+
+fun Long.receiptMoney(currencyCode: String): String {
+    val safeCode = currencyCode.trim().uppercase().ifBlank { "USD" }
+    val absolute = kotlin.math.abs(this)
+    val amount = "${absolute / 100}.${(absolute % 100).toString().padStart(2, '0')}"
+    return "${if (this < 0) "-" else ""}$safeCode $amount"
 }
 
 data class RecipeDraft(
@@ -337,6 +510,8 @@ data class RecipeDraft(
     val servings: Int? = null,
     val prepMinutes: Int? = null,
     val tags: String = "",
+    val imageUri: String? = null,
+    val imageUrl: String = "",
 ) : FoodDraft {
     override val title: String = "Save recipe"
     override val summary: String = titleText
@@ -345,10 +520,10 @@ data class RecipeDraft(
 
 data class MealLogDraft(
     val titleText: String,
-    val calories: Int,
-    val proteinGrams: Double,
-    val carbsGrams: Double,
-    val fatGrams: Double,
+    val calories: Int? = null,
+    val proteinGrams: Double? = null,
+    val carbsGrams: Double? = null,
+    val fatGrams: Double? = null,
     val mealSlot: MealSlot = MealSlot.FLEX,
     val usedItemsText: String = "",
     val loggedDateEpochDay: Long? = null,
@@ -356,15 +531,15 @@ data class MealLogDraft(
 ) : FoodDraft {
     override val operation: FoodOperation = FoodOperation.LOG
     override val title: String = "Log meal"
-    override val summary: String = "$calories kcal estimated"
-    override val rows: List<String> = listOf(
-        "Slot: ${mealSlot.label}",
-        "${proteinGrams.toInt()}g protein",
-        "${carbsGrams.toInt()}g carbs",
-        "${fatGrams.toInt()}g fat",
-        "Used: ${usedItemsText.ifBlank { "unknown" }}",
-        "Source: $source",
-    )
+    override val summary: String = calories?.let { "$it kcal estimated" } ?: "Nutrition unknown"
+    override val rows: List<String> = buildList {
+        add("Slot: ${mealSlot.label}")
+        proteinGrams?.let { add("${it.toInt()}g protein") }
+        carbsGrams?.let { add("${it.toInt()}g carbs") }
+        fatGrams?.let { add("${it.toInt()}g fat") }
+        add("Used: ${usedItemsText.ifBlank { "unknown" }}")
+        add("Source: $source")
+    }
 }
 
 data class MealPlanEntryDraft(
@@ -398,3 +573,48 @@ data class AiTurn(
     val reply: String,
     val draft: FoodDraft?,
 )
+
+fun foodEmojiForName(name: String): String {
+    val text = name.lowercase()
+    return when {
+        "egg" in text -> "🥚"
+        "yogurt" in text -> "🥣"
+        "spinach" in text || "lettuce" in text || "greens" in text -> "🥬"
+        "berry" in text || "berries" in text -> "🫐"
+        "banana" in text -> "🍌"
+        "apple" in text -> "🍎"
+        "curry" in text -> "🍛"
+        "tomato" in text -> "🍅"
+        "cucumber" in text -> "🥒"
+        "eggplant" in text || "brinjal" in text -> "🍆"
+        "lime" in text || "lemon" in text -> "🍋"
+        "peanut" in text -> "🥜"
+        "onion" in text -> "🧅"
+        "potato" in text -> "🥔"
+        "carrot" in text -> "🥕"
+        "chili" in text || "pepper" in text -> "🌶️"
+        "oat" in text -> "🌾"
+        "rice" in text -> "🍚"
+        "pasta" in text -> "🍝"
+        "pizza" in text -> "🍕"
+        "chicken" in text -> "🍗"
+        "fish" in text || "salmon" in text -> "🐟"
+        "beef" in text || "steak" in text -> "🥩"
+        "bean" in text -> "🫘"
+        "lentil" in text || "dal" in text -> "🍲"
+        "milk" in text -> "🥛"
+        "cheese" in text || "paneer" in text -> "🧀"
+        "bread" in text || "toast" in text -> "🍞"
+        "sandwich" in text -> "🥪"
+        "salad" in text -> "🥗"
+        "soup" in text -> "🍲"
+        "bowl" in text -> "🥙"
+        "coffee" in text -> "☕"
+        "tea" in text -> "🍵"
+        "smoothie" in text -> "🥤"
+        "water" in text -> "💧"
+        "cleaner" in text || "soap" in text || "detergent" in text -> "🧼"
+        "freezer" in text || "frozen" in text -> "❄️"
+        else -> "🍽️"
+    }
+}

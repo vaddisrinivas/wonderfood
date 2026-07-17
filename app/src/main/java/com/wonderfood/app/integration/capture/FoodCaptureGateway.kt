@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.wonderfood.app.data.TrustedFoodLookup
 import java.io.File
 
 enum class FoodCaptureKind(val directoryName: String) {
@@ -63,12 +64,24 @@ class FoodCaptureGateway(
         require(cleanValue.isNotBlank()) { "Barcode value must not be blank." }
         val now = clockMillis()
         val id = captureId(FoodCaptureKind.BARCODE, now, cleanValue)
+        val lookup = TrustedFoodLookup.lookupBarcode(cleanValue)
+        val evidence = buildList {
+            add(listOfNotNull(format?.trim()?.ifBlank { null }, cleanValue).joinToString(":"))
+            if (lookup != null) {
+                add("provider=bundled_barcode_provider")
+                add("item=${lookup.name}")
+                add("serving=${lookup.servingText}")
+                add("nutrition_source=${lookup.nutritionSource}")
+            } else {
+                add("provider=unknown")
+            }
+        }.joinToString("\n")
         return FoodCaptureRecord(
             id = id,
             kind = FoodCaptureKind.BARCODE,
             originalUri = null,
             privateUri = null,
-            evidenceText = listOfNotNull(format?.trim()?.ifBlank { null }, cleanValue).joinToString(":"),
+            evidenceText = evidence,
             status = FoodCaptureStatus.STAGED,
             metadataPolicy = MetadataPolicy.NOT_APPLICABLE,
             createdAtMillis = now,

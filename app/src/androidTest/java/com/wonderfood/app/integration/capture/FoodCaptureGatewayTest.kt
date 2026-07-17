@@ -61,7 +61,9 @@ class FoodCaptureGatewayTest {
         assertEquals(FoodCaptureStatus.STAGED, record.status)
         assertEquals(MetadataPolicy.NOT_APPLICABLE, record.metadataPolicy)
         assertEquals(null, record.privateUri)
-        assertEquals("UPC_A:012345678905", record.evidenceText)
+        assertTrue(record.evidenceText.contains("UPC_A:012345678905"))
+        assertTrue(record.evidenceText.contains("Generic Rolled Oats"))
+        assertTrue(record.evidenceText.contains("bundled_barcode_provider"))
         assertTrue(record.aiPrompt.contains("barcode", ignoreCase = true))
         assertTrue(record.reviewRequired)
     }

@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -19,6 +20,7 @@ local.properties
 build/
 captures/
 outputs/
+work/
 *.apk
 *.aab
 *.apks
@@ -54,3 +56,7 @@ docs/baseline/screenshots/
 !.env.example
 secrets/
 *.secret
+
+# JVM/compiler crash dumps can contain local paths and environment metadata
+hs_err_pid*.log
+replay_pid*.log

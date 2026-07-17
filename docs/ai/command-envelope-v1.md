@@ -221,6 +221,8 @@ product intentions, not persistence operations.
 `planning.update_meal_plan_entry`
 
 - Payload: `plan_entry_ref`, fields to change, and `reason`.
+- Supported changed fields: `date`, `slot`, `title`, `calorie_target`, `status`,
+  `notes`, `recipe_ref`, and display metadata (`emoji`, `image_url`).
 - Confirmation: confirm when replacing an accepted plan entry.
 
 `planning.mark_entry_status`

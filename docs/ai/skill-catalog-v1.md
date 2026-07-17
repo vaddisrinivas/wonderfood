@@ -113,6 +113,10 @@ Expected commands:
 - Warnings: `allergy_conflict`, `nutrition_unverified`, `possible_duplicate`.
 - Confidence: high when date range and meal count are clear; lower when schedule or goals
   conflict.
+- Payload expectations: preserve entry date, slot, title, calorie target, status, notes,
+  source, recipe relation, and display metadata (`emoji`, `image_url`) when available.
+- Calendar/day context: update only the targeted entry unless the user clearly asks to
+  regenerate the full plan.
 - Unsupported: exact medical nutrition plans or calorie guarantees.
 - Golden fixture: `fixtures/golden/planning-create-plan.json`.
 

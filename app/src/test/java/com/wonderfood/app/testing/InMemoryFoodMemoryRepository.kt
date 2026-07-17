@@ -5,8 +5,10 @@ import com.wonderfood.app.data.FoodMemory
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.GroceryItem
 import com.wonderfood.app.data.GroceryStatus
+import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.InventoryItem
+import com.wonderfood.app.data.LinkActionDraft
 import com.wonderfood.app.data.MealLog
 import com.wonderfood.app.data.MealLogDraft
 import com.wonderfood.app.data.MealPlan
@@ -16,6 +18,8 @@ import com.wonderfood.app.data.MealPlanEntryStatus
 import com.wonderfood.app.data.MealPlanStatus
 import com.wonderfood.app.data.Recipe
 import com.wonderfood.app.data.RecipeDraft
+import com.wonderfood.app.data.ReceiptDraft
+import com.wonderfood.app.data.ReceiptItemDisposition
 import java.time.LocalDate
 import java.time.ZoneOffset
 
@@ -35,6 +39,10 @@ class InMemoryFoodMemoryRepository(
     fun applyDraft(draft: FoodDraft): FoodMemory {
         val now = clock.millis()
         memory = when (draft) {
+            is CompositeDraft -> {
+                draft.drafts.forEach { applyDraft(it) }
+                memory
+            }
             is InventoryDraft -> memory.copy(
                 inventory = memory.inventory + draft.items.map { item ->
                     InventoryItem(
@@ -55,6 +63,7 @@ class InMemoryFoodMemoryRepository(
                         source = TestFoodSeeds.TEST_SOURCE,
                         createdAtMillis = now,
                         updatedAtMillis = now,
+                        imageUrl = item.imageUrl,
                     )
                 },
             )
@@ -76,9 +85,21 @@ class InMemoryFoodMemoryRepository(
                         imageUri = item.imageUri,
                         createdAtMillis = now,
                         updatedAtMillis = now,
+                        imageUrl = item.imageUrl,
                     )
                 },
             )
+            is ReceiptDraft -> {
+                applyDraft(
+                    InventoryDraft(
+                        draft.items
+                            .filter { it.disposition == ReceiptItemDisposition.INVENTORY }
+                            .map { it.food },
+                    ),
+                )
+                memory
+            }
+            is LinkActionDraft -> memory
             is RecipeDraft -> memory.copy(
                 recipes = memory.recipes + Recipe(
                     id = ids.nextId(),
@@ -89,9 +110,10 @@ class InMemoryFoodMemoryRepository(
                     prepMinutes = draft.prepMinutes,
                     tags = draft.tags,
                     rating = null,
-                    imageUri = null,
+                    imageUri = draft.imageUri,
                     createdAtMillis = now,
                     updatedAtMillis = now,
+                    imageUrl = draft.imageUrl,
                 ),
             )
             is MealLogDraft -> memory.copy(

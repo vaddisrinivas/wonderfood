@@ -59,6 +59,8 @@ object FakeAiTurns {
                 servings = 2,
                 prepMinutes = 25,
                 tags = "generic, offline",
+                imageUri = "🥙",
+                imageUrl = TestFoodSeeds.TEST_IMAGE_URL,
             ),
         )
 

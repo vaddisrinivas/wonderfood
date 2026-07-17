@@ -1,7 +1,7 @@
 package com.wonderfood.app.ui.main
 
 import android.graphics.BitmapFactory
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +47,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -97,9 +101,9 @@ fun PageHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FoodImage(image = image, fallback = fallback, color = MaterialTheme.colorScheme.primaryContainer, size = 64.dp)
+        FoodImage(image = image, fallback = fallback, color = MaterialTheme.colorScheme.primaryContainer, size = 64.dp, contentDescription = "$title image")
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 source?.let { SourceBadge(it) }
@@ -155,7 +159,7 @@ fun RelationRow(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth().semantics { role = Role.Button }.clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
@@ -223,13 +227,14 @@ fun FoodImage(
     color: Color,
     modifier: Modifier = Modifier,
     size: Dp = 52.dp,
+    contentDescription: String? = null,
 ) {
     val context = LocalContext.current
     val bitmap = remember(image) {
         val value = image.orEmpty()
-        if (value.startsWith("content://") || value.startsWith("file://")) {
+        if (value.isLocalImageUri()) {
             runCatching {
-                context.contentResolver.openInputStream(Uri.parse(value))?.use { stream ->
+                context.contentResolver.openInputStream(value.toUri())?.use { stream ->
                     BitmapFactory.decodeStream(stream)?.asImageBitmap()
                 }
             }.getOrNull()
@@ -238,7 +243,9 @@ fun FoodImage(
         }
     }
     Surface(
-        modifier = modifier.size(size).semantics { contentDescription = "Food image" },
+        modifier = modifier.size(size).then(
+            if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier,
+        ),
         shape = RoundedCornerShape(8.dp),
         color = color,
     ) {
@@ -251,10 +258,21 @@ fun FoodImage(
                     contentScale = ContentScale.Crop,
                 )
             } else {
-                Text(image?.takeUnless { it.startsWith("content://") || it.startsWith("file://") }.orEmpty().ifBlank { fallback }, style = MaterialTheme.typography.headlineSmall)
+                Text(image.displayImageText(fallback), style = MaterialTheme.typography.headlineSmall)
             }
         }
     }
+}
+
+private fun String.isLocalImageUri(): Boolean =
+    startsWith("content://") || startsWith("file://")
+
+private fun String?.displayImageText(fallback: String): String {
+    val value = orEmpty()
+    return value
+        .takeUnless { it.isLocalImageUri() || it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
+        .orEmpty()
+        .ifBlank { fallback }
 }
 
 @Composable
@@ -306,17 +324,31 @@ fun GalleryListToggle(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onSelected(DatabaseViewMode.GALLERY) }) {
+        IconButton(
+            onClick = { onSelected(DatabaseViewMode.GALLERY) },
+            modifier = Modifier.semantics {
+                role = Role.RadioButton
+                this.selected = selected == DatabaseViewMode.GALLERY
+                contentDescription = "Gallery view"
+            },
+        ) {
             Icon(
                 Icons.Rounded.GridView,
-                contentDescription = "Gallery view",
+                contentDescription = null,
                 tint = if (selected == DatabaseViewMode.GALLERY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = { onSelected(DatabaseViewMode.LIST) }) {
+        IconButton(
+            onClick = { onSelected(DatabaseViewMode.LIST) },
+            modifier = Modifier.semantics {
+                role = Role.RadioButton
+                this.selected = selected == DatabaseViewMode.LIST
+                contentDescription = "List view"
+            },
+        ) {
             Icon(
                 Icons.AutoMirrored.Rounded.List,
-                contentDescription = "List view",
+                contentDescription = null,
                 tint = if (selected == DatabaseViewMode.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

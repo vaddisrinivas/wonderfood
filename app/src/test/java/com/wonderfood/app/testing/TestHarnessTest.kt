@@ -1,6 +1,7 @@
 package com.wonderfood.app.testing
 
 import com.wonderfood.app.data.InventoryDraft
+import com.wonderfood.app.data.RecipeDraft
 import java.time.Duration
 import java.time.Instant
 import org.junit.Assert.assertEquals
@@ -49,6 +50,28 @@ class TestHarnessTest {
 
         assertEquals(listOf("Generic Eggs", "Generic Rice"), draft.items.map { it.name })
         assertEquals("add staples", gateway.requests.single().text)
+    }
+
+    @Test
+    fun inMemoryRepositoryPreservesDisplayMetadata() {
+        val repository = InMemoryFoodMemoryRepository()
+
+        repository.applyDraft(InventoryDraft(listOf(TestFoodSeeds.candidate(name = "Generic Yogurt", imageUri = "🥣"))))
+        repository.applyDraft(
+            RecipeDraft(
+                titleText = "Generic Rice Bowl",
+                ingredientsText = "Rice, eggs, spinach",
+                stepsText = "Cook rice. Add eggs and spinach.",
+                imageUri = "🥙",
+                imageUrl = TestFoodSeeds.TEST_IMAGE_URL,
+            ),
+        )
+
+        val memory = repository.readMemory()
+        assertEquals("🥣", memory.inventory.single().imageUri)
+        assertEquals(TestFoodSeeds.TEST_IMAGE_URL, memory.inventory.single().imageUrl)
+        assertEquals("🥙", memory.recipes.single().imageUri)
+        assertEquals(TestFoodSeeds.TEST_IMAGE_URL, memory.recipes.single().imageUrl)
     }
 
     @Test

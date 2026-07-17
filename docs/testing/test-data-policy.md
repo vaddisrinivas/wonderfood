@@ -12,6 +12,7 @@ WonderFood tests must be safe to run, share, and archive. Test data is product e
 - Deterministic timestamps such as `2026-01-15T12:00:00Z`.
 - Deterministic IDs such as `test-receipt-001`.
 - Synthetic `content://wonderfood-test/...` URIs.
+- Synthetic non-fetching URLs under `https://example.invalid/...` when testing stored image URL fields.
 - Null nutrition values when a field is unknown.
 - Small JSON fixtures under `app/src/test/resources/fixtures/**`.
 

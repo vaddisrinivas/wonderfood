@@ -41,7 +41,7 @@ class JsonFixtureProbe(private val raw: String) {
             "@outlook.com",
             "@icloud.com",
             "notion",
-            "srinivas",
+            "john.doe@",
         )
         val lower = raw.lowercase()
         return forbidden.any { it in lower }

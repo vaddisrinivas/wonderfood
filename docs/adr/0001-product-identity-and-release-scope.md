@@ -19,7 +19,7 @@ Release identity:
 | Version policy | Semantic app version plus monotonic Play `versionCode` |
 | Initial version | `1.0` / `1` |
 | License | Apache-2.0 unless repository visibility changes before release |
-| Repository visibility | Private during product build, public-ready before GitHub release |
+| Repository visibility | Public under Apache-2.0 |
 | Initial release region | United States first, then expand after Play review and vitals are clean |
 
 ## Scope
@@ -40,7 +40,6 @@ Out of scope for 1.0:
 
 ## Consequences
 
-- Existing prototype package `com.example.wonderfood` is treated as a baseline-only package.
-- New installs use `com.wonderfood.app`; prototype emulator data is preserved under
-  `docs/baseline/` for migration fixtures.
+- New installs use `com.wonderfood.app`; historical prototype binaries, databases,
+  screenshots, and personal migration artifacts are not distributed in the public tree.
 - Play Console app creation must use `com.wonderfood.app` and happen after this ADR.

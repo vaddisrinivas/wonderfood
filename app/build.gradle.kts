@@ -54,13 +54,18 @@ dependencies {
   implementation(project(":core:ai"))
 
   implementation(libs.androidx.core.ktx)
+  implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services.auth)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.health.connect.client)
+  implementation(libs.googleid)
+  implementation(libs.google.play.services.auth)
 
   // Compose
   implementation(libs.androidx.compose.ui)
@@ -76,6 +81,7 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.robolectric)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

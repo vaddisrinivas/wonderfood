@@ -1,4 +1,4 @@
-# WF-C05 Intent Security And Direct Actions
+# Intent security and external command intake
 
 ## Security Alignment Area
 
@@ -6,9 +6,8 @@ Safe exported Activity deep-link handling for assistant and shortcut entry point
 
 ## Impact And Priority
 
-Priority: medium. `MainActivity` is exported for launcher, shortcuts, and `wonderfood://`
-assistant links, so incoming intents must be allowlisted and parsed without forwarding,
-granting URI permissions, or accepting arbitrary actions.
+Priority: high. `MainActivity` is exported for launcher, shares, shortcuts, verified
+HTTPS links, custom-scheme links, and explicit command intents. All input is untrusted.
 
 ## Scope Of Changes
 
@@ -19,9 +18,15 @@ granting URI permissions, or accepting arbitrary actions.
 
 ## Implementation Summary
 
-- Deep-link parsing now accepts only `Intent.ACTION_VIEW` and the `wonderfood` scheme.
-- Hosts are allowlisted to `open`, `voice`, and `quick`.
-- Assistant text fields are trimmed, control characters are removed, and oversized text is capped.
+- Parsing accepts only the documented VIEW, SEND, and explicit command actions.
+- HTTPS hosts are restricted to `wonderfood.app` and `www.wonderfood.app`; supported
+  paths are `/add` and `/action`. Custom-scheme hosts are allowlisted.
+- Text, field sizes, bulk count, action types, target types, fields, enums, and numeric
+  values are bounded and allowlisted before a proposal can reach persistence.
+- Malformed explicit extras, URLs, and bulk JSON fail closed without crashing.
+- Every external mutation opens a review form. Users can edit, accept, or reject it.
+- Bulk acceptance uses one SQLite transaction; any failed child rolls back all children.
+- Destructive and preference actions remain explicitly marked for confirmation.
 - Explicit `requestId`, `request_id`, or `idempotencyKey` query parameters are preserved so
   assistant retries can be deduped.
 - Unsupported `voice` or `quick` utterances become AI-review commands instead of disappearing.
@@ -30,11 +35,7 @@ granting URI permissions, or accepting arbitrary actions.
 
 ## Verification
 
-- Instrumented parser tests: `WonderFoodDeepLinkTest`
+- Local and instrumented parser tests: `WonderFoodDeepLinkTest`
+- Executor policy tests: `FoodDraftCommandExecutorTest`
+- Transaction rollback test: `FoodChatStoreTest`
 - Manual/CI ADB suite: `scripts/adb-direct-actions.sh`
-- Replay evidence from emulator on 2026-07-16:
-  - `WATER` event for `requestId=adb-water-250`: 1 row after two launches.
-  - `SHOP` start event for `requestId=adb-shopping-start`: 1 row after two launches.
-  - Grocery item `oats` for `requestId=adb-grocery-oats`: 1 row after two launches.
-  - Meal log `chicken rice` for `requestId=adb-meal-chicken-rice`: 1 row after two launches.
-  - AI-review voice note `need Greek yogurt this week` for `requestId=adb-ai-note-yogurt`: 1 user message after two launches.

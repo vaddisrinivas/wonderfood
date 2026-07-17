@@ -6,9 +6,16 @@ on:
     branches:
       - main
 
+concurrency:
+  group: android-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  data-room:
+  local-quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
 
     steps:
       - name: Check out source
@@ -23,19 +30,66 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Room unit tests
-        run: ./gradlew :core:data:testDebugUnitTest
+      - name: Run local harness
+        run: ./scripts/quality/android-harness.sh local
 
-      - name: Run Room migration tests on emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          script: ./gradlew :core:data:connectedDebugAndroidTest
-
-      - name: Archive Room schemas
+      - name: Archive local reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: room-schemas
-          path: core/data/schemas
+          name: android-local-reports
+          path: |
+            **/build/test-results/**/*.xml
+            **/build/reports/tests
+            **/build/reports/lint-results-*.html
+            **/build/outputs/apk/**/*.apk
+
+  device-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 35]
+
+    steps:
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls /dev/kvm
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run instrumented app and migration tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          disable-animations: true
+          script: ./scripts/quality/android-harness.sh connected
+
+      - name: Archive Android test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-device-reports-api-${{ matrix.api-level }}
+          path: |
+            app/build/reports
+            app/build/outputs/androidTest-results
+            core/data/build/reports
+            core/data/build/outputs/androidTest-results
+            core/data/schemas

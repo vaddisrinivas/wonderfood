@@ -34,10 +34,28 @@
         <intent
             android:targetPackage="com.wonderfood.app"
             android:targetClass="com.wonderfood.app.MainActivity">
-            <url-template android:value="wonderfood://voice/grocery/add{?item}" />
+            <url-template android:value="wonderfood://voice/grocery/add{?text}" />
             <parameter
-                android:name="item"
-                android:key="item"
+                android:name="text"
+                android:key="text"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.ADD_KITCHEN_ITEM"
+        app:queryPatterns="@array/assistant_add_kitchen_item_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/kitchen/add{?text,zone}" />
+            <parameter
+                android:name="text"
+                android:key="text"
+                android:mimeType="https://schema.org/Text" />
+            <parameter
+                android:name="zone"
+                android:key="zone"
                 android:mimeType="https://schema.org/Text" />
         </intent>
     </capability>
@@ -67,6 +85,16 @@
                 android:name="recipe"
                 android:key="recipe"
                 android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.PLAN_MEALS"
+        app:queryPatterns="@array/assistant_plan_meals_queries">
+        <intent
+            android:targetPackage="com.wonderfood.app"
+            android:targetClass="com.wonderfood.app.MainActivity">
+            <url-template android:value="wonderfood://voice/plan/create" />
         </intent>
     </capability>
 

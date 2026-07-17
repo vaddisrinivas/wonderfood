@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,10 +61,9 @@ class MainActivity : ComponentActivity() {
     }.getOrDefault(WonderFoodThemeMode.SYSTEM)
 
   private fun saveThemeMode(mode: WonderFoodThemeMode) {
-    getSharedPreferences(THEME_PREFS_NAME, MODE_PRIVATE)
-      .edit()
-      .putString(KEY_THEME_MODE, mode.name)
-      .apply()
+    getSharedPreferences(THEME_PREFS_NAME, MODE_PRIVATE).edit {
+      putString(KEY_THEME_MODE, mode.name)
+    }
   }
 
   companion object {

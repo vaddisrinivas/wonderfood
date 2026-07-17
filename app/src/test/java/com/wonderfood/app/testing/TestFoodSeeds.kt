@@ -30,6 +30,8 @@ object TestFoodSeeds {
         quantity: String = "12 count",
         zone: StorageZone = StorageZone.FRIDGE,
         category: String = "protein",
+        imageUri: String? = "🥚",
+        imageUrl: String = TEST_IMAGE_URL,
     ): FoodCandidate =
         FoodCandidate(
             name = name,
@@ -43,7 +45,8 @@ object TestFoodSeeds {
             fatGrams = null,
             nutritionSource = "",
             notes = "generic offline fixture",
-            imageUri = null,
+            imageUri = imageUri,
+            imageUrl = imageUrl,
             expiresAtMillis = null,
         )
 
@@ -67,11 +70,12 @@ object TestFoodSeeds {
             fatGrams = null,
             nutritionSource = "",
             notes = "generic offline fixture",
-            imageUri = null,
+            imageUri = "🥚",
             expiresAtMillis = null,
             source = TEST_SOURCE,
             createdAtMillis = NOW_MILLIS,
             updatedAtMillis = NOW_MILLIS,
+            imageUrl = TEST_IMAGE_URL,
         )
 
     fun groceryItem(
@@ -92,9 +96,10 @@ object TestFoodSeeds {
             fatGrams = null,
             nutritionSource = "",
             source = TEST_SOURCE,
-            imageUri = null,
+            imageUri = "🍚",
             createdAtMillis = NOW_MILLIS,
             updatedAtMillis = NOW_MILLIS,
+            imageUrl = TEST_IMAGE_URL,
         )
 
     fun recipe(
@@ -110,9 +115,10 @@ object TestFoodSeeds {
             prepMinutes = 25,
             tags = "generic, offline",
             rating = null,
-            imageUri = null,
+            imageUri = "🥙",
             createdAtMillis = NOW_MILLIS,
             updatedAtMillis = NOW_MILLIS,
+            imageUrl = TEST_IMAGE_URL,
         )
 
     fun mealLog(
@@ -223,4 +229,5 @@ object TestFoodSeeds {
         )
 
     const val TEST_SOURCE: String = "test_fixture"
+    const val TEST_IMAGE_URL: String = "https://example.invalid/wonderfood/generic-food.png"
 }
