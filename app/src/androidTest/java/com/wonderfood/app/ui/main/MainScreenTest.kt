@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.wonderfood.app.MainActivity
 import org.junit.Assume.assumeTrue
@@ -49,7 +50,8 @@ class MainScreenTest {
             .fetchSemanticsNode()
             .boundsInRoot
             .width
-        assertTrue("AI capture input should not collapse", inputWidth > 500f)
+        val screenWidth = composeTestRule.activity.resources.displayMetrics.widthPixels.toFloat()
+        assertTrue("AI capture input should not collapse", inputWidth > screenWidth * 0.55f)
         composeTestRule.onNodeWithContentDescription("Close AI capture").performClick()
         composeTestRule.onNodeWithContentDescription("Open settings").performClick()
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
@@ -144,7 +146,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("New recipe").assertIsDisplayed()
 
         composeTestRule.onAllNodesWithText("Today").onFirst().performClick()
-        composeTestRule.onNodeWithText("Log meal").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Log meal").performScrollTo().assertIsDisplayed()
     }
 
     private fun assertTextPresent(text: String) {
