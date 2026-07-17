@@ -1,9 +1,11 @@
 # Changelog
 
 All user-visible changes are recorded here. WonderFood follows Keep a Changelog
-structure; version numbers begin when signed release artifacts begin.
+structure.
 
 ## Unreleased
+
+## 1.0.0 - 2026-07-17
 
 ### Added
 

@@ -36,6 +36,10 @@ Install on a connected device or emulator:
 ./gradlew :app:installDebug
 ```
 
+Signed APKs are published on the [GitHub Releases](https://github.com/vaddisrinivas/wonderfood/releases)
+page with a SHA-256 checksum. Maintainer instructions live in
+[`docs/releasing.md`](docs/releasing.md).
+
 Full local quality gate:
 
 ```bash
