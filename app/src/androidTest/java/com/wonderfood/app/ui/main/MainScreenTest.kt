@@ -4,14 +4,17 @@ import android.os.Build
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import com.wonderfood.app.MainActivity
 import org.junit.Assume.assumeTrue
@@ -146,7 +149,9 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("New recipe").assertIsDisplayed()
 
         composeTestRule.onAllNodesWithText("Today").onFirst().performClick()
-        composeTestRule.onNodeWithText("Log meal").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log meal"))
+        composeTestRule.onNodeWithText("Log meal").performClick()
+        composeTestRule.onNodeWithText("Date").assertIsDisplayed()
     }
 
     private fun assertTextPresent(text: String) {
