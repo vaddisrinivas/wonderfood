@@ -1,0 +1,94 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "shopping",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_bulk_links_001",
+  "idempotency_key": "test-bulk-links-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_bulk_1",
+      "type": "user_text",
+      "source_ref": "turn:test:local",
+      "quote": "Need bread and pantry oats and then put three eggs in fridge while editing meal plan.",
+      "observed_at": "2026-01-15T12:00:00Z",
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_bulk_1",
+      "type": "inventory.add_lot",
+      "summary": "Add eggs to freezer inventory.",
+      "payload": {
+        "name": "Eggs",
+        "quantity": {
+          "amount": 3,
+          "unit": "count",
+          "text": "3 eggs"
+        },
+        "storage_zone": "FRIDGE",
+        "category": "protein",
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_bulk_1"
+      ],
+      "confidence": {
+        "score": 0.96,
+        "rationale": "Quantity and storage are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Inventory additions require review.",
+        "prompt": "Add eggs to fridge?"
+      },
+      "destructive": false,
+      "mutation": true
+    },
+    {
+      "command_id": "cmd_bulk_2",
+      "type": "shopping.add_item",
+      "summary": "Add oats to shopping list.",
+      "payload": {
+        "name": "Oats",
+        "quantity": {
+          "amount": 1,
+          "unit": "bag",
+          "text": "one bag"
+        },
+        "category": "grains",
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_bulk_1"
+      ],
+      "confidence": {
+        "score": 0.92,
+        "rationale": "Item and quantity are explicit."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Shopping additions are reviewable.",
+        "prompt": "Add oats to shopping list?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.94,
+    "rationale": "Bulk request is explicit with independent targets."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "review",
+    "reason": "Review both updates before saving.",
+    "prompt": "Review shopping and pantry updates?"
+  },
+  "warnings": [],
+  "unsupported": null
+}

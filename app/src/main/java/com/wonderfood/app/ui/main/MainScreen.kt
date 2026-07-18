@@ -29,12 +29,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -82,6 +82,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,8 +93,8 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -188,6 +189,8 @@ import com.wonderfood.app.sync.GoogleSignInGateway
 import com.wonderfood.app.sync.WonderFoodCsvGateway
 import com.wonderfood.app.theme.WonderFoodTheme
 import com.wonderfood.app.theme.WonderFoodThemeMode
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -241,24 +244,11 @@ private enum class GoogleSyncAction {
     RESTORE,
 }
 
-private enum class ActionDockTone {
-    PRIMARY,
-    SECONDARY,
-    AI,
-}
-
-private data class FoodDockAction(
+private data class FoodPrimaryAction(
     val label: String,
     val contentDescription: String,
     val icon: ImageVector,
-    val tone: ActionDockTone = ActionDockTone.PRIMARY,
-    val showBadge: Boolean = false,
     val onClick: () -> Unit,
-)
-
-private data class FoodActionDockSpec(
-    val primary: FoodDockAction,
-    val secondary: List<FoodDockAction> = emptyList(),
 )
 
 @Composable
@@ -1015,128 +1005,70 @@ private fun MainWorkspace(
             .sortedByDescending { it.createdAtMillis }
             .firstOrNull { it.status == ReceiptStatus.EXTRACTED }
             ?.let { FoodDetailTarget(FoodDetailKind.RECEIPT, id = it.id) }
-    fun askAction(prompt: String? = null) = FoodDockAction(
-        label = "Ask",
-        contentDescription = "Open AI capture",
-        icon = Icons.AutoMirrored.Rounded.Chat,
-        tone = ActionDockTone.AI,
-        showBadge = state.isWorking,
-        onClick = { openAi(prompt) },
-    )
-    val canShowActionDock = !showAiCapture &&
+    val canShowPrimaryAction = !showAiCapture &&
         !hasFeedback &&
         secondaryPane == null &&
         state.detailTarget == null &&
-        state.pendingDraft == null
-    val actionDockSpec = if (canShowActionDock) {
+        state.pendingDraft == null &&
+        manualCreateKind == null &&
+        !showDiscardSettings
+    val primaryAction = if (canShowPrimaryAction) {
         when (state.section) {
-            FoodSection.TODAY -> FoodActionDockSpec(
-                primary = FoodDockAction(
-                    label = "Log meal",
-                    contentDescription = "Log meal",
-                    icon = Icons.Rounded.Restaurant,
-                    onClick = logMealToday,
-                ),
-                secondary = listOf(askAction()),
+            FoodSection.TODAY -> FoodPrimaryAction(
+                label = "Log meal",
+                contentDescription = "Log meal",
+                icon = Icons.Rounded.Restaurant,
+                onClick = logMealToday,
             )
-            FoodSection.KITCHEN -> FoodActionDockSpec(
-                primary = FoodDockAction(
-                    label = "Add food",
-                    contentDescription = "Add kitchen food",
-                    icon = Icons.Rounded.Add,
-                    onClick = addKitchenFood,
-                ),
-                secondary = listOf(
-                    FoodDockAction(
-                        label = "Receipt",
-                        contentDescription = "Scan receipt",
-                        icon = Icons.Rounded.AddAPhoto,
-                        tone = ActionDockTone.SECONDARY,
-                        onClick = onPickReceiptPhoto,
-                    ),
-                    askAction(
-                        prompt = "Help me add food to my Kitchen. Ask for any missing details before drafting changes.",
-                    ),
-                ),
+            FoodSection.KITCHEN -> FoodPrimaryAction(
+                label = "Add food",
+                contentDescription = "Add kitchen food",
+                icon = Icons.Rounded.Add,
+                onClick = addKitchenFood,
             )
-            FoodSection.PLAN -> FoodActionDockSpec(
-                primary = FoodDockAction(
-                    label = "Plan today",
-                    contentDescription = "Plan today",
-                    icon = Icons.Rounded.CalendarMonth,
-                    onClick = openTodayPlan,
-                ),
-                secondary = listOf(
-                    askAction(
-                        prompt = "Plan meals using my current Kitchen first. Show missing groceries and let me edit the plan before saving.",
-                    ),
-                    FoodDockAction(
-                        label = "Log meal",
-                        contentDescription = "Log meal",
-                        icon = Icons.Rounded.Restaurant,
-                        tone = ActionDockTone.SECONDARY,
-                        onClick = logMealToday,
-                    ),
-                ),
+            FoodSection.PLAN -> FoodPrimaryAction(
+                label = "Plan today",
+                contentDescription = "Plan today",
+                icon = Icons.Rounded.CalendarMonth,
+                onClick = openTodayPlan,
             )
-            FoodSection.RECIPES -> FoodActionDockSpec(
-                primary = FoodDockAction(
-                    label = "New recipe",
-                    contentDescription = "Create recipe",
-                    icon = Icons.Rounded.Add,
-                    onClick = addRecipe,
-                ),
-                secondary = listOf(
-                    askAction(
-                        prompt = "Suggest recipes I can make with my current Kitchen. Show what I have and what is missing.",
-                    ),
-                ),
+            FoodSection.RECIPES -> FoodPrimaryAction(
+                label = "New recipe",
+                contentDescription = "Create recipe",
+                icon = Icons.Rounded.Add,
+                onClick = addRecipe,
             )
             FoodSection.SHOP -> {
-                val addItem = FoodDockAction(
+                val addItem = FoodPrimaryAction(
                     label = "Add item",
                     contentDescription = "Add shopping item",
                     icon = Icons.Rounded.Add,
                     onClick = addShoppingItem,
                 )
-                val scanReceipt = FoodDockAction(
+                val scanReceipt = FoodPrimaryAction(
                     label = "Scan receipt",
                     contentDescription = "Scan receipt",
                     icon = Icons.Rounded.AddAPhoto,
-                    tone = ActionDockTone.SECONDARY,
                     onClick = onPickReceiptPhoto,
                 )
-                val shoppingAsk = askAction(
-                    prompt = "Help me review my shopping list, receipts, and put-away queue. Draft changes only after showing what will change.",
-                )
                 when (shopMode) {
-                    ShopMode.TO_BUY -> FoodActionDockSpec(
-                        primary = addItem,
-                        secondary = listOf(scanReceipt, shoppingAsk),
-                    )
-                    ShopMode.RECEIPTS -> FoodActionDockSpec(
-                        primary = scanReceipt.copy(tone = ActionDockTone.PRIMARY),
-                        secondary = listOf(addItem.copy(tone = ActionDockTone.SECONDARY), shoppingAsk),
-                    )
-                    ShopMode.PUT_AWAY -> FoodActionDockSpec(
-                        primary = putAwayTarget?.let { target ->
-                            FoodDockAction(
-                                label = "Review item",
-                                contentDescription = "Review put-away item",
-                                icon = Icons.Rounded.Inventory2,
-                                onClick = { onOpenDetail(target) },
-                            )
-                        } ?: scanReceipt.copy(tone = ActionDockTone.PRIMARY),
-                        secondary = listOf(addItem.copy(tone = ActionDockTone.SECONDARY), shoppingAsk),
-                    )
+                    ShopMode.TO_BUY -> addItem
+                    ShopMode.RECEIPTS -> scanReceipt
+                    ShopMode.PUT_AWAY -> putAwayTarget?.let { target ->
+                        FoodPrimaryAction(
+                            label = "Review item",
+                            contentDescription = "Review put-away item",
+                            icon = Icons.Rounded.Inventory2,
+                            onClick = { onOpenDetail(target) },
+                        )
+                    } ?: scanReceipt
                 }
             }
         }
     } else {
         null
     }
-    val actionDockBottomPadding = if (showBottomNavigation) 92.dp else 20.dp
-    val actionDockContentPadding = if (actionDockSpec != null) 76.dp else 0.dp
+    val primaryActionContentPadding = if (primaryAction != null) 84.dp else 0.dp
     BackHandler(enabled = showAiCapture || secondaryPane != null || state.detailTarget != null) {
         when {
             showAiCapture -> showAiCapture = false
@@ -1148,32 +1080,64 @@ private fun MainWorkspace(
         modifier = modifier
             .safeDrawingPadding(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (secondaryPane == null) {
-                TopBar(
-                    state = state,
-                    onSearchClick = {
-                        onDismissFeedback()
-                        showAiCapture = false
-                        secondaryPane = SecondaryPane.SEARCH
-                    },
-                    onSettingsClick = {
-                        onDismissFeedback()
-                        showAiCapture = false
-                        secondaryPane = SecondaryPane.SETTINGS
-                    },
-                )
-            }
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp),
+            topBar = {
+                if (secondaryPane == null) {
+                    TopBar(
+                        state = state,
+                        isAiWorking = state.isWorking,
+                        onSearchClick = {
+                            onDismissFeedback()
+                            showAiCapture = false
+                            secondaryPane = SecondaryPane.SEARCH
+                        },
+                        onAiClick = { openAi() },
+                        onSettingsClick = {
+                            onDismissFeedback()
+                            showAiCapture = false
+                            secondaryPane = SecondaryPane.SETTINGS
+                        },
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
+                    )
+                }
+            },
+            bottomBar = {
+                if (showBottomNavigation) {
+                    FoodBottomNavigation(
+                        selected = state.section,
+                        onSelected = { section ->
+                            if (secondaryPane == SecondaryPane.SETTINGS && settingsDirty) {
+                                showDiscardSettings = true
+                            } else {
+                                onDismissFeedback()
+                                showAiCapture = false
+                                secondaryPane = null
+                                onSectionSelected(section)
+                            }
+                        },
+                    )
+                }
+            },
+            floatingActionButton = {
+                primaryAction?.let { action ->
+                    FoodPrimaryActionButton(action)
+                }
+            },
+            floatingActionButtonPosition = FabPosition.End,
+        ) { innerPadding ->
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(bottom = actionDockContentPadding),
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(
+                        start = 16.dp,
+                        top = if (secondaryPane == null) 8.dp else 16.dp,
+                        end = 16.dp,
+                        bottom = 16.dp + primaryActionContentPadding,
+                    ),
             ) {
                 when {
                     state.pendingDraft != null && !showAiCapture -> DraftCard(
@@ -1309,21 +1273,6 @@ private fun MainWorkspace(
                     } }
                 }
             }
-            if (showBottomNavigation) {
-                FoodBottomNavigation(
-                    selected = state.section,
-                    onSelected = { section ->
-                        if (secondaryPane == SecondaryPane.SETTINGS && settingsDirty) {
-                            showDiscardSettings = true
-                        } else {
-                            onDismissFeedback()
-                            showAiCapture = false
-                            secondaryPane = null
-                            onSectionSelected(section)
-                        }
-                    },
-                )
-            }
         }
         if (state.undoMessage.isNotBlank()) {
             FeedbackBar(
@@ -1349,17 +1298,6 @@ private fun MainWorkspace(
                         start = 16.dp,
                         end = 16.dp,
                         bottom = if (showBottomNavigation) 92.dp else 20.dp,
-                    ),
-            )
-        }
-        actionDockSpec?.let { spec ->
-            FoodActionDock(
-                spec = spec,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = 16.dp,
-                        bottom = actionDockBottomPadding,
                     ),
             )
         }
@@ -1436,10 +1374,13 @@ private fun MainWorkspace(
 @Composable
 private fun TopBar(
     state: WonderFoodUiState,
+    isAiWorking: Boolean,
     onSearchClick: () -> Unit,
+    onAiClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val compact = maxWidth < 560.dp
         val title = if (state.section == FoodSection.TODAY) todayTitle() else state.section.label
         if (compact) {
@@ -1469,6 +1410,7 @@ private fun TopBar(
                 ) {
                     Icon(Icons.Rounded.Search, contentDescription = null)
                 }
+                AiTopBarButton(isWorking = isAiWorking, onClick = onAiClick)
                 IconButton(
                     onClick = onSettingsClick,
                     modifier = Modifier.semantics {
@@ -1507,6 +1449,7 @@ private fun TopBar(
                     ) {
                         Icon(Icons.Rounded.Search, contentDescription = null)
                     }
+                    AiTopBarButton(isWorking = isAiWorking, onClick = onAiClick)
                     IconButton(
                         onClick = onSettingsClick,
                         modifier = Modifier.semantics {
@@ -1523,64 +1466,41 @@ private fun TopBar(
 }
 
 @Composable
-private fun FoodActionDock(
-    spec: FoodActionDockSpec,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.navigationBarsPadding(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        spec.secondary.forEach { action ->
-            DockSecondaryAction(action)
-        }
-        DockPrimaryAction(spec.primary)
-    }
-}
-
-@Composable
-private fun DockPrimaryAction(action: FoodDockAction) {
+private fun AiTopBarButton(isWorking: Boolean, onClick: () -> Unit) {
     Box {
-        ExtendedFloatingActionButton(
-            onClick = action.onClick,
-            modifier = Modifier.semantics { contentDescription = action.contentDescription },
-            expanded = true,
-            icon = {
-                Icon(
-                    action.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            text = { Text(action.label) },
-            containerColor = action.containerColor(),
-            contentColor = action.contentColor(),
-        )
-        DockActionBadge(show = action.showBadge, modifier = Modifier.align(Alignment.TopEnd))
-    }
-}
-
-@Composable
-private fun DockSecondaryAction(action: FoodDockAction) {
-    Box {
-        SmallFloatingActionButton(
-            onClick = action.onClick,
+        IconButton(
+            onClick = onClick,
             modifier = Modifier
-                .size(48.dp)
-                .semantics { contentDescription = action.contentDescription },
-            shape = CircleShape,
-            containerColor = action.containerColor(),
-            contentColor = action.contentColor(),
+                .semantics {
+                    contentDescription = "Open AI capture"
+                    role = Role.Button
+                },
         ) {
-            Icon(action.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null)
         }
-        DockActionBadge(show = action.showBadge, modifier = Modifier.align(Alignment.TopEnd))
+        ActionBadge(show = isWorking, modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp))
     }
 }
 
 @Composable
-private fun DockActionBadge(show: Boolean, modifier: Modifier = Modifier) {
+private fun FoodPrimaryActionButton(action: FoodPrimaryAction) {
+    ExtendedFloatingActionButton(
+        onClick = action.onClick,
+        modifier = Modifier.semantics { contentDescription = action.contentDescription },
+        expanded = true,
+        icon = {
+            Icon(
+                action.icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+        text = { Text(action.label) },
+    )
+}
+
+@Composable
+private fun ActionBadge(show: Boolean, modifier: Modifier = Modifier) {
     if (!show) return
     Surface(
         modifier = modifier
@@ -1591,22 +1511,6 @@ private fun DockActionBadge(show: Boolean, modifier: Modifier = Modifier) {
         content = {},
     )
 }
-
-@Composable
-private fun FoodDockAction.containerColor(): Color =
-    when (tone) {
-        ActionDockTone.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
-        ActionDockTone.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
-        ActionDockTone.AI -> MaterialTheme.colorScheme.tertiaryContainer
-    }
-
-@Composable
-private fun FoodDockAction.contentColor(): Color =
-    when (tone) {
-        ActionDockTone.PRIMARY -> MaterialTheme.colorScheme.onPrimaryContainer
-        ActionDockTone.SECONDARY -> MaterialTheme.colorScheme.onSecondaryContainer
-        ActionDockTone.AI -> MaterialTheme.colorScheme.onTertiaryContainer
-    }
 
 @Composable
 private fun VoiceStatusCard(message: String) {
@@ -4148,6 +4052,16 @@ private fun AiAssistantSettings(
         title = "Connection",
         body = aiStatus,
     )
+    SettingsControlGroup {
+        Text("Provider routes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        AiProviderRouteLine("1  Primary", aiConfig)
+        AiProviderRouteLine("2  Fallback", aiFallbackConfig)
+        Text(
+            "403 means the provider received the request but rejected auth, model, project, deployment, or route access.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     PreferenceTextField(
         label = "Assistant instructions",
         value = preferences.customAiInstructions,
@@ -4280,6 +4194,7 @@ private fun AiAssistantSettings(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            AiProviderEndpointPreview(selectedConfig)
             OutlinedTextField(
                 value = selectedConfig.apiKey,
                 onValueChange = { onSelectedConfigChange(selectedConfig.copy(apiKey = it)) },
@@ -4310,6 +4225,132 @@ private fun AiAssistantSettings(
             }
         }
     }
+}
+
+@Composable
+private fun AiProviderRouteLine(label: String, config: LiteLlmConfig) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Surface(
+            modifier = Modifier.size(32.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = if (config.isUsable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(label.take(1), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            }
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "$label: ${if (config.isUsable) config.statusLabel else "Not configured"}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                if (config.isUsable) config.settingsEndpointPreview() else "Set provider URL, model, and key.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (config.isUsable) {
+                Text(
+                    config.settingsAuthLabel(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiProviderEndpointPreview(config: LiteLlmConfig) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Request preview", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "Endpoint: ${config.settingsEndpointPreview()}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Auth: ${config.settingsAuthLabel()}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            config.settings403Hint(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+private fun LiteLlmConfig.settingsEndpointPreview(): String {
+    val trimmed = baseUrl.trim()
+    if (trimmed.isBlank()) return "Set provider URL"
+    return when (provider) {
+        AiProvider.OPENAI_COMPATIBLE -> if (usesExplicitOpenAiEndpointForSettings()) {
+            trimmed
+        } else {
+            trimmed.appendSettingsUrlPath("chat/completions")
+        }
+        AiProvider.AZURE_OPENAI -> {
+            val endpoint = when {
+                usesExplicitOpenAiEndpointForSettings() -> trimmed
+                usesAzureV1ForSettings() -> trimmed.appendSettingsUrlPath("chat/completions")
+                else -> {
+                    val deployment = URLEncoder.encode(model.trim(), StandardCharsets.UTF_8.name())
+                    trimmed.appendSettingsUrlPath("openai/deployments/$deployment/chat/completions")
+                }
+            }
+            endpoint.withAzureSettingsApiVersion(apiVersion)
+        }
+        AiProvider.ANTHROPIC -> trimmed.trimEnd('/') + "/v1/messages"
+    }
+}
+
+private fun LiteLlmConfig.settingsAuthLabel(): String =
+    when (provider) {
+        AiProvider.OPENAI_COMPATIBLE -> "Authorization: Bearer <key>"
+        AiProvider.AZURE_OPENAI -> "api-key header"
+        AiProvider.ANTHROPIC -> "x-api-key header"
+    }
+
+private fun LiteLlmConfig.settings403Hint(): String =
+    when (provider) {
+        AiProvider.OPENAI_COMPATIBLE ->
+            "OpenAI-compatible 403: check key project, model access, provider URL, and whether this route supports chat/completions."
+        AiProvider.AZURE_OPENAI ->
+            "Azure 403: check resource key, deployment/model name, endpoint type, and Azure network/access policy."
+        AiProvider.ANTHROPIC ->
+            "Anthropic 403: check workspace/key access and model permission."
+    }
+
+private fun LiteLlmConfig.usesExplicitOpenAiEndpointForSettings(): Boolean {
+    val path = baseUrl.substringBefore('?').trimEnd('/').lowercase()
+    return path.endsWith("/chat/completions") || path.endsWith("/responses")
+}
+
+private fun LiteLlmConfig.usesAzureV1ForSettings(): Boolean =
+    baseUrl.substringBefore('?').trimEnd('/').lowercase().let { path ->
+        path.endsWith("/openai/v1") || "/openai/v1/" in path
+    }
+
+private fun String.appendSettingsUrlPath(path: String): String {
+    val base = substringBefore('?').trimEnd('/')
+    val query = substringAfter('?', "")
+    return "$base/$path" + query.takeIf(String::isNotBlank)?.let { "?$it" }.orEmpty()
+}
+
+private fun String.withAzureSettingsApiVersion(apiVersion: String): String {
+    if (apiVersion.isBlank() || contains("api-version=", ignoreCase = true)) return this
+    val separator = if (contains("?")) "&" else "?"
+    val encodedVersion = URLEncoder.encode(apiVersion.trim(), StandardCharsets.UTF_8.name())
+    return "$this${separator}api-version=$encodedVersion"
 }
 
 @Composable

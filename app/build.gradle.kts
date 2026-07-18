@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.ksp)
 }
 
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
@@ -97,6 +98,9 @@ dependencies {
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
+  implementation(libs.androidx.appfunctions)
+  implementation(libs.androidx.appfunctions.service)
+  ksp(libs.androidx.appfunctions.compiler)
   add("playImplementation", libs.androidx.credentials.play.services.auth)
   add("playImplementation", libs.androidx.health.connect.client)
   add("playImplementation", libs.googleid)
@@ -123,4 +127,8 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
+}
+
+ksp {
+    arg("appfunctions:aggregateAppFunctions", "true")
 }

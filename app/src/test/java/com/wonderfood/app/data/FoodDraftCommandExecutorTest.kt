@@ -40,6 +40,28 @@ class FoodDraftCommandExecutorTest {
     }
 
     @Test
+    fun executeRejectsCompositeContainingInvalidChildBeforeSinkWrite() {
+        val sink = FakeSink()
+        val executor = FoodDraftCommandExecutor { sink }
+        val result = executor.execute(
+            FoodDraftCommand(
+                draft = CompositeDraft(
+                    listOf(
+                        InventoryDraft(listOf(FoodCandidate(name = "Eggs", quantity = "2"))),
+                        GroceryDraft(listOf(FoodCandidate(name = ""))),
+                    ),
+                ),
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
+            ),
+        )
+
+        assertTrue(result is FoodDraftExecutionResult.Rejected)
+        assertTrue(sink.applied.isEmpty())
+        assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("needs a name") })
+    }
+
+    @Test
     fun executeAcceptsReviewableLinkActionDraft() {
         val sink = FakeSink()
         val executor = FoodDraftCommandExecutor { sink }
@@ -101,6 +123,92 @@ class FoodDraftCommandExecutorTest {
         assertTrue(result is FoodDraftExecutionResult.Rejected)
         assertTrue(sink.applied.isEmpty())
         assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("not supported") })
+    }
+
+    @Test
+    fun executeRejectsPreferenceLinkActionWithoutSensitiveMarker() {
+        val sink = FakeSink()
+        val result = FoodDraftCommandExecutor { sink }.execute(
+            FoodDraftCommand(
+                draft = LinkActionDraft(
+                    actionType = "preferences.update",
+                    targetKind = "preferences",
+                    fields = mapOf("allergies" to "shellfish"),
+                    sensitive = false,
+                ),
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
+            ),
+        )
+
+        assertTrue(result is FoodDraftExecutionResult.Rejected)
+        assertTrue(sink.applied.isEmpty())
+        assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("sensitive marker") })
+    }
+
+    @Test
+    fun executeRejectsDestructiveLinkActionWithoutDestructiveMarker() {
+        val sink = FakeSink()
+        val result = FoodDraftCommandExecutor { sink }.execute(
+            FoodDraftCommand(
+                draft = LinkActionDraft(
+                    actionType = "inventory.delete",
+                    targetKind = "inventory",
+                    targetRef = "7",
+                    destructive = false,
+                ),
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
+            ),
+        )
+
+        assertTrue(result is FoodDraftExecutionResult.Rejected)
+        assertTrue(sink.applied.isEmpty())
+        assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("destructive marker") })
+    }
+
+    @Test
+    fun executeRejectsVoiceAutoAcceptDestructiveDraftBeforeSinkWrite() {
+        val sink = FakeSink()
+        val result = FoodDraftCommandExecutor { sink }.execute(
+            FoodDraftCommand(
+                draft = LinkActionDraft(
+                    actionType = "inventory.delete",
+                    targetKind = "inventory",
+                    targetRef = "7",
+                    destructive = true,
+                ),
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.VOICE_AUTO_ACCEPT,
+            ),
+        )
+
+        assertTrue(result is FoodDraftExecutionResult.Rejected)
+        assertTrue(sink.applied.isEmpty())
+        assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("Voice auto-accept") })
+    }
+
+    @Test
+    fun executeRejectsInvalidConfidenceInLinkActionBeforeSinkWrite() {
+        val sink = FakeSink()
+        val result = FoodDraftCommandExecutor { sink }.execute(
+            FoodDraftCommand(
+                draft = LinkActionDraft(
+                    actionType = "event.log",
+                    targetKind = "event",
+                    fields = mapOf(
+                        "event_type" to "meal",
+                        "confidence" to "uncertain",
+                    ),
+                ),
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
+            ),
+        )
+
+        assertTrue(result is FoodDraftExecutionResult.Rejected)
+        assertTrue(sink.applied.isEmpty())
+        assertTrue((result as FoodDraftExecutionResult.Rejected).errors.any { it.contains("confidence 'uncertain' is not supported") })
     }
 
     @Test

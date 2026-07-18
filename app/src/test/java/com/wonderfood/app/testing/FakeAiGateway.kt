@@ -112,6 +112,31 @@ object CommandEnvelopeFixtures {
         skillId = "inventory",
         expectedCommandCount = 2,
     )
+    val SHOPPING_ADD = CommandEnvelopeFixture(
+        path = "fixtures/command-envelopes/shopping-add-generic.json",
+        skillId = "shopping",
+        expectedCommandCount = 2,
+    )
+    val BULK_LINKS = CommandEnvelopeFixture(
+        path = "fixtures/command-envelopes/bulk-links-generic.json",
+        skillId = "shopping",
+        expectedCommandCount = 2,
+    )
+    val RECIPE_SAVE = CommandEnvelopeFixture(
+        path = "fixtures/command-envelopes/recipe-save-generic.json",
+        skillId = "recipes",
+        expectedCommandCount = 1,
+    )
+    val MEAL_LOG = CommandEnvelopeFixture(
+        path = "fixtures/command-envelopes/meal-log-generic.json",
+        skillId = "meals",
+        expectedCommandCount = 1,
+    )
+    val MEAL_PLAN = CommandEnvelopeFixture(
+        path = "fixtures/command-envelopes/meal-plan-generic.json",
+        skillId = "planning",
+        expectedCommandCount = 1,
+    )
     val RECEIPT_PARSE = CommandEnvelopeFixture(
         path = "fixtures/command-envelopes/receipt-parse-generic.json",
         skillId = "receipt_parsing",
@@ -125,6 +150,11 @@ object CommandEnvelopeFixtures {
 
     val all: List<CommandEnvelopeFixture> = listOf(
         INVENTORY_ADD,
+        SHOPPING_ADD,
+        BULK_LINKS,
+        RECIPE_SAVE,
+        MEAL_LOG,
+        MEAL_PLAN,
         RECEIPT_PARSE,
         NUTRITION_CORRECTION,
     )

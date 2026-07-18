@@ -7,15 +7,24 @@ import com.wonderfood.app.data.ReceiptItemDisposition
 import com.wonderfood.app.data.ReceiptItemDraft
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.data.TrustedFoodLookup
+import com.wonderfood.app.integration.capture.ProductionReceiptServingPicker
+import com.wonderfood.app.integration.capture.ReceiptServingPicker
+import com.wonderfood.app.integration.capture.BarcodeLookupProvider
+import com.wonderfood.app.integration.capture.BundledBarcodeLookupProvider
 import com.wonderfood.app.data.categorizeFood
 import com.wonderfood.app.data.classifyStorageZone
 import com.wonderfood.app.data.foodEmojiForName
 import java.util.Locale
 
 object DeterministicReceiptParser {
-    fun tryParse(raw: String, promptContext: String? = null): ReceiptParseResult? {
+    fun tryParse(
+        raw: String,
+        promptContext: String? = null,
+        barcodeLookupProvider: BarcodeLookupProvider = BundledBarcodeLookupProvider(),
+        servingPicker: ReceiptServingPicker = ProductionReceiptServingPicker(),
+    ): ReceiptParseResult? {
         if (!looksLikeReceiptText(raw, promptContext)) return null
-        val items = parseLines(raw)
+        val items = parseLines(raw, barcodeLookupProvider, servingPicker)
         if (items.isEmpty()) return null
         return ReceiptParseResult(
             draft = ReceiptDraft(
@@ -39,7 +48,11 @@ object DeterministicReceiptParser {
         return priceLineCount(raw) >= 2
     }
 
-    private fun parseLines(raw: String): List<ReceiptItemDraft> =
+    private fun parseLines(
+        raw: String,
+        barcodeLookupProvider: BarcodeLookupProvider,
+        servingPicker: ReceiptServingPicker,
+    ): List<ReceiptItemDraft> =
         raw.lines()
             .asSequence()
             .map { original -> original to cleanReceiptLine(original) }
@@ -47,15 +60,16 @@ object DeterministicReceiptParser {
             .filterNot { (_, line) -> line.isReceiptControlLine() }
             .filter { (original, line) -> original.isLikelyReceiptItemLine(line) }
             .mapNotNull { (original, line) ->
-                val barcodeCandidate = TrustedFoodLookup.lookupBarcode(line)
+                val barcodeCandidate = barcodeLookupProvider.lookupBarcode(line)
                 val food = if (barcodeCandidate != null) {
                     barcodeCandidate.copy(
                         evidence = original.trim(),
                         confidence = 0.95,
                         zoneSource = "barcode_provider",
+                        servingText = servingPicker.pickServingText(original, barcodeCandidate),
                     )
                 } else {
-                    line.toReceiptCandidate()
+                    line.toReceiptCandidate(original, servingPicker)
                 } ?: return@mapNotNull null
                 ReceiptItemDraft(
                     food = food,
@@ -71,6 +85,14 @@ object DeterministicReceiptParser {
             .distinctBy { it.food.name.lowercase(Locale.US) }
             .take(MAX_RECEIPT_ITEMS)
             .toList()
+
+    private fun FoodCandidate.withServingsFrom(
+        rawLine: String,
+        servingPicker: ReceiptServingPicker,
+    ): FoodCandidate =
+        copy(
+            servingText = servingPicker.pickServingText(rawLine, this),
+        )
 
     private fun cleanReceiptLine(line: String): String =
         line
@@ -95,7 +117,7 @@ object DeterministicReceiptParser {
             TrustedFoodLookup.lookupBarcode(cleaned) != null ||
             FOOD_WORDS.any { word -> word in cleaned.lowercase(Locale.US) }
 
-    private fun String.toReceiptCandidate(): FoodCandidate? {
+    private fun String.toReceiptCandidate(rawLine: String, servingPicker: ReceiptServingPicker): FoodCandidate? {
         val cleaned = replace(Regex("""(?i)\b(organic|org|fresh|frozen|canned)\b""")) { match -> match.value.lowercase(Locale.US) }
             .replace(Regex("""(?i)\b(?:item|sku|upc)\s*\d+\b"""), " ")
             .replace(Regex("""\s+"""), " ")
@@ -133,7 +155,7 @@ object DeterministicReceiptParser {
             confidence = 0.65,
             zoneSource = "app_storage_inference",
             warnings = listOf("Parsed from receipt text; verify the item name and quantity."),
-        )
+        ).withServingsFrom(rawLine, servingPicker)
     }
 
     private fun priceLineCount(raw: String): Int =

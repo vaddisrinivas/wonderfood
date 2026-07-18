@@ -30,11 +30,32 @@ Run the full app plus Room migration instrumented suite:
 ./scripts/quality/android-harness.sh connected
 ```
 
+Validate the external automation routes (share/intents/links) with a device and collect route-specific evidence:
+
+```bash
+ANDROID_SERIAL=R3CW10MSVRT ./scripts/quality/validate-external-automation.sh build/evidence/external-routes
+```
+
+Validate App Links/assetlink fingerprint state before a release:
+
+```bash
+export ANDROID_KEYSTORE_PATH=...
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=...
+export ANDROID_KEY_PASSWORD=...
+./scripts/quality/refresh-assetlinks-fingerprint.sh  # optional
+./scripts/quality/verify-release-assetlinks.sh
+```
+
 Collect phone/emulator evidence after a failure:
 
 ```bash
 ANDROID_SERIAL=R3CW10MSVRT ./scripts/quality/collect-device-evidence.sh
 ```
+
+Issue #5 requires manual verification for Google Assistant, App Actions, and Samsung Routines/notifications. Use the dedicated checklist:
+
+- `docs/testing/external-automation-validation.md`
 
 ## Harness files
 

@@ -1,0 +1,71 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "recipes",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_test_recipe_001",
+  "idempotency_key": "test-recipe-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_recipe_1",
+      "type": "user_text",
+      "source_ref": "turn:test:local",
+      "quote": "Save tomato peanut curry recipe with tomatoes, peanuts and onion.",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_recipe_1",
+      "type": "recipe.save_structured",
+      "summary": "Save tomato peanut curry recipe.",
+      "payload": {
+        "title": "Tomato Peanut Curry",
+        "ingredients": [
+          {"quantity": {"amount": 2, "unit": "cups", "text": "2 cups"}, "name": "Tomatoes"},
+          {"quantity": {"amount": 0.5, "unit": "cup", "text": "1/2 cup"}, "name": "Peanut Butter"}
+        ],
+        "steps": [
+          "Soak peanuts and blend into a smooth paste.",
+          "Sauté onions, tomatoes, then cook with spices and peanut paste.",
+          "Simmer until thick."
+        ],
+        "servings": 4,
+        "prep_minutes": 20,
+        "tags": "indian, dinner, vegan",
+        "image_uri": "🍛",
+        "nutrition_source": "user_text",
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_user_recipe_1"
+      ],
+      "confidence": {
+        "score": 0.88,
+        "rationale": "Recipe content includes title, ingredients, and steps."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Recipe details are reviewable before save.",
+        "prompt": "Save this recipe?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.9,
+    "rationale": "Recipe fields are well-formed and complete."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "review",
+    "reason": "Recipe save is reviewable.",
+    "prompt": "Review and save this recipe?"
+  },
+  "warnings": [],
+  "unsupported": null
+}

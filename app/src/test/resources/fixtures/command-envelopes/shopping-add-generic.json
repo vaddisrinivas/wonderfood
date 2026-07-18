@@ -1,0 +1,93 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "shopping",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_test_shopping_001",
+  "idempotency_key": "test-shopping-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_test_user_1",
+      "type": "user_text",
+      "source_ref": "turn:test:local",
+      "quote": "Need bread and olive oil from the store.",
+      "observed_at": "2026-01-15T12:00:00Z",
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_1",
+      "type": "shopping.add_item",
+      "summary": "Add bread and olive oil to shopping list.",
+      "payload": {
+        "name": "Bread",
+        "quantity": {
+          "amount": 1,
+          "unit": "item",
+          "text": "one loaf"
+        },
+        "category": "bakery",
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_test_user_1"
+      ],
+      "confidence": {
+        "score": 0.94,
+        "rationale": "Item and quantity are explicit from the utterance."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Shopping additions are reviewable before persistence.",
+        "prompt": "Add grocery item?"
+      },
+      "destructive": false,
+      "mutation": true
+    },
+    {
+      "command_id": "cmd_2",
+      "type": "shopping.add_item",
+      "summary": "Add olive oil to shopping list.",
+      "payload": {
+        "name": "Olive Oil",
+        "quantity": {
+          "amount": 1,
+          "unit": "bottle",
+          "text": "one bottle"
+        },
+        "category": "pantry",
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_test_user_1"
+      ],
+      "confidence": {
+        "score": 0.91,
+        "rationale": "Item and unit are explicit from the utterance."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Shopping additions are reviewable before persistence.",
+        "prompt": "Add grocery item?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.92,
+    "rationale": "Shopping list intent is explicit."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "review",
+    "reason": "Shopping additions are reviewable before persistence.",
+    "prompt": "Review these shopping items first."
+  },
+  "warnings": [],
+  "unsupported": null
+}
