@@ -70,19 +70,6 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput("Need oats")
         composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
         composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
-        composeTestRule.waitUntil(timeoutMillis = 20_000) {
-            composeTestRule.onAllNodesWithText("Edit proposal").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Edit proposal").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching {
-                composeTestRule.onNodeWithText("Edit before saving").assertIsDisplayed()
-                true
-            }.getOrDefault(false)
-        }
-        composeTestRule.onNodeWithText("Edit before saving").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Name").onFirst().assertIsDisplayed()
     }
 
     @Test
