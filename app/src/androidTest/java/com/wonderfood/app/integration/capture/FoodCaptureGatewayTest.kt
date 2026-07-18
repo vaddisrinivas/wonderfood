@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
+import com.wonderfood.app.data.FoodCandidate
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -65,6 +66,35 @@ class FoodCaptureGatewayTest {
         assertTrue(record.evidenceText.contains("Generic Rolled Oats"))
         assertTrue(record.evidenceText.contains("bundled_barcode_provider"))
         assertTrue(record.aiPrompt.contains("barcode", ignoreCase = true))
+        assertTrue(record.reviewRequired)
+    }
+
+    @Test
+    fun stageBarcodeUsesInjectedLookupProviderForLookup() {
+        var lookedUp = false
+        val fakeProvider = object : BarcodeLookupProvider {
+            override val sourceLabel: String = "fake_barcode_provider"
+
+            override fun lookupBarcode(value: String): FoodCandidate? {
+                lookedUp = true
+                assertEquals("012345678905", value)
+                return FoodCandidate(
+                    name = "Fake Bar",
+                    nutritionSource = "manual_lookup",
+                    servingText = "1 serving",
+                )
+            }
+        }
+        val fakeProviderGateway = FoodCaptureGateway(context, clockMillis = { 1_784_224_800_001L }, barcodeLookupProvider = fakeProvider)
+        val record = fakeProviderGateway.stageBarcode("012345678905", format = "UPC_A")
+
+        assertTrue(lookedUp)
+        assertEquals(FoodCaptureStatus.STAGED, record.status)
+        assertEquals(MetadataPolicy.NOT_APPLICABLE, record.metadataPolicy)
+        assertEquals(null, record.privateUri)
+        assertTrue(record.evidenceText.contains("UPC_A:012345678905"))
+        assertTrue(record.evidenceText.contains("provider=fake_barcode_provider"))
+        assertTrue(record.evidenceText.contains("item=Fake Bar"))
         assertTrue(record.reviewRequired)
     }
 

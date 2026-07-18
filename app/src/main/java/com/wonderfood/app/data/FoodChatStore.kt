@@ -1274,46 +1274,53 @@ class FoodChatStore(
     fun markGroceryBought(id: Long): String {
         val item = readGroceries().firstOrNull { it.id == id } ?: return "Grocery item not found."
         if (item.status == GroceryStatus.BOUGHT) return "${item.name} is already marked bought."
-        writableDatabase.update(
-            "grocery_items",
-            ContentValues().apply {
-                put("status", GroceryStatus.BOUGHT.name)
-                put("updated_at", now())
-            },
-            "id = ?",
-            arrayOf(id.toString()),
-        )
-        addInventory(
-            FoodCandidate(
-                name = item.name,
-                quantity = item.quantity,
-                zone = classifyStorageZone(item.name),
-                category = item.category,
-                servingText = item.servingText,
-                calories = item.calories,
-                proteinGrams = item.proteinGrams,
-                carbsGrams = item.carbsGrams,
-                fatGrams = item.fatGrams,
-                nutritionSource = item.nutritionSource,
-                notes = "Moved from shopping; storage location inferred from item name.",
-                imageUri = item.imageUri,
-                imageUrl = item.imageUrl,
-                zoneSource = "app_storage_inference",
-                warnings = listOf("Storage location was inferred when the shopping item was marked bought."),
-            ),
-            sourceMessageId = null,
-            source = "grocery",
-            transactionAction = InventoryAction.BOUGHT,
-            transactionReason = "Marked bought from shopping list",
-        )
-        insertFoodEvent(
-            type = FoodEventType.GROCERY_PURCHASE,
-            amount = 1.0,
-            unit = "item",
-            source = "manual",
-            confidence = FoodEventConfidence.EXACT,
-            note = "Bought ${item.name}",
-        )
+        val now = now()
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.update(
+                "grocery_items",
+                ContentValues().apply {
+                    put("status", GroceryStatus.BOUGHT.name)
+                    put("updated_at", now)
+                },
+                "id = ?",
+                arrayOf(id.toString()),
+            )
+            addInventory(
+                FoodCandidate(
+                    name = item.name,
+                    quantity = item.quantity,
+                    zone = classifyStorageZone(item.name),
+                    category = item.category,
+                    servingText = item.servingText,
+                    calories = item.calories,
+                    proteinGrams = item.proteinGrams,
+                    carbsGrams = item.carbsGrams,
+                    fatGrams = item.fatGrams,
+                    nutritionSource = item.nutritionSource,
+                    notes = "Moved from shopping; storage location inferred from item name.",
+                    imageUri = item.imageUri,
+                    imageUrl = item.imageUrl,
+                    zoneSource = "app_storage_inference",
+                    warnings = listOf("Storage location was inferred when the shopping item was marked bought."),
+                ),
+                sourceMessageId = null,
+                source = "grocery",
+                transactionAction = InventoryAction.BOUGHT,
+                transactionReason = "Marked bought from shopping list",
+            )
+            insertFoodEvent(
+                type = FoodEventType.GROCERY_PURCHASE,
+                amount = 1.0,
+                unit = "item",
+                source = "manual",
+                confidence = FoodEventConfidence.EXACT,
+                note = "Bought ${item.name}",
+            )
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
         return "Moved ${item.name} into inventory and recorded shopping."
     }
 
@@ -1321,33 +1328,39 @@ class FoodChatStore(
     fun undoGroceryBought(id: Long): String {
         val item = readGroceries().firstOrNull { it.id == id } ?: return "Grocery item not found."
         if (item.status != GroceryStatus.BOUGHT) return "${item.name} is already on the shopping list."
-        writableDatabase.update(
-            "grocery_items",
-            ContentValues().apply {
-                put("status", GroceryStatus.NEEDED.name)
-                put("updated_at", now())
-            },
-            "id = ?",
-            arrayOf(id.toString()),
-        )
-        latestGroceryPurchaseTransaction(item.name)?.let { transaction ->
-            if (transaction.inventoryItemId != null && inventoryWasCreatedByTransaction(transaction.inventoryItemId, transaction.createdAtMillis)) {
-                archiveRow("inventory_items", transaction.inventoryItemId)
-            }
-            writableDatabase.delete("inventory_transactions", "id = ?", arrayOf(transaction.id.toString()))
-        }
-        writableDatabase.delete(
-            "food_events",
-            """
-            id IN (
-                SELECT id FROM food_events
-                WHERE type = ? AND note = ?
-                ORDER BY id DESC
-                LIMIT 1
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.update(
+                "grocery_items",
+                ContentValues().apply {
+                    put("status", GroceryStatus.NEEDED.name)
+                    put("updated_at", now())
+                },
+                "id = ?",
+                arrayOf(id.toString()),
             )
-            """.trimIndent(),
-            arrayOf(FoodEventType.GROCERY_PURCHASE.name, "Bought ${item.name}"),
-        )
+            latestGroceryPurchaseTransaction(item.name)?.let { transaction ->
+                if (transaction.inventoryItemId != null && inventoryWasCreatedByTransaction(transaction.inventoryItemId, transaction.createdAtMillis)) {
+                    archiveRow("inventory_items", transaction.inventoryItemId)
+                }
+                writableDatabase.delete("inventory_transactions", "id = ?", arrayOf(transaction.id.toString()))
+            }
+            writableDatabase.delete(
+                "food_events",
+                """
+                id IN (
+                    SELECT id FROM food_events
+                    WHERE type = ? AND note = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                )
+                """.trimIndent(),
+                arrayOf(FoodEventType.GROCERY_PURCHASE.name, "Bought ${item.name}"),
+            )
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
         return "Moved ${item.name} back to shopping."
     }
 

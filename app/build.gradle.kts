@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.ksp)
 }
 
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
@@ -87,8 +88,11 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.health.connect.client)
+  implementation(libs.androidx.appfunctions)
+  implementation(libs.androidx.appfunctions.service)
   implementation(libs.googleid)
   implementation(libs.google.play.services.auth)
+  ksp(libs.androidx.appfunctions.compiler)
 
   // Compose
   implementation(libs.androidx.compose.ui)
@@ -111,4 +115,8 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
+}
+
+ksp {
+    arg("appfunctions:aggregateAppFunctions", "true")
 }

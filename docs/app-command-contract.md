@@ -72,6 +72,71 @@ https://wonderfood.app/action?actions=[{"type":"inventory.add","name":"Eggs","qu
 
 For real links, URL-encode the JSON `actions` value.
 
+## Android AppFunctions (workflow actions, Android 16+)
+
+WonderFood exposes the AppFunctions service at package service
+`com.wonderfood.app.FoodWorkspaceAppFunctionService` for AI assistants and automation
+integrations that already use Android AppFunctions.
+
+Current AppFunctions shape:
+
+- `proposeFoodWorkspaceActions`: proposal-only path. Returns review metadata and does
+  not apply writes.
+- `executeFoodWorkspaceActions`: applies non-sensitive and non-destructive actions through
+  normal write execution and returns per-action status.
+
+Top-level request schema:
+
+- `requestId`: stable id for idempotency and replay control.
+- `action`: single `FoodWorkspaceAction` for convenience.
+- `actions`: array of up to 12 `FoodWorkspaceAction` items (preferred path).
+
+Action schema:
+
+- `type`: verb such as `inventory.add`, `grocery.mark_bought`, `recipe.add`, `preferences.update`.
+- `targetKind`: one of `inventory`, `grocery`, `recipe`, `meal_log`, `meal_plan`, `plan_entry`, `preferences`, `event`.
+- `targetRef`: required when mutating existing objects.
+- `displayName`: user-facing label for create-like operations.
+- `fields`: key/value list such as `quantity`, `zone`, `category`, `status`, `servings`, `slot`.
+- `idempotencyKey`: optional dedupe token; if omitted, `requestId + index` is used when possible.
+
+Example request payload (shared for both methods):
+
+```json
+{
+  "requestId": "wf-af-001",
+  "actions": [
+    {
+      "type": "inventory.add",
+      "targetKind": "inventory",
+      "targetRef": "",
+      "displayName": "Greek Yogurt",
+      "fields": [
+        { "key": "quantity", "value": "6" },
+        { "key": "zone", "value": "fridge" }
+      ],
+      "idempotencyKey": "wf-af-001-0"
+    }
+  ]
+}
+```
+
+Validation expectations:
+
+- Unsupported actions are rejected without writes.
+- Destructive and preference mutations always return review-only.
+- Missing `requestId` and duplicate idempotency keys can increase repeat exposure.
+- This feature is feature-gated by Android API level (works on Android 16+ build targets with
+  AppFunctions runtime support). On older devices the existing intent/link routes remain the
+  primary path.
+
+Canonical usage pattern:
+
+```text
+1) Call proposeFoodWorkspaceActions first for review preview.
+2) Optionally call executeFoodWorkspaceActions for approved non-sensitive actions.
+```
+
 ## Supported action shapes
 
 Canonical examples:

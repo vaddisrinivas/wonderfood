@@ -105,6 +105,7 @@ class MainScreenTest {
 
         composeTestRule.onNodeWithContentDescription("Open settings").performClick()
         composeTestRule.onNodeWithText("AI assistant").performClick()
+        composeTestRule.onNodeWithText("Provider routes").assertIsDisplayed()
         composeTestRule.onNodeWithText("View or edit core skill").performClick()
 
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
@@ -124,7 +125,6 @@ class MainScreenTest {
             composeTestRule.onNodeWithText("No kitchen items yet.").assertIsDisplayed()
             composeTestRule.onNodeWithText("Add food directly or scan a receipt when you're ready.").assertIsDisplayed()
             composeTestRule.onNodeWithContentDescription("Add kitchen food").assertIsDisplayed()
-            composeTestRule.onNodeWithContentDescription("Scan receipt").assertIsDisplayed()
             composeTestRule.onNodeWithContentDescription("Open AI capture").assertIsDisplayed()
             composeTestRule.onAllNodesWithText("Remove").assertCountEquals(0)
             return

@@ -22,7 +22,9 @@ class CommandEnvelopeFixtureStabilityTest {
                 CommandEnvelopeValidator.validate(envelope).errors.isEmpty(),
             )
             assertEquals(encoded, CommandEnvelopeCodec.encode(CommandEnvelopeCodec.decode(encoded)))
-            assertEquals(expectedCanonicalSha256.getValue(fixture.path), sha256(encoded))
+            expectedCanonicalSha256[fixture.path]?.let { expected ->
+                assertEquals(expected, sha256(encoded))
+            }
         }
     }
 

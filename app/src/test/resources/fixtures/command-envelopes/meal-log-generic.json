@@ -1,0 +1,66 @@
+{
+  "schema_version": "wf.ai.command-envelope.v1",
+  "catalog_version": "wf.ai.skill-catalog.v1",
+  "skill_id": "meals",
+  "skill_version": "1.0.0",
+  "envelope_id": "env_test_meal_log_001",
+  "idempotency_key": "test-meal-log-001",
+  "status": "commands",
+  "evidence": [
+    {
+      "evidence_id": "ev_user_meal_log_1",
+      "type": "user_text",
+      "source_ref": "turn:test:local",
+      "quote": "Log chicken rice bowl for lunch.",
+      "observed_at": null,
+      "confidence": 1.0
+    }
+  ],
+  "commands": [
+    {
+      "command_id": "cmd_meal_log_1",
+      "type": "meal.log",
+      "summary": "Log chicken rice bowl for lunch.",
+      "payload": {
+        "title": "Chicken Rice Bowl For Lunch",
+        "meal_slot": "LUNCH",
+        "nutrition": {
+          "calories": 560,
+          "protein_g": 31.0,
+          "carbs_g": 48.0,
+          "fat_g": 22.0,
+          "source": "unknown"
+        },
+        "used_items": ["Chicken", "Rice"],
+        "source": "user_text"
+      },
+      "evidence_refs": [
+        "ev_user_meal_log_1"
+      ],
+      "confidence": {
+        "score": 0.87,
+        "rationale": "Meal and components are explicit from user input."
+      },
+      "confirmation": {
+        "required": false,
+        "level": "review",
+        "reason": "Meal log entries remain reviewable before persistence.",
+        "prompt": "Log this lunch?"
+      },
+      "destructive": false,
+      "mutation": true
+    }
+  ],
+  "confidence": {
+    "score": 0.89,
+    "rationale": "Explicit meal command with clear meal slot and title."
+  },
+  "confirmation": {
+    "required": false,
+    "level": "review",
+    "reason": "Meal log is reviewable.",
+    "prompt": "Review meal log?"
+  },
+  "warnings": [],
+  "unsupported": null
+}

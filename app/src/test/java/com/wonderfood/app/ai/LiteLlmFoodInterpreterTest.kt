@@ -3,6 +3,10 @@ package com.wonderfood.app.ai
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.FoodDraft
+import com.wonderfood.app.data.FoodDraftNormalizer
+import com.wonderfood.app.data.FoodInterpreter
+import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.ReceiptDraft
 import com.wonderfood.app.data.ReceiptItemDisposition
@@ -289,6 +293,48 @@ class LiteLlmFoodInterpreterTest {
         assertTrue(draft.totalCents == 848L)
     }
 
+    @Test
+    fun deterministicAiDraftMatchesLocalGroceryParserForEquivalentInput() {
+        val server = startServer(
+            status = 200,
+            body = chatResponse(
+                """
+                {
+                  "reply": "I drafted the grocery request.",
+                  "draft": {
+                    "type": "grocery",
+                    "items": [
+                      {
+                        "name": "Oats",
+                        "quantity": "2",
+                        "zone": "PANTRY",
+                        "category": "grain"
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        val text = "Need 2 oats"
+        val aiResult = LiteLlmFoodInterpreter().interpretWithDiagnostics(
+            text = text,
+            memory = FoodMemory(),
+            config = server.config(),
+        )
+        val localResult = FoodInterpreter().interpret(
+            text = text,
+            memory = FoodMemory(),
+            promptContext = "Current WonderFood section: Shop.",
+        )
+
+        assertTrue(aiResult is LiteLlmInterpretation.Success)
+        val aiDraft = FoodDraftNormalizer.normalize((aiResult as LiteLlmInterpretation.Success).turn.draft) as GroceryDraft
+        val localDraft = FoodDraftNormalizer.normalize(localResult.draft) as GroceryDraft
+        assertEquals(localDraft.toCanonicalShopping(), aiDraft.toCanonicalShopping())
+    }
+
     private fun startServer(
         status: Int,
         body: String,
@@ -318,6 +364,16 @@ class LiteLlmFoodInterpreterTest {
         sendResponseHeaders(status, bytes.size.toLong())
         responseBody.use { it.write(bytes) }
     }
+
+    private fun GroceryDraft.toCanonicalShopping(): List<String> =
+        items.map {
+            listOf(
+                it.name.lowercase(),
+                it.quantity,
+                it.zone.name,
+                it.category.lowercase(),
+            ).joinToString("|")
+        }.sorted()
 
     private fun HttpServer.config(
         apiKey: String = "test-key",

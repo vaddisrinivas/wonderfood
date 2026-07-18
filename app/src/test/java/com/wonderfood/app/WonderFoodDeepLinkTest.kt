@@ -117,6 +117,79 @@ class WonderFoodDeepLinkTest {
     }
 
     @Test
+    fun shareIntentAndCommandTextIntentShareSameReviewEnvelope() {
+        val shared = WonderFoodDeepLink.from(
+            Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, "Need oats, bananas, and chicken thighs"),
+        )
+        val actionText = WonderFoodDeepLink.from(
+            Intent(WonderFoodCommandContract.ACTION_COMMAND)
+                .putExtra(Intent.EXTRA_TEXT, "Need oats, bananas, and chicken thighs"),
+        )
+
+        assertNotNull(shared)
+        assertNotNull(actionText)
+        assertEquals(WonderFoodVoiceAction.AI_REVIEW, requireNotNull(shared).action)
+        assertEquals(WonderFoodVoiceAction.AI_REVIEW, requireNotNull(actionText).action)
+        assertEquals(requireNotNull(shared).text, requireNotNull(actionText).text)
+        assertEquals("Need oats, bananas, and chicken thighs", requireNotNull(shared).text)
+    }
+
+    @Test
+    fun actionIntentAndDeepLinkActionsResolveEquivalentLinkActions() {
+        val deepLink = WonderFoodDeepLink.from(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("wonderfood://action?type=inventory.add&name=Eggs&quantity=12&zone=fridge&idempotencyKey=dl-1"),
+            ),
+        )
+        val commandIntent = WonderFoodDeepLink.from(
+            Intent(WonderFoodCommandContract.ACTION_COMMAND)
+                .putExtra(WonderFoodCommandContract.EXTRA_REQUEST_ID, "dl-1")
+                .putExtra(WonderFoodCommandContract.EXTRA_ACTION_TYPE, "inventory.add")
+                .putExtra(WonderFoodCommandContract.EXTRA_NAME, "Eggs")
+                .putExtra("quantity", "12")
+                .putExtra("zone", "fridge"),
+        )
+
+        val deepAction = requireNotNull(deepLink).linkActions.single()
+        val intentAction = requireNotNull(commandIntent).linkActions.single()
+        assertEquals(deepAction.type, intentAction.type)
+        assertEquals(deepAction.targetKind, intentAction.targetKind)
+        assertEquals(deepAction.displayName, intentAction.displayName)
+        assertEquals(deepAction.fields["name"], intentAction.fields["name"])
+        assertEquals(deepAction.fields["quantity"], intentAction.fields["quantity"])
+        assertEquals(deepAction.fields["zone"], intentAction.fields["zone"])
+    }
+
+    @Test
+    fun deepLinkAndCommandIntentBulkActionsResolveEquivalentPayloads() {
+        val actions = """
+            [
+              {"type":"inventory.add","name":"Eggs","quantity":"12","zone":"fridge"},
+              {"type":"grocery.add","name":"Bananas","quantity":"6"}
+            ]
+            """.trimIndent()
+        val deepLink = WonderFoodDeepLink.from(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("wonderfood://action?actions=${Uri.encode(actions)}"),
+            ),
+        )
+        val commandIntent = WonderFoodDeepLink.from(
+            Intent(WonderFoodCommandContract.ACTION_COMMAND)
+                .putExtra(WonderFoodCommandContract.EXTRA_IDEMPOTENCY_KEY, "bulk-1")
+                .putExtra(WonderFoodCommandContract.EXTRA_ACTIONS_JSON, actions),
+        )
+
+        assertEquals(
+            requireNotNull(deepLink).linkActions,
+            requireNotNull(commandIntent).linkActions,
+        )
+    }
+
+    @Test
     fun actionLinkRejectsUnknownVerb() {
         val command = WonderFoodDeepLink.from(
             Intent(

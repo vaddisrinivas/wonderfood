@@ -4,7 +4,9 @@ import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealLogDraft
 import com.wonderfood.app.data.MealPlanDraft
+import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.MealSlot
+import com.wonderfood.app.data.RecipeDraft
 import com.wonderfood.app.data.ReceiptDraft
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.testing.TestFixtureResources
@@ -35,6 +37,72 @@ class CommandEnvelopeDraftMapperTest {
         val draft = turn?.draft as InventoryDraft
         assertTrue(turn.reply.contains("WonderFood GPT"))
         assertEquals(listOf("Eggs", "Frozen Berries"), draft.items.map { it.name })
+    }
+
+    @Test
+    fun shoppingEnvelopeMapsToReviewDraft() {
+        val turn = CommandEnvelopeDraftMapper.tryMap(
+            TestFixtureResources.readText("fixtures/command-envelopes/shopping-add-generic.json"),
+        )
+
+        val draft = turn?.draft as GroceryDraft
+        assertTrue(turn.reply.contains("review", ignoreCase = true))
+        assertEquals(listOf("Bread", "Olive Oil"), draft.items.map { it.name })
+        assertEquals("Bakery", draft.items.first().category)
+        assertEquals("Pantry", draft.items[1].category)
+    }
+
+    @Test
+    fun shoppingAndPackageEnvelopeProduceEquivalentDrafts() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/shopping-add-generic.json")
+        val envelope = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val direct = envelope?.draft as GroceryDraft
+        val wrapped = packageTurn?.draft as GroceryDraft
+
+        assertEquals(direct.items.map { it.name }, wrapped.items.map { it.name })
+        assertEquals(direct.items.first().category, wrapped.items.first().category)
+        assertEquals(direct.items[1].category, wrapped.items[1].category)
+    }
+
+    @Test
+    fun bulkLinksEnvelopeAndPackageProduceEquivalentCompositeDraft() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/bulk-links-generic.json")
+        val envelope = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val direct = requireNotNull(envelope?.draft)
+        val wrapped = requireNotNull(packageTurn?.draft)
+        assertEquals(direct, wrapped)
+    }
+
+    @Test
+    fun receiptEnvelopePackageAndDirectProduceEquivalentDrafts() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/receipt-parse-generic.json")
+        val envelope = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val direct = envelope?.draft as ReceiptDraft
+        val wrapped = packageTurn?.draft as ReceiptDraft
+
+        assertEquals(direct.items.map { it.food.name }, wrapped.items.map { it.food.name })
+        assertEquals(direct.items.map { it.disposition }, wrapped.items.map { it.disposition })
+        assertEquals(direct.items.map { it.linePriceCents }, wrapped.items.map { it.linePriceCents })
+    }
+
+    @Test
+    fun confirmationRiskEnvelopeAndPackageRemainConsistentOnUnsupportedCommands() {
+        val unsupportedEnvelope = TestFixtureResources.readText("fixtures/command-envelopes/nutrition-correction-generic.json")
+
+        val envelopeTurn = CommandEnvelopeDraftMapper.tryMap(unsupportedEnvelope)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(unsupportedEnvelope))
+
+        assertNull(envelopeTurn?.draft)
+        assertNull(packageTurn?.draft)
+        assertEquals(envelopeTurn?.reply, packageTurn?.reply)
+        assertTrue(envelopeTurn?.reply?.contains("cannot import those command types yet") == true)
+        assertTrue(packageTurn?.reply?.contains("cannot import those command types yet") == true)
     }
 
     @Test
@@ -82,6 +150,54 @@ class CommandEnvelopeDraftMapperTest {
         val plan = draft.drafts.filterIsInstance<MealPlanDraft>().single()
         assertEquals("Three Pantry Dinners", plan.titleText)
         assertEquals(2, plan.entries.size)
+    }
+
+    @Test
+    fun mealLogEnvelopeMapsToStableReviewDraftAcrossPackageBoundary() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/meal-log-generic.json")
+        val turn = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val envelopeDraft = turn?.draft as MealLogDraft
+        val packageDraft = packageTurn?.draft as MealLogDraft
+
+        assertEquals(envelopeDraft.titleText, packageDraft.titleText)
+        assertEquals(envelopeDraft.mealSlot, packageDraft.mealSlot)
+        assertEquals(envelopeDraft.calories, packageDraft.calories)
+        assertEquals(envelopeDraft.usedItemsText, packageDraft.usedItemsText)
+        assertTrue(envelopeDraft.source.contains("unknown"))
+        assertEquals(envelopeDraft.source, packageDraft.source)
+    }
+
+    @Test
+    fun mealPlanEnvelopeMapsToStableReviewDraftAcrossPackageBoundary() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/meal-plan-generic.json")
+        val turn = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val envelopeDraft = turn?.draft as MealPlanDraft
+        val packageDraft = packageTurn?.draft as MealPlanDraft
+
+        assertEquals(envelopeDraft.titleText, packageDraft.titleText)
+        assertEquals(envelopeDraft.entries.size, packageDraft.entries.size)
+        assertEquals(envelopeDraft.entries.single().title, packageDraft.entries.single().title)
+        assertEquals(envelopeDraft.entries.single().slot, packageDraft.entries.single().slot)
+    }
+
+    @Test
+    fun recipeEnvelopeMapsToStableReviewDraftAcrossPackageBoundary() {
+        val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/recipe-save-generic.json")
+        val turn = CommandEnvelopeDraftMapper.tryMap(envelopeJson)
+        val packageTurn = CommandEnvelopeDraftMapper.tryMap(packageJson(envelopeJson))
+
+        val envelopeDraft = turn?.draft as RecipeDraft
+        val packageDraft = packageTurn?.draft as RecipeDraft
+
+        assertEquals(envelopeDraft.titleText, packageDraft.titleText)
+        assertEquals(envelopeDraft.ingredientsText, packageDraft.ingredientsText)
+        assertEquals(envelopeDraft.servings, packageDraft.servings)
+        assertEquals(envelopeDraft.prepMinutes, packageDraft.prepMinutes)
+        assertEquals(envelopeDraft.stepsText, packageDraft.stepsText)
     }
 
     @Test

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.edit
+import com.wonderfood.app.ai.AiProvider
 import com.wonderfood.app.ai.CommandEnvelopeDraftMapper
 import com.wonderfood.app.ai.DeterministicReceiptParser
 import com.wonderfood.app.ai.FoodInterpreter
@@ -47,6 +48,8 @@ import com.wonderfood.app.data.RecipeDraft
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.data.categorizeFood
 import com.wonderfood.app.data.classifyStorageZone
+import com.wonderfood.app.integration.capture.ProductionReceiptCaptureProvider
+import com.wonderfood.app.integration.capture.ReceiptCaptureProvider
 import com.wonderfood.app.health.HealthConnectGateway
 import com.wonderfood.app.health.HealthDailySummary
 import com.wonderfood.app.health.HealthExportResult
@@ -78,6 +81,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val liteLlmSettings = LiteLlmSettings(appContext)
     private val health = HealthConnectGateway(appContext)
     private val captureGateway = FoodCaptureGateway(appContext)
+    private val receiptCaptureProvider: ReceiptCaptureProvider = ProductionReceiptCaptureProvider(liteLlmInterpreter)
     private val backupGateway = WonderFoodBackupGateway(appContext)
     private val googleDriveGateway = GoogleDriveAppDataGateway()
     private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
@@ -1501,7 +1505,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     showFeedback(message)
                 }
                 .onFailure { error ->
-                    val message = "AI connection failed: ${error.safeMessage()}"
+                    val failure = error.safeMessage()
+                    val message = "AI connection failed: $failure${config.connectionFailureHint(failure)}"
                     _uiState.update { it.copy(isWorking = false, aiStatus = message) }
                     showFeedback(message)
                 }
@@ -1846,19 +1851,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val localTurn = interpreter.interpret(originalText, memory, promptContext)
         var lastProviderDiagnostic = ""
         configs.forEachIndexed { index, config ->
-            val attempt = index + 1
+            val routeLabel = if (index == 0) "primary" else "fallback"
             _uiState.update {
                 it.copy(
-                    aiAttemptStatus = if (index == 0) {
-                        "Trying ${config.statusLabel} ($attempt/${configs.size})"
-                    } else {
-                        "Retrying with ${config.statusLabel} ($attempt/${configs.size})"
-                    },
-                    voiceStatus = if (index == 0) {
-                        "Trying ${config.statusLabel}."
-                    } else {
-                        "Retrying with ${config.statusLabel}."
-                    },
+                    aiAttemptStatus = "Trying $routeLabel: ${config.statusLabel}.",
+                    voiceStatus = "Trying $routeLabel AI provider.",
                 )
             }
             when (val result = liteLlmInterpreter.interpretWithDiagnostics(promptText, memory, config)) {
@@ -1881,16 +1878,25 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     _uiState.update {
                         it.copy(
                             aiAttemptStatus = result.diagnostic,
-                            voiceStatus = "Provider route failed; checking fallback.",
+                            voiceStatus = if (index == 0 && configs.size > 1) {
+                                "Primary failed; checking fallback."
+                            } else {
+                                "AI provider failed."
+                            },
                         )
                     }
                 }
             }
         }
+        val localFallbackStatus = if (configs.size > 1) {
+            "Primary and fallback failed. Using local fallback."
+        } else {
+            "Primary failed. Using local fallback."
+        }
         _uiState.update {
             it.copy(
-                aiAttemptStatus = "Provider routes failed. Using local fallback.",
-                voiceStatus = "Provider routes failed. Using local fallback.",
+                aiAttemptStatus = localFallbackStatus,
+                voiceStatus = localFallbackStatus,
             )
         }
         if (localReceipt != null) {
@@ -1919,35 +1925,32 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         userNote: String,
     ): com.wonderfood.app.data.AiTurn? {
         configs.forEachIndexed { index, config ->
-            val attempt = index + 1
+            val routeLabel = if (index == 0) "primary" else "fallback"
             _uiState.update {
                 it.copy(
-                    aiAttemptStatus = if (index == 0) {
-                        "Reading receipt with ${config.statusLabel} ($attempt/${configs.size})"
-                    } else {
-                        "Retrying receipt with ${config.statusLabel} ($attempt/${configs.size})"
-                    },
-                    voiceStatus = if (index == 0) {
-                        "Reading receipt with ${config.statusLabel}."
-                    } else {
-                        "Retrying receipt with ${config.statusLabel}."
-                    },
+                    aiAttemptStatus = "Reading receipt with $routeLabel: ${config.statusLabel}.",
+                    voiceStatus = "Reading receipt with $routeLabel AI provider.",
                 )
             }
-            liteLlmInterpreter.interpretReceiptPhoto(appContext, uri, memory, config, userNote)?.let { turn ->
+            receiptCaptureProvider.interpretReceiptPhoto(appContext, uri, memory, config, userNote)?.let { turn ->
                 _uiState.update {
                     it.copy(
-                        aiAttemptStatus = "Receipt read by ${config.statusLabel}.",
-                        voiceStatus = "Receipt read by ${config.statusLabel}.",
+                        aiAttemptStatus = "Receipt read by ${config.statusLabel} via ${receiptCaptureProvider.providerName}.",
+                        voiceStatus = "Receipt read by ${config.statusLabel} via ${receiptCaptureProvider.providerName}.",
                     )
                 }
                 return turn
             }
         }
+        val status = if (configs.size > 1) {
+            "Receipt primary and fallback failed."
+        } else {
+            "Receipt primary failed."
+        }
         _uiState.update {
             it.copy(
-                aiAttemptStatus = "Receipt providers failed.",
-                voiceStatus = "Receipt providers failed.",
+                aiAttemptStatus = status,
+                voiceStatus = status,
             )
         }
         return null
@@ -2341,6 +2344,18 @@ private val Int.pluralWord: String
 
 private fun Throwable.safeMessage(): String =
     message?.take(140)?.ifBlank { null } ?: "unknown error"
+
+private fun LiteLlmConfig.connectionFailureHint(message: String): String {
+    if (!message.contains("HTTP 403", ignoreCase = true)) return ""
+    return when (provider) {
+        AiProvider.OPENAI_COMPATIBLE ->
+            " Hint: 403 usually means the key/project can reach the provider but is not allowed to use this model or route."
+        AiProvider.AZURE_OPENAI ->
+            " Hint: 403 usually means the key, resource, deployment, or network policy rejected this request."
+        AiProvider.ANTHROPIC ->
+            " Hint: 403 usually means the key or workspace is not allowed to use this model."
+    }
+}
 
 data class WonderFoodUiState(
     val memory: FoodMemory = FoodMemory(),
