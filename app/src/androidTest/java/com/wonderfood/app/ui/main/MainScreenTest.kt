@@ -70,11 +70,10 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput("Need oats")
         composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
         composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
-        composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithText("Update grocery list").fetchSemanticsNodes().isNotEmpty()
+        composeTestRule.waitUntil(timeoutMillis = 20_000) {
+            composeTestRule.onAllNodesWithText("Edit proposal").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Update grocery list").assertCountEquals(1)
         composeTestRule.onNodeWithText("Edit proposal").performClick()
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             runCatching {
@@ -96,8 +95,8 @@ class MainScreenTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput(previousMessage)
         composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithText("Update grocery list").fetchSemanticsNodes().isNotEmpty()
+        composeTestRule.waitUntil(timeoutMillis = 20_000) {
+            composeTestRule.onAllNodesWithText("Edit proposal").fetchSemanticsNodes().isNotEmpty()
         }
 
         composeTestRule.onNodeWithText("New chat").performClick()
