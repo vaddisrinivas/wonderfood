@@ -5,7 +5,6 @@ import com.sun.net.httpserver.HttpServer
 import com.wonderfood.app.data.FoodMemory
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftNormalizer
-import com.wonderfood.app.data.FoodInterpreter
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.ReceiptDraft
@@ -330,8 +329,8 @@ class LiteLlmFoodInterpreterTest {
         )
 
         assertTrue(aiResult is LiteLlmInterpretation.Success)
-        val aiDraft = FoodDraftNormalizer.normalize((aiResult as LiteLlmInterpretation.Success).turn.draft) as GroceryDraft
-        val localDraft = FoodDraftNormalizer.normalize(localResult.draft) as GroceryDraft
+        val aiDraft = FoodDraftNormalizer.normalize(requireNotNull((aiResult as LiteLlmInterpretation.Success).turn.draft)) as GroceryDraft
+        val localDraft = FoodDraftNormalizer.normalize(requireNotNull(localResult.draft)) as GroceryDraft
         assertEquals(localDraft.toCanonicalShopping(), aiDraft.toCanonicalShopping())
     }
 

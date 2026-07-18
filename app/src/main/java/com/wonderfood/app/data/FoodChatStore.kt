@@ -148,6 +148,40 @@ class FoodChatStore(
         )
 
     @Synchronized
+    fun draftPantryFirstPlan(): FoodDraft =
+        FoodPlanningToolkit.pantryFirstPlan(readMemory())
+
+    @Synchronized
+    fun draftRecipeImport(rawText: String): RecipeDraft =
+        RecipeIngredientParser.toRecipeDraft(rawText)
+
+    @Synchronized
+    fun draftMealPlanShoppingList(): GroceryDraft =
+        FoodPlanningToolkit.shoppingForPlan(
+            recipes = readRecipes(),
+            entries = readMealPlanEntries(),
+            inventory = readInventory(),
+        )
+
+    @Synchronized
+    fun preparedBatchPlanForRecipe(recipeId: Long, portionCount: Int, zone: StorageZone = StorageZone.FREEZER): PreparedBatchPlan {
+        val recipe = readRecipes().firstOrNull { it.id == recipeId } ?: throw FoodDraftApplyException("Recipe not found.")
+        return FoodPlanningToolkit.preparedBatchForRecipe(recipe, portionCount, zone, todayEpochDay())
+    }
+
+    @Synchronized
+    fun mealPrepRemixSuggestions(): List<MealPrepRemixSuggestion> =
+        FoodPlanningToolkit.remixSuggestions(readMemory())
+
+    @Synchronized
+    fun compatibilityExportJson(): String =
+        FoodPlanningToolkit.compatibilityExport(readMemory())
+
+    @Synchronized
+    fun enrichCandidateWithNutrition(candidate: FoodCandidate, barcode: String = ""): FoodCandidate =
+        NutritionProviderChain().enrich(candidate, barcode)
+
+    @Synchronized
     fun checkpointForBackup() {
         runCatching {
             writableDatabase.rawQuery("PRAGMA wal_checkpoint(FULL)", emptyArray()).use { cursor ->

@@ -6,8 +6,7 @@ import com.wonderfood.app.WonderFoodCommandContract
 import com.wonderfood.app.WonderFoodDeepLink
 import com.wonderfood.app.WonderFoodVoiceAction
 import com.wonderfood.app.WonderFoodVoiceCommand
-import com.wonderfood.app.categorizeFood
-import com.wonderfood.app.classifyStorageZone
+import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraftNormalizer
 import com.wonderfood.app.data.FoodDraft
@@ -22,6 +21,8 @@ import com.wonderfood.app.data.LinkActionDraft
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.data.ReceiptDraft
 import com.wonderfood.app.data.ReceiptItemDraft
+import com.wonderfood.app.data.categorizeFood
+import com.wonderfood.app.data.classifyStorageZone
 import com.wonderfood.app.testing.TestFixtureResources
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -36,6 +36,7 @@ class FoodWorkspaceAppFunctionServiceTest {
     fun executeRequestMarksUnknownActionsAsFailed() {
         val request = FoodWorkspaceActionRequest(
             requestId = "wf-af-action-fail",
+            action = null,
             actions = listOf(
                 FoodWorkspaceAction(
                     type = "inventory.delete_all",
@@ -63,6 +64,7 @@ class FoodWorkspaceAppFunctionServiceTest {
     fun executeRequestReturnsReviewOnlyForPreferencesUpdates() {
         val request = FoodWorkspaceActionRequest(
             requestId = "wf-af-sensitive",
+            action = null,
             actions = listOf(
                 FoodWorkspaceAction(
                     type = "preferences.update",
@@ -98,6 +100,7 @@ class FoodWorkspaceAppFunctionServiceTest {
                 fields = listOf(FoodWorkspaceActionField("quantity", "4")),
                 idempotencyKey = "",
             ),
+            actions = emptyList(),
         )
 
         val response = service.executeRequest(request, executeChanges = false)
@@ -117,10 +120,12 @@ class FoodWorkspaceAppFunctionServiceTest {
             action = FoodWorkspaceAction(
                 type = "inventory.add",
                 targetKind = "inventory",
+                targetRef = "",
                 displayName = "Canned beans",
                 fields = listOf(FoodWorkspaceActionField("quantity", "2")),
                 idempotencyKey = "",
             ),
+            actions = emptyList(),
         )
 
         val first = service.executeRequest(request, executeChanges = true)
@@ -138,12 +143,15 @@ class FoodWorkspaceAppFunctionServiceTest {
     fun executeRequestRejectsLargeRequestsImmediately() {
         val request = FoodWorkspaceActionRequest(
             requestId = "wf-af-limit",
+            action = null,
             actions = (0..13).map { index ->
                 FoodWorkspaceAction(
                     type = "inventory.add",
                     targetKind = "inventory",
+                    targetRef = "",
                     displayName = "Item $index",
                     fields = listOf(FoodWorkspaceActionField("quantity", "1")),
+                    idempotencyKey = "",
                 )
             },
         )

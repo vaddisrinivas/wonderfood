@@ -12,6 +12,8 @@ import androidx.appfunctions.ExecuteAppFunctionRequest
 import androidx.appfunctions.ExecuteAppFunctionResponse
 import androidx.appfunctions.AppFunctionAppUnknownException
 import androidx.appfunctions.AppFunctionFunctionNotFoundException
+import androidx.core.content.edit
+import com.wonderfood.app.data.FoodChatStore
 import com.wonderfood.app.data.FoodDraftCommand
 import com.wonderfood.app.data.FoodDraftCommandExecutor
 import com.wonderfood.app.data.FoodDraftCommandOrigin
@@ -347,17 +349,17 @@ data class FoodWorkspaceActionRequest(
      * Request-scoped id for idempotency and dedupe.
      * Example: `wf-af-001`.
      */
-    val requestId: String = "",
+    val requestId: String,
     /**
      * Backward-compatible single-action input; use `actions` for multi-action payloads.
      * Example: `{"type":"inventory.add", ...}`.
      */
-    val action: FoodWorkspaceAction? = null,
+    val action: FoodWorkspaceAction?,
     /**
      * Ordered list of actions to execute. Maximum of 12 actions in a request.
      * Example: `[ {"type":"inventory.add"}, {"type":"grocery.add"} ]`.
      */
-    val actions: List<FoodWorkspaceAction> = emptyList(),
+    val actions: List<FoodWorkspaceAction>,
 )
 
 @AppFunctionSerializable
@@ -367,22 +369,22 @@ data class FoodWorkspaceAction(
     /**
      * Target model for the action, e.g. `inventory`, `grocery`, `meal_log`, `meal_plan`, `recipe`.
      */
-    val targetKind: String = "",
+    val targetKind: String,
     /**
      * Existing target object id string for mutate/delete actions; blank for create-like actions.
      */
-    val targetRef: String = "",
+    val targetRef: String,
     /**
      * Human-readable target label for create-like actions and for assistant-facing summaries.
      */
-    val displayName: String = "",
+    val displayName: String,
     /**
      * Structured payload fields for the requested mutation.
      * Example: `[ {"key":"quantity","value":"2"}, {"key":"zone","value":"fridge"} ]`.
      */
-    val fields: List<FoodWorkspaceActionField> = emptyList(),
+    val fields: List<FoodWorkspaceActionField>,
     /** Optional caller-controlled dedupe key (`idempotencyKey`). */
-    val idempotencyKey: String = "",
+    val idempotencyKey: String,
 )
 
 @AppFunctionSerializable
