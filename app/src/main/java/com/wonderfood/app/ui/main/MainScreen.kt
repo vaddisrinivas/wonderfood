@@ -2,7 +2,6 @@ package com.wonderfood.app.ui.main
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.Activity
@@ -140,7 +139,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.android.gms.auth.api.identity.Identity
 import com.wonderfood.app.ai.AiProvider
 import com.wonderfood.app.ai.LiteLlmConfig
 import com.wonderfood.app.WonderFoodVoiceCommand
@@ -346,9 +344,7 @@ fun MainScreen(
                 return@rememberLauncherForActivityResult
             }
             runCatching {
-                val authResult = Identity.getAuthorizationClient(context)
-                    .getAuthorizationResultFromIntent(result.data)
-                GoogleDriveAuthorization.accessToken(authResult)
+                GoogleDriveAuthorization.accessTokenFromResultIntent(context, result.data)
             }.onSuccess(::runGoogleAction)
                 .onFailure { error ->
                     pendingGoogleAction = null
@@ -362,31 +358,16 @@ fun MainScreen(
         }
         pendingGoogleAction = action
         val accountEmail = pendingGoogleEmail.ifBlank { state.googleAccountEmail }
-        Identity.getAuthorizationClient(activity)
-            .authorize(GoogleDriveAuthorization.request(accountEmail))
-            .addOnSuccessListener { authResult ->
-                if (authResult.hasResolution()) {
-                    val pendingIntent = authResult.pendingIntent ?: run {
-                        pendingGoogleAction = null
-                        viewModel.onGoogleSyncError("Google Drive permission prompt was unavailable.")
-                        return@addOnSuccessListener
-                    }
-                    googleDriveAuthorizationLauncher.launch(
-                        IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
-                    )
-                } else {
-                    runCatching { GoogleDriveAuthorization.accessToken(authResult) }
-                        .onSuccess(::runGoogleAction)
-                        .onFailure { error ->
-                            pendingGoogleAction = null
-                            viewModel.onGoogleSyncError("Google Drive permission failed: ${error.message ?: "unknown error"}")
-                        }
-                }
-            }
-            .addOnFailureListener { error ->
+        GoogleDriveAuthorization.requestAccess(
+            activity = activity,
+            accountEmail = accountEmail,
+            onResolution = googleDriveAuthorizationLauncher::launch,
+            onAccessToken = ::runGoogleAction,
+            onFailure = { error ->
                 pendingGoogleAction = null
                 viewModel.onGoogleSyncError("Google Drive permission failed: ${error.message ?: "unknown error"}")
-            }
+            },
+        )
     }
     fun signInAndRequestGoogleDrive(action: GoogleSyncAction) {
         googleScope.launch {
