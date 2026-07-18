@@ -94,6 +94,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -241,6 +242,26 @@ private enum class GoogleSyncAction {
     BACKUP,
     RESTORE,
 }
+
+private enum class ActionDockTone {
+    PRIMARY,
+    SECONDARY,
+    AI,
+}
+
+private data class FoodDockAction(
+    val label: String,
+    val contentDescription: String,
+    val icon: ImageVector,
+    val tone: ActionDockTone = ActionDockTone.PRIMARY,
+    val showBadge: Boolean = false,
+    val onClick: () -> Unit,
+)
+
+private data class FoodActionDockSpec(
+    val primary: FoodDockAction,
+    val secondary: List<FoodDockAction> = emptyList(),
+)
 
 @Composable
 fun MainScreen(
@@ -978,6 +999,7 @@ private fun MainWorkspace(
 ) {
     var secondaryPane by rememberSaveable { mutableStateOf<SecondaryPane?>(null) }
     var showAiCapture by rememberSaveable { mutableStateOf(false) }
+    var shopMode by rememberSaveable { mutableStateOf(ShopMode.TO_BUY) }
     var manualCreateKind by rememberSaveable { mutableStateOf<ManualCreateKind?>(null) }
     var manualCreateDay by rememberSaveable { mutableStateOf<Long?>(null) }
     var manualCreateSlot by rememberSaveable { mutableStateOf<MealSlot?>(null) }
@@ -991,6 +1013,149 @@ private fun MainWorkspace(
     val closeSecondaryPane = {
         if (secondaryPane == SecondaryPane.SETTINGS && settingsDirty) showDiscardSettings = true else secondaryPane = null
     }
+    fun openAi(prompt: String? = null) {
+        prompt?.let(onInputChange)
+        showAiCapture = true
+    }
+    val logMealToday = {
+        manualCreateDay = LocalDate.now().toEpochDay()
+        manualCreateSlot = null
+        manualCreateKind = ManualCreateKind.MEAL
+    }
+    val addKitchenFood = { manualCreateKind = ManualCreateKind.INVENTORY }
+    val addShoppingItem = { manualCreateKind = ManualCreateKind.GROCERY }
+    val addRecipe = { manualCreateKind = ManualCreateKind.RECIPE }
+    val openTodayPlan = {
+        onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = LocalDate.now().toEpochDay()))
+    }
+    val putAwayTarget = state.memory.groceries.firstOrNull { it.status == GroceryStatus.BOUGHT }
+        ?.let { FoodDetailTarget(FoodDetailKind.GROCERY, id = it.id) }
+        ?: state.memory.receipts
+            .sortedByDescending { it.createdAtMillis }
+            .firstOrNull { it.status == ReceiptStatus.EXTRACTED }
+            ?.let { FoodDetailTarget(FoodDetailKind.RECEIPT, id = it.id) }
+    fun askAction(prompt: String? = null) = FoodDockAction(
+        label = "Ask",
+        contentDescription = "Open AI capture",
+        icon = Icons.AutoMirrored.Rounded.Chat,
+        tone = ActionDockTone.AI,
+        showBadge = state.isWorking,
+        onClick = { openAi(prompt) },
+    )
+    val canShowActionDock = !showAiCapture &&
+        !hasFeedback &&
+        secondaryPane == null &&
+        state.detailTarget == null &&
+        state.pendingDraft == null
+    val actionDockSpec = if (canShowActionDock) {
+        when (state.section) {
+            FoodSection.TODAY -> FoodActionDockSpec(
+                primary = FoodDockAction(
+                    label = "Log meal",
+                    contentDescription = "Log meal",
+                    icon = Icons.Rounded.Restaurant,
+                    onClick = logMealToday,
+                ),
+                secondary = listOf(askAction()),
+            )
+            FoodSection.KITCHEN -> FoodActionDockSpec(
+                primary = FoodDockAction(
+                    label = "Add food",
+                    contentDescription = "Add kitchen food",
+                    icon = Icons.Rounded.Add,
+                    onClick = addKitchenFood,
+                ),
+                secondary = listOf(
+                    FoodDockAction(
+                        label = "Receipt",
+                        contentDescription = "Scan receipt",
+                        icon = Icons.Rounded.AddAPhoto,
+                        tone = ActionDockTone.SECONDARY,
+                        onClick = onPickReceiptPhoto,
+                    ),
+                    askAction(
+                        prompt = "Help me add food to my Kitchen. Ask for any missing details before drafting changes.",
+                    ),
+                ),
+            )
+            FoodSection.PLAN -> FoodActionDockSpec(
+                primary = FoodDockAction(
+                    label = "Plan today",
+                    contentDescription = "Plan today",
+                    icon = Icons.Rounded.CalendarMonth,
+                    onClick = openTodayPlan,
+                ),
+                secondary = listOf(
+                    askAction(
+                        prompt = "Plan meals using my current Kitchen first. Show missing groceries and let me edit the plan before saving.",
+                    ),
+                    FoodDockAction(
+                        label = "Log meal",
+                        contentDescription = "Log meal",
+                        icon = Icons.Rounded.Restaurant,
+                        tone = ActionDockTone.SECONDARY,
+                        onClick = logMealToday,
+                    ),
+                ),
+            )
+            FoodSection.RECIPES -> FoodActionDockSpec(
+                primary = FoodDockAction(
+                    label = "New recipe",
+                    contentDescription = "Create recipe",
+                    icon = Icons.Rounded.Add,
+                    onClick = addRecipe,
+                ),
+                secondary = listOf(
+                    askAction(
+                        prompt = "Suggest recipes I can make with my current Kitchen. Show what I have and what is missing.",
+                    ),
+                ),
+            )
+            FoodSection.SHOP -> {
+                val addItem = FoodDockAction(
+                    label = "Add item",
+                    contentDescription = "Add shopping item",
+                    icon = Icons.Rounded.Add,
+                    onClick = addShoppingItem,
+                )
+                val scanReceipt = FoodDockAction(
+                    label = "Scan receipt",
+                    contentDescription = "Scan receipt",
+                    icon = Icons.Rounded.AddAPhoto,
+                    tone = ActionDockTone.SECONDARY,
+                    onClick = onPickReceiptPhoto,
+                )
+                val shoppingAsk = askAction(
+                    prompt = "Help me review my shopping list, receipts, and put-away queue. Draft changes only after showing what will change.",
+                )
+                when (shopMode) {
+                    ShopMode.TO_BUY -> FoodActionDockSpec(
+                        primary = addItem,
+                        secondary = listOf(scanReceipt, shoppingAsk),
+                    )
+                    ShopMode.RECEIPTS -> FoodActionDockSpec(
+                        primary = scanReceipt.copy(tone = ActionDockTone.PRIMARY),
+                        secondary = listOf(addItem.copy(tone = ActionDockTone.SECONDARY), shoppingAsk),
+                    )
+                    ShopMode.PUT_AWAY -> FoodActionDockSpec(
+                        primary = putAwayTarget?.let { target ->
+                            FoodDockAction(
+                                label = "Review item",
+                                contentDescription = "Review put-away item",
+                                icon = Icons.Rounded.Inventory2,
+                                onClick = { onOpenDetail(target) },
+                            )
+                        } ?: scanReceipt.copy(tone = ActionDockTone.PRIMARY),
+                        secondary = listOf(addItem.copy(tone = ActionDockTone.SECONDARY), shoppingAsk),
+                    )
+                }
+            }
+        }
+    } else {
+        null
+    }
+    val actionDockBottomPadding = if (showBottomNavigation) 92.dp else 20.dp
+    val actionDockContentPadding = if (actionDockSpec != null) 76.dp else 0.dp
     BackHandler(enabled = showAiCapture || secondaryPane != null || state.detailTarget != null) {
         when {
             showAiCapture -> showAiCapture = false
@@ -1023,7 +1188,12 @@ private fun MainWorkspace(
                     },
                 )
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(bottom = actionDockContentPadding),
+            ) {
                 when {
                     state.pendingDraft != null && !showAiCapture -> DraftCard(
                         draft = state.pendingDraft,
@@ -1117,22 +1287,16 @@ private fun MainWorkspace(
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id))
                         },
                         onDelete = onDeleteInventory,
-                        onAdd = { manualCreateKind = ManualCreateKind.INVENTORY },
-                        onScanReceipt = onPickReceiptPhoto,
-                        onAsk = {
-                            onInputChange("Help me add food to my Kitchen. Ask for any missing details before drafting changes.")
-                            showAiCapture = true
-                        },
                     )
                     FoodSection.SHOP -> GroceryContent(
                         memory = state.memory,
+                        mode = shopMode,
+                        onModeChange = { shopMode = it },
                         onOpen = { item ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.GROCERY, id = item.id))
                         },
                         onBought = onMarkGroceryBought,
                         onDelete = onDeleteGrocery,
-                        onAdd = { manualCreateKind = ManualCreateKind.GROCERY },
-                        onScanReceipt = onPickReceiptPhoto,
                         onOpenReceipt = { receipt ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.RECEIPT, id = receipt.id))
                         },
@@ -1154,24 +1318,11 @@ private fun MainWorkspace(
                         onOpenDetail = onOpenDetail,
                         onDeleteMealPlanEntries = onDeleteMealPlanEntries,
                         onDeleteAllPlans = onDeleteAllPlans,
-                        onLogMeal = { day ->
-                            manualCreateDay = day
-                            manualCreateKind = ManualCreateKind.MEAL
-                        },
-                        onPlanWithKitchen = {
-                            onInputChange("Plan meals using my current Kitchen first. Show missing groceries and let me edit the plan before saving.")
-                            showAiCapture = true
-                        },
                     )
                     FoodSection.RECIPES -> RecipesContent(
                         memory = state.memory,
                         onOpen = { recipe ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.RECIPE, id = recipe.id))
-                        },
-                        onAdd = { manualCreateKind = ManualCreateKind.RECIPE },
-                        onAsk = {
-                            onInputChange("Suggest recipes I can make with my current Kitchen. Show what I have and what is missing.")
-                            showAiCapture = true
                         },
                     )
                     } }
@@ -1220,17 +1371,14 @@ private fun MainWorkspace(
                     ),
             )
         }
-        if (!showAiCapture && !hasFeedback && secondaryPane == null && state.detailTarget == null && state.pendingDraft == null) {
-            AiCaptureFab(
-                hasDraft = false,
-                isWorking = state.isWorking,
-                expanded = state.section == FoodSection.TODAY || state.isWorking,
-                onClick = { showAiCapture = true },
+        actionDockSpec?.let { spec ->
+            FoodActionDock(
+                spec = spec,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
-                        bottom = if (showBottomNavigation) 92.dp else 20.dp,
+                        bottom = actionDockBottomPadding,
                     ),
             )
         }
@@ -1394,49 +1542,90 @@ private fun TopBar(
 }
 
 @Composable
-private fun AiCaptureFab(
-    hasDraft: Boolean,
-    isWorking: Boolean,
-    expanded: Boolean,
-    onClick: () -> Unit,
+private fun FoodActionDock(
+    spec: FoodActionDockSpec,
     modifier: Modifier = Modifier,
 ) {
-    val label = when {
-        isWorking -> "Reviewing"
-        hasDraft -> "Review"
-        else -> "Ask"
+    Row(
+        modifier = modifier.navigationBarsPadding(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        spec.secondary.forEach { action ->
+            DockSecondaryAction(action)
+        }
+        DockPrimaryAction(spec.primary)
     }
-    Box(modifier = modifier) {
+}
+
+@Composable
+private fun DockPrimaryAction(action: FoodDockAction) {
+    Box {
         ExtendedFloatingActionButton(
-            onClick = onClick,
-            modifier = Modifier
-                .navigationBarsPadding()
-                .semantics { contentDescription = "Open AI capture" },
-            expanded = expanded,
+            onClick = action.onClick,
+            modifier = Modifier.semantics { contentDescription = action.contentDescription },
+            expanded = true,
             icon = {
                 Icon(
-                    Icons.AutoMirrored.Rounded.Chat,
+                    action.icon,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
                 )
             },
-            text = { Text(label) },
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            text = { Text(action.label) },
+            containerColor = action.containerColor(),
+            contentColor = action.contentColor(),
         )
-        if (hasDraft || isWorking) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(14.dp),
-                shape = CircleShape,
-                color = if (isWorking) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
-                border = BorderStroke(2.dp, MaterialTheme.colorScheme.background),
-                content = {},
-            )
-        }
+        DockActionBadge(show = action.showBadge, modifier = Modifier.align(Alignment.TopEnd))
     }
 }
+
+@Composable
+private fun DockSecondaryAction(action: FoodDockAction) {
+    Box {
+        SmallFloatingActionButton(
+            onClick = action.onClick,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = action.contentDescription },
+            shape = CircleShape,
+            containerColor = action.containerColor(),
+            contentColor = action.contentColor(),
+        ) {
+            Icon(action.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        }
+        DockActionBadge(show = action.showBadge, modifier = Modifier.align(Alignment.TopEnd))
+    }
+}
+
+@Composable
+private fun DockActionBadge(show: Boolean, modifier: Modifier = Modifier) {
+    if (!show) return
+    Surface(
+        modifier = modifier
+            .size(14.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondary,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.background),
+        content = {},
+    )
+}
+
+@Composable
+private fun FoodDockAction.containerColor(): Color =
+    when (tone) {
+        ActionDockTone.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
+        ActionDockTone.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
+        ActionDockTone.AI -> MaterialTheme.colorScheme.tertiaryContainer
+    }
+
+@Composable
+private fun FoodDockAction.contentColor(): Color =
+    when (tone) {
+        ActionDockTone.PRIMARY -> MaterialTheme.colorScheme.onPrimaryContainer
+        ActionDockTone.SECONDARY -> MaterialTheme.colorScheme.onSecondaryContainer
+        ActionDockTone.AI -> MaterialTheme.colorScheme.onTertiaryContainer
+    }
 
 @Composable
 private fun VoiceStatusCard(message: String) {
@@ -2154,14 +2343,10 @@ private fun PantryContent(
     items: List<InventoryItem>,
     onOpen: (InventoryItem) -> Unit,
     onDelete: (Long) -> Unit,
-    onAdd: () -> Unit,
-    onScanReceipt: () -> Unit,
-    onAsk: () -> Unit,
 ) {
     if (items.isEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            EmptyState("No kitchen items yet.", "Add food directly or scan a receipt.", "Add food", onAdd)
-            KitchenCaptureActions(onAdd = null, onScanReceipt = onScanReceipt, onAsk = onAsk)
+            EmptyState("No kitchen items yet.", "Add food directly or scan a receipt when you're ready.")
         }
         return
     }
@@ -2206,9 +2391,6 @@ private fun PantryContent(
     }
     if (viewMode == DatabaseViewMode.LIST) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-            item {
-                KitchenCaptureActions(onAdd = onAdd, onScanReceipt = onScanReceipt, onAsk = onAsk)
-            }
             item {
                 KitchenUseFirstRail(items = visible, onOpen = onOpen)
             }
@@ -2263,9 +2445,6 @@ private fun PantryContent(
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                KitchenCaptureActions(onAdd = onAdd, onScanReceipt = onScanReceipt, onAsk = onAsk)
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
                 KitchenUseFirstRail(items = visible, onOpen = onOpen)
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -2318,37 +2497,6 @@ private enum class KitchenFocusFilter(val label: String) {
     ALL("All food"),
     USE_SOON("Use soon"),
     NEEDS_DETAILS("Needs details"),
-}
-
-@Composable
-private fun KitchenCaptureActions(
-    onAdd: (() -> Unit)?,
-    onScanReceipt: () -> Unit,
-    onAsk: () -> Unit,
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        onAdd?.let {
-            Button(onClick = it, shape = RoundedCornerShape(8.dp)) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Add food")
-            }
-        }
-        OutlinedButton(onClick = onScanReceipt, shape = RoundedCornerShape(8.dp)) {
-            Icon(Icons.Rounded.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Receipt")
-        }
-        TextButton(onClick = onAsk) {
-            Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Ask AI")
-        }
-    }
 }
 
 @Composable
@@ -2495,11 +2643,11 @@ private fun KitchenSelectionBar(selectedCount: Int, onClear: () -> Unit, onArchi
 @Composable
 private fun GroceryContent(
     memory: FoodMemory,
+    mode: ShopMode,
+    onModeChange: (ShopMode) -> Unit,
     onOpen: (GroceryItem) -> Unit,
     onBought: (Long) -> Unit,
     onDelete: (Long) -> Unit,
-    onAdd: () -> Unit,
-    onScanReceipt: () -> Unit,
     onOpenReceipt: (ReceiptCapture) -> Unit = {},
 ) {
     val items = memory.groceries
@@ -2507,7 +2655,6 @@ private fun GroceryContent(
     val needed = items.filter { it.status == GroceryStatus.NEEDED }
     val bought = items.filter { it.status == GroceryStatus.BOUGHT }
     val extractedReceipts = receipts.filter { it.status == ReceiptStatus.EXTRACTED }
-    var mode by rememberSaveable { mutableStateOf(ShopMode.TO_BUY) }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 12.dp),
@@ -2522,30 +2669,10 @@ private fun GroceryContent(
                     }
                     FilterChip(
                         selected = mode == option,
-                        onClick = { mode = option },
+                        onClick = { onModeChange(option) },
                         modifier = Modifier.semantics { contentDescription = "Shop mode ${option.label}" },
                         label = { Text("${option.label} ($count)") },
                     )
-                }
-            }
-        }
-        item {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (mode == ShopMode.TO_BUY) {
-                    Button(onClick = onAdd, shape = RoundedCornerShape(8.dp)) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Add item")
-                    }
-                }
-                OutlinedButton(onClick = onScanReceipt, shape = RoundedCornerShape(8.dp)) {
-                    Icon(Icons.Rounded.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Scan receipt")
                 }
             }
         }
@@ -2629,13 +2756,6 @@ private fun TodayContent(
         item {
             TodayDashboard(memory = memory, healthSummary = healthSummary, onOpenDetail = onOpenDetail, onLogMeal = onLogMeal)
         }
-        item {
-            Button(onClick = { onLogMeal(null) }, shape = RoundedCornerShape(8.dp)) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Log meal")
-            }
-        }
         if (memory.inventory.isNotEmpty()) {
             item { KitchenUseFirstRail(items = memory.inventory, onOpen = { item ->
                 onOpenDetail(FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id))
@@ -2698,8 +2818,6 @@ private fun PlanContent(
     onOpenDetail: (FoodDetailTarget) -> Unit,
     onDeleteMealPlanEntries: (Set<Long>) -> Unit,
     onDeleteAllPlans: () -> Unit,
-    onLogMeal: (Long) -> Unit,
-    onPlanWithKitchen: () -> Unit,
 ) {
     val plans = memory.mealPlans
     val plannedEntries = memory.mealPlanEntries
@@ -2732,25 +2850,9 @@ private fun PlanContent(
                 onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = day))
             })
         }
-        item {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (plans.isNotEmpty() || plannedEntries.isNotEmpty()) {
-                    Button(
-                        onClick = { onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = LocalDate.now().toEpochDay())) },
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Plan today")
-                    }
-                }
-                OutlinedButton(onClick = onPlanWithKitchen, shape = RoundedCornerShape(8.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Plan with my Kitchen")
-                }
-                TextButton(onClick = { onLogMeal(LocalDate.now().toEpochDay()) }) { Text("Log a meal") }
-                if (plans.isNotEmpty() || plannedEntries.isNotEmpty()) {
+        if (plans.isNotEmpty() || plannedEntries.isNotEmpty()) {
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     ConfirmIconTextButton(
                         Icons.Rounded.Delete,
                         "Delete all plans",
@@ -2820,9 +2922,7 @@ private fun PlanContent(
                     item {
                         EmptyState(
                             "No meal plan yet.",
-                            "Open today and add the first planned meal.",
-                            "Plan today",
-                            { onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = LocalDate.now().toEpochDay())) },
+                            "Open today when you're ready to add the first planned meal.",
                         )
                     }
                 } else {
@@ -2840,9 +2940,7 @@ private fun PlanContent(
                     item {
                         EmptyState(
                             "No planned meals.",
-                            "Open today and add the first planned meal.",
-                            "Plan today",
-                            { onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = LocalDate.now().toEpochDay())) },
+                            "Open today when you're ready to add the first planned meal.",
                         )
                     }
                 } else {
@@ -2870,8 +2968,6 @@ private fun PlanContent(
                         EmptyState(
                             "No actual activity yet.",
                             "Logged meals, shopping, cooking, and water will show here.",
-                            "Log a meal",
-                            { onLogMeal(LocalDate.now().toEpochDay()) },
                         )
                     }
                 } else {
@@ -3293,18 +3389,11 @@ private fun MealSlotRow(
 private fun RecipesContent(
     memory: FoodMemory,
     onOpen: (Recipe) -> Unit,
-    onAdd: () -> Unit,
-    onAsk: () -> Unit,
 ) {
     val recipes = memory.recipes
     if (recipes.isEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            EmptyState("No personal recipes yet.", "Create one directly or ask AI to draft it.", "New recipe", onAdd)
-            TextButton(onClick = onAsk) {
-                Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Ask AI with my Kitchen")
-            }
+            EmptyState("No personal recipes yet.", "Create one directly or ask AI to draft it from your Kitchen.")
         }
         return
     }
@@ -3340,9 +3429,6 @@ private fun RecipesContent(
         .toList()
     if (viewMode == DatabaseViewMode.LIST) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-            item {
-                RecipeActions(onAdd = onAdd, onAsk = onAsk)
-            }
             item {
                 RecipeAvailabilityFilters(
                     selected = availability,
@@ -3381,9 +3467,6 @@ private fun RecipesContent(
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                RecipeActions(onAdd = onAdd, onAsk = onAsk)
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
                 RecipeAvailabilityFilters(
                     selected = availability,
                     matches = kitchenMatches.values,
@@ -3421,22 +3504,6 @@ private enum class RecipeAvailability(val label: String) {
     MAKE_NOW("Make now"),
     ALMOST("Almost"),
     ALL("All recipes"),
-}
-
-@Composable
-private fun RecipeActions(onAdd: () -> Unit, onAsk: () -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = onAdd, shape = RoundedCornerShape(8.dp)) {
-            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("New recipe")
-        }
-        OutlinedButton(onClick = onAsk, shape = RoundedCornerShape(8.dp)) {
-            Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Ask from Kitchen")
-        }
-    }
 }
 
 @Composable
@@ -6598,13 +6665,16 @@ private fun AiChatHistoryDialog(
         title = { Text("Chat history") },
         text = {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .semantics { contentDescription = "Chat history list" },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(chats, key = { it.first }) { (chatId, chatMessages) ->
                     val first = chatMessages.first()
-                    val preview = chatMessages.firstOrNull { it.role == ChatRole.USER }?.body
-                        ?: chatMessages.firstOrNull()?.body.orEmpty()
+                    val preview = chatMessages.lastOrNull { it.role == ChatRole.USER }?.body
+                        ?: chatMessages.lastOrNull()?.body.orEmpty()
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()

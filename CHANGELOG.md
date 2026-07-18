@@ -5,6 +5,16 @@ structure.
 
 ## Unreleased
 
+## 1.0.1 - 2026-07-18
+
+### Changed
+
+- Moved primary create actions into a context-aware bottom action dock.
+- Kept AI, receipt, and related quick actions as compact secondary dock actions.
+- Made Shop's bottom action follow To buy, Receipts, and Put away modes.
+- Reduced duplicate top action rows across Today, Kitchen, Plan, Recipes, and Shop.
+- Improved AI chat history previews to show the latest user message in each chat.
+
 ## 1.0.0 - 2026-07-17
 
 ### Added

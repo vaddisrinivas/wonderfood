@@ -83,7 +83,7 @@ class MainScreenTest {
             }.getOrDefault(false)
         }
         composeTestRule.onNodeWithText("Edit before saving").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Name").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Name").onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -92,6 +92,8 @@ class MainScreenTest {
         val previousMessage = "Need tamarind for the history test"
 
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
+        composeTestRule.onNodeWithText("New chat").performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput(previousMessage)
         composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -107,6 +109,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("History").performClick()
 
         composeTestRule.onNodeWithText("Chat history").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Chat history list").performScrollToNode(hasText(previousMessage))
         composeTestRule.onNodeWithText(previousMessage).assertIsDisplayed()
     }
 
@@ -133,14 +136,15 @@ class MainScreenTest {
         composeTestRule.onAllNodesWithText("Kitchen").onFirst().performClick()
         if (composeTestRule.onAllNodesWithText("No kitchen items yet.").fetchSemanticsNodes().isNotEmpty()) {
             composeTestRule.onNodeWithText("No kitchen items yet.").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Add food directly or scan a receipt.").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Receipt").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Ask AI").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Add food directly or scan a receipt when you're ready.").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("Add kitchen food").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("Scan receipt").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("Open AI capture").assertIsDisplayed()
             composeTestRule.onAllNodesWithText("Remove").assertCountEquals(0)
             return
         }
 
-        composeTestRule.onNodeWithText("Add food").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Add kitchen food").assertIsDisplayed()
         composeTestRule.onNodeWithText("Use first").assertIsDisplayed()
         composeTestRule.onNodeWithText("Search food, category, notes").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Gallery view").assertIsSelected()
@@ -154,19 +158,18 @@ class MainScreenTest {
         assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
 
         composeTestRule.onAllNodesWithText("Kitchen").onFirst().performClick()
-        composeTestRule.onNodeWithText("Add food").performClick()
+        composeTestRule.onNodeWithContentDescription("Add kitchen food").performClick()
         composeTestRule.onNodeWithText("Add kitchen food").assertIsDisplayed()
         composeTestRule.onNodeWithText("Cancel").performClick()
 
         composeTestRule.onAllNodesWithText("Shop").onFirst().performClick()
-        composeTestRule.onNodeWithText("Add item").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Add shopping item").assertIsDisplayed()
 
         composeTestRule.onAllNodesWithText("Recipes").onFirst().performClick()
-        composeTestRule.onNodeWithText("New recipe").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Create recipe").assertIsDisplayed()
 
         composeTestRule.onAllNodesWithText("Today").onFirst().performClick()
-        composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log meal"))
-        composeTestRule.onNodeWithText("Log meal").performClick()
+        composeTestRule.onNodeWithContentDescription("Log meal").performClick()
         composeTestRule.onNodeWithText("Date").assertIsDisplayed()
     }
 
@@ -179,7 +182,8 @@ class MainScreenTest {
 
         composeTestRule.onAllNodesWithText("Plan").onFirst().performClick()
         composeTestRule.onNodeWithText("This week").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Plan with my Kitchen").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Plan today").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Open AI capture").assertIsDisplayed()
 
         composeTestRule.onAllNodesWithText("Shop").onFirst().performClick()
         composeTestRule.onNodeWithContentDescription("Shop mode To buy").assertIsDisplayed()
