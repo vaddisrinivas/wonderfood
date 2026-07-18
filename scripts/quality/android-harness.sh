@@ -7,20 +7,25 @@ cd "$ROOT_DIR"
 MODE="${1:-local}"
 
 local_tasks=(
-  ":app:lintDebug"
+  ":app:lintFossDebug"
+  ":app:lintPlayDebug"
   ":core:data:lintDebug"
-  ":app:testDebugUnitTest"
+  ":app:testFossDebugUnitTest"
+  ":app:testPlayDebugUnitTest"
   ":core:model:test"
   ":core:engine:test"
   ":core:ai:test"
   ":core:data:testDebugUnitTest"
-  ":app:assembleDebug"
-  ":app:assembleDebugAndroidTest"
+  ":app:assembleFossDebug"
+  ":app:assemblePlayDebug"
+  ":app:assembleFossDebugAndroidTest"
+  ":app:assemblePlayDebugAndroidTest"
   ":core:data:assembleDebugAndroidTest"
 )
 
 connected_tasks=(
-  ":app:connectedDebugAndroidTest"
+  ":app:connectedFossDebugAndroidTest"
+  ":app:connectedPlayDebugAndroidTest"
   ":core:data:connectedDebugAndroidTest"
 )
 
