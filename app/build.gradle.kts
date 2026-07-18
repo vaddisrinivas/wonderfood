@@ -22,8 +22,20 @@ android {
         applicationId = "com.wonderfood.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("foss") {
+            dimension = "distribution"
+            applicationIdSuffix = ".foss"
+            versionNameSuffix = "-foss"
+        }
+        create("play") {
+            dimension = "distribution"
+        }
     }
 
     signingConfigs {
@@ -82,17 +94,17 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.credentials)
-  implementation(libs.androidx.credentials.play.services.auth)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
-  implementation(libs.androidx.health.connect.client)
   implementation(libs.androidx.appfunctions)
   implementation(libs.androidx.appfunctions.service)
-  implementation(libs.googleid)
-  implementation(libs.google.play.services.auth)
   ksp(libs.androidx.appfunctions.compiler)
+  add("playImplementation", libs.androidx.credentials.play.services.auth)
+  add("playImplementation", libs.androidx.health.connect.client)
+  add("playImplementation", libs.googleid)
+  add("playImplementation", libs.google.play.services.auth)
 
   // Compose
   implementation(libs.androidx.compose.ui)

@@ -5,6 +5,18 @@ structure.
 
 ## Unreleased
 
+## 1.0.2 - 2026-07-18
+
+### Added
+
+- Added separate FOSS and Play distribution flavors.
+- Added FOSS stubs for Google Drive backup and Health Connect integrations.
+
+### Changed
+
+- Updated README, screenshots, demo media, and Fastlane metadata for open-source discovery.
+- Kept Google Identity, Play Services Auth, and Health Connect dependencies out of the FOSS flavor.
+
 ## 1.0.1 - 2026-07-18
 
 ### Changed

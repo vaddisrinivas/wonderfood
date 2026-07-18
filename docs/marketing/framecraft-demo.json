@@ -1,0 +1,64 @@
+{
+  "scenes": [
+    {
+      "title": "WonderFood",
+      "subtitle": "Local-first food planning for Android.",
+      "screenshot": "docs/images/screenshots/wonderfood-today.png",
+      "narration": "Meet WonderFood. A local-first food workspace for pantry, recipes, meals, shopping, receipts, and nutrition.",
+      "bullets": ["Pantry", "Recipes", "Meals", "Shopping"],
+      "duration": 0,
+      "animation": "slide-up",
+      "screenshot_animation": "scale"
+    },
+    {
+      "title": "One daily food workspace",
+      "screenshot": "docs/images/screenshots/wonderfood-today.png",
+      "narration": "Plan the day from one Android screen.",
+      "bullets": ["Today", "Meals", "Review queue"],
+      "callouts": [
+        {"text": "Daily workspace", "x": 48, "y": 34, "color": "#4ade80", "delay": 1.0}
+      ],
+      "duration": 0,
+      "animation": "fade",
+      "screenshot_animation": "scale"
+    },
+    {
+      "title": "Inventory that remembers context",
+      "screenshot": "docs/images/screenshots/wonderfood-kitchen.png",
+      "narration": "Keep inventory useful with lots, expiry, prices, notes, and nutrition confidence.",
+      "bullets": ["Lots", "Expiry", "Prices", "Nutrition confidence"],
+      "callouts": [
+        {"text": "Use-first kitchen view", "x": 53, "y": 56, "color": "#fbbf24", "delay": 1.1}
+      ],
+      "duration": 0,
+      "animation": "slide-up",
+      "screenshot_animation": "scale"
+    },
+    {
+      "title": "Shopping and receipts become drafts",
+      "screenshot": "docs/images/screenshots/wonderfood-shop.png",
+      "narration": "Turn shopping and receipts into reviewable changes.",
+      "bullets": ["Shopping lists", "Receipt evidence", "Put-away review"],
+      "duration": 0,
+      "animation": "fade",
+      "screenshot_animation": "scale"
+    },
+    {
+      "title": "AI proposes. You decide.",
+      "subtitle": "github.com/vaddisrinivas/wonderfood",
+      "screenshot": "docs/images/social-preview.png",
+      "narration": "AI can propose. The app validates. You decide what gets saved.",
+      "bullets": ["Typed commands", "User review", "Apache-2.0"],
+      "duration": 0,
+      "animation": "slide-up",
+      "screenshot_animation": "fade"
+    }
+  ],
+  "output": "docs/images/wonderfood-demo.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "voice": "jenny",
+  "transition": "crossfade",
+  "transition_duration": 0.4
+}
