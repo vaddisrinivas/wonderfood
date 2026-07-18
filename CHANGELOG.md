@@ -5,6 +5,19 @@ structure.
 
 ## Unreleased
 
+## 1.0.3 - 2026-07-18
+
+### Added
+
+- Added Android AppFunctions workflow actions for food workspace automation.
+- Added production receipt capture provider wiring and safer receipt-to-Kitchen put-away.
+- Added pantry-first planning, nutrition provider-chain scaffolding, meal-prep batch planning, recipe import parsing, scaled shopping-list gaps, household profiles, compatibility export, and prepared-base remix suggestions.
+- Added cross-channel golden tests, risk-policy coverage, and external automation validation scripts.
+
+### Changed
+
+- Updated the release and App Links verification flow for trustworthy signed distribution.
+
 ## 1.0.2 - 2026-07-18
 
 ### Added
