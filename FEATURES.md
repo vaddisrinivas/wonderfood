@@ -4,6 +4,26 @@ This file is the product source of truth. It describes user-visible capabilities
 not implementation tickets. Update it in the same change that ships or removes a
 capability.
 
+## Latest release: 1.0.4
+
+WonderFood 1.0.4 ships the first serious version of the AI home-space
+foundation:
+
+| Area | What changed | How to use it |
+|---|---|---|
+| Android shell | The primary app destinations are now `Now`, `Food`, `Week`, `Saved`, and `Cart`. | Use `Now` for today's meals, `Food` for kitchen and recipe context, `Week` for planning, `Saved` for saved recipes, and `Cart` for shopping/receipts/put-away. |
+| Local-first data | SQLite remains the default data home and needs no setup. | Choose local/on-device during onboarding or keep using the app without connecting another backend. |
+| Google Sheets | Added Sheet URL parsing, Google authorization foundations, readable workspace schema tabs, raw hidden `_wf_*` sync tabs, snapshot export/import scaffolding, and seeded proof data. | Use the Play build, connect a Sheet URL with Google authorization, then review exported workspace tabs instead of treating Sheets as a blank dump. |
+| Notion | Added Notion page URL parsing, token-protected gateway foundations, human-readable workspace schema, managed block export, snapshot merge support, and seed fixture coverage. | Connect a Notion page/integration token and use Notion as a household-readable mirror/workspace, while the app remains the custom AI view. |
+| Postgres/Supabase | Added Postgres/Supabase-style connection parsing and gateway contracts. | Use HTTPS endpoint/API-token style configuration for advanced or self-hosted setups; direct mobile DSN mode is config-only until a safe adapter exists. |
+| Backend safety | Added backend router and rollback snapshot contract before switching data homes. | Before committing a new data home, WonderFood stages a local safety snapshot so the household can recover. |
+| Workspace schema | Added uniform app/Notion/Sheets concepts for food, recipes, meals, purchases, cart, and planning data. | Use the same object identities and fields across the app and external workspaces to support future automation. |
+| AI contracts | Added typed skill contracts for recipe import, pantry normalization, can-cook ranking, meal planning, cart building, personalization, cooking coach, receipt parsing, and nutrition estimation. | AI output stays as reviewable proposals; app validation owns persistence and safety. |
+| External food providers | Added provider contracts and mappings for TheMealDB recipe lookup and Open Food Facts package lookup. | Provider responses map into WonderFood proposals with attribution, warnings, cache policy, and confidence instead of silent writes. |
+| Receipts/import | Improved deterministic receipt parsing, food draft normalization, legacy memory export, legacy snapshot import, and snapshot merging. | Receipt and import paths now produce more consistent editable drafts across AI and non-AI flows. |
+| Manual workflows | Manual food entry, cart item creation, recipe creation, and meal logging remain available without AI. | Use the visible create actions in each destination when you do not want AI involved. |
+| Quality/release | Added release evidence scripts, Google Sheets proof helper, serial connected harness, and CI green lanes for local quality plus API 26/API 35 device quality. | A release should now prove local unit/build checks, connected device checks, and signed APK publication. |
+
 Status meanings:
 
 - **Shipped** — available in the Android app and covered by an automated or device check.

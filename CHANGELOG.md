@@ -7,6 +7,22 @@ structure.
 
 ## 1.0.4 - 2026-07-19
 
+WonderFood 1.0.4 is a workspace foundation release. It keeps the app usable
+offline with local SQLite, adds the first real Notion/Google Sheets/Postgres
+data-home contracts, and upgrades the Android shell toward the AI home-space
+model.
+
+### Upgrade and install notes
+
+- Install the Play APK for the richest integration surface: `WonderFood-play-v1.0.4.apk`.
+- Install the FOSS APK when you want the no-Google dependency build: `WonderFood-foss-v1.0.4.apk`.
+- Existing local data stays local. Connecting another data home should create a
+  rollback snapshot before the new backend is committed.
+- Google Sheets, Notion, and Postgres/Supabase support are foundation-level in
+  this release. They validate configuration, preserve local-first behavior, and
+  establish uniform schemas; full two-way production sync remains marked partial
+  in `FEATURES.md`.
+
 ### Added
 
 - Added local-first SQLite plus optional Notion, Google Sheets, and Postgres workspace sync foundations.
@@ -17,12 +33,27 @@ structure.
 - Added Samsung Food shared-link recipe import detection for individual public/shared links.
 - Added plan/cart plain-text sharing formatter that excludes secrets and provider credentials.
 - Added focused tests for provider mapping, AI skill proposals, Sheets/Notion workspace sync, backend switch safety, and conflict handling.
+- Added a V3 Android workspace shell with `Now`, `Food`, `Week`, `Saved`, and `Cart` destinations.
+- Added first-run data-home onboarding foundations for local SQLite, Google Sheets, Notion, and Postgres/Supabase-style endpoints.
+- Added a backend router so one app data contract can point at local SQLite or an optional external data home.
+- Added URL/config parsers for Google Sheets, Notion pages, and Postgres/Supabase connection strings.
+- Added Android Keystore-backed credential storage foundations for provider tokens.
+- Added shared workspace snapshot export, legacy memory export, legacy snapshot import, and snapshot merge foundations.
+- Added seed workspace fixtures so Notion, Sheets, and app mapping can be tested with realistic food, recipe, meal, cart, and purchase data.
+- Added typed contracts for recipe import, pantry normalization, can-cook ranking, cart generation, meal planning, personalization, cooking coach, receipt parsing, nutrition estimation, TheMealDB mapping, and Open Food Facts mapping.
+- Added deterministic/manual coverage for food entry, cart item creation, recipe creation, meal logging, and AI capture surfaces.
+- Added release helper scripts for evidence collection and Google Sheets live proof runs.
 
 ### Changed
 
 - Google Sheets raw sync tabs now use hidden `_wf_*` sheet names to avoid collisions with human-facing tabs such as `Recipes`.
 - Google Sheets provisioning repairs mismatched legacy headers and keeps workspace tabs readable.
 - AI features remain reviewable proposals; deterministic app code owns validation, persistence, undo, and external provider sync.
+- Navigation labels now reflect the V3 workspace language: `Now`, `Food`, `Week`, `Saved`, and `Cart`.
+- Receipt parsing and food draft normalization are more deterministic across AI, import, and command paths.
+- AppFunctions service lint/API handling is safer on unsupported Android versions.
+- Connected Android quality now runs FOSS, Play, and core data device tests serially to avoid emulator contention.
+- Android CI now proves local quality plus device-quality lanes on API 26 and API 35 before release.
 
 ## 1.0.3 - 2026-07-18
 

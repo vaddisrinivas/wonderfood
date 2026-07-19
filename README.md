@@ -28,6 +28,26 @@ Food apps usually split your life into separate places: pantry lists, recipes, m
 - **Selectable data homes:** start local, or connect Google Sheets, Notion, Supabase/PostgREST, or a WonderFood server with rollback snapshots before switching.
 - **Optional integrations:** encrypted Google Drive app-data backup and Health Connect support can be enabled by the user.
 
+## Latest Release: 1.0.4
+
+WonderFood 1.0.4 is the workspace foundation release:
+
+- **New V3 shell:** `Now`, `Food`, `Week`, `Saved`, and `Cart` organize the app around daily use instead of setup screens.
+- **Local-first default:** SQLite works without accounts, internet, Notion, Sheets, Postgres, or AI.
+- **Real data-home foundations:** Google Sheets, Notion, and Postgres/Supabase-style configuration now share one app data contract instead of separate one-off dumps.
+- **Readable household workspaces:** Notion and Sheets schema work focuses on useful food, recipe, meal, purchase, cart, and planning views that humans can inspect and automate.
+- **Safer switching:** backend changes create a local rollback snapshot before committing the new data home.
+- **AI as proposals:** recipe import, pantry normalization, can-cook ranking, meal planning, cart building, personalization, cooking coach, receipt parsing, and nutrition estimation have typed contracts while deterministic app validation owns writes.
+- **Provider-ready mapping:** TheMealDB and Open Food Facts mappings now preserve source, confidence, warnings, and cache policy.
+- **Better import/receipt consistency:** deterministic receipt parsing, food draft normalization, legacy export/import, and snapshot merging make AI and non-AI intake behave more uniformly.
+- **Manual workflows still work:** food entry, cart items, recipe creation, and meal logging are available without AI.
+- **Release proof:** local Android quality, API 26 device quality, API 35 device quality, and signed APK release automation passed for this version.
+
+Install from [WonderFood 1.0.4](https://github.com/vaddisrinivas/wonderfood/releases/tag/v1.0.4):
+
+- Use `WonderFood-play-v1.0.4.apk` for Google/Play-integrated features.
+- Use `WonderFood-foss-v1.0.4.apk` for the no-Google-dependency build.
+
 ## Product Principles
 
 - Food data stays on-device unless the user explicitly chooses a remote data home, invokes an external provider, creates an encrypted backup, exports, or shares.
