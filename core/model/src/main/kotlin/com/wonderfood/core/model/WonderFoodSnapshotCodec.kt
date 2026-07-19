@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 object WonderFoodSnapshotCodec {
     const val CURRENT_SCHEMA_VERSION: Int = 1
 
-    private val json = Json {
+    internal val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = false
     }
@@ -18,7 +18,68 @@ object WonderFoodSnapshotCodec {
 
     fun decode(encoded: String): WonderFoodSnapshot =
         json.decodeFromString<WonderFoodSnapshotDto>(encoded).toDomain()
+
+    fun rows(snapshot: WonderFoodSnapshot, updatedAt: String): List<WonderFoodSnapshotRow> {
+        require(updatedAt.isNotBlank()) { "Snapshot row updated timestamp must not be blank." }
+        val dto = snapshot.toDto()
+        return buildList {
+            add(
+                WonderFoodSnapshotRow(
+                    tab = "_meta",
+                    id = "snapshot",
+                    version = snapshot.schemaVersion.toLong(),
+                    updatedAt = updatedAt,
+                    archivedAt = null,
+                    payloadJson = json.encodeToString(dto),
+                ),
+            )
+            addAll(dto.pages.map { it.row("pages", it.id, updatedAt) })
+            addAll(dto.foods.map { it.row("foods", it.id, updatedAt) })
+            addAll(dto.foodAliases.map { it.row("food_aliases", it.id, updatedAt) })
+            addAll(dto.stockLots.map { it.row("stock_lots", it.id, updatedAt) })
+            addAll(dto.nutritionSnapshots.map { it.row("nutrition_snapshots", it.id, updatedAt) })
+            addAll(dto.recipes.map { it.row("recipes", it.id, updatedAt) })
+            addAll(dto.mealPlans.map { it.row("meal_plans", it.id, updatedAt) })
+            addAll(dto.mealLogs.map { it.row("meal_logs", it.id, updatedAt) })
+            addAll(dto.shoppingItems.map { it.row("shopping_items", it.id, updatedAt) })
+            addAll(dto.receipts.map { it.row("receipts", it.id, updatedAt) })
+            addAll(dto.foodEvents.map { it.row("events", it.id, updatedAt) })
+            addAll(dto.relations.map { it.row("relations", it.id, updatedAt) })
+            addAll(dto.attachments.map { it.row("attachments", it.id, updatedAt) })
+        }
+    }
+
+    fun decodeSnapshotRow(row: WonderFoodSnapshotRow): WonderFoodSnapshot? =
+        row.takeIf { it.tab == "_meta" && it.id == "snapshot" }
+            ?.let { decode(it.payloadJson) }
 }
+
+data class WonderFoodSnapshotRow(
+    val tab: String,
+    val id: String,
+    val version: Long,
+    val updatedAt: String,
+    val archivedAt: String?,
+    val payloadJson: String,
+) {
+    init {
+        require(tab.isNotBlank()) { "Snapshot row tab must not be blank." }
+        require(id.isNotBlank()) { "Snapshot row id must not be blank." }
+        require(version >= 0L) { "Snapshot row version must not be negative." }
+        require(updatedAt.isNotBlank()) { "Snapshot row updated timestamp must not be blank." }
+        require(payloadJson.isNotBlank()) { "Snapshot row payload must not be blank." }
+    }
+}
+
+private inline fun <reified T> T.row(tab: String, id: String, updatedAt: String): WonderFoodSnapshotRow =
+    WonderFoodSnapshotRow(
+        tab = tab,
+        id = id,
+        version = 1L,
+        updatedAt = updatedAt,
+        archivedAt = null,
+        payloadJson = WonderFoodSnapshotCodec.json.encodeToString(this),
+    )
 
 @Serializable
 internal data class WonderFoodSnapshotDto(

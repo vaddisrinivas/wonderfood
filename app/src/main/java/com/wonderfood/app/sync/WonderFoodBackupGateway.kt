@@ -87,6 +87,29 @@ class WonderFoodBackupGateway(private val context: Context) {
         return payload.snapshot.copy(fileName = file.name, sizeBytes = file.length())
     }
 
+    fun createBackendSwitchSafetyBackup(
+        memory: FoodMemory,
+        fromLabel: String,
+        toLabel: String,
+    ): BackupSnapshot {
+        val payload = createGoogleDriveBackup(memory)
+        val timestamp = backupTimestamp(Instant.now())
+        val file = File(backupDir, "wonderfood-safety-before-backend-switch-$timestamp.wfcloudbackup")
+        file.writeBytes(payload.bytes)
+        File(backupDir, LATEST_BACKEND_SWITCH_SAFETY).writeBytes(payload.bytes)
+        File(backupDir, LATEST_BACKEND_SWITCH_SAFETY_MANIFEST).writeText(
+            JSONObject()
+                .put("from", fromLabel.ifBlank { "Unknown" })
+                .put("to", toLabel.ifBlank { "Unknown" })
+                .put("file_name", file.name)
+                .put("created_at_millis", payload.snapshot.createdAtMillis)
+                .put("size_bytes", file.length())
+                .put("item_count", payload.snapshot.itemCount)
+                .toString(),
+        )
+        return payload.snapshot.copy(fileName = file.name, sizeBytes = file.length())
+    }
+
     fun restoreLatestEncryptedBackup(passphrase: String): BackupSnapshot {
         require(passphrase.length >= MIN_PASSPHRASE_LENGTH) {
             "Enter the backup passphrase used to create the backup."
@@ -186,6 +209,16 @@ class WonderFoodBackupGateway(private val context: Context) {
         val file = File(backupDir, LATEST_CLOUD_BACKUP)
         if (!file.exists()) return "No Google backup cached on this phone yet."
         return "Latest Google backup cached: ${file.length() / 1024} KB"
+    }
+
+    fun latestBackendSwitchSafetyLabel(): String {
+        val manifest = File(backupDir, LATEST_BACKEND_SWITCH_SAFETY_MANIFEST)
+        if (!manifest.exists()) return ""
+        val json = runCatching { JSONObject(manifest.readText()) }.getOrNull() ?: return ""
+        val from = json.optString("from", "Unknown")
+        val to = json.optString("to", "Unknown")
+        val sizeKb = json.optLong("size_bytes", 0L) / 1024
+        return "Rollback snapshot before $from -> $to: $sizeKb KB"
     }
 
     fun deleteLocalBackups() {
@@ -294,6 +327,8 @@ class WonderFoodBackupGateway(private val context: Context) {
         private const val MANIFEST_ENTRY = "manifest.json"
         private const val LATEST_BACKUP = "wonderfood-latest.wfbackup"
         private const val LATEST_CLOUD_BACKUP = "wonderfood-latest.wfcloudbackup"
+        private const val LATEST_BACKEND_SWITCH_SAFETY = "wonderfood-latest-backend-switch-safety.wfcloudbackup"
+        private const val LATEST_BACKEND_SWITCH_SAFETY_MANIFEST = "wonderfood-latest-backend-switch-safety.json"
         private const val MIN_PASSPHRASE_LENGTH = 8
         private const val VERSION = 1
         private const val SALT_BYTES = 16

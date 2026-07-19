@@ -5,6 +5,25 @@ structure.
 
 ## Unreleased
 
+## 1.0.4 - 2026-07-19
+
+### Added
+
+- Added local-first SQLite plus optional Notion, Google Sheets, and Postgres workspace sync foundations.
+- Added polished Notion/Sheets human workspace schema, seeded provider proof harnesses, and durable conflict inbox handling.
+- Added provider contracts for recipe lookup, barcode/package lookup, nutrition lookup attribution, cache policy, and provider warnings.
+- Added TheMealDB recipe lookup preview mapping and Open Food Facts package lookup mapping.
+- Added typed AI skill contracts for recipe import, pantry normalization, can-cook ranking, meal planning, cart building, recipe personalization, cooking coach, receipt parsing, and nutrition estimation.
+- Added Samsung Food shared-link recipe import detection for individual public/shared links.
+- Added plan/cart plain-text sharing formatter that excludes secrets and provider credentials.
+- Added focused tests for provider mapping, AI skill proposals, Sheets/Notion workspace sync, backend switch safety, and conflict handling.
+
+### Changed
+
+- Google Sheets raw sync tabs now use hidden `_wf_*` sheet names to avoid collisions with human-facing tabs such as `Recipes`.
+- Google Sheets provisioning repairs mismatched legacy headers and keeps workspace tabs readable.
+- AI features remain reviewable proposals; deterministic app code owns validation, persistence, undo, and external provider sync.
+
 ## 1.0.3 - 2026-07-18
 
 ### Added

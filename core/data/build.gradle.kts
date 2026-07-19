@@ -33,6 +33,7 @@ ksp {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:engine"))
+    implementation(project(":core:ai"))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.kotlinx.serialization.json)

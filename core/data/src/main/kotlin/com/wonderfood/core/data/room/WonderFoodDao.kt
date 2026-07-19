@@ -18,6 +18,7 @@ internal abstract class WonderFoodDao {
     @Upsert abstract suspend fun upsertPage(entity: PageEntity)
     @Query("SELECT * FROM pages WHERE id = :id") abstract suspend fun getPage(id: String): PageEntity?
     @Query("SELECT * FROM pages WHERE id = :id") abstract fun observePage(id: String): Flow<PageEntity?>
+    @Query("SELECT * FROM pages WHERE deleted_at IS NULL ORDER BY updated_at DESC") abstract suspend fun getPages(): List<PageEntity>
     @Query("SELECT * FROM pages WHERE deleted_at IS NULL ORDER BY updated_at DESC") abstract fun observePages(): Flow<List<PageEntity>>
     @Query("UPDATE pages SET archived_at = :archivedAt WHERE id = :id") abstract suspend fun archivePage(id: String, archivedAt: String): Int
     @Query("UPDATE pages SET deleted_at = :deletedAt WHERE id = :id") abstract suspend fun tombstonePage(id: String, deletedAt: String): Int
@@ -25,6 +26,7 @@ internal abstract class WonderFoodDao {
     @Upsert abstract suspend fun upsertFood(entity: FoodEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertFood(entity: FoodEntity)
     @Query("SELECT * FROM foods WHERE id = :id") abstract suspend fun getFood(id: String): FoodEntity?
+    @Query("SELECT * FROM foods WHERE deleted_at IS NULL ORDER BY name") abstract suspend fun getFoods(): List<FoodEntity>
     @Query("SELECT * FROM foods WHERE id = :id") abstract fun observeFood(id: String): Flow<FoodEntity?>
     @Query("SELECT * FROM foods WHERE deleted_at IS NULL ORDER BY name") abstract fun observeFoods(): Flow<List<FoodEntity>>
     @Query("SELECT * FROM foods WHERE page_id = :pageId") abstract fun observeFoodForPage(pageId: String): Flow<FoodEntity?>
@@ -34,12 +36,14 @@ internal abstract class WonderFoodDao {
 
     @Upsert abstract suspend fun upsertFoodAlias(entity: FoodAliasEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertFoodAlias(entity: FoodAliasEntity)
+    @Query("SELECT * FROM food_aliases WHERE deleted_at IS NULL ORDER BY name") abstract suspend fun getFoodAliases(): List<FoodAliasEntity>
     @Query("SELECT * FROM food_aliases WHERE id = :id") abstract fun observeFoodAlias(id: String): Flow<FoodAliasEntity?>
     @Query("SELECT * FROM food_aliases WHERE food_id = :foodId AND deleted_at IS NULL ORDER BY name") abstract fun observeAliasesForFood(foodId: String): Flow<List<FoodAliasEntity>>
     @Query("UPDATE food_aliases SET archived_at = :archivedAt WHERE id = :id") abstract suspend fun archiveFoodAlias(id: String, archivedAt: String): Int
 
     @Upsert abstract suspend fun upsertStockLot(entity: StockLotEntity)
     @Query("SELECT * FROM stock_lots WHERE id = :id") abstract suspend fun getStockLot(id: String): StockLotEntity?
+    @Query("SELECT * FROM stock_lots WHERE deleted_at IS NULL ORDER BY expires_on") abstract suspend fun getStockLots(): List<StockLotEntity>
     @Query("SELECT * FROM stock_lots WHERE id = :id") abstract fun observeStockLot(id: String): Flow<StockLotEntity?>
     @Query("SELECT * FROM stock_lots WHERE food_id = :foodId AND deleted_at IS NULL ORDER BY expires_on") abstract fun observeStockLotsForFood(foodId: String): Flow<List<StockLotEntity>>
     @Query("UPDATE stock_lots SET status = 'ARCHIVED', archived_at = :archivedAt, updated_at = :archivedAt WHERE id = :id") abstract suspend fun archiveStockLot(id: String, archivedAt: String): Int

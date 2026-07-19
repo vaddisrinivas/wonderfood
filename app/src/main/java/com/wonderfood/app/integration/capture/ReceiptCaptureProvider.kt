@@ -39,7 +39,7 @@ class ProductionReceiptServingPicker : ReceiptServingPicker {
     override fun pickServingText(rawLine: String, candidate: FoodCandidate): String =
         buildString {
             if (candidate.servingText.isNotBlank()) append(candidate.servingText.trim())
-            if (isEmpty() && candidate.quantity.isNotBlank()) append(candidate.quantity)
+            if (isEmpty() && candidate.quantity.isNotBlank()) append(candidate.quantity.lowercase())
             if (isEmpty()) append(rawLine.trim())
         }
 }

@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT_DIR"
+
+STAMP="$(date +"%Y%m%d-%H%M%S")"
+OUT_DIR="${1:-build/evidence/release-$STAMP}"
+mkdir -p "$OUT_DIR"
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+record() {
+  printf '%s\n' "$*" | tee -a "$OUT_DIR/release-evidence.txt" >/dev/null
+}
+
+version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
+version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' app/build.gradle.kts | head -n 1)"
+package_name="com.wonderfood.app"
+
+test -n "$version_name" || fail "Could not read versionName from app/build.gradle.kts"
+test -n "$version_code" || fail "Could not read versionCode from app/build.gradle.kts"
+
+record "WonderFood release evidence"
+record "timestamp=$STAMP"
+record "version_name=$version_name"
+record "version_code=$version_code"
+record "package=$package_name"
+record "git_head=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+record ""
+
+missing_signing=0
+for name in ANDROID_KEYSTORE_PATH ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+  if [[ -z "${!name:-}" ]]; then
+    record "missing_env=$name"
+    missing_signing=1
+  fi
+done
+
+if [[ "$missing_signing" -eq 0 ]]; then
+  [[ -f "$ANDROID_KEYSTORE_PATH" ]] || fail "ANDROID_KEYSTORE_PATH does not exist: $ANDROID_KEYSTORE_PATH"
+  record "signing_env=present"
+  keytool -list -v \
+    -keystore "$ANDROID_KEYSTORE_PATH" \
+    -alias "$ANDROID_KEY_ALIAS" \
+    -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+    -keypass "$ANDROID_KEY_PASSWORD" \
+    > "$OUT_DIR/signing-key.txt"
+  awk '/SHA1:|SHA256:|SHA512:/{print}' "$OUT_DIR/signing-key.txt" | tee "$OUT_DIR/signing-fingerprints.txt" >/dev/null
+  record "signing_fingerprints=$OUT_DIR/signing-fingerprints.txt"
+  ./gradlew --no-daemon :app:assembleFossRelease :app:assemblePlayRelease | tee "$OUT_DIR/gradle-release-build.log"
+else
+  record "signing_env=missing"
+  record "release_build=skipped_missing_signing_env"
+fi
+
+release_apks=()
+while IFS= read -r apk; do
+  release_apks+=("$apk")
+done < <(find app/build/outputs/apk -path '*/release/*.apk' ! -name '*unsigned*' -type f 2>/dev/null | sort)
+
+if [[ "${#release_apks[@]}" -gt 0 ]]; then
+  apksigner="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
+  [[ -x "$apksigner" ]] || fail "Could not find apksigner under ANDROID_HOME/build-tools"
+  : > "$OUT_DIR/SHA256SUMS.txt"
+  for apk in "${release_apks[@]}"; do
+    base="$(basename "$apk")"
+    cp "$apk" "$OUT_DIR/$base"
+    shasum -a 256 "$OUT_DIR/$base" >> "$OUT_DIR/SHA256SUMS.txt"
+    "$apksigner" verify --verbose --print-certs "$apk" > "$OUT_DIR/$base.apksigner.txt"
+    record "verified_apk=$OUT_DIR/$base"
+  done
+else
+  record "verified_apk=none"
+fi
+
+client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' app/src/main/res/values/google_auth.xml | head -n 1)"
+if [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
+  record "google_web_client_id=placeholder"
+else
+  record "google_web_client_id=configured_public_value"
+fi
+
+if [[ -f .well-known/assetlinks.json ]]; then
+  if grep -q 'REPLACE_WITH_RELEASE_SHA256_CERT_FINGERPRINT' .well-known/assetlinks.json; then
+    record "assetlinks=placeholder"
+  else
+    record "assetlinks=configured"
+  fi
+else
+  record "assetlinks=missing"
+fi
+
+if command -v adb >/dev/null 2>&1; then
+  adb devices -l > "$OUT_DIR/adb-devices.txt" || true
+  device_count="$(awk '$2 == "device" { count++ } END { print count + 0 }' "$OUT_DIR/adb-devices.txt")"
+  if [[ "$device_count" -eq 1 || -n "${ANDROID_SERIAL:-}" ]]; then
+    scripts/quality/collect-device-evidence.sh "${ANDROID_SERIAL:-}" "$OUT_DIR/device" >/dev/null || true
+    record "device_evidence=$OUT_DIR/device"
+  elif [[ "$device_count" -gt 1 ]]; then
+    record "device_evidence=none_multiple_devices_set_ANDROID_SERIAL"
+  else
+    record "device_evidence=none_no_connected_device"
+  fi
+else
+  record "device_evidence=none_adb_missing"
+fi
+
+cat > "$OUT_DIR/manifest.txt" <<MANIFEST
+version_name=$version_name
+version_code=$version_code
+package=$package_name
+signing_env=$([[ "$missing_signing" -eq 0 ]] && echo present || echo missing)
+google_web_client_id=${client_id:-missing}
+release_apk_count=${#release_apks[@]}
+MANIFEST
+
+record "manifest=$OUT_DIR/manifest.txt"
+record "done=$OUT_DIR"
+echo "$OUT_DIR"

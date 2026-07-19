@@ -175,7 +175,7 @@ class FoodInterpreterTest {
         )
 
         val draft = turn.draft as MealLogDraft
-        assertEquals("Chicken Rice Bowl For Lunch", draft.titleText)
+        assertEquals("Chicken Rice Bowl", draft.titleText)
         assertEquals(MealSlot.LUNCH, draft.mealSlot)
         assertEquals("Chicken", draft.usedItemsText)
         assertTrue(requireNotNull(draft.calories) > 0)

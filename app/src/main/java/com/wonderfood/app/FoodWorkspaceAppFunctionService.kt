@@ -1,5 +1,7 @@
 package com.wonderfood.app
 
+import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import androidx.appfunctions.service.AppFunction
@@ -39,6 +41,8 @@ private const val EXECUTE_FOOD_WORKSPACE_ACTIONS_ID =
 private const val PROPOSE_FOOD_WORKSPACE_ACTIONS_ID =
     "com.wonderfood.app.FoodWorkspaceAppFunctionService#proposeFoodWorkspaceActions"
 
+@TargetApi(APP_FUNCTION_MIN_SDK)
+@SuppressLint("NewApi")
 class FoodWorkspaceAppFunctionService : AppFunctionService() {
     override suspend fun executeFunction(
         request: ExecuteAppFunctionRequest,
