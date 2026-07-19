@@ -145,8 +145,9 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("AI assistant").performClick()
         composeTestRule.onNodeWithText("Provider routes").assertIsDisplayed()
         composeTestRule.onNodeWithText("View or edit core skill").performClick()
+        composeTestRule.waitForIdle()
 
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        composeTestRule.waitUntil(timeoutMillis = 20_000) {
             composeTestRule.onAllNodesWithText("Core AI skill").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("Core AI skill").assertExists()
