@@ -21,6 +21,21 @@ navigation execution, and user confirmation.
 
 ## Skills
 
+### Wave 1 app contracts
+
+The Android app now carries typed contract objects for the next AI/provider wave:
+
+- `RecipeImportSkillContract`: URL/text/Samsung Food shared-link import proposals.
+- `PantryNormalizeSkillContract`: canonical pantry names, categories, likely units, aliases, and confidence.
+- `CanCookSkillContract`: deterministic first can-cook/almost-can-cook recipe ranking.
+- `MealPlanSkillContract`: pantry-first reviewable meal-plan proposals.
+- `CartBuilderSkillContract`: plan-to-cart suggestions with duplicate preservation.
+- `RecipePersonalizeSkillContract`: reviewable recipe variants that preserve originals.
+- `CookingCoachSkillContract`: step guidance and deterministic timer extraction.
+
+These contracts are not permission to silently mutate data. Each output remains a
+proposal until product validation and user review accept it.
+
 ### 1. Inventory
 
 - Skill id: `inventory`

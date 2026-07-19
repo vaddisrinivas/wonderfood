@@ -19,6 +19,7 @@ import com.wonderfood.core.model.NutritionSnapshotId
 import com.wonderfood.core.model.Page
 import com.wonderfood.core.model.PageId
 import com.wonderfood.core.model.Quantity
+import com.wonderfood.core.model.RelationId
 import com.wonderfood.core.model.Source
 import com.wonderfood.core.model.SourceId
 import com.wonderfood.core.model.StockLot
@@ -236,6 +237,20 @@ internal fun SourceRecordEntity.toDomain(): Source =
 internal fun PageEntity.toPageEntityRef(): EntityRef? =
     entityId?.let { id -> EntityRef(entityType ?: EntityType.UNKNOWN, id) }
 
+internal fun PageEntity.toPage(): Page =
+    Page(
+        id = PageId(id),
+        title = title,
+        kind = kind,
+        entity = toPageEntityRef(),
+        aliases = aliases,
+        relationIds = relationIds.map(::RelationId),
+        attachmentIds = attachmentIds.map(::AttachmentId),
+        truthState = truthState,
+        source = source.toDomain(),
+        confidence = confidence.toDomain(),
+    )
+
 internal fun FoodEntity.toFood(): Food =
     Food(
         id = FoodId(id),
@@ -246,6 +261,17 @@ internal fun FoodEntity.toFood(): Food =
         stockLotIds = stockLotIds.map(::StockLotId),
         nutritionSnapshotIds = nutritionSnapshotIds.map(::NutritionSnapshotId),
         attachmentIds = attachmentIds.map(::AttachmentId),
+        source = source.toDomain(),
+        confidence = confidence.toDomain(),
+        truthState = truthState,
+    )
+
+internal fun FoodAliasEntity.toFoodAlias(): FoodAlias =
+    FoodAlias(
+        id = FoodAliasId(id),
+        foodId = FoodId(foodId),
+        name = name,
+        locale = locale,
         source = source.toDomain(),
         confidence = confidence.toDomain(),
         truthState = truthState,

@@ -15,7 +15,7 @@ Status meanings:
 
 | Capability | Status | User contract |
 |---|---|---|
-| Five-destination shell | Shipped | Today, Kitchen, Plan, Recipes, and Shop only; adaptive phone and tablet navigation. |
+| Now/Food/Week/Cart shell | Shipped | Primary navigation is Now, Food, Week, and Cart; recipes live inside Food instead of a separate top-level destination. |
 | Today meal timeline | Shipped | Planned and logged meals share one daily timeline. Unknown nutrition is not rendered as zero. |
 | Global search | Shipped | Search across food, groceries, recipes, meals, plans, and receipts. |
 | Object detail pages | Shipped | Food objects can be inspected and edited without AI. |
@@ -43,6 +43,7 @@ Status meanings:
 | Meal plans and day entries | Shipped | Draft/planned/eaten/skipped states are editable and reviewable. |
 | Deterministic meal planning | Shipped | No-LLM templates can create the same proposal shape as AI. |
 | Pantry-aware recipe matching | Shipped | Recipes show have/need matching against current Kitchen data. |
+| Food segmented hub | Shipped | Food offers Can make, In kitchen, and Saved views so recipes start from matched Kitchen items. |
 | Cooking and inventory deductions | Partial | Cooking can propose/log changes; complete leftover and multi-lot deduction review remains. |
 | Focused cooking mode | Planned | Large-step, wake-lock, timers, progress, and finish summary. |
 
@@ -81,6 +82,9 @@ Status meanings:
 | Google Assistant/App Actions | Partial | Intent/shortcut contracts exist; physical-device Assistant validation remains. |
 | Samsung Routines/notification bridge | Partial | Share/intent/deep-link paths are available; packaged Routine/notification adapters remain. |
 | Google Drive encrypted backup | Partial | App-data backup flow exists; production OAuth client configuration is external. |
+| Google Sheets data home | Partial | Play flavor connects with Sheet URL plus Google authorization, creates schema tabs, exports snapshots, preserves remote data, and supports reviewed additive import. Release OAuth proof remains external. |
+| Notion data home | Partial | Page URL plus integration token is validated, token is Keystore-protected, and snapshot export appends managed blocks. Structured Notion readback/import remains. |
+| Postgres/Supabase data home | Partial | Supabase/PostgREST/WonderFood server modes validate HTTPS API access and export canonical snapshots. Direct DSN is advanced/config-only until a safe adapter exists. |
 | Health Connect | Partial | Optional read/integration flow exists; broader device/provider validation remains. |
 | Verified `wonderfood.app` links | External | Requires production `assetlinks.json` for the release signing certificate. |
 
@@ -89,6 +93,7 @@ Status meanings:
 | Capability | Status | User contract |
 |---|---|---|
 | Local-first database | Shipped | Core food workspace remains useful offline and without AI. |
+| Backend switch rollback snapshot | Shipped | Switching data homes creates a local rollback snapshot before the new backend is committed. |
 | CSV import/export | Shipped | Imports are reviewed and exports remain user-controlled. |
 | Encrypted backup/restore | Shipped | Explicit backups are encrypted; Android automatic data backup is disabled. |
 | Golden command parity tests | Partial | Pantry/AI paths are covered; plan, meal, shop, recipe, and receipt matrix is growing. |

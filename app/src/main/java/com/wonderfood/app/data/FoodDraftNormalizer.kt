@@ -37,9 +37,9 @@ object FoodDraftNormalizer {
                     .mapValues { it.value.trim() }
                     .filterValues { it.isNotBlank() },
             )
-            is MealLogDraft -> draft.copy(titleText = draft.titleText.cleanTitle())
+            is MealLogDraft -> draft.copy(titleText = draft.titleText.cleanTitle().stripTrailingMealSlot())
             is MealPlanDraft -> draft.copy(
-                titleText = draft.titleText.cleanTitle().ifBlank { "Meal plan" },
+                titleText = draft.titleText.cleanWhitespace().ifBlank { "Meal plan" },
                 entries = draft.entries.map { entry -> entry.copy(title = entry.title.cleanTitle()) },
             )
             is RecipeDraft -> draft.copy(titleText = draft.titleText.cleanTitle())
@@ -57,12 +57,18 @@ object FoodDraftNormalizer {
     }
 
     private fun String.cleanTitle(): String =
-        trim()
-            .replace(Regex("""\s+"""), " ")
+        cleanWhitespace()
             .split(" ")
             .joinToString(" ") { word ->
                 word.replaceFirstChar { first ->
                     if (first.isLowerCase()) first.titlecase(Locale.US) else first.toString()
                 }
             }
+
+    private fun String.cleanWhitespace(): String =
+        trim().replace(Regex("""\s+"""), " ")
+
+    private fun String.stripTrailingMealSlot(): String =
+        replace(Regex("""(?i)\s+for\s+(breakfast|lunch|dinner|snack)$"""), "")
+            .trim(' ', '.', '!', '?', '-')
 }

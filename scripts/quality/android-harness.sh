@@ -34,7 +34,9 @@ case "$MODE" in
     ./gradlew "${local_tasks[@]}"
     ;;
   connected)
-    ./gradlew "${connected_tasks[@]}"
+    for task in "${connected_tasks[@]}"; do
+      ./gradlew "$task"
+    done
     ;;
   all)
     "$0" local

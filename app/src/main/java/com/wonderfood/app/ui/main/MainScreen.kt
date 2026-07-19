@@ -79,6 +79,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -185,10 +186,12 @@ import com.wonderfood.app.health.HealthDailySummary
 import com.wonderfood.app.integration.capture.FoodCaptureContracts
 import com.wonderfood.app.sync.GoogleDriveAccess
 import com.wonderfood.app.sync.GoogleDriveAuthorization
+import com.wonderfood.app.sync.GoogleSheetsAuthorization
 import com.wonderfood.app.sync.GoogleSignInGateway
 import com.wonderfood.app.sync.WonderFoodCsvGateway
 import com.wonderfood.app.theme.WonderFoodTheme
 import com.wonderfood.app.theme.WonderFoodThemeMode
+import com.wonderfood.core.data.backend.BackendType
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -314,6 +317,7 @@ fun MainScreen(
     val googleSignInGateway = remember(context) { GoogleSignInGateway(context) }
     var pendingGoogleAction by rememberSaveable { mutableStateOf<GoogleSyncAction?>(null) }
     var pendingGoogleEmail by rememberSaveable { mutableStateOf("") }
+    var pendingGoogleSheetUrl by rememberSaveable { mutableStateOf("") }
     fun runGoogleAction(accessToken: String) {
         val access = GoogleDriveAccess(
             accessToken = accessToken,
@@ -340,6 +344,27 @@ fun MainScreen(
                     pendingGoogleAction = null
                     viewModel.onGoogleSyncError("Google Drive permission failed: ${error.message ?: "unknown error"}")
                 }
+        }
+    val googleSheetsAuthorizationLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+                pendingGoogleSheetUrl = ""
+                viewModel.onGoogleSyncError("Google Sheets permission was cancelled.")
+                return@rememberLauncherForActivityResult
+            }
+            runCatching {
+                GoogleSheetsAuthorization.accessTokenFromResultIntent(context, result.data)
+            }.onSuccess { accessToken ->
+                viewModel.connectGoogleSheetsBackend(
+                    sheetInput = pendingGoogleSheetUrl,
+                    accountEmail = pendingGoogleEmail.ifBlank { state.googleAccountEmail },
+                    accessToken = accessToken,
+                )
+                pendingGoogleSheetUrl = ""
+            }.onFailure { error ->
+                pendingGoogleSheetUrl = ""
+                viewModel.onGoogleSyncError("Google Sheets permission failed: ${error.message ?: "unknown error"}")
+            }
         }
     fun requestGoogleDriveAccess(action: GoogleSyncAction) {
         val activity = context as? Activity ?: run {
@@ -380,6 +405,50 @@ fun MainScreen(
             }.onSuccess { profile ->
                 pendingGoogleEmail = profile.email
                 viewModel.onGoogleSignIn(profile)
+            }.onFailure { error ->
+                viewModel.onGoogleSyncError("Google sign-in failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+    fun requestGoogleSheetsAccess(sheetUrl: String, accountEmail: String) {
+        val activity = context as? Activity ?: run {
+            viewModel.onGoogleSyncError("Google Sheets needs an active Android screen.")
+            return
+        }
+        pendingGoogleSheetUrl = sheetUrl
+        GoogleSheetsAuthorization.requestAccess(
+            activity = activity,
+            accountEmail = accountEmail,
+            onResolution = googleSheetsAuthorizationLauncher::launch,
+            onAccessToken = { accessToken ->
+                viewModel.connectGoogleSheetsBackend(
+                    sheetInput = sheetUrl,
+                    accountEmail = accountEmail,
+                    accessToken = accessToken,
+                )
+                pendingGoogleSheetUrl = ""
+            },
+            onFailure = { error ->
+                pendingGoogleSheetUrl = ""
+                viewModel.onGoogleSyncError("Google Sheets permission failed: ${error.message ?: "unknown error"}")
+            },
+        )
+    }
+    fun signInAndConnectGoogleSheets(sheetUrl: String) {
+        val clientId = state.googleOAuthClientId.trim()
+        if (clientId.isBlank() || clientId.startsWith("TODO_")) {
+            viewModel.onGoogleSyncError(
+                "Paste the Google Web OAuth client ID in Settings > Backup & restore before using Google Sheets.",
+            )
+            return
+        }
+        googleScope.launch {
+            runCatching {
+                googleSignInGateway.signIn(clientId)
+            }.onSuccess { profile ->
+                pendingGoogleEmail = profile.email
+                viewModel.onGoogleSignIn(profile)
+                requestGoogleSheetsAccess(sheetUrl, profile.email)
             }.onFailure { error ->
                 viewModel.onGoogleSyncError("Google sign-in failed: ${error.message ?: "unknown error"}")
             }
@@ -489,6 +558,13 @@ fun MainScreen(
         onLogWater = viewModel::logWater,
         onUndo = viewModel::undoLastAction,
         onDismissFeedback = viewModel::clearFeedback,
+        onChooseLocalBackend = viewModel::chooseLocalBackend,
+        onValidateGoogleSheetsBackend = ::signInAndConnectGoogleSheets,
+        onConnectNotionBackend = viewModel::connectNotionBackend,
+        onConnectPostgresBackend = viewModel::connectPostgresBackend,
+        onSelectPendingBackend = viewModel::selectPendingBackend,
+        onDismissBackendOnboarding = viewModel::dismissBackendOnboardingForNow,
+        onClearWorkspaceConflictInbox = viewModel::clearWorkspaceConflictInbox,
         modifier = modifier,
     )
     state.csvImportPreview?.let { preview ->
@@ -503,6 +579,13 @@ fun MainScreen(
             preview = preview,
             onConfirm = viewModel::confirmGoogleRestorePreview,
             onDismiss = viewModel::cancelGoogleRestorePreview,
+        )
+    }
+    state.sheetsImportPreview?.let { preview ->
+        SheetsImportPreviewDialog(
+            preview = preview,
+            onConfirm = viewModel::confirmSheetsImportPreview,
+            onDismiss = viewModel::cancelSheetsImportPreview,
         )
     }
     pendingReceiptUri?.let { uri ->
@@ -548,7 +631,7 @@ private fun ReceiptNoteDialog(
                     placeholder = { Text("Bought for pantry; line 4 is oat milk…") },
                     minLines = 4,
                     maxLines = 8,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 )
                 Text(
                     "The photo and this note are staged for review. Nothing is added until you approve the proposal.",
@@ -558,10 +641,10 @@ private fun ReceiptNoteDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onAnalyze, shape = RoundedCornerShape(8.dp)) { Text("Analyze receipt") }
+            Button(onClick = onAnalyze, shape = RoundedCornerShape(18.dp)) { Text("Analyze receipt") }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) { Text("Cancel") }
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(18.dp)) { Text("Cancel") }
         },
     )
 }
@@ -593,12 +676,12 @@ private fun CsvImportPreviewDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, shape = RoundedCornerShape(8.dp)) {
+            Button(onClick = onConfirm, shape = RoundedCornerShape(18.dp)) {
                 Text("Import")
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(18.dp)) {
                 Text("Cancel")
             }
         },
@@ -611,6 +694,67 @@ private fun CsvPreviewLine(label: String, value: String) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
     }
+}
+
+@Composable
+private fun SheetsImportPreviewDialog(
+    preview: SheetsImportPreview,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${preview.providerLabel} already has WonderFood data") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Import mode: Review first", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                CsvPreviewLine("Source", preview.sourceLabel)
+                if (preview.workspaceRowCount > 0) {
+                    CsvPreviewLine("Workspace rows", preview.workspaceRowCount.toString())
+                    CsvPreviewLine("Merge changes", preview.changeCount.toString())
+                    CsvPreviewLine("Conflicts", preview.conflictCount.toString())
+                    CsvPreviewLine("Field clocks", preview.fieldClockCount.toString())
+                }
+                CsvPreviewLine("Kitchen foods", preview.foodCount.toString())
+                CsvPreviewLine("Stock lots", preview.stockLotCount.toString())
+                CsvPreviewLine("Shopping items", preview.shoppingItemCount.toString())
+                CsvPreviewLine("Recipes", preview.recipeCount.toString())
+                CsvPreviewLine("Meal plans", preview.mealPlanCount.toString())
+                CsvPreviewLine("Meal logs", preview.mealLogCount.toString())
+                CsvPreviewLine("Events", preview.eventCount.toString())
+                if (preview.mergeClock.isNotBlank()) {
+                    CsvPreviewLine("Merge clock", preview.mergeClock)
+                }
+                if (preview.conflictSummary.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text("Needs attention", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    preview.conflictSummary.forEach { conflict ->
+                        Text(conflict, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                HorizontalDivider()
+                Text(
+                    if (preview.conflictCount > 0) {
+                        "WonderFood can preserve ${preview.providerLabel} and apply valid changes, but conflicts should be reviewed so household data is not duplicated or silently overwritten."
+                    } else {
+                        "WonderFood preserved this ${preview.providerLabel} workspace instead of overwriting it. Import/merge needs an explicit review step so household data is not duplicated or deleted accidentally."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm, shape = RoundedCornerShape(18.dp)) {
+                Text("Use ${preview.providerLabel} data")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, shape = RoundedCornerShape(18.dp)) {
+                Text("Preserve only")
+            }
+        },
+    )
 }
 
 @Composable
@@ -646,12 +790,12 @@ private fun GoogleRestorePreviewDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, shape = RoundedCornerShape(8.dp)) {
+            Button(onClick = onConfirm, shape = RoundedCornerShape(18.dp)) {
                 Text("Restore")
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(18.dp)) {
                 Text("Cancel")
             }
         },
@@ -663,6 +807,481 @@ private fun GoogleRestoreLine(label: String, value: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
         Text(label, modifier = Modifier.widthIn(min = 96.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun BackendOnboardingDialog(
+    backendHome: BackendHomeUiState,
+    conflictInbox: WorkspaceConflictInbox?,
+    onUseLocal: () -> Unit,
+    onConnectSheets: (String) -> Unit,
+    onConnectNotion: (String, String) -> Unit,
+    onConnectPostgres: (String, String, String) -> Unit,
+    onSelectPending: (BackendType) -> Unit,
+    onClearConflictInbox: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selectedBackend by rememberSaveable(backendHome.activeType) {
+        mutableStateOf(backendHome.activeType ?: BackendType.LOCAL_SQLITE)
+    }
+    var sheetUrl by rememberSaveable(backendHome.sheetUrl) { mutableStateOf(backendHome.sheetUrl) }
+    var notionPageUrl by rememberSaveable { mutableStateOf("") }
+    var notionToken by rememberSaveable { mutableStateOf("") }
+    var postgresEndpoint by rememberSaveable { mutableStateOf("") }
+    var postgresHousehold by rememberSaveable { mutableStateOf("home") }
+    var postgresToken by rememberSaveable { mutableStateOf("") }
+    var switchAcknowledged by rememberSaveable { mutableStateOf(false) }
+    val activeType = backendHome.activeType
+    val isBackendSwitch = activeType != null && selectedBackend != activeType
+    val switchReady = !isBackendSwitch || switchAcknowledged
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Choose your food home")
+                Text(
+                    "One place stays in charge. WonderFood keeps a rollback snapshot before switching.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Normal,
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BackendSafetyBanner()
+                conflictInbox?.let { inbox ->
+                    WorkspaceConflictInboxCard(
+                        inbox = inbox,
+                        onClear = onClearConflictInbox,
+                    )
+                }
+                BackendChoiceRow(
+                    icon = Icons.Rounded.Kitchen,
+                    title = "This phone",
+                    subtitle = "Fastest setup. Private and offline.",
+                    helper = "Best if you just want to start now.",
+                    selected = selectedBackend == BackendType.LOCAL_SQLITE,
+                    onClick = {
+                        selectedBackend = BackendType.LOCAL_SQLITE
+                        switchAcknowledged = false
+                        onSelectPending(BackendType.LOCAL_SQLITE)
+                    },
+                )
+                BackendChoiceRow(
+                    icon = Icons.Rounded.Description,
+                    title = "Google Sheets",
+                    subtitle = "Shared spreadsheet. Easy family editing.",
+                    helper = "Paste a Sheet link and approve Google access.",
+                    selected = selectedBackend == BackendType.GOOGLE_SHEETS,
+                    onClick = {
+                        selectedBackend = BackendType.GOOGLE_SHEETS
+                        switchAcknowledged = false
+                        onSelectPending(BackendType.GOOGLE_SHEETS)
+                    },
+                )
+                BackendChoiceRow(
+                    icon = Icons.Rounded.Storefront,
+                    title = "Notion",
+                    subtitle = "A Notion page becomes the food workspace.",
+                    helper = "Share the page with your integration first.",
+                    selected = selectedBackend == BackendType.NOTION,
+                    onClick = {
+                        selectedBackend = BackendType.NOTION
+                        switchAcknowledged = false
+                        onSelectPending(BackendType.NOTION)
+                    },
+                )
+                BackendChoiceRow(
+                    icon = Icons.Rounded.ShoppingCart,
+                    title = "Postgres / Supabase",
+                    subtitle = "For Supabase, PostgREST, or a server.",
+                    helper = "Advanced. Needs URL, household, and token.",
+                    selected = selectedBackend == BackendType.POSTGRES,
+                    onClick = {
+                        selectedBackend = BackendType.POSTGRES
+                        switchAcknowledged = false
+                        onSelectPending(BackendType.POSTGRES)
+                    },
+                )
+                if (isBackendSwitch) {
+                    BackendSwitchCheckpoint(
+                        fromLabel = activeType.label,
+                        toLabel = selectedBackend.label,
+                        acknowledged = switchAcknowledged,
+                        onAcknowledgedChange = { switchAcknowledged = it },
+                    )
+                }
+                HorizontalDivider()
+                when (selectedBackend) {
+                    BackendType.LOCAL_SQLITE -> LocalBackendSetup(
+                        enabled = switchReady,
+                        onUseLocal = onUseLocal,
+                    )
+                    BackendType.GOOGLE_SHEETS -> GoogleSheetsBackendSetup(
+                        sheetUrl = sheetUrl,
+                        onSheetUrlChange = { sheetUrl = it.take(600) },
+                        enabled = switchReady,
+                        onConnect = { onConnectSheets(sheetUrl) },
+                    )
+                    BackendType.NOTION -> NotionBackendSetup(
+                        pageUrl = notionPageUrl,
+                        token = notionToken,
+                        onPageUrlChange = { notionPageUrl = it.take(600) },
+                        onTokenChange = { notionToken = it.take(300) },
+                        enabled = switchReady,
+                        onConnect = { onConnectNotion(notionPageUrl, notionToken) },
+                    )
+                    BackendType.POSTGRES -> PostgresBackendSetup(
+                        endpoint = postgresEndpoint,
+                        householdId = postgresHousehold,
+                        token = postgresToken,
+                        onEndpointChange = { postgresEndpoint = it.take(600) },
+                        onHouseholdChange = { postgresHousehold = it.take(120) },
+                        onTokenChange = { postgresToken = it.take(500) },
+                        enabled = switchReady,
+                        onConnect = { onConnectPostgres(postgresEndpoint, postgresHousehold, postgresToken) },
+                    )
+                }
+                if (backendHome.message.isNotBlank()) {
+                    BackendStatusMessage(backendHome.message)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("I’ll do this later") }
+        },
+        dismissButton = {
+            TextButton(onClick = onUseLocal, enabled = selectedBackend == BackendType.LOCAL_SQLITE && switchReady) {
+                Text("Start local now")
+            }
+        },
+    )
+}
+
+@Composable
+private fun WorkspaceConflictInboxCard(
+    inbox: WorkspaceConflictInbox,
+    onClear: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                Icon(Icons.Rounded.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "${inbox.providerLabel} conflict inbox",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Text(
+                        "${inbox.conflictCount} conflict${inbox.conflictCount.pluralWord} · ${inbox.changeCount} change${inbox.changeCount.pluralWord} · ${inbox.sourceLabel}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+            if (inbox.mergeClock.isNotBlank()) {
+                Text(
+                    "Merge clock: ${inbox.mergeClock}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Text(
+                inbox.decision,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            inbox.conflictSummary.forEach { conflict ->
+                Text(
+                    conflict,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            TextButton(onClick = onClear, shape = RoundedCornerShape(18.dp)) {
+                Text("Dismiss reviewed conflicts")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackendSwitchCheckpoint(
+    fromLabel: String,
+    toLabel: String,
+    acknowledged: Boolean,
+    onAcknowledgedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Switch checkpoint", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "You are switching from $fromLabel to $toLabel. WonderFood will create a rollback snapshot first, verify the new data home, export a snapshot, then save the switch.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Checkbox(checked = acknowledged, onCheckedChange = onAcknowledgedChange)
+                Text(
+                    "I understand the current data home stays recoverable from the rollback snapshot.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackendChoiceRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    helper: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(helper, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (selected) {
+                Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackendSafetyBanner() {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Simple rule", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "Choose one data home. WonderFood checks access, exports a snapshot, then saves the choice. Failed setup never replaces your current data.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocalBackendSetup(enabled: Boolean = true, onUseLocal: () -> Unit) {
+    BackendSetupPanel(
+        title = "Ready immediately",
+        body = "No account, token, network, or permission. Your food stays on this phone until you switch.",
+    ) {
+        Button(
+            onClick = onUseLocal,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            enabled = enabled,
+        ) {
+            Text("Use this phone")
+        }
+    }
+}
+
+@Composable
+private fun GoogleSheetsBackendSetup(
+    sheetUrl: String,
+    onSheetUrlChange: (String) -> Unit,
+    enabled: Boolean = true,
+    onConnect: () -> Unit,
+) {
+    BackendSetupPanel(
+        title = "What you need",
+        body = "A Google Sheet you can edit. WonderFood creates tabs, preserves existing WonderFood data, and asks Google for Sheets access.",
+    ) {
+        OutlinedTextField(
+            value = sheetUrl,
+            onValueChange = onSheetUrlChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Google Sheet URL") },
+            placeholder = { Text("https://docs.google.com/spreadsheets/d/...") },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        Button(
+            onClick = onConnect,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            enabled = enabled && sheetUrl.isNotBlank(),
+        ) {
+            Text("Continue with Google")
+        }
+    }
+}
+
+@Composable
+private fun NotionBackendSetup(
+    pageUrl: String,
+    token: String,
+    onPageUrlChange: (String) -> Unit,
+    onTokenChange: (String) -> Unit,
+    enabled: Boolean = true,
+    onConnect: () -> Unit,
+) {
+    BackendSetupPanel(
+        title = "What you need",
+        body = "A Notion page shared with your integration. We never ask for your Notion username or password.",
+    ) {
+        OutlinedTextField(
+            value = pageUrl,
+            onValueChange = onPageUrlChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Notion page URL") },
+            placeholder = { Text("https://www.notion.so/...") },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        OutlinedTextField(
+            value = token,
+            onValueChange = onTokenChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Integration token") },
+            placeholder = { Text("secret_...") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        Button(
+            onClick = onConnect,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            enabled = enabled && pageUrl.isNotBlank() && token.isNotBlank(),
+        ) {
+            Text("Use Notion")
+        }
+    }
+}
+
+@Composable
+private fun PostgresBackendSetup(
+    endpoint: String,
+    householdId: String,
+    token: String,
+    onEndpointChange: (String) -> Unit,
+    onHouseholdChange: (String) -> Unit,
+    onTokenChange: (String) -> Unit,
+    enabled: Boolean = true,
+    onConnect: () -> Unit,
+) {
+    BackendSetupPanel(
+        title = "Advanced setup",
+        body = "Supabase and PostgREST work with HTTPS API URLs. Direct PostgreSQL DSN is saved for advanced/internal use only.",
+    ) {
+        OutlinedTextField(
+            value = endpoint,
+            onValueChange = onEndpointChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Server URL or PostgreSQL DSN") },
+            placeholder = { Text("https://project.supabase.co") },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        OutlinedTextField(
+            value = householdId,
+            onValueChange = onHouseholdChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Household ID") },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        OutlinedTextField(
+            value = token,
+            onValueChange = onTokenChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("API token") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+        )
+        Button(
+            onClick = onConnect,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            enabled = enabled &&
+                endpoint.isNotBlank() &&
+                householdId.isNotBlank() &&
+                (token.isNotBlank() || endpoint.trim().startsWith("postgres", ignoreCase = true)),
+        ) {
+            Text("Use Postgres / Supabase")
+        }
+    }
+}
+
+@Composable
+private fun BackendSetupPanel(
+    title: String,
+    body: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun BackendStatusMessage(message: String) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)) {
+        Text(
+            message,
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
     }
 }
 
@@ -725,6 +1344,13 @@ private fun WonderFoodScreen(
     onLogWater: (Int) -> Unit,
     onUndo: () -> Unit,
     onDismissFeedback: () -> Unit,
+    onChooseLocalBackend: () -> Unit,
+    onValidateGoogleSheetsBackend: (String) -> Unit,
+    onConnectNotionBackend: (String, String) -> Unit,
+    onConnectPostgresBackend: (String, String, String) -> Unit,
+    onSelectPendingBackend: (BackendType) -> Unit,
+    onDismissBackendOnboarding: () -> Unit,
+    onClearWorkspaceConflictInbox: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
@@ -803,6 +1429,13 @@ private fun WonderFoodScreen(
                     onLogWater = onLogWater,
                     onUndo = onUndo,
                     onDismissFeedback = onDismissFeedback,
+                    onChooseLocalBackend = onChooseLocalBackend,
+                    onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                    onConnectNotionBackend = onConnectNotionBackend,
+                    onConnectPostgresBackend = onConnectPostgresBackend,
+                    onSelectPendingBackend = onSelectPendingBackend,
+                    onDismissBackendOnboarding = onDismissBackendOnboarding,
+                    onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                     modifier = Modifier.weight(1f),
                 )
                 if (showCalendarPane) {
@@ -876,6 +1509,13 @@ private fun WonderFoodScreen(
                 onLogWater = onLogWater,
                 onUndo = onUndo,
                 onDismissFeedback = onDismissFeedback,
+                onChooseLocalBackend = onChooseLocalBackend,
+                onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                onConnectNotionBackend = onConnectNotionBackend,
+                onConnectPostgresBackend = onConnectPostgresBackend,
+                onSelectPendingBackend = onSelectPendingBackend,
+                onDismissBackendOnboarding = onDismissBackendOnboarding,
+                onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -895,6 +1535,7 @@ private fun FoodNavigationRail(
     ) {
         FoodSection.entries.forEach { section ->
             NavigationRailItem(
+                modifier = Modifier.semantics { contentDescription = "Navigate to ${section.label}" },
                 selected = selected == section,
                 onClick = { onSectionSelected(section) },
                 icon = { Icon(section.icon, contentDescription = null) },
@@ -966,6 +1607,13 @@ private fun MainWorkspace(
     onLogWater: (Int) -> Unit,
     onUndo: () -> Unit,
     onDismissFeedback: () -> Unit,
+    onChooseLocalBackend: () -> Unit,
+    onValidateGoogleSheetsBackend: (String) -> Unit,
+    onConnectNotionBackend: (String, String) -> Unit,
+    onConnectPostgresBackend: (String, String, String) -> Unit,
+    onSelectPendingBackend: (BackendType) -> Unit,
+    onDismissBackendOnboarding: () -> Unit,
+    onClearWorkspaceConflictInbox: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var secondaryPane by rememberSaveable { mutableStateOf<SecondaryPane?>(null) }
@@ -1167,6 +1815,8 @@ private fun MainWorkspace(
                         healthStatus = state.healthStatus,
                         healthSummary = state.healthSummary,
                         syncStatus = state.syncStatus,
+                        backendHome = state.backendHome,
+                        workspaceConflictInbox = state.workspaceConflictInbox,
                         googleAccountEmail = state.googleAccountEmail,
                         googleOAuthClientId = state.googleOAuthClientId,
                         googleSyncStatus = state.googleSyncStatus,
@@ -1188,10 +1838,16 @@ private fun MainWorkspace(
                         onImportCsv = onImportCsv,
                         onTestAiConnection = onTestAiConnection,
                         onDeleteAllAppData = onDeleteAllAppData,
+                        onChooseLocalBackend = onChooseLocalBackend,
+                        onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                        onConnectNotionBackend = onConnectNotionBackend,
+                        onConnectPostgresBackend = onConnectPostgresBackend,
+                        onSelectPendingBackend = onSelectPendingBackend,
                         onDeleteAllPlans = onDeleteAllPlans,
                         onClearChatHistory = onClearChatHistory,
                         onThemeModeChange = onThemeModeChange,
                         onRequestHealthConnect = onRequestHealthConnect,
+                        onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                         onBack = { secondaryPane = null },
                     )
                     state.detailTarget != null -> {
@@ -1226,12 +1882,15 @@ private fun MainWorkspace(
                     )
                     }
                     else -> sectionStateHolder.SaveableStateProvider(state.section.name) { when (state.section) {
-                    FoodSection.KITCHEN -> PantryContent(
-                        items = state.memory.inventory,
-                        onOpen = { item ->
+                    FoodSection.KITCHEN -> FoodHubContent(
+                        memory = state.memory,
+                        onOpenInventory = { item ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id))
                         },
-                        onDelete = onDeleteInventory,
+                        onDeleteInventory = onDeleteInventory,
+                        onOpenRecipe = { recipe ->
+                            onOpenDetail(FoodDetailTarget(FoodDetailKind.RECIPE, id = recipe.id))
+                        },
                     )
                     FoodSection.SHOP -> GroceryContent(
                         memory = state.memory,
@@ -1368,6 +2027,19 @@ private fun MainWorkspace(
                 },
             )
         }
+        if (state.backendHome.requiresOnboarding) {
+            BackendOnboardingDialog(
+                backendHome = state.backendHome,
+                conflictInbox = state.workspaceConflictInbox,
+                onUseLocal = onChooseLocalBackend,
+                onConnectSheets = onValidateGoogleSheetsBackend,
+                onConnectNotion = onConnectNotionBackend,
+                onConnectPostgres = onConnectPostgresBackend,
+                onSelectPending = onSelectPendingBackend,
+                onClearConflictInbox = onClearWorkspaceConflictInbox,
+                onDismiss = onDismissBackendOnboarding,
+            )
+        }
     }
 }
 
@@ -1488,6 +2160,9 @@ private fun FoodPrimaryActionButton(action: FoodPrimaryAction) {
         onClick = action.onClick,
         modifier = Modifier.semantics { contentDescription = action.contentDescription },
         expanded = true,
+        shape = RoundedCornerShape(22.dp),
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
         icon = {
             Icon(
                 action.icon,
@@ -1516,7 +2191,7 @@ private fun ActionBadge(show: Boolean, modifier: Modifier = Modifier) {
 private fun VoiceStatusCard(message: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer,
     ) {
         Row(
@@ -1538,13 +2213,23 @@ private fun VoiceStatusCard(message: String) {
 
 @Composable
 private fun FoodBottomNavigation(selected: FoodSection, onSelected: (FoodSection) -> Unit) {
+    val visibleSections = remember {
+        listOf(
+            FoodSection.TODAY,
+            FoodSection.KITCHEN,
+            FoodSection.PLAN,
+            FoodSection.RECIPES,
+            FoodSection.SHOP,
+        )
+    }
     NavigationBar(
         modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 0.dp,
     ) {
-        FoodSection.entries.forEach { section ->
+        visibleSections.forEach { section ->
             NavigationBarItem(
+                modifier = Modifier.semantics { contentDescription = "Navigate to ${section.label}" },
                 selected = selected == section,
                 onClick = { onSelected(section) },
                 icon = { Icon(section.icon, contentDescription = null) },
@@ -1622,7 +2307,7 @@ private fun ChatActionCard(action: ChatAction) {
     val accepted = action.status == ChatActionStatus.ACCEPTED
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = if (accepted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -1663,7 +2348,7 @@ private fun ChatActionCard(action: ChatAction) {
 private fun TodayPlateCard(onPrompt: (String) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
         Row(
@@ -1684,7 +2369,7 @@ private fun TodayPlateCard(onPrompt: (String) -> Unit) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
-            OutlinedButton(onClick = { onPrompt("Plan meals this week") }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { onPrompt("Plan meals this week") }, shape = RoundedCornerShape(18.dp)) {
                 Text("Plan")
             }
         }
@@ -1700,7 +2385,7 @@ private fun MessageBubble(message: ChatMessage) {
     ) {
         Surface(
             modifier = Modifier.widthIn(max = 520.dp),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
             color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Text(
@@ -1727,7 +2412,7 @@ private fun DraftCard(
     var editing by remember { mutableStateOf(false) }
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         modifier = modifier.semantics {
             liveRegion = LiveRegionMode.Polite
             contentDescription = "Draft review. ${review.sourceLabel}. ${review.actionLabel}. Not saved yet."
@@ -1762,19 +2447,19 @@ private fun DraftCard(
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAccept, shape = RoundedCornerShape(8.dp)) {
+                Button(onClick = onAccept, shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(draft.acceptButtonLabel())
                 }
                 if (onChange != null) {
-                    OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+                    OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                         Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(if (editing) "Done editing" else "Edit proposal")
                     }
                 }
-                OutlinedButton(onClick = onReject, shape = RoundedCornerShape(8.dp)) { Text("Reject") }
+                OutlinedButton(onClick = onReject, shape = RoundedCornerShape(18.dp)) { Text("Reject") }
             }
         }
     }
@@ -2131,7 +2816,7 @@ private fun CandidateDraftEditor(
     }
     OutlinedButton(
         onClick = { onChange(items + FoodCandidate(name = "", zone = StorageZone.PANTRY)) },
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
     ) {
         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
@@ -2157,7 +2842,7 @@ private fun DraftEditorField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         minLines = minLines,
         maxLines = if (minLines > 1) 6 else 1,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
     )
 }
 
@@ -2378,6 +3063,90 @@ private fun PantryContent(
     }
 }
 
+private enum class FoodHubMode(val label: String) {
+    CAN_MAKE("Can make"),
+    IN_KITCHEN("In kitchen"),
+    SAVED("Saved"),
+}
+
+@Composable
+private fun FoodHubContent(
+    memory: FoodMemory,
+    onOpenInventory: (InventoryItem) -> Unit,
+    onDeleteInventory: (Long) -> Unit,
+    onOpenRecipe: (Recipe) -> Unit,
+) {
+    var mode by rememberSaveable { mutableStateOf(FoodHubMode.CAN_MAKE) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Food", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Cook from what you have, manage the kitchen, or open saved recipes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    FoodHubMode.entries.forEach { option ->
+                        SuggestionChip(
+                            onClick = { mode = option },
+                            label = { Text(option.label) },
+                            icon = if (mode == option) {
+                                { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        when (mode) {
+            FoodHubMode.CAN_MAKE -> CanMakeRecipesContent(memory = memory, onOpen = onOpenRecipe)
+            FoodHubMode.IN_KITCHEN -> PantryContent(items = memory.inventory, onOpen = onOpenInventory, onDelete = onDeleteInventory)
+            FoodHubMode.SAVED -> RecipesContent(memory = memory, onOpen = onOpenRecipe)
+        }
+    }
+}
+
+@Composable
+private fun CanMakeRecipesContent(
+    memory: FoodMemory,
+    onOpen: (Recipe) -> Unit,
+) {
+    val ranked = remember(memory.recipes, memory.inventory) {
+        memory.recipes
+            .map { recipe -> recipe to recipe.kitchenMatch(memory) }
+            .filter { (_, match) -> match.have.isNotEmpty() || match.need.isNotEmpty() }
+            .sortedWith(
+                compareByDescending<Pair<Recipe, RecipeKitchenMatch>> { (_, match) ->
+                    val total = match.have.size + match.need.size
+                    if (total == 0) 0.0 else match.have.size.toDouble() / total
+                }.thenBy { (_, match) -> match.need.size },
+            )
+    }
+    if (ranked.isEmpty()) {
+        EmptyState("No matched recipes yet.", "Save recipes with ingredients, then WonderFood will rank them from your Kitchen.")
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+        item {
+            SectionLabel("Best from your kitchen")
+        }
+        items(ranked, key = { it.first.id }) { (recipe, match) ->
+            RecipeCard(
+                recipe = recipe,
+                match = match,
+                onOpen = { onOpen(recipe) },
+                onCook = { onOpen(recipe) },
+            )
+        }
+    }
+}
+
 private enum class KitchenFocusFilter(val label: String) {
     ALL("All food"),
     USE_SOON("Use soon"),
@@ -2398,7 +3167,7 @@ private fun KitchenUseFirstRail(items: List<InventoryItem>, onOpen: (InventoryIt
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Use first", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(
-                "${items.size} kitchen file${items.size.pluralWord}",
+                "${items.size} Kitchen item${items.size.pluralWord}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -2414,9 +3183,9 @@ private fun KitchenUseFirstRail(items: List<InventoryItem>, onOpen: (InventoryIt
 @Composable
 private fun KitchenFocusChip(item: InventoryItem, onOpen: () -> Unit) {
     Surface(
-        modifier = Modifier.width(188.dp).clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
-        color = zoneColor(item.zone),
+        modifier = Modifier.width(204.dp).clickable(onClick = onOpen),
+        shape = RoundedCornerShape(20.dp),
+        color = kitchenFocusColor(item),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
@@ -2424,7 +3193,7 @@ private fun KitchenFocusChip(item: InventoryItem, onOpen: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = MaterialTheme.colorScheme.surface, size = 44.dp)
+            FoodImage(image = item.imageUri ?: foodEmoji(item.name), fallback = foodEmoji(item.name), color = MaterialTheme.colorScheme.surface, size = 52.dp)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.kitchenStateLabel(), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2468,8 +3237,13 @@ private fun KitchenControlPanel(
             add(DatabaseChip("Sort: $option", sort == option) { onSort(option) })
         }
     }
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = query,
@@ -2478,7 +3252,7 @@ private fun KitchenControlPanel(
                     placeholder = { Text("Search food, category, notes") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 )
                 GalleryListToggle(selected = viewMode, onSelected = onViewMode)
             }
@@ -2501,7 +3275,7 @@ private fun KitchenControlPanel(
 
 @Composable
 private fun KitchenSelectionBar(selectedCount: Int, onClear: () -> Unit, onArchive: () -> Unit) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2673,7 +3447,7 @@ private fun TodayAttentionCard(receipt: ReceiptCapture, onOpen: () -> Unit) {
             .fillMaxWidth()
             .semantics { role = Role.Button }
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer,
     ) {
         Row(
@@ -2773,7 +3547,7 @@ private fun PlanContent(
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Row(
@@ -2897,7 +3671,7 @@ private fun PlanWeekStrip(memory: FoodMemory, onOpenDay: (Long) -> Unit) {
                         .width(72.dp)
                         .semantics { role = Role.Button }
                         .clickable { onOpenDay(day.toEpochDay()) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = if (isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                 ) {
@@ -2951,7 +3725,7 @@ private fun PlannedEntrySelectableCard(
                 onClick = onOpen,
                 onLongClick = onSelect,
             ),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
@@ -2961,7 +3735,7 @@ private fun PlannedEntrySelectableCard(
         ) {
             Surface(
                 modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surface,
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -3040,7 +3814,7 @@ private fun SearchContent(
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 )
             }
         }
@@ -3093,7 +3867,7 @@ private fun TodayDashboard(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Row(
@@ -3169,7 +3943,7 @@ private fun LatestDecisionStrip(action: ChatAction?, transaction: InventoryTrans
         action?.let {
             Surface(
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surface,
             ) {
                 Row(
@@ -3190,7 +3964,7 @@ private fun LatestDecisionStrip(action: ChatAction?, transaction: InventoryTrans
         transaction?.let {
             Surface(
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surface,
             ) {
                 Row(
@@ -3213,7 +3987,7 @@ private fun LatestDecisionStrip(action: ChatAction?, transaction: InventoryTrans
 
 @Composable
 private fun MetricPill(icon: String, value: String) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -3237,7 +4011,7 @@ private fun MealSlotRow(
             .fillMaxWidth()
             .semantics { role = Role.Button }
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
@@ -3457,6 +4231,8 @@ private fun PreferencesContent(
     healthStatus: String,
     healthSummary: HealthDailySummary,
     syncStatus: String,
+    backendHome: BackendHomeUiState,
+    workspaceConflictInbox: WorkspaceConflictInbox?,
     googleAccountEmail: String,
     googleOAuthClientId: String,
     googleSyncStatus: String,
@@ -3478,6 +4254,12 @@ private fun PreferencesContent(
     onImportCsv: () -> Unit,
     onTestAiConnection: (LiteLlmConfig) -> Unit,
     onDeleteAllAppData: () -> Unit,
+    onChooseLocalBackend: () -> Unit,
+    onValidateGoogleSheetsBackend: (String) -> Unit,
+    onConnectNotionBackend: (String, String) -> Unit,
+    onConnectPostgresBackend: (String, String, String) -> Unit,
+    onSelectPendingBackend: (BackendType) -> Unit,
+    onClearWorkspaceConflictInbox: () -> Unit,
     onDeleteAllPlans: () -> Unit,
     onClearChatHistory: () -> Unit,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
@@ -3496,6 +4278,7 @@ private fun PreferencesContent(
             aiStatus = aiStatus,
             healthStatus = healthStatus,
             healthSummary = healthSummary,
+            backendHome = backendHome,
             googleAccountEmail = googleAccountEmail,
             googleSyncStatus = googleSyncStatus,
             settingsSaveStatus = settingsSaveStatus,
@@ -3571,6 +4354,17 @@ private fun PreferencesContent(
                 onDisconnectGoogle = onDisconnectGoogle,
             )
         }
+        SettingsDestination.DATA_HOME -> BackendOnboardingDialog(
+            backendHome = backendHome,
+            onUseLocal = onChooseLocalBackend,
+            onConnectSheets = onValidateGoogleSheetsBackend,
+            onConnectNotion = onConnectNotionBackend,
+            onConnectPostgres = onConnectPostgresBackend,
+            onSelectPending = onSelectPendingBackend,
+            conflictInbox = workspaceConflictInbox,
+            onClearConflictInbox = onClearWorkspaceConflictInbox,
+            onDismiss = { destination = SettingsDestination.HOME },
+        )
         SettingsDestination.IMPORT_EXPORT_PRIVACY -> SettingsDetailPage(
             image = "⇄",
             title = "Import, export & privacy",
@@ -3609,6 +4403,7 @@ private fun SettingsHomeContent(
     aiStatus: String,
     healthStatus: String,
     healthSummary: HealthDailySummary,
+    backendHome: BackendHomeUiState,
     googleAccountEmail: String,
     googleSyncStatus: String,
     settingsSaveStatus: String,
@@ -3677,6 +4472,14 @@ private fun SettingsHomeContent(
         item {
             SettingsHomeRow(
                 icon = Icons.Rounded.Inventory2,
+                title = "Data home",
+                subtitle = backendHome.settingsSummary(),
+                onClick = { onOpen(SettingsDestination.DATA_HOME) },
+            )
+        }
+        item {
+            SettingsHomeRow(
+                icon = Icons.Rounded.Inventory2,
                 title = "Backup & restore",
                 subtitle = backupSummary(googleAccountEmail, googleSyncStatus),
                 onClick = { onOpen(SettingsDestination.BACKUP_RESTORE) },
@@ -3740,7 +4543,7 @@ private fun SettingsSubpageHeader(
         }
         Surface(
             modifier = Modifier.size(64.dp),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -3766,7 +4569,7 @@ private fun SettingsAccountSummary(
             .fillMaxWidth()
             .semantics { role = Role.Button }
             .clickable(onClick = onOpenBackup),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = if (connected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
@@ -3774,7 +4577,7 @@ private fun SettingsAccountSummary(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(modifier = Modifier.size(44.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
+            Surface(modifier = Modifier.size(44.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
@@ -3807,7 +4610,7 @@ private fun SettingsSectionHeader(text: String) {
 @Composable
 private fun SettingsSaveStatus(status: String) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
         Text(
@@ -3832,7 +4635,7 @@ private fun SettingsHomeRow(
             .heightIn(min = 64.dp)
             .semantics { role = Role.Button }
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -3855,7 +4658,7 @@ private fun SettingsHomeRow(
 private fun SettingsStatusBlock(icon: ImageVector, title: String, body: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
@@ -3876,7 +4679,7 @@ private fun SettingsStatusBlock(icon: ImageVector, title: String, body: String) 
 private fun SettingsControlGroup(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
@@ -3984,7 +4787,7 @@ private fun GoalsHealthSettings(
     )
     HealthConnectSnapshot(summary = healthSummary)
     if (healthSummary.isAvailable && !healthSummary.isConnected) {
-        Button(onClick = onRequestHealthConnect, shape = RoundedCornerShape(8.dp)) {
+        Button(onClick = onRequestHealthConnect, shape = RoundedCornerShape(18.dp)) {
             Icon(Icons.Rounded.HealthAndSafety, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Grant Health Connect once")
@@ -4099,20 +4902,20 @@ private fun AiAssistantSettings(
             OutlinedButton(
                 onClick = { onChange(preferences.copy(aiSkillOverride = "")) },
                 enabled = preferences.aiSkillOverride.isNotBlank(),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Text("Reset to bundled skill")
             }
         }
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = onSaveAiConfig, shape = RoundedCornerShape(8.dp)) {
+        Button(onClick = onSaveAiConfig, shape = RoundedCornerShape(18.dp)) {
             Text("Save providers")
         }
         OutlinedButton(
             onClick = { onTestAiConnection(selectedConfig) },
             enabled = selectedConfig.isUsable,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
         ) {
             Text("Test ${if (editingFallback) "fallback" else "primary"}")
         }
@@ -4203,7 +5006,7 @@ private fun AiAssistantSettings(
                 placeholder = { Text("Encrypted on this device") },
                 visualTransformation = if (revealKey) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { revealKey = !revealKey }) {
@@ -4236,7 +5039,7 @@ private fun AiProviderRouteLine(label: String, config: LiteLlmConfig) {
     ) {
         Surface(
             modifier = Modifier.size(32.dp),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
             color = if (config.isUsable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -4384,13 +5187,13 @@ private fun BackupRestoreSettings(
         body = if (googleAccountEmail.isBlank()) "Sign in to create an app-private Google Drive backup." else googleSyncStatus,
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = onConnectGoogle, shape = RoundedCornerShape(8.dp)) {
+        Button(onClick = onConnectGoogle, shape = RoundedCornerShape(18.dp)) {
             Text(if (googleAccountEmail.isBlank()) "Continue with Google" else "Reconnect Google")
         }
-        OutlinedButton(onClick = onBackupToGoogleDrive, shape = RoundedCornerShape(8.dp)) {
+        OutlinedButton(onClick = onBackupToGoogleDrive, shape = RoundedCornerShape(18.dp)) {
             Text("Back up now")
         }
-        OutlinedButton(onClick = onRestoreFromGoogleDrive, shape = RoundedCornerShape(8.dp)) {
+        OutlinedButton(onClick = onRestoreFromGoogleDrive, shape = RoundedCornerShape(18.dp)) {
             Text("Restore")
         }
         if (googleAccountEmail.isNotBlank()) {
@@ -4459,20 +5262,20 @@ private fun DataPrivacySettings(
             placeholder = { Text("8+ chars; needed on your other phone") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { onCreateEncryptedBackup(backupPassphrase) },
                 enabled = backupPassphrase.length >= 8,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Text("Encrypted backup")
             }
             OutlinedButton(
                 onClick = { onRestoreLatestEncryptedBackup(backupPassphrase) },
                 enabled = backupPassphrase.length >= 8,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Text("Restore latest")
             }
@@ -4481,10 +5284,10 @@ private fun DataPrivacySettings(
     SettingsControlGroup {
         Text("Spreadsheet tools", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onExportCsv, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onExportCsv, shape = RoundedCornerShape(18.dp)) {
                 Text("Export CSV")
             }
-            OutlinedButton(onClick = onImportCsv, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onImportCsv, shape = RoundedCornerShape(18.dp)) {
                 Text("Import CSV/JSON")
             }
         }
@@ -4571,7 +5374,7 @@ private fun SettingsUnitTextField(
             placeholder = { Text(placeholder) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
         )
         Text(unit, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -4584,9 +5387,20 @@ private enum class SettingsDestination {
     AI_ASSISTANT,
     APPEARANCE,
     BACKUP_RESTORE,
+    DATA_HOME,
     IMPORT_EXPORT_PRIVACY,
     HELP_ABOUT,
 }
+
+private fun BackendHomeUiState.settingsSummary(): String =
+    listOf(
+        label,
+        detail.takeIf { it.isNotBlank() && it != label },
+        message.takeIf { it.isNotBlank() },
+        safetyMessage.takeIf { it.isNotBlank() },
+    )
+        .filterNotNull()
+        .joinToString(" · ")
 
 private fun foodProfileSummary(preferences: FoodPreferences): String =
     listOf(
@@ -4645,7 +5459,7 @@ private fun SettingsGroupCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
@@ -4653,7 +5467,7 @@ private fun SettingsGroupCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Surface(modifier = Modifier.size(44.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface) {
+                Surface(modifier = Modifier.size(44.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
@@ -4674,7 +5488,7 @@ private fun ThemeModeSelector(
     selected: WonderFoodThemeMode,
     onSelected: (WonderFoodThemeMode) -> Unit,
 ) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Rounded.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -4703,7 +5517,7 @@ private fun PreferenceChipEditor(
 ) {
     var draft by remember(value) { mutableStateOf("") }
     val selected = value.preferenceTokens()
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -4743,7 +5557,7 @@ private fun PreferenceChipEditor(
                             }
                         },
                     ),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 )
                 IconButton(
                     onClick = {
@@ -4777,7 +5591,7 @@ private fun PreferenceTextField(
         placeholder = { Text(placeholder) },
         minLines = minLines,
         maxLines = if (minLines > 1) maxOf(6, minLines) else 2,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
     )
 }
 
@@ -4789,7 +5603,7 @@ private fun PreferenceInfoField(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -4858,7 +5672,7 @@ private fun CalendarPane(
 private fun CalendarDayCard(day: CalendarSlot, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }.clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (day.isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -4870,7 +5684,7 @@ private fun CalendarDayCard(day: CalendarSlot, onOpen: () -> Unit) {
         ) {
             Surface(
                 modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surface,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -4904,7 +5718,7 @@ private fun CalendarSignals(day: CalendarSlot) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             signals.take(5).forEach { signal ->
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
                 ) {
                     Text(
@@ -5087,7 +5901,7 @@ private fun InventoryDetail(
             },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit page")
             }
             AssistChip(onClick = {}, enabled = false, label = { Text("updated ${item.updatedAtMillis.shortDate()}") })
@@ -5119,7 +5933,7 @@ private fun InventoryDetail(
                             )
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5165,7 +5979,7 @@ private fun InventoryDetail(
                         editing = false
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) { Text("Save changes") }
             }
         }
@@ -5220,7 +6034,7 @@ private fun GroceryDetail(
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit page")
             }
             AssistChip(onClick = {}, enabled = false, label = { Text("updated ${item.updatedAtMillis.shortDate()}") })
@@ -5251,7 +6065,7 @@ private fun GroceryDetail(
                             )
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5296,13 +6110,13 @@ private fun GroceryDetail(
                         editing = false
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) { Text("Save changes") }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (item.status == GroceryStatus.NEEDED) {
-                Button(onClick = { onBought(item.id) }, shape = RoundedCornerShape(8.dp)) {
+                Button(onClick = { onBought(item.id) }, shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Bought")
@@ -5344,10 +6158,10 @@ private fun RecipeDetail(
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit recipe")
             }
-            OutlinedButton(onClick = { onPickImage(recipe.id) }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { onPickImage(recipe.id) }, shape = RoundedCornerShape(18.dp)) {
                 Icon(Icons.Rounded.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Image")
@@ -5374,7 +6188,7 @@ private fun RecipeDetail(
                             )
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5403,7 +6217,7 @@ private fun RecipeDetail(
                         editing = false
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) { Text("Save changes") }
             }
         }
@@ -5466,7 +6280,7 @@ private fun MealDetail(
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit page")
             }
             AssistChip(
@@ -5497,7 +6311,7 @@ private fun MealDetail(
                             )
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5538,7 +6352,7 @@ private fun MealDetail(
                         editing = false
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) { Text("Save changes") }
             }
         }
@@ -5550,7 +6364,7 @@ private fun MealDetail(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onExport, shape = RoundedCornerShape(8.dp)) {
+            Button(onClick = onExport, shape = RoundedCornerShape(18.dp)) {
                 Icon(Icons.Rounded.HealthAndSafety, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Sync")
@@ -5586,7 +6400,7 @@ private fun PlanDetail(
                 (entry.calorieTarget?.let { "  ${it} kcal" } ?: "")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit page")
             }
             AssistChip(onClick = {}, enabled = false, label = { Text("updated ${plan.updatedAtMillis.shortDate()}") })
@@ -5608,7 +6422,7 @@ private fun PlanDetail(
                             )
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5628,7 +6442,7 @@ private fun PlanDetail(
                         editing = false
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) { Text("Save changes") }
             }
         }
@@ -5673,13 +6487,13 @@ private fun DayDetail(
             ),
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onLogMeal(epochDay) }, shape = RoundedCornerShape(8.dp)) {
+            Button(onClick = { onLogMeal(epochDay) }, shape = RoundedCornerShape(18.dp)) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Log meal")
             }
-            OutlinedButton(onClick = { onLogWater(250) }, shape = RoundedCornerShape(8.dp)) { Text("+250 ml water") }
-            OutlinedButton(onClick = { onLogWater(500) }, shape = RoundedCornerShape(8.dp)) { Text("+500 ml water") }
+            OutlinedButton(onClick = { onLogWater(250) }, shape = RoundedCornerShape(18.dp)) { Text("+250 ml water") }
+            OutlinedButton(onClick = { onLogWater(500) }, shape = RoundedCornerShape(18.dp)) { Text("+500 ml water") }
         }
         SectionLabel("Planned meals")
         if (day.planEntries.isEmpty()) {
@@ -5772,7 +6586,7 @@ private fun PlannedMealEntryCard(
     }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -5834,7 +6648,7 @@ private fun PlannedMealEntryCard(
                         status,
                     )
                 },
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -5854,7 +6668,7 @@ private fun AddPlannedMealCard(
     var calories by remember(dateEpochDay) { mutableStateOf("") }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -5879,7 +6693,7 @@ private fun AddPlannedMealCard(
                         title = ""
                         calories = ""
                     },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -5908,7 +6722,7 @@ private fun ReceiptDetail(
             ),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                 Text(if (editing) "Done editing" else "Edit page")
             }
         }
@@ -5923,7 +6737,7 @@ private fun ReceiptDetail(
                             onUpdate(receipt.id, rawText, status)
                             editing = false
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) { Text("Save") }
                 },
             ) {
@@ -5966,7 +6780,7 @@ private fun DetailShell(
 private fun VisualFactGrid(facts: List<Pair<String, String>>) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         facts.forEach { (icon, value) ->
-            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -5982,7 +6796,7 @@ private fun VisualFactGrid(facts: List<Pair<String, String>>) {
 
 @Composable
 private fun DetailSection(title: String, body: String) {
-    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -6006,7 +6820,7 @@ private fun ObjectImage(image: String, color: Color, size: androidx.compose.ui.u
     }
     Surface(
         modifier = Modifier.size(size),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = color,
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -6042,7 +6856,7 @@ private fun InventoryCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -6083,7 +6897,7 @@ private fun InventoryTile(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().heightIn(min = 172.dp).clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -6216,7 +7030,7 @@ private fun RecipeTile(
     val ingredientCount = match.have.size + match.need.size
     Card(
         modifier = Modifier.fillMaxWidth().height(210.dp).clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -6284,7 +7098,7 @@ private fun MemoryCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -6342,13 +7156,13 @@ private fun ConfirmIconTextButton(
                         open = false
                         onConfirm()
                     },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Text(label)
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { open = false }, shape = RoundedCornerShape(8.dp)) {
+                OutlinedButton(onClick = { open = false }, shape = RoundedCornerShape(18.dp)) {
                     Text("Cancel")
                 }
             },
@@ -6375,7 +7189,7 @@ private fun EmptyState(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
@@ -6386,7 +7200,7 @@ private fun EmptyState(
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             actionLabel?.let {
-                Button(onClick = onAction, shape = RoundedCornerShape(8.dp)) { Text(it) }
+                Button(onClick = onAction, shape = RoundedCornerShape(18.dp)) { Text(it) }
             }
         }
     }
@@ -6404,7 +7218,7 @@ private fun FeedbackBar(
         modifier = modifier
             .fillMaxWidth()
             .semantics { liveRegion = LiveRegionMode.Polite },
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.inverseSurface,
         contentColor = MaterialTheme.colorScheme.inverseOnSurface,
     ) {
@@ -6447,6 +7261,9 @@ private fun ManualCreateDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(titleText) },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
                 item {
@@ -6631,7 +7448,7 @@ private fun AiCaptureSheet(
             if (viewingPreviousChat) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Row(
@@ -6640,7 +7457,7 @@ private fun AiCaptureSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Reading a previous chat", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        Button(onClick = { selectedChatId = null }, shape = RoundedCornerShape(8.dp)) {
+                        Button(onClick = { selectedChatId = null }, shape = RoundedCornerShape(18.dp)) {
                             Text("Current chat")
                         }
                     }
@@ -6702,7 +7519,7 @@ private fun AiChatHistoryDialog(
                             .fillMaxWidth()
                             .clickable { onSelect(chatId) }
                             .semantics { selected = chatId == selectedChatId },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(18.dp),
                         color = if (chatId == selectedChatId) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
@@ -6896,7 +7713,7 @@ private fun AiThreadMessageBubble(
             }
             if (editing) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 2.dp,
                 ) {
@@ -6908,7 +7725,7 @@ private fun AiThreadMessageBubble(
                             label = { Text(if (isUser) "Your message" else "AI reply") },
                             minLines = 3,
                             maxLines = 10,
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(18.dp),
                         )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
@@ -6917,7 +7734,7 @@ private fun AiThreadMessageBubble(
                                     editing = false
                                 },
                                 enabled = editedBody.isNotBlank(),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(18.dp),
                             ) { Text("Save edit") }
                             TextButton(onClick = { editedBody = message.body; editing = false }) { Text("Cancel") }
                         }
@@ -6984,7 +7801,7 @@ private fun AiChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         shadowElevation = 6.dp,
@@ -7005,7 +7822,7 @@ private fun AiChatComposer(
                 maxLines = 5,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(18.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -7032,7 +7849,7 @@ private fun AiChatComposer(
                     modifier = Modifier
                         .height(56.dp)
                         .semantics { contentDescription = "Send AI capture" },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
@@ -7052,7 +7869,7 @@ private fun AiContextCard(
     var expanded by rememberSaveable { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
@@ -7117,17 +7934,17 @@ private fun AiDraftReview(
             Text(draft.summary, style = MaterialTheme.typography.bodySmall)
             DraftReviewMeta(draft = draft, origin = origin, compact = true)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAccept, shape = RoundedCornerShape(8.dp)) {
+                Button(onClick = onAccept, shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(draft.acceptButtonLabel())
                 }
-                OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(8.dp)) {
+                OutlinedButton(onClick = { editing = !editing }, shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(if (editing) "Done editing" else "Edit proposal")
                 }
-                OutlinedButton(onClick = onReject, shape = RoundedCornerShape(8.dp)) {
+                OutlinedButton(onClick = onReject, shape = RoundedCornerShape(18.dp)) {
                     Text("Reject")
                 }
             }
@@ -7181,7 +7998,7 @@ private fun DraftReviewMeta(
         }
         val destructive = draft.operation == FoodOperation.DELETE
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(18.dp),
             color = if (destructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
             border = BorderStroke(
                 1.dp,
@@ -7284,6 +8101,15 @@ private fun FoodDraft.acceptButtonLabel(): String =
     }
 
 @Composable
+private fun kitchenFocusColor(item: InventoryItem): Color =
+    when {
+        item.expiresAtMillis != null && item.expiresAtMillis <= System.currentTimeMillis() -> MaterialTheme.colorScheme.tertiaryContainer
+        item.quantity.trim() == "0" -> MaterialTheme.colorScheme.errorContainer
+        item.quantity.isKitchenLowSignal() -> MaterialTheme.colorScheme.secondaryContainer
+        else -> zoneColor(item.zone)
+    }
+
+@Composable
 private fun zoneColor(zone: StorageZone): Color =
     when (zone) {
         StorageZone.FRIDGE -> MaterialTheme.colorScheme.primaryContainer
@@ -7380,11 +8206,11 @@ private val FoodSection.icon: ImageVector
 private val FoodSection.subtitle: String
     get() =
         when (this) {
-            FoodSection.TODAY -> "Meals, reviews, use soon"
-            FoodSection.KITCHEN -> "What you have"
+            FoodSection.TODAY -> "Next meal, capture, reviews"
+            FoodSection.KITCHEN -> "Can make, kitchen, saved"
             FoodSection.PLAN -> "This week and beyond"
-            FoodSection.RECIPES -> "What you can make"
-            FoodSection.SHOP -> "To buy, receipts, put away"
+            FoodSection.RECIPES -> "Saved recipes"
+            FoodSection.SHOP -> "Cart, receipts, put away"
         }
 
 private val WonderFoodThemeMode.displayLabel: String
@@ -7444,6 +8270,7 @@ private fun InventoryItem.kitchenStateLabel(): String =
     when {
         expiresAtMillis != null && expiresAtMillis <= System.currentTimeMillis() -> "Expired or due now"
         expiresAtMillis != null && expiresAtMillis <= System.currentTimeMillis() + THREE_DAYS_MILLIS -> "Use by ${expiresAtMillis.shortDate()}"
+        quantity.trim() == "0" -> "Out of stock"
         quantity.isKitchenLowSignal() -> "Low stock"
         calories == null && nutritionSource.isBlank() -> "Needs nutrition"
         category.isNotBlank() -> category
@@ -7879,6 +8706,13 @@ private fun WonderFoodPreview() {
             onLogWater = {},
             onUndo = {},
             onDismissFeedback = {},
+            onChooseLocalBackend = {},
+            onValidateGoogleSheetsBackend = {},
+            onConnectNotionBackend = { _, _ -> },
+            onConnectPostgresBackend = { _, _, _ -> },
+            onSelectPendingBackend = {},
+            onDismissBackendOnboarding = {},
+            onClearWorkspaceConflictInbox = {},
         )
     }
 }

@@ -200,7 +200,7 @@ object CommandEnvelopeDraftMapper {
             name = name,
             quantity = quantityText("quantity", "serving"),
             zone = storageZone("storage_zone", "zone"),
-            category = cleanString("category").ifBlank { categorizeFood(name) },
+            category = cleanString("category").ifBlank { categorizeFood(name) }.displayLabel(),
             servingText = quantityText("serving"),
             calories = int("calories"),
             proteinGrams = double("protein_g"),
@@ -382,6 +382,11 @@ object CommandEnvelopeDraftMapper {
 
     private fun String.isRemoteImageUrl(): Boolean =
         startsWith("https://", ignoreCase = true)
+
+    private fun String.displayLabel(): String =
+        trim().replace(Regex("""\s+"""), " ").replaceFirstChar { first ->
+            if (first.isLowerCase()) first.titlecase() else first.toString()
+        }
 
     private const val MAX_ITEMS = 40
     private const val MAX_PLAN_ENTRIES = 31

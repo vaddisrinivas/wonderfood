@@ -55,13 +55,35 @@ import com.wonderfood.app.health.HealthDailySummary
 import com.wonderfood.app.health.HealthExportResult
 import com.wonderfood.app.integration.capture.FoodCaptureGateway
 import com.wonderfood.app.integration.capture.FoodCaptureStatus
+import com.wonderfood.app.sync.AndroidKeystoreCredentialVault
 import com.wonderfood.app.sync.GoogleAccountProfile
 import com.wonderfood.app.sync.GoogleDriveAccess
 import com.wonderfood.app.sync.GoogleDriveAppDataGateway
 import com.wonderfood.app.sync.GoogleDriveBackupDownload
+import com.wonderfood.app.sync.GoogleSheetsGateway
+import com.wonderfood.app.sync.GoogleSheetsSnapshotSyncCoordinator
+import com.wonderfood.app.sync.GoogleSheetsSnapshotSyncResult
+import com.wonderfood.app.sync.LegacyFoodMemorySnapshotExporter
+import com.wonderfood.app.sync.LegacySnapshotDraftImporter
+import com.wonderfood.app.sync.NotionGateway
+import com.wonderfood.app.sync.PostgresGateway
 import com.wonderfood.app.sync.WonderFoodBackupGateway
 import com.wonderfood.app.sync.WonderFoodCsvGateway
 import com.wonderfood.app.sync.WonderFoodCsvImport
+import com.wonderfood.app.sync.WorkspaceMergeResult
+import com.wonderfood.core.data.backend.BackendSecret
+import com.wonderfood.core.data.backend.BackendType
+import com.wonderfood.core.data.backend.CredentialRef
+import com.wonderfood.core.data.backend.GoogleSheetsConfig
+import com.wonderfood.core.data.backend.GoogleSheetsUrlParser
+import com.wonderfood.core.data.backend.LocalSqliteConfig
+import com.wonderfood.core.data.backend.NotionConfig
+import com.wonderfood.core.data.backend.NotionUrlParser
+import com.wonderfood.core.data.backend.PostgresConfig
+import com.wonderfood.core.data.backend.PostgresConnectionMode
+import com.wonderfood.core.data.backend.PostgresConnectionParser
+import com.wonderfood.core.data.backend.SharedPreferencesBackendConfigurationStore
+import com.wonderfood.core.model.WonderFoodSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -69,6 +91,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.launch
 
 class MainScreenViewModel(context: Context) : ViewModel() {
@@ -84,15 +108,28 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val receiptCaptureProvider: ReceiptCaptureProvider = ProductionReceiptCaptureProvider(liteLlmInterpreter)
     private val backupGateway = WonderFoodBackupGateway(appContext)
     private val googleDriveGateway = GoogleDriveAppDataGateway()
+    private val googleSheetsGateway = GoogleSheetsGateway()
+    private val notionGateway = NotionGateway()
+    private val postgresGateway = PostgresGateway()
+    private val backendConfigurationStore = SharedPreferencesBackendConfigurationStore(appContext)
+    private val credentialVault = AndroidKeystoreCredentialVault(appContext)
     private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
     private val directActionPrefs = appContext.getSharedPreferences(DIRECT_ACTION_PREFS_NAME, Context.MODE_PRIVATE)
     private val googleSyncPrefs = appContext.getSharedPreferences(GOOGLE_SYNC_PREFS_NAME, Context.MODE_PRIVATE)
     private var pendingUndo: PendingUndo? = null
     private var pendingDraftOrigin: FoodDraftCommandOrigin = FoodDraftCommandOrigin.AI_REVIEW
     private var preferenceAutoSaveJob: Job? = null
+    private var backendSnapshotSyncJob: Job? = null
     private var pendingGoogleRestoreDownload: GoogleDriveBackupDownload? = null
+    private var pendingSheetsImportSnapshot: WonderFoodSnapshot? = null
+    private var pendingSheetsImportLabel: String = "Sheet data"
 
-    private val _uiState = MutableStateFlow(WonderFoodUiState(section = readSelectedSection()))
+    private val _uiState = MutableStateFlow(
+        WonderFoodUiState(
+            section = readSelectedSection(),
+            workspaceConflictInbox = readWorkspaceConflictInbox(),
+        ),
+    )
     val uiState: StateFlow<WonderFoodUiState> = _uiState.asStateFlow()
 
     val healthPermissionContract = health.permissionContract()
@@ -106,6 +143,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             refreshAiStatus()
             refreshHealthStatus()
             refreshSyncStatus()
+            refreshBackendHome()
         }
     }
 
@@ -1294,6 +1332,565 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
+    fun refreshBackendHome() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val config = backendConfigurationStore.activeConfiguration()
+            val dismissed = backendConfigurationStore.onboardingDismissed()
+            val syncStatus = shellPrefs.getString(KEY_BACKEND_SYNC_STATUS, "").orEmpty()
+            val safetyStatus = backupGateway.latestBackendSwitchSafetyLabel()
+            _uiState.update {
+                it.copy(
+                    backendHome = BackendHomeUiState.fromConfig(
+                        config = config,
+                        onboardingDismissed = dismissed,
+                    ).let { backendHome ->
+                        backendHome.copy(
+                            message = syncStatus.ifBlank { backendHome.message },
+                            safetyMessage = safetyStatus,
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    fun chooseLocalBackend() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val previous = _uiState.value.backendHome.label
+            val safety = createBackendSwitchSafety("On this phone")
+            backendConfigurationStore.saveActiveConfiguration(LocalSqliteConfig())
+            backendConfigurationStore.setOnboardingDismissed(true)
+            _uiState.update {
+                it.copy(
+                    backendHome = BackendHomeUiState(
+                        activeType = BackendType.LOCAL_SQLITE,
+                        label = "On this phone",
+                        detail = "Private local storage is active.",
+                        requiresOnboarding = false,
+                        safetyMessage = safety,
+                    ),
+                )
+            }
+            showFeedback("WonderFood will keep data on this phone. Rollback snapshot saved from $previous.")
+        }
+    }
+
+    fun validateGoogleSheetsBackend(sheetInput: String) {
+        connectGoogleSheetsBackend(sheetInput, readGoogleAccountEmail(), accessToken = "pending")
+    }
+
+    fun connectGoogleSheetsBackend(sheetInput: String, accountEmail: String, accessToken: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (accessToken.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets permission did not return access. Try again.",
+                        ),
+                    )
+                }
+                return@launch
+            }
+            val reference = runCatching { GoogleSheetsUrlParser.parse(sheetInput) }
+                .getOrElse { error ->
+                    _uiState.update {
+                        it.copy(
+                            backendHome = it.backendHome.copy(
+                                message = error.safeMessage(),
+                            ),
+                        )
+                    }
+                    return@launch
+                }
+            val bootstrap = runCatching {
+                googleSheetsGateway.ensureWonderFoodSchema(accessToken, reference.spreadsheetId)
+            }.getOrElse { error ->
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets check failed: ${error.safeMessage()}",
+                        ),
+                    )
+                }
+                showFeedback("Google Sheets check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
+            val coordinator = GoogleSheetsSnapshotSyncCoordinator(
+                sheetsGateway = googleSheetsGateway,
+                clock = { java.time.Instant.now().toString() },
+            )
+            val workspaceMerge = runCatching {
+                coordinator.readRemoteWorkspaceMerge(accessToken, reference.spreadsheetId, snapshot)
+            }.getOrElse { error ->
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets workspace merge check failed: ${error.safeMessage()}",
+                        ),
+                    )
+                }
+                showFeedback("Google Sheets workspace merge check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val remoteSnapshot = runCatching {
+                coordinator.readRemoteSnapshot(accessToken, reference.spreadsheetId)
+            }.getOrElse { error ->
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets import check failed: ${error.safeMessage()}",
+                        ),
+                    )
+                }
+                showFeedback("Google Sheets import check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val workspaceImportPreview = (workspaceMerge as? GoogleSheetsSnapshotSyncResult.RemoteWorkspaceMerge)
+                ?.merge
+                ?.toSheetsImportPreview(reference.canonicalUrl, workspaceMerge.rowCount)
+            val shouldPreserveRemote = workspaceImportPreview != null || remoteSnapshot is GoogleSheetsSnapshotSyncResult.RemoteSnapshot &&
+                remoteSnapshot.snapshot.hasUserData()
+            val rawSnapshotImportPreview = (remoteSnapshot as? GoogleSheetsSnapshotSyncResult.RemoteSnapshot)
+                ?.snapshot
+                ?.takeIf { workspaceImportPreview == null && shouldPreserveRemote }
+                ?.toSheetsImportPreview(reference.canonicalUrl)
+            val sheetsImportPreview = workspaceImportPreview ?: rawSnapshotImportPreview
+            pendingSheetsImportSnapshot = sheetsImportPreview?.let {
+                workspaceImportPreview?.let { workspaceMerge.merge.snapshot }
+                    ?: (remoteSnapshot as GoogleSheetsSnapshotSyncResult.RemoteSnapshot).snapshot
+            }
+            pendingSheetsImportLabel = if (workspaceImportPreview != null) "Sheet workspace merge" else "Sheet data"
+            val export = if (shouldPreserveRemote) {
+                null
+            } else {
+                runCatching {
+                    coordinator.exportSnapshot(accessToken, reference.spreadsheetId, snapshot)
+                }.getOrElse { error ->
+                    _uiState.update {
+                        it.copy(
+                            backendHome = it.backendHome.copy(
+                                message = "Google Sheets export failed: ${error.safeMessage()}",
+                            ),
+                        )
+                    }
+                    showFeedback("Google Sheets export failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            }
+            val safety = createBackendSwitchSafety("Google Sheets")
+            val credentialRef = CredentialRef(BackendType.GOOGLE_SHEETS, "google-sheets-primary")
+            credentialVault.put(
+                credentialRef,
+                BackendSecret.OAuthAccess(
+                    accessToken = accessToken,
+                    refreshToken = null,
+                    expiresAtEpochMillis = null,
+                ),
+            )
+            backendConfigurationStore.saveActiveConfiguration(
+                GoogleSheetsConfig(
+                    spreadsheetUrl = reference.canonicalUrl,
+                    spreadsheetId = reference.spreadsheetId,
+                    accountEmail = accountEmail.ifBlank { null },
+                    credentialRef = credentialRef,
+                ),
+            )
+            backendConfigurationStore.setOnboardingDismissed(true)
+            _uiState.update {
+                it.copy(
+                    backendHome = BackendHomeUiState(
+                        activeType = BackendType.GOOGLE_SHEETS,
+                        label = "Google Sheets",
+                        detail = if (shouldPreserveRemote) {
+                            "Connected to ${bootstrap.title.ifBlank { "Google Sheet" }}. Existing WonderFood data was preserved."
+                        } else {
+                            "Connected to ${bootstrap.title.ifBlank { "Google Sheet" }}. Snapshot sync is active."
+                        },
+                        requiresOnboarding = false,
+                        sheetUrl = reference.canonicalUrl,
+                        safetyMessage = safety,
+                    ),
+                    sheetsImportPreview = sheetsImportPreview,
+                )
+            }
+            val feedback = if (shouldPreserveRemote) {
+                "Google Sheets ready: existing WonderFood data found and preserved for import."
+            } else {
+                "Google Sheets ready: ${bootstrap.createdCount} tabs created, ${bootstrap.initializedCount} headers checked, ${export?.rowCount ?: 0} sync rows exported plus Home, Kitchen, Recipes, Meals, Plans, Shopping, Purchases, Goals, and managed data tabs."
+            }
+            shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, feedback) }
+            showFeedback(feedback)
+        }
+    }
+
+    fun cancelSheetsImportPreview() {
+        val preview = _uiState.value.sheetsImportPreview
+        val inbox = preview.toConflictInbox(
+            decision = "Preserved remote workspace; no local changes applied.",
+        )
+        inbox?.let(::rememberWorkspaceConflictInbox)
+        pendingSheetsImportSnapshot = null
+        pendingSheetsImportLabel = "Sheet data"
+        _uiState.update {
+            it.copy(
+                sheetsImportPreview = null,
+                workspaceConflictInbox = inbox ?: it.workspaceConflictInbox,
+                backendHome = it.backendHome.copy(
+                    message = "Existing ${preview?.providerLabel ?: "Sheet"} data preserved. Import/merge review is still needed.",
+                ),
+            )
+        }
+    }
+
+    fun confirmSheetsImportPreview() {
+        val snapshot = pendingSheetsImportSnapshot
+        val preview = _uiState.value.sheetsImportPreview
+        if (snapshot == null) {
+            _uiState.update {
+                it.copy(
+                    sheetsImportPreview = null,
+                    backendHome = it.backendHome.copy(message = "Sheet import preview expired. Reconnect to review it again."),
+                )
+            }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val draft = LegacySnapshotDraftImporter.toDraft(snapshot)
+            if (draft == null) {
+                pendingSheetsImportSnapshot = null
+                _uiState.update {
+                    it.copy(
+                        sheetsImportPreview = null,
+                        backendHome = it.backendHome.copy(message = "Sheet import found no daily food records to apply."),
+                    )
+                }
+                return@launch
+            }
+            val result = executeDraftCommand(
+                draft = draft,
+                sourceMessageId = null,
+                origin = FoodDraftCommandOrigin.CSV_IMPORT,
+            )
+            pendingSheetsImportSnapshot = null
+            val label = pendingSheetsImportLabel
+            pendingSheetsImportLabel = "Sheet data"
+            val message = when (result) {
+                is FoodDraftExecutionResult.Applied -> "Imported $label. ${result.summary}"
+                is FoodDraftExecutionResult.Rejected -> "$label rejected: ${result.errors.joinToString("; ")}"
+            }
+            val inbox = preview.toConflictInbox(decision = message)
+            inbox?.let(::rememberWorkspaceConflictInbox)
+            _uiState.update {
+                it.copy(
+                    memory = store.readMemory(),
+                    sheetsImportPreview = null,
+                    workspaceConflictInbox = inbox ?: it.workspaceConflictInbox,
+                    backendHome = it.backendHome.copy(message = message),
+                )
+            }
+            shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, message) }
+            showFeedback(message)
+        }
+    }
+
+    fun clearWorkspaceConflictInbox() {
+        shellPrefs.edit { remove(KEY_WORKSPACE_CONFLICT_INBOX) }
+        _uiState.update { it.copy(workspaceConflictInbox = null) }
+    }
+
+    fun connectNotionBackend(pageInput: String, token: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cleanToken = token.trim()
+            if (cleanToken.isBlank()) {
+                showBackendMessage("Notion token is required.")
+                return@launch
+            }
+            val reference = runCatching { NotionUrlParser.parse(pageInput) }
+                .getOrElse { error ->
+                    showBackendMessage(error.safeMessage())
+                    return@launch
+                }
+            val access = runCatching { notionGateway.retrievePage(cleanToken, reference.pageId) }
+                .getOrElse { error ->
+                    showBackendMessage("Notion check failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            val remoteSnapshot = runCatching { notionGateway.readRemoteSnapshot(cleanToken, reference.pageId) }
+                .getOrElse { error ->
+                    showBackendMessage("Notion import check failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
+            val updatedAt = java.time.Instant.now().toString()
+            val workspaceMerge = runCatching {
+                notionGateway.readRemoteWorkspaceMerge(
+                    token = cleanToken,
+                    pageId = reference.pageId,
+                    baseSnapshot = snapshot,
+                    updatedAt = updatedAt,
+                )
+            }.getOrElse { error ->
+                showBackendMessage("Notion workspace merge check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val notionImportPreview = workspaceMerge.merge?.toSheetsImportPreview(
+                spreadsheetUrl = reference.canonicalUrl,
+                workspaceRowCount = workspaceMerge.rowCount,
+                providerLabel = "Notion",
+            )
+            val rawSnapshotImportPreview = remoteSnapshot.snapshot
+                ?.takeIf { notionImportPreview == null && it.hasUserData() }
+                ?.toSheetsImportPreview(reference.canonicalUrl, providerLabel = "Notion")
+            val importPreview = notionImportPreview ?: rawSnapshotImportPreview
+            val foundRemoteData = importPreview != null
+            pendingSheetsImportSnapshot = importPreview?.let {
+                notionImportPreview?.let { workspaceMerge.merge.snapshot } ?: requireNotNull(remoteSnapshot.snapshot)
+            }
+            pendingSheetsImportLabel = if (notionImportPreview != null) "Notion workspace merge" else "Notion data"
+            val workspaceProvision = runCatching {
+                if (foundRemoteData) {
+                    notionGateway.ensureWorkspaceDatabases(cleanToken, reference.pageId)
+                } else {
+                    null
+                }
+            }.getOrElse { error ->
+                showBackendMessage("Notion workspace check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val workspaceExport = if (foundRemoteData) {
+                null
+            } else {
+                runCatching {
+                    notionGateway.exportWorkspace(
+                        token = cleanToken,
+                        pageId = reference.pageId,
+                        snapshot = snapshot,
+                        updatedAt = updatedAt,
+                    )
+                }.getOrElse { error ->
+                    showBackendMessage("Notion workspace export failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            }
+            val export = if (foundRemoteData) {
+                null
+            } else {
+                runCatching {
+                    notionGateway.exportSnapshot(
+                        token = cleanToken,
+                        pageId = reference.pageId,
+                        snapshot = snapshot,
+                        updatedAt = updatedAt,
+                    )
+                }.getOrElse { error ->
+                    showBackendMessage("Notion export failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            }
+            val safety = createBackendSwitchSafety("Notion")
+            val credentialRef = CredentialRef(BackendType.NOTION, "notion-primary")
+            credentialVault.put(credentialRef, BackendSecret.BearerToken(cleanToken))
+            backendConfigurationStore.saveActiveConfiguration(
+                NotionConfig(
+                    pageUrl = reference.canonicalUrl,
+                    rootPageId = reference.pageId,
+                    workspaceName = null,
+                    credentialRef = credentialRef,
+                ),
+            )
+            backendConfigurationStore.setOnboardingDismissed(true)
+            _uiState.update {
+                it.copy(
+                    backendHome = BackendHomeUiState(
+                        activeType = BackendType.NOTION,
+                        label = "Notion",
+                        detail = if (foundRemoteData) {
+                            "Notion page ${access.pageId} has existing WonderFood data. Workspace databases and snapshot sync are active; import review is next."
+                        } else {
+                            "Notion page ${access.pageId} is reachable. Workspace databases and snapshot sync are active."
+                        },
+                        requiresOnboarding = false,
+                        message = if (foundRemoteData) {
+                            val createdCount = workspaceProvision?.createdDatabases?.size ?: 0
+                            "Notion preserved existing remote data, created $createdCount database${createdCount.pluralWord}, and prepared an import review instead of overwriting your workspace."
+                        } else {
+                            val createdCount = workspaceExport?.createdDatabases?.size ?: 0
+                            val upsertedRows = workspaceExport?.upsertedRows ?: 0
+                            val chunkCount = export?.chunkCount ?: 0
+                            "Notion created $createdCount database${createdCount.pluralWord}, upserted $upsertedRows workspace row${upsertedRows.pluralWord}, and exported $chunkCount snapshot block${chunkCount.pluralWord}."
+                        },
+                        safetyMessage = safety,
+                    ),
+                    sheetsImportPreview = importPreview,
+                )
+            }
+            val feedback = if (foundRemoteData) {
+                "Notion connected: existing remote data preserved; ${workspaceProvision?.createdDatabases?.size ?: 0} database${(workspaceProvision?.createdDatabases?.size ?: 0).pluralWord} created and import review is ready."
+            } else {
+                "Notion connected: ${workspaceExport?.createdDatabases?.size ?: 0} database${(workspaceExport?.createdDatabases?.size ?: 0).pluralWord} created and ${workspaceExport?.upsertedRows ?: 0} workspace row${(workspaceExport?.upsertedRows ?: 0).pluralWord} synced."
+            }
+            shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, feedback) }
+            showFeedback(feedback)
+        }
+    }
+
+    fun connectPostgresBackend(endpoint: String, householdId: String, token: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cleanToken = token.trim()
+            val reference = runCatching {
+                PostgresConnectionParser.parse(endpoint = endpoint, householdId = householdId)
+            }.getOrElse { error ->
+                showBackendMessage(error.safeMessage())
+                return@launch
+            }
+            if (reference.mode != PostgresConnectionMode.DIRECT_DSN && cleanToken.isBlank()) {
+                showBackendMessage("Postgres API token is required.")
+                return@launch
+            }
+            val hostedAccess = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
+                null
+            } else {
+                runCatching {
+                    postgresGateway.validateHostedApi(reference.mode, reference.endpoint, cleanToken)
+                }.getOrElse { error ->
+                    showBackendMessage("${reference.mode.label} check failed: ${error.safeMessage()}")
+                    return@launch
+                }
+            }
+            val export = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
+                null
+            } else {
+                val remoteSnapshot = runCatching {
+                    postgresGateway.readRemoteSnapshot(
+                        mode = reference.mode,
+                        endpoint = reference.endpoint,
+                        token = cleanToken,
+                        householdId = reference.householdId,
+                    )
+                }.getOrElse { error ->
+                    showBackendMessage("${reference.mode.label} import check failed: ${error.safeMessage()}")
+                    return@launch
+                }
+                val foundRemoteData = remoteSnapshot.snapshot?.hasUserData() == true
+                runCatching {
+                    postgresGateway.exportSnapshot(
+                        mode = reference.mode,
+                        endpoint = reference.endpoint,
+                        token = cleanToken,
+                        householdId = reference.householdId,
+                        snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory()),
+                        updatedAt = java.time.Instant.now().toString(),
+                    )
+                }.getOrElse { error ->
+                    showBackendMessage("${reference.mode.label} export failed: ${error.safeMessage()}")
+                    return@launch
+                } to foundRemoteData
+            }
+            val safety = createBackendSwitchSafety(reference.mode.label)
+            val credentialRef = CredentialRef(BackendType.POSTGRES, "postgres-primary")
+            val secret = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
+                BackendSecret.ConnectionString(requireNotNull(reference.credentialSecret))
+            } else {
+                BackendSecret.ApiToken(cleanToken)
+            }
+            credentialVault.put(credentialRef, secret)
+            backendConfigurationStore.saveActiveConfiguration(
+                PostgresConfig(
+                    connectionMode = reference.mode,
+                    endpoint = reference.endpoint,
+                    householdId = reference.householdId,
+                    credentialRef = credentialRef,
+                ),
+            )
+            backendConfigurationStore.setOnboardingDismissed(true)
+            _uiState.update {
+                it.copy(
+                    backendHome = BackendHomeUiState(
+                        activeType = BackendType.POSTGRES,
+                        label = reference.mode.label,
+                        detail = if (hostedAccess == null) {
+                            "Direct PostgreSQL connection string saved for ${reference.householdId}."
+                        } else if (export?.second == true) {
+                            "${hostedAccess.mode.label} has existing WonderFood data for ${reference.householdId}. Snapshot export is active; import review is next."
+                        } else {
+                            "${hostedAccess.mode.label} snapshot export is active for ${reference.householdId}."
+                        },
+                        requiresOnboarding = false,
+                        message = export?.let {
+                            if (it.second) {
+                                "${reference.mode.label} preserved existing remote data and exported ${it.first.byteCount} bytes."
+                            } else {
+                                "${reference.mode.label} exported ${it.first.byteCount} bytes."
+                            }
+                        }
+                            ?: "${reference.mode.label} connected.",
+                        safetyMessage = safety,
+                    ),
+                )
+            }
+            val feedback = export?.let {
+                if (it.second) {
+                    "${reference.mode.label} connected: existing remote data detected; exported ${it.first.byteCount} bytes."
+                } else {
+                    "${reference.mode.label} connected: exported ${it.first.byteCount} bytes."
+                }
+            }
+                ?: "${reference.mode.label} connected."
+            shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, feedback) }
+            showFeedback(feedback)
+        }
+    }
+
+    fun selectPendingBackend(type: BackendType) {
+        val message = when (type) {
+            BackendType.NOTION -> "Notion setup is next: page link plus integration token."
+            BackendType.POSTGRES -> "Postgres setup is next: server URL, token, and household."
+            BackendType.GOOGLE_SHEETS -> "Paste a Google Sheet link first."
+            BackendType.LOCAL_SQLITE -> "Use this phone to continue without setup."
+        }
+        _uiState.update { it.copy(backendHome = it.backendHome.copy(message = message)) }
+    }
+
+    private val PostgresConnectionMode.label: String
+        get() = when (this) {
+            PostgresConnectionMode.SUPABASE -> "Supabase"
+            PostgresConnectionMode.POSTGREST -> "PostgREST"
+            PostgresConnectionMode.WONDERFOOD_SERVER -> "WonderFood server"
+            PostgresConnectionMode.DIRECT_DSN -> "Direct PostgreSQL"
+        }
+
+    private fun createBackendSwitchSafety(toLabel: String): String {
+        val fromLabel = _uiState.value.backendHome.label
+        val snapshot = backupGateway.createBackendSwitchSafetyBackup(
+            memory = store.readMemory(),
+            fromLabel = fromLabel,
+            toLabel = toLabel,
+        )
+        return "Rollback snapshot before $fromLabel -> $toLabel: ${snapshot.sizeBytes / 1024} KB"
+    }
+
+    private fun showBackendMessage(message: String) {
+        _uiState.update {
+            it.copy(
+                backendHome = it.backendHome.copy(message = message),
+            )
+        }
+        showFeedback(message)
+    }
+
+    fun dismissBackendOnboardingForNow() {
+        backendConfigurationStore.setOnboardingDismissed(true)
+        _uiState.update {
+            it.copy(
+                backendHome = it.backendHome.copy(
+                    requiresOnboarding = false,
+                    message = "You can choose a data home from Settings later.",
+                ),
+            )
+        }
+    }
+
     fun onGoogleOAuthClientIdChange(value: String) {
         val cleaned = value.trim()
         googleSyncPrefs.edit { putString(KEY_GOOGLE_WEB_CLIENT_ID, cleaned) }
@@ -1991,6 +2588,27 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             )
         }.getOrDefault(FoodSection.TODAY)
 
+    private fun rememberWorkspaceConflictInbox(inbox: WorkspaceConflictInbox) {
+        shellPrefs.edit { putString(KEY_WORKSPACE_CONFLICT_INBOX, inbox.toJson().toString()) }
+    }
+
+    private fun readWorkspaceConflictInbox(): WorkspaceConflictInbox? {
+        val raw = shellPrefs.getString(KEY_WORKSPACE_CONFLICT_INBOX, null) ?: return null
+        return runCatching {
+            val json = JSONObject(raw)
+            WorkspaceConflictInbox(
+                providerLabel = json.optString("providerLabel"),
+                sourceLabel = json.optString("sourceLabel"),
+                conflictCount = json.optInt("conflictCount"),
+                changeCount = json.optInt("changeCount"),
+                mergeClock = json.optString("mergeClock"),
+                decision = json.optString("decision"),
+                conflictSummary = json.optJSONArray("conflictSummary")
+                    .orEmptyStrings(),
+            )
+        }.getOrNull()
+    }
+
     private fun rememberGoogleEmail(email: String) {
         if (email.isBlank()) return
         googleSyncPrefs.edit { putString(KEY_GOOGLE_EMAIL, email) }
@@ -2031,8 +2649,13 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         draft: FoodDraft,
         sourceMessageId: Long?,
         origin: FoodDraftCommandOrigin,
-    ): FoodDraftExecutionResult =
-        draftCommandExecutor.execute(FoodDraftCommand(draft, sourceMessageId, origin))
+    ): FoodDraftExecutionResult {
+        val result = draftCommandExecutor.execute(FoodDraftCommand(draft, sourceMessageId, origin))
+        if (result is FoodDraftExecutionResult.Applied) {
+            queueBackendSnapshotSync("draft")
+        }
+        return result
+    }
 
     private fun executeMutationCommand(
         type: FoodMutationCommandType,
@@ -2041,8 +2664,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         sourceMessageId: Long? = null,
         payload: Map<String, String?> = emptyMap(),
         write: () -> String,
-    ): FoodMutationExecutionResult =
-        mutationCommandExecutor.execute(
+    ): FoodMutationExecutionResult {
+        val result = mutationCommandExecutor.execute(
             FoodMutationCommand(
                 type = type,
                 label = label,
@@ -2052,6 +2675,77 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             ),
             write = write,
         )
+        if (result is FoodMutationExecutionResult.Applied) {
+            queueBackendSnapshotSync(type.name.lowercase())
+        }
+        return result
+    }
+
+    private fun queueBackendSnapshotSync(reason: String) {
+        backendSnapshotSyncJob?.cancel()
+        backendSnapshotSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(BACKEND_SNAPSHOT_SYNC_DEBOUNCE_MILLIS)
+            val config = backendConfigurationStore.activeConfiguration() ?: return@launch
+            val export = runCatching { exportSnapshotToActiveBackend(config) }
+            _uiState.update {
+                val message = export.fold(
+                    onSuccess = { result -> "$result after $reason." },
+                    onFailure = { error -> "Backend sync failed after $reason: ${error.safeMessage()}" },
+                )
+                shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, message) }
+                it.copy(backendHome = it.backendHome.copy(message = message))
+            }
+        }
+    }
+
+    private suspend fun exportSnapshotToActiveBackend(config: com.wonderfood.core.data.backend.BackendConfig): String {
+        val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
+        return when (config) {
+            is GoogleSheetsConfig -> {
+                val secret = credentialVault.get(config.credentialRef) as? BackendSecret.OAuthAccess ?: return "Google Sheets sync skipped: missing OAuth token"
+                val result = GoogleSheetsSnapshotSyncCoordinator(
+                    sheetsGateway = googleSheetsGateway,
+                    clock = { java.time.Instant.now().toString() },
+                ).exportSnapshot(
+                    accessToken = secret.accessToken,
+                    spreadsheetId = config.spreadsheetId,
+                    snapshot = snapshot,
+                )
+                "Google Sheets synced ${result.rowCount} rows"
+            }
+            is NotionConfig -> {
+                val secret = credentialVault.get(config.credentialRef) as? BackendSecret.BearerToken ?: return "Notion sync skipped: missing token"
+                val updatedAt = java.time.Instant.now().toString()
+                val workspaceResult = notionGateway.exportWorkspace(
+                    token = secret.token,
+                    pageId = config.rootPageId,
+                    snapshot = snapshot,
+                    updatedAt = updatedAt,
+                )
+                val result = notionGateway.exportSnapshot(
+                    token = secret.token,
+                    pageId = config.rootPageId,
+                    snapshot = snapshot,
+                    updatedAt = updatedAt,
+                )
+                "Notion synced ${workspaceResult.upsertedRows} workspace row${workspaceResult.upsertedRows.pluralWord} and ${result.chunkCount} snapshot block${result.chunkCount.pluralWord}"
+            }
+            is PostgresConfig -> {
+                if (config.connectionMode == PostgresConnectionMode.DIRECT_DSN) return "Direct PostgreSQL sync skipped: server-side adapter required"
+                val secret = credentialVault.get(config.credentialRef) as? BackendSecret.ApiToken ?: return "${config.connectionMode.label} sync skipped: missing API token"
+                val result = postgresGateway.exportSnapshot(
+                    mode = config.connectionMode,
+                    endpoint = config.endpoint,
+                    token = secret.token,
+                    householdId = config.householdId,
+                    snapshot = snapshot,
+                    updatedAt = java.time.Instant.now().toString(),
+                )
+                "${config.connectionMode.label} synced ${result.byteCount} bytes"
+            }
+            else -> "Backend sync skipped: ${config.type.label} export is not implemented yet"
+        }
+    }
 
     private fun FoodMutationExecutionResult.summaryOrFallback(successFallback: String): String =
         when (this) {
@@ -2335,7 +3029,10 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         const val KEY_GOOGLE_EMAIL = "google_email"
         const val KEY_GOOGLE_NAME = "google_name"
         const val KEY_GOOGLE_WEB_CLIENT_ID = "google_web_client_id"
+        const val KEY_BACKEND_SYNC_STATUS = "backend_sync_status"
+        const val KEY_WORKSPACE_CONFLICT_INBOX = "workspace_conflict_inbox"
         const val PREFERENCE_AUTO_SAVE_DELAY_MILLIS = 450L
+        const val BACKEND_SNAPSHOT_SYNC_DEBOUNCE_MILLIS = 900L
     }
 }
 
@@ -2344,6 +3041,59 @@ private val Int.pluralWord: String
 
 private fun Throwable.safeMessage(): String =
     message?.take(140)?.ifBlank { null } ?: "unknown error"
+
+private fun WonderFoodSnapshot.hasUserData(): Boolean =
+    foods.isNotEmpty() ||
+        stockLots.isNotEmpty() ||
+        recipes.isNotEmpty() ||
+        mealPlans.isNotEmpty() ||
+        mealLogs.isNotEmpty() ||
+        shoppingItems.isNotEmpty() ||
+        receipts.isNotEmpty() ||
+        foodEvents.isNotEmpty()
+
+private fun WonderFoodSnapshot.toSheetsImportPreview(
+    spreadsheetUrl: String,
+    providerLabel: String = "Google Sheets",
+): SheetsImportPreview =
+    SheetsImportPreview(
+        spreadsheetUrl = spreadsheetUrl,
+        providerLabel = providerLabel,
+        sourceLabel = "Raw WonderFood snapshot",
+        schemaVersion = schemaVersion,
+        foodCount = foods.size,
+        stockLotCount = stockLots.size,
+        shoppingItemCount = shoppingItems.size,
+        recipeCount = recipes.size,
+        mealPlanCount = mealPlans.size,
+        mealLogCount = mealLogs.size,
+        eventCount = foodEvents.size,
+    )
+
+private fun WorkspaceMergeResult.toSheetsImportPreview(
+    spreadsheetUrl: String,
+    workspaceRowCount: Int,
+    providerLabel: String = "Google Sheets",
+): SheetsImportPreview =
+    SheetsImportPreview(
+        spreadsheetUrl = spreadsheetUrl,
+        providerLabel = providerLabel,
+        sourceLabel = "Editable workspace tabs",
+        schemaVersion = snapshot.schemaVersion,
+        foodCount = snapshot.foods.size,
+        stockLotCount = snapshot.stockLots.size,
+        shoppingItemCount = snapshot.shoppingItems.size,
+        recipeCount = snapshot.recipes.size,
+        mealPlanCount = snapshot.mealPlans.size,
+        mealLogCount = snapshot.mealLogs.size,
+        eventCount = snapshot.foodEvents.size,
+        workspaceRowCount = workspaceRowCount,
+        changeCount = changes.size,
+        conflictCount = conflicts.size,
+        fieldClockCount = fieldClocks.size,
+        mergeClock = mergeClock,
+        conflictSummary = conflicts.take(4).map { "${it.table}: ${it.field} - ${it.reason}" },
+    )
 
 private fun LiteLlmConfig.connectionFailureHint(message: String): String {
     if (!message.contains("HTTP 403", ignoreCase = true)) return ""
@@ -2374,6 +3124,8 @@ data class WonderFoodUiState(
     val googleSyncStatus: String = "Paste the Google Web OAuth client ID on this phone, then sign in.",
     val googleRestorePreview: GoogleRestorePreview? = null,
     val csvImportPreview: CsvImportPreview? = null,
+    val sheetsImportPreview: SheetsImportPreview? = null,
+    val workspaceConflictInbox: WorkspaceConflictInbox? = null,
     val settingsSaveStatus: String = "",
     val preferencesForm: FoodPreferences = FoodPreferences(),
     val aiConfigForm: LiteLlmConfig = LiteLlmConfig("", "", LiteLlmSettings.DEFAULT_MODEL),
@@ -2389,7 +3141,55 @@ data class WonderFoodUiState(
     val feedbackMessage: String = "",
     val undoMessage: String = "",
     val isWorking: Boolean = false,
+    val backendHome: BackendHomeUiState = BackendHomeUiState(),
 )
+
+data class BackendHomeUiState(
+    val activeType: BackendType? = null,
+    val label: String = "Choose data home",
+    val detail: String = "Pick where WonderFood keeps kitchen, plan, recipe and shopping data.",
+    val requiresOnboarding: Boolean = true,
+    val sheetUrl: String = "",
+    val message: String = "",
+    val safetyMessage: String = "",
+) {
+    companion object {
+        fun fromConfig(
+            config: com.wonderfood.core.data.backend.BackendConfig?,
+            onboardingDismissed: Boolean,
+        ): BackendHomeUiState =
+            when (config) {
+                is LocalSqliteConfig -> BackendHomeUiState(
+                    activeType = BackendType.LOCAL_SQLITE,
+                    label = "On this phone",
+                    detail = "Private local storage is active.",
+                    requiresOnboarding = false,
+                )
+                is GoogleSheetsConfig -> BackendHomeUiState(
+                    activeType = BackendType.GOOGLE_SHEETS,
+                    label = "Google Sheets",
+                    detail = "Sheet connected. Schema check and sync are next.",
+                    requiresOnboarding = false,
+                    sheetUrl = config.spreadsheetUrl,
+                )
+                null -> BackendHomeUiState(requiresOnboarding = !onboardingDismissed)
+                else -> BackendHomeUiState(
+                    activeType = config.type,
+                    label = config.type.label,
+                    detail = "Connection details saved.",
+                    requiresOnboarding = false,
+                )
+            }
+    }
+}
+
+val BackendType.label: String
+    get() = when (this) {
+        BackendType.LOCAL_SQLITE -> "On this phone"
+        BackendType.GOOGLE_SHEETS -> "Google Sheets"
+        BackendType.NOTION -> "Notion"
+        BackendType.POSTGRES -> "Postgres / Supabase"
+    }
 
 data class GoogleRestorePreview(
     val fileName: String,
@@ -2419,6 +3219,67 @@ data class CsvImportPreview(
     val importsPreferences: Boolean,
     val summary: String,
 )
+
+data class SheetsImportPreview(
+    val spreadsheetUrl: String,
+    val providerLabel: String,
+    val sourceLabel: String,
+    val schemaVersion: Int,
+    val foodCount: Int,
+    val stockLotCount: Int,
+    val shoppingItemCount: Int,
+    val recipeCount: Int,
+    val mealPlanCount: Int,
+    val mealLogCount: Int,
+    val eventCount: Int,
+    val workspaceRowCount: Int = 0,
+    val changeCount: Int = 0,
+    val conflictCount: Int = 0,
+    val fieldClockCount: Int = 0,
+    val mergeClock: String = "",
+    val conflictSummary: List<String> = emptyList(),
+)
+
+data class WorkspaceConflictInbox(
+    val providerLabel: String,
+    val sourceLabel: String,
+    val conflictCount: Int,
+    val changeCount: Int,
+    val mergeClock: String,
+    val decision: String,
+    val conflictSummary: List<String>,
+)
+
+private fun WorkspaceConflictInbox.toJson(): JSONObject =
+    JSONObject()
+        .put("providerLabel", providerLabel)
+        .put("sourceLabel", sourceLabel)
+        .put("conflictCount", conflictCount)
+        .put("changeCount", changeCount)
+        .put("mergeClock", mergeClock)
+        .put("decision", decision)
+        .put("conflictSummary", JSONArray().apply { conflictSummary.forEach(::put) })
+
+private fun JSONArray?.orEmptyStrings(): List<String> =
+    if (this == null) {
+        emptyList()
+    } else {
+        List(length()) { index -> optString(index) }
+    }
+
+private fun SheetsImportPreview?.toConflictInbox(decision: String): WorkspaceConflictInbox? {
+    val preview = this ?: return null
+    if (preview.conflictCount <= 0 && preview.conflictSummary.isEmpty()) return null
+    return WorkspaceConflictInbox(
+        providerLabel = preview.providerLabel,
+        sourceLabel = preview.sourceLabel,
+        conflictCount = preview.conflictCount,
+        changeCount = preview.changeCount,
+        mergeClock = preview.mergeClock,
+        decision = decision,
+        conflictSummary = preview.conflictSummary,
+    )
+}
 
 private sealed interface ImportReadResult {
     data class Proposal(
@@ -2569,11 +3430,11 @@ enum class FoodDetailKind {
 }
 
 enum class FoodSection(val label: String) {
-    TODAY("Today"),
-    KITCHEN("Kitchen"),
-    PLAN("Plan"),
-    RECIPES("Recipes"),
-    SHOP("Shop"),
+    TODAY("Now"),
+    KITCHEN("Food"),
+    PLAN("Week"),
+    RECIPES("Saved"),
+    SHOP("Cart"),
 }
 
 private fun String.toFoodSection(): FoodSection {

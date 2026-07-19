@@ -89,7 +89,7 @@ class FoodInterpreter {
         val lower = text.lowercase()
         val title = text.cleanTitle(
             prefixes = listOf("i ate", "ate", "i had", "had", "log", "logged", "for breakfast", "for lunch", "for dinner"),
-        ).stripExplicitNutritionFacts().ifBlank { "Meal from chat" }
+        ).stripExplicitNutritionFacts().stripTrailingMealSlot().ifBlank { "Meal from chat" }
         return AiTurn(
             reply = if (explicit.hasAny) {
                 "I used the nutrition numbers you wrote and estimated any missing macros. Review before saving."
@@ -128,7 +128,7 @@ class FoodInterpreter {
                 0 -> "Today ${slot.label.lowercase()} plan"
                 1 -> "Tomorrow ${slot.label.lowercase()} plan"
                 else -> "${slot.label} plan"
-            },
+            }.toDisplayName(),
             daysText = "${slot.label}: $title",
             groceryHint = "Review missing ingredients for $title.",
             entries = listOf(
@@ -291,6 +291,7 @@ private fun extractFoodCandidates(raw: String): List<FoodCandidate> {
     val cleaned = raw
         .replace(Regex("(?i)^(i\\s+)?(bought|got|picked up|added|add|need|needs|buy|to buy|receipt says|receipt|we have|i have)\\s+"), "")
         .replace(Regex("(?i)\\b(to my|to the|to|into|in the|for the)\\s+(groceries|grocery|shopping|pantry|fridge|freezer|inventory|list)\\b"), "")
+        .replace(Regex("(?i)\\b(from|at)\\s+(the\\s+)?store\\b.*$"), "")
         .replace(Regex("(?i)\\b(from|at)\\s+[a-z0-9' -]+$"), "")
         .replace(";", ",")
         .replace("\n", ",")
@@ -544,6 +545,10 @@ private fun String.stripExplicitNutritionFacts(): String =
         .replace(Regex("""(?i)\b\d+(?:\.\d+)?\s*(?:g|grams?)?\s*(?:of\s+)?(?:protein|carbs?|carbohydrates?|fat|fats)\b"""), " ")
         .replace(Regex("""(?i)\b(?:protein|carbs?|carbohydrates?|fat|fats)\s*:?\s*\d+(?:\.\d+)?\s*(?:g|grams?)?\b"""), " ")
         .replace(Regex("""\s+"""), " ")
+        .trim(' ', '.', '!', '?', '-')
+
+private fun String.stripTrailingMealSlot(): String =
+    replace(Regex("""(?i)\s+for\s+(breakfast|lunch|dinner|snack)$"""), "")
         .trim(' ', '.', '!', '?', '-')
 
 private fun String.toDisplayName(): String =

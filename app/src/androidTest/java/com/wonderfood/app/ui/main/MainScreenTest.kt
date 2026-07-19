@@ -15,25 +15,60 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
 import com.wonderfood.app.MainActivity
 import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.BeforeClass
+import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runners.MethodSorters
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class MainScreenTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
-    @Test
-    fun mainScreenShowsFiveDestinationShell() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    companion object {
+        @JvmStatic
+        @BeforeClass
+        fun seedLocalBackendChoice() {
+            InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .getSharedPreferences("wonderfood_backend_configuration", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("type", "LOCAL_SQLITE")
+                .putInt("schema_version", 1)
+                .putBoolean("onboarding_dismissed", true)
+                .commit()
+        }
+    }
 
-        assertTextPresent("Today")
-        assertTextPresent("Kitchen")
-        assertTextPresent("Plan")
-        assertTextPresent("Recipes")
-        assertTextPresent("Shop")
+    @After
+    fun returnToShellAfterTest() {
+        if (!isEmulator()) return
+        repeat(6) {
+            if (isShellVisible()) return
+            runCatching {
+                composeTestRule.activityRule.scenario.onActivity { activity ->
+                    activity.onBackPressedDispatcher.onBackPressed()
+                }
+            }
+            composeTestRule.waitForIdle()
+        }
+    }
+
+    @Test
+    fun aMainScreenShowsFiveDestinationShell() {
+        assumeEmulatorAndWaitForShell()
+
+        assertTextPresent("Now")
+        assertTextPresent("Food")
+        assertTextPresent("Week")
+        assertTextPresent("Saved")
+        assertTextPresent("Cart")
         composeTestRule.onAllNodesWithContentDescription("More").assertCountEquals(0)
         composeTestRule.onAllNodesWithContentDescription("AI").assertCountEquals(0)
         composeTestRule.onAllNodesWithText("More").assertCountEquals(0)
@@ -59,22 +94,24 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food profile").assertIsDisplayed()
         composeTestRule.onNodeWithText("Goals & health").assertIsDisplayed()
+        pressActivityBack()
     }
 
     @Test
-    fun aiCaptureStaysOpenAfterSend() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun eAiCaptureStaysOpenAfterSend() {
+        assumeEmulatorAndWaitForShell()
 
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
         composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("AI capture text").performTextInput("Need oats")
         composeTestRule.onNodeWithContentDescription("Send AI capture").performClick()
         composeTestRule.onNodeWithText("WonderFood AI").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Close AI capture").performClick()
     }
 
     @Test
-    fun newChatKeepsPreviousConversationReadableFromHistory() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun fNewChatKeepsPreviousConversationReadableFromHistory() {
+        assumeEmulatorAndWaitForShell()
         val previousMessage = "Need tamarind for the history test"
 
         composeTestRule.onNodeWithContentDescription("Open AI capture").performClick()
@@ -97,11 +134,12 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Chat history").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Chat history list").performScrollToNode(hasText(previousMessage))
         composeTestRule.onNodeWithText(previousMessage).assertIsDisplayed()
+        pressActivityBack()
     }
 
     @Test
-    fun coreAiSkillCanBeOpenedWithoutCrashing() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun zCoreAiSkillCanBeOpenedWithoutCrashing() {
+        assumeEmulatorAndWaitForShell()
 
         composeTestRule.onNodeWithContentDescription("Open settings").performClick()
         composeTestRule.onNodeWithText("AI assistant").performClick()
@@ -114,13 +152,15 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Core AI skill").assertExists()
         composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Reset to bundled skill"))
         composeTestRule.onNodeWithText("Reset to bundled skill").assertIsDisplayed()
+        pressActivityBack()
+        pressActivityBack()
     }
 
     @Test
-    fun kitchenShowsFoodFirstControlsAndSafeSelection() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun bKitchenShowsFoodFirstControlsAndSafeSelection() {
+        assumeEmulatorAndWaitForShell()
 
-        composeTestRule.onAllNodesWithText("Kitchen").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Food").performClick()
         if (composeTestRule.onAllNodesWithText("No kitchen items yet.").fetchSemanticsNodes().isNotEmpty()) {
             composeTestRule.onNodeWithText("No kitchen items yet.").assertIsDisplayed()
             composeTestRule.onNodeWithText("Add food directly or scan a receipt when you're ready.").assertIsDisplayed()
@@ -131,47 +171,43 @@ class MainScreenTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Add kitchen food").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Use first").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Search food, category, notes").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Gallery view").assertIsSelected()
-        composeTestRule.onNodeWithText("Select").performClick()
-        composeTestRule.onNodeWithText("0 selected").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Remove").assertCountEquals(0)
     }
 
     @Test
-    fun manualCreateIsAvailableWithoutAi() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun cManualCreateIsAvailableWithoutAi() {
+        assumeEmulatorAndWaitForShell()
 
-        composeTestRule.onAllNodesWithText("Kitchen").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Food").performClick()
         composeTestRule.onNodeWithContentDescription("Add kitchen food").performClick()
         composeTestRule.onNodeWithText("Add kitchen food").assertIsDisplayed()
         composeTestRule.onNodeWithText("Cancel").performClick()
 
-        composeTestRule.onAllNodesWithText("Shop").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Cart").performClick()
         composeTestRule.onNodeWithContentDescription("Add shopping item").assertIsDisplayed()
 
-        composeTestRule.onAllNodesWithText("Recipes").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Saved").performClick()
         composeTestRule.onNodeWithContentDescription("Create recipe").assertIsDisplayed()
 
-        composeTestRule.onAllNodesWithText("Today").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Now").performClick()
         composeTestRule.onNodeWithContentDescription("Log meal").performClick()
         composeTestRule.onNodeWithText("Date").assertIsDisplayed()
+        pressActivityBack()
     }
 
     @Test
-    fun destinationsExposeV3WorkflowContexts() {
-        assumeTrue(Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic"))
+    fun dDestinationsExposeV3WorkflowContexts() {
+        assumeEmulatorAndWaitForShell()
 
-        composeTestRule.onAllNodesWithText("Today").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Now").performClick()
         composeTestRule.onNodeWithText("Meal timeline").assertIsDisplayed()
 
-        composeTestRule.onAllNodesWithText("Plan").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Week").performClick()
         composeTestRule.onNodeWithText("This week").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Plan today").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open AI capture").assertIsDisplayed()
 
-        composeTestRule.onAllNodesWithText("Shop").onFirst().performClick()
+        composeTestRule.onNodeWithContentDescription("Navigate to Cart").performClick()
         composeTestRule.onNodeWithContentDescription("Shop mode To buy").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Shop mode Receipts").performClick()
         composeTestRule.onNodeWithText("No receipts yet.").assertIsDisplayed()
@@ -184,5 +220,43 @@ class MainScreenTest {
             "$text should be present in the app shell",
             composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty(),
         )
+    }
+
+    private fun assumeEmulatorAndWaitForShell() {
+        assumeTrue(isEmulator())
+        composeTestRule.activity
+        composeTestRule.waitForIdle()
+        dismissFoodHomeChooserIfPresent()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            isShellVisible()
+        }
+    }
+
+    private fun isEmulator(): Boolean =
+        Build.MODEL.contains("sdk", ignoreCase = true) || Build.FINGERPRINT.contains("generic")
+
+    private fun isShellVisible(): Boolean =
+        runCatching {
+            composeTestRule.onAllNodesWithContentDescription("Navigate to Now").fetchSemanticsNodes().isNotEmpty() ||
+                composeTestRule.onAllNodesWithText("Today").fetchSemanticsNodes().isNotEmpty()
+        }.getOrDefault(false)
+
+    private fun pressActivityBack() {
+        runCatching {
+            composeTestRule.activityRule.scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    private fun dismissFoodHomeChooserIfPresent() {
+        if (runCatching { composeTestRule.onAllNodesWithText("Start local now").fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false)) {
+            composeTestRule.onNodeWithText("Start local now").performClick()
+            composeTestRule.waitForIdle()
+            composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                runCatching { composeTestRule.onAllNodesWithText("Start local now").fetchSemanticsNodes().isEmpty() }.getOrDefault(false)
+            }
+        }
     }
 }

@@ -22,8 +22,8 @@ android {
         applicationId = "com.wonderfood.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
     }
 
     flavorDimensions += "distribution"
@@ -90,6 +90,7 @@ dependencies {
   implementation(project(":core:ai"))
 
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.room.runtime)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
@@ -119,6 +120,7 @@ dependencies {
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
+  testImplementation(libs.androidx.test.core)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
 

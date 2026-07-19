@@ -1,6 +1,6 @@
 # WonderFood
 
-Local-first food planning for Android: kitchen inventory, recipes, meal plans, shopping, receipts, and reviewable AI proposals in one private workspace.
+Local-first food planning for Android: kitchen inventory, recipes, meal plans, shopping, receipts, selectable data homes, and reviewable AI proposals in one private workspace.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-8%2B-3ddc84.svg)](app/build.gradle.kts)
@@ -15,7 +15,7 @@ Local-first food planning for Android: kitchen inventory, recipes, meal plans, s
 
 ## Why It Exists
 
-Food apps usually split your life into separate places: pantry lists, recipes, meal logs, shopping, receipts, nutrition, and AI chats. WonderFood keeps them in one local workspace and treats every AI/share/deep-link mutation as a draft you can edit, accept, or reject.
+Food apps usually split your life into separate places: pantry lists, recipes, meal logs, shopping, receipts, nutrition, and AI chats. WonderFood keeps them in one workspace, lets the household choose where that workspace lives, and treats every AI/share/deep-link mutation as a draft you can edit, accept, or reject.
 
 ## Highlights
 
@@ -25,11 +25,12 @@ Food apps usually split your life into separate places: pantry lists, recipes, m
 - **Reviewable AI:** provider output maps to typed command envelopes; app validation owns every write.
 - **No-LLM fallbacks:** manual forms, CSV import/export, deterministic parsing, and command links work without an in-app LLM.
 - **External commands:** Android shares, HTTPS/custom-scheme links, and explicit command intents stage bounded proposals.
+- **Selectable data homes:** start local, or connect Google Sheets, Notion, Supabase/PostgREST, or a WonderFood server with rollback snapshots before switching.
 - **Optional integrations:** encrypted Google Drive app-data backup and Health Connect support can be enabled by the user.
 
 ## Product Principles
 
-- Food data stays on-device unless the user explicitly invokes an external provider, encrypted backup, export, or share.
+- Food data stays on-device unless the user explicitly chooses a remote data home, invokes an external provider, creates an encrypted backup, exports, or shares.
 - AI, assistant, share, and deep-link mutations are proposals. The user can edit, accept, or reject them before persistence.
 - Unknown nutrition remains unknown. Provider estimates retain source and confidence.
 - External bulk proposals are bounded, validated, audited, and applied atomically.
@@ -74,6 +75,7 @@ Connected Android tests:
 ## Optional Integrations
 
 - AI providers are configured as a deterministic Primary and one optional Fallback. Each request tries Primary once, then Fallback only after failure; there is no rotation or load balancing.
+- Data home setup is shown on first run. Local SQLite needs no account. Google Sheets uses a Sheet URL plus Google authorization in the `play` flavor. Notion uses a page URL plus integration token. Supabase/PostgREST/WonderFood server use an HTTPS endpoint, household ID, and API token. Advanced direct PostgreSQL DSN mode is stored but does not perform mobile direct-write sync.
 - Google Drive app-data backup is available in the `play` flavor and requires replacing `google_web_client_id` in `app/src/main/res/values/google_auth.xml` with a public OAuth web client ID.
 - Health Connect access is available in the `play` flavor and requested through Android's permission flow.
 - HTTPS app links require a deployed `https://wonderfood.app/.well-known/assetlinks.json`.
@@ -96,6 +98,8 @@ The runtime app currently uses its audited SQLite store while the canonical core
 ## Privacy and Security
 
 See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md). Android automatic backup is disabled; WonderFood's explicit backup flow encrypts archives before upload. Cleartext networking is denied except emulator/local-development loopback hosts.
+
+Release signing and OAuth proof gates are tracked in [docs/release/RELEASE_CHECKLIST.md](docs/release/RELEASE_CHECKLIST.md).
 
 ## Contributing
 

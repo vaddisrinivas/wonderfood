@@ -9,6 +9,10 @@ command names listed in `command-envelope-v1.md`.
 ## Current Version
 
 - Catalog: `wf.ai.skill-catalog.v1`
+- Release slice: `1.0.4` adds typed app contracts for `RecipeImportSkill`,
+  `PantryNormalizeSkill`, `CanCookSkill`, `MealPlanSkill`, `CartBuilderSkill`,
+  `RecipePersonalizeSkill`, `CookingCoachSkill`, `ReceiptParseSkill`, and
+  `NutritionEstimateSkill`.
 - Envelope schema: `wf.ai.command-envelope.v1`
 - Human contract: [skill-catalog-v1.md](skill-catalog-v1.md)
 - Command contract: [command-envelope-v1.md](command-envelope-v1.md)

@@ -45,6 +45,19 @@ reject future APKs.
 3. Run `./scripts/quality/android-harness.sh local`.
 4. Capture release evidence (commands run, checksums, signing fingerprints, app and
    build ID).
+
+```bash
+export ANDROID_KEYSTORE_PATH=/path/to/wonderfood-release.jks
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=...
+export ANDROID_KEY_PASSWORD=...
+
+./scripts/quality/collect-release-evidence.sh
+```
+
+The collector writes a timestamped directory under `build/evidence/` with release
+APK verification output, SHA-256 sums, signing fingerprints, OAuth placeholder
+status, assetlinks status, and connected-device evidence when ADB sees a device.
 5. Validate release signing fingerprint and App Links manifest:
 
 ```bash

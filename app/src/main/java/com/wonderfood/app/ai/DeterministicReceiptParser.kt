@@ -57,8 +57,8 @@ object DeterministicReceiptParser {
             .asSequence()
             .map { original -> original to cleanReceiptLine(original) }
             .filter { (_, line) -> line.isNotBlank() }
-            .filterNot { (_, line) -> line.isReceiptControlLine() }
-            .filter { (original, line) -> original.isLikelyReceiptItemLine(line) }
+            .filterNot { (_, line) -> line.isReceiptControlLine(barcodeLookupProvider) }
+            .filter { (original, line) -> original.isLikelyReceiptItemLine(line, barcodeLookupProvider) }
             .mapNotNull { (original, line) ->
                 val barcodeCandidate = barcodeLookupProvider.lookupBarcode(line)
                 val food = if (barcodeCandidate != null) {
@@ -104,17 +104,17 @@ object DeterministicReceiptParser {
             .replace(Regex("""\s+"""), " ")
             .trim(' ', '-', '.', ':')
 
-    private fun String.isReceiptControlLine(): Boolean {
-        if (TrustedFoodLookup.lookupBarcode(this) != null) return false
+    private fun String.isReceiptControlLine(barcodeLookupProvider: BarcodeLookupProvider): Boolean {
+        if (barcodeLookupProvider.lookupBarcode(this) != null) return false
         val lower = lowercase(Locale.US)
         if (lower.length < 3) return true
         if (lower.all { it.isDigit() || it.isWhitespace() }) return true
         return CONTROL_WORDS.any { it in lower }
     }
 
-    private fun String.isLikelyReceiptItemLine(cleaned: String): Boolean =
+    private fun String.isLikelyReceiptItemLine(cleaned: String, barcodeLookupProvider: BarcodeLookupProvider): Boolean =
         PRICE_PATTERN.containsMatchIn(this) ||
-            TrustedFoodLookup.lookupBarcode(cleaned) != null ||
+            barcodeLookupProvider.lookupBarcode(cleaned) != null ||
             FOOD_WORDS.any { word -> word in cleaned.lowercase(Locale.US) }
 
     private fun String.toReceiptCandidate(rawLine: String, servingPicker: ReceiptServingPicker): FoodCandidate? {

@@ -13,21 +13,29 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = HerbGreenContainer,
-    onPrimary = HerbGreenDark,
-    primaryContainer = HerbGreenDark,
-    onPrimaryContainer = HerbGreenContainer,
-    secondary = OliveContainer,
-    onSecondary = Olive,
-    secondaryContainer = Olive,
-    onSecondaryContainer = OliveContainer,
-    tertiary = TomatoContainer,
-    onTertiary = Tomato,
-    tertiaryContainer = Tomato,
-    onTertiaryContainer = TomatoContainer,
-    background = FoodSurfaceDark,
-    surface = FoodSurfaceDark,
-    surfaceVariant = Color(0xFF2C2820),
+    primary = Color(0xFF8BD7A8),
+    onPrimary = Color(0xFF072A18),
+    primaryContainer = Color(0xFF174F32),
+    onPrimaryContainer = Color(0xFFE0F7E8),
+    secondary = Color(0xFFE5DF95),
+    onSecondary = Color(0xFF2F2D06),
+    secondaryContainer = Color(0xFF474516),
+    onSecondaryContainer = Color(0xFFF7F1B2),
+    tertiary = Color(0xFFFFB59E),
+    onTertiary = Color(0xFF5B1805),
+    tertiaryContainer = Color(0xFF8D3218),
+    onTertiaryContainer = Color(0xFFFFE3D8),
+    background = Color(0xFF211E1A),
+    onBackground = Color(0xFFF7EFE2),
+    surface = Color(0xFF2A261F),
+    onSurface = Color(0xFFF7EFE2),
+    surfaceVariant = Color(0xFF383226),
+    onSurfaceVariant = Color(0xFFE6DDCE),
+    outline = Color(0xFFA69B8A),
+    outlineVariant = Color(0xFF514A3D),
+    inverseSurface = OatSurface,
+    inverseOnSurface = Ink,
+    inversePrimary = HerbGreen,
   )
 
 private val LightColorScheme =
@@ -74,7 +82,7 @@ fun WonderFoodTheme(
     darkTheme ?: when (themeMode) {
       WonderFoodThemeMode.LIGHT -> false
       WonderFoodThemeMode.DARK -> true
-      WonderFoodThemeMode.SYSTEM -> isSystemInDarkTheme()
+      WonderFoodThemeMode.SYSTEM -> false
     }
   val colorScheme =
     when {

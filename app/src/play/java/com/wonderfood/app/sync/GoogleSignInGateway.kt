@@ -54,7 +54,7 @@ class GoogleSignInGateway(private val context: Context) {
             context.getString(R.string.google_web_client_id).trim()
         }
         require(value.isNotBlank() && !value.startsWith("TODO_")) {
-            "Paste your Google Web OAuth client ID in Settings → Backup & restore before using Google backup."
+            "Paste your Google Web OAuth client ID in Settings → Backup & restore before using Google features."
         }
         return value
     }
