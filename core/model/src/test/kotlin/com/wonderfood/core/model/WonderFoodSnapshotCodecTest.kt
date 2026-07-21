@@ -344,6 +344,11 @@ class WonderFoodSnapshotCodecTest {
                 currencyCode = "USD",
                 truthState = TruthState.USER_CONFIRMED,
             ),
+            tax = Money(
+                amount = 0.4,
+                currencyCode = "USD",
+                truthState = TruthState.USER_CONFIRMED,
+            ),
             total = Money(
                 amount = 5.39,
                 currencyCode = "USD",

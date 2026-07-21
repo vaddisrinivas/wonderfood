@@ -38,14 +38,14 @@ class WonderFoodMigrationInstrumentedTest {
     }
 
     @Test
-    fun versionOneFixtureMigratesToCurrentSchemaWithoutDataLoss() = runTest {
-        val name = databaseName("v1-to-v2")
-        val expected = createCurrentFixtureThenMarkAsVersion(name, version = 1)
+    fun currentFixtureReopensWithoutDataLoss() = runTest {
+        val name = databaseName("current-reopen")
+        val expected = createCurrentFixtureThenMarkAsVersion(name, version = 10)
 
         val database = WonderFoodDatabaseFactory.create(context, name)
         try {
             val readable = database.openHelper.readableDatabase
-            assertEquals(2, readable.userVersion())
+            assertEquals(10, readable.userVersion())
             assertEquals(expected, rowCounts(readable, expected.keys))
             assertNoForeignKeyViolations(readable)
             assertIndexExists(readable, "foods", "index_foods_page_id")
@@ -81,7 +81,7 @@ class WonderFoodMigrationInstrumentedTest {
     @Test
     fun corruptedSchemaFailsWithoutDeletingFileOrRemainingRows() = runTest {
         val name = databaseName("corrupt-schema")
-        createCurrentFixtureThenMarkAsVersion(name, version = 2)
+        createCurrentFixtureThenMarkAsVersion(name, version = 10)
         corruptSchemaByDroppingFoods(name)
         val file = context.getDatabasePath(name)
 

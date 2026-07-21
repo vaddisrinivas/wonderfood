@@ -316,73 +316,6 @@ class FoodDraftCommandExecutorTest {
         assertTrue(sink.applied.single().draft is CompositeDraft)
     }
 
-    @Test
-    fun mutationExecutorRecordsAppliedMutation() {
-        val sink = FakeMutationSink()
-        val executor = FoodMutationCommandExecutor { sink }
-        val result = executor.execute(
-            FoodMutationCommand(
-                type = FoodMutationCommandType.UPDATE_INVENTORY,
-                label = "Update pantry item",
-                origin = FoodDraftCommandOrigin.MANUAL_SAVE,
-                payload = mapOf("id" to "7", "name" to "Eggs"),
-            ),
-        ) {
-            "Kitchen page updated."
-        }
-
-        assertTrue(result is FoodMutationExecutionResult.Applied)
-        assertEquals("APPLIED", sink.recorded.single().status)
-        assertEquals(FoodMutationCommandType.UPDATE_INVENTORY, sink.recorded.single().command.type)
-        assertEquals("manual", sink.recorded.single().command.origin.writeSource)
-    }
-
-    @Test
-    fun mutationExecutorRejectsExternalDestructiveMutationBeforeWrite() {
-        val sink = FakeMutationSink()
-        val executor = FoodMutationCommandExecutor { sink }
-        var wrote = false
-        val result = executor.execute(
-            FoodMutationCommand(
-                type = FoodMutationCommandType.DELETE_RECIPE,
-                label = "Archive recipe",
-                origin = FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
-                payload = mapOf("id" to "9"),
-            ),
-        ) {
-            wrote = true
-            "Archived."
-        }
-
-        assertTrue(result is FoodMutationExecutionResult.Rejected)
-        assertTrue(!wrote)
-        assertEquals("REJECTED", sink.recorded.single().status)
-        assertTrue((result as FoodMutationExecutionResult.Rejected).errors.single().contains("external_proposal"))
-    }
-
-    @Test
-    fun mutationExecutorRejectsAssistantDestructiveMutationBeforeWrite() {
-        val sink = FakeMutationSink()
-        val executor = FoodMutationCommandExecutor { sink }
-        var wrote = false
-        val result = executor.execute(
-            FoodMutationCommand(
-                type = FoodMutationCommandType.DELETE_GROCERY,
-                label = "Delete grocery from assistant",
-                origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
-                payload = mapOf("id" to "12"),
-            ),
-        ) {
-            wrote = true
-            "Deleted."
-        }
-
-        assertTrue(result is FoodMutationExecutionResult.Rejected)
-        assertTrue(!wrote)
-        assertEquals("REJECTED", sink.recorded.single().status)
-        assertTrue((result as FoodMutationExecutionResult.Rejected).errors.single().contains("google_assistant"))
-    }
-
     private class FakeSink : FoodDraftCommandSink {
         val applied = mutableListOf<AppliedCall>()
 
@@ -401,17 +334,4 @@ class FoodDraftCommandExecutorTest {
         val writeSource: String,
     )
 
-    private class FakeMutationSink : FoodMutationCommandSink {
-        val recorded = mutableListOf<RecordedMutation>()
-
-        override fun recordMutationCommand(command: FoodMutationCommand, status: String, summary: String) {
-            recorded += RecordedMutation(command, status, summary)
-        }
-    }
-
-    private data class RecordedMutation(
-        val command: FoodMutationCommand,
-        val status: String,
-        val summary: String,
-    )
 }

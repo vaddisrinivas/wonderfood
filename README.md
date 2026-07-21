@@ -25,25 +25,26 @@ Food apps usually split your life into separate places: pantry lists, recipes, m
 - **Reviewable AI:** provider output maps to typed command envelopes; app validation owns every write.
 - **No-LLM fallbacks:** manual forms, CSV import/export, deterministic parsing, and command links work without an in-app LLM.
 - **External commands:** Android shares, HTTPS/custom-scheme links, and explicit command intents stage bounded proposals.
-- **Selectable data homes:** start local, or connect Google Sheets, Notion, Supabase/PostgREST, or a WonderFood server with rollback snapshots before switching.
+- **Selectable data homes:** start local, or connect Google Sheets, Notion, or a Postgres-backed HTTPS API with rollback snapshots before switching.
 - **Optional integrations:** encrypted Google Drive app-data backup and Health Connect support can be enabled by the user.
 
-## Latest Release: 1.0.4
+## Current Release Work: 1.0.5
 
-WonderFood 1.0.4 is the workspace foundation release:
+WonderFood 1.0.5 is the active verification target:
 
-- **New V3 shell:** `Now`, `Food`, `Week`, `Saved`, and `Cart` organize the app around daily use instead of setup screens.
+- **Canonical local runtime:** app state, imports, exports, AI context, and AppFunctions are being cut over to canonical household commands and Room state.
+- **New V3 shell:** `Now`, `Food`, `Week`, and `Cart` organize the app around daily use instead of setup screens.
 - **Local-first default:** SQLite works without accounts, internet, Notion, Sheets, Postgres, or AI.
-- **Real data-home foundations:** Google Sheets, Notion, and Postgres/Supabase-style configuration now share one app data contract instead of separate one-off dumps.
+- **Real data homes:** Google Sheets, Notion, and Postgres use one canonical household contract instead of provider-specific snapshots.
 - **Readable household workspaces:** Notion and Sheets schema work focuses on useful food, recipe, meal, purchase, cart, and planning views that humans can inspect and automate.
 - **Safer switching:** backend changes create a local rollback snapshot before committing the new data home.
 - **AI as proposals:** recipe import, pantry normalization, can-cook ranking, meal planning, cart building, personalization, cooking coach, receipt parsing, and nutrition estimation have typed contracts while deterministic app validation owns writes.
 - **Provider-ready mapping:** TheMealDB and Open Food Facts mappings now preserve source, confidence, warnings, and cache policy.
-- **Better import/receipt consistency:** deterministic receipt parsing, food draft normalization, legacy export/import, and snapshot merging make AI and non-AI intake behave more uniformly.
+- **Better import/receipt consistency:** deterministic receipt parsing, draft normalization, canonical import/export, and snapshot merging make AI and non-AI intake behave more uniformly.
 - **Manual workflows still work:** food entry, cart items, recipe creation, and meal logging are available without AI.
-- **Release proof:** local Android quality, API 26 device quality, API 35 device quality, and signed APK release automation passed for this version.
+- **Release proof:** local tests, emulator/device proof, live-provider proof, signing, checksums, CI, PR merge, and release publication are required before 1.0.5 is called complete.
 
-Install from [WonderFood 1.0.4](https://github.com/vaddisrinivas/wonderfood/releases/tag/v1.0.4):
+Latest published install remains [WonderFood 1.0.4](https://github.com/vaddisrinivas/wonderfood/releases/tag/v1.0.4) until the 1.0.5 release evidence is complete:
 
 - Use `WonderFood-play-v1.0.4.apk` for Google/Play-integrated features.
 - Use `WonderFood-foss-v1.0.4.apk` for the no-Google-dependency build.
@@ -95,7 +96,7 @@ Connected Android tests:
 ## Optional Integrations
 
 - AI providers are configured as a deterministic Primary and one optional Fallback. Each request tries Primary once, then Fallback only after failure; there is no rotation or load balancing.
-- Data home setup is shown on first run. Local SQLite needs no account. Google Sheets uses a Sheet URL plus Google authorization in the `play` flavor. Notion uses a page URL plus integration token. Supabase/PostgREST/WonderFood server use an HTTPS endpoint, household ID, and API token. Advanced direct PostgreSQL DSN mode is stored but does not perform mobile direct-write sync.
+- Data home setup is shown on first run. Local SQLite needs no account. Google Sheets uses a Sheet URL plus Google authorization in the `play` flavor. Notion uses a page URL plus integration token. Postgres uses a Postgres-backed HTTPS API or user-owned service endpoint with household ID and API token. Android must not ship raw database credentials, privileged server tokens, or raw database socket paths.
 - Google Drive app-data backup is available in the `play` flavor and requires replacing `google_web_client_id` in `app/src/main/res/values/google_auth.xml` with a public OAuth web client ID.
 - Health Connect access is available in the `play` flavor and requested through Android's permission flow.
 - HTTPS app links require a deployed `https://wonderfood.app/.well-known/assetlinks.json`.
@@ -110,10 +111,10 @@ WonderFood is Apache-2.0 and local-first, with Fastlane metadata and screenshots
 - `app`: Compose UI, Android integrations, command/deep-link intake, local SQLite runtime, import/export, and sync UI.
 - `core:model`: canonical food domain and snapshot contracts.
 - `core:engine`: validated command execution policies.
-- `core:data`: Room repository and migration foundation.
+- `core:data`: Room repository and migration contracts.
 - `core:ai`: versioned structured proposal envelopes and provider boundaries.
 
-The runtime app currently uses its audited SQLite store while the canonical core modules remain independently tested boundaries. Keep contract changes synchronized across both paths.
+The runtime app uses the canonical household repository for the v1.0.5 path. Keep contract changes synchronized across app, Room, sync, AI, and AppFunctions.
 
 ## Privacy and Security
 

@@ -24,8 +24,8 @@ class CredentialSecretCodecTest {
     fun roundTripsBearerApiAndConnectionSecrets() {
         listOf(
             BackendSecret.BearerToken("notion-token"),
-            BackendSecret.ApiToken("supabase-token"),
-            BackendSecret.ConnectionString("postgres://user:pass@example/db"),
+            BackendSecret.ApiToken("postgres-api-token"),
+            BackendSecret.ConnectionString("owned-service-connection"),
         ).forEach { secret ->
             assertEquals(secret, CredentialSecretCodec.decode(CredentialSecretCodec.encode(secret)))
         }

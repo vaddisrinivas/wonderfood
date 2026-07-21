@@ -5,25 +5,15 @@ import org.junit.Test
 
 class PostgresConnectionParserTest {
     @Test
-    fun infersSupabaseHttpsEndpoint() {
+    fun infersWonderFoodServerHttpsEndpoint() {
         val reference = PostgresConnectionParser.parse(
-            endpoint = "https://abcxyz.supabase.co",
+            endpoint = "https://api.example.com",
             householdId = "home",
         )
 
-        assertEquals(PostgresConnectionMode.SUPABASE, reference.mode)
-        assertEquals("https://abcxyz.supabase.co", reference.endpoint)
+        assertEquals(PostgresConnectionMode.WONDERFOOD_SERVER, reference.mode)
+        assertEquals("https://api.example.com", reference.endpoint)
         assertEquals("home", reference.householdId)
-    }
-
-    @Test
-    fun infersDirectDsn() {
-        val reference = PostgresConnectionParser.parse(
-            endpoint = "postgresql://user:pass@example.com:5432/wonderfood?sslmode=require",
-            householdId = "home",
-        )
-
-        assertEquals(PostgresConnectionMode.DIRECT_DSN, reference.mode)
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -35,9 +25,9 @@ class PostgresConnectionParserTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun rejectsDirectDsnWithDisabledTls() {
+    fun rejectsRawPostgresDsn() {
         PostgresConnectionParser.parse(
-            endpoint = "postgres://user:pass@example.com/db?sslmode=disable",
+            endpoint = "postgres.example.com:5432/wonderfood",
             householdId = "home",
         )
     }

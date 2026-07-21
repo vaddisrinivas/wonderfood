@@ -55,10 +55,10 @@ class MainActivity : ComponentActivity() {
     runCatching {
       WonderFoodThemeMode.valueOf(
         getSharedPreferences(THEME_PREFS_NAME, MODE_PRIVATE)
-          .getString(KEY_THEME_MODE, WonderFoodThemeMode.LIGHT.name)
+          .getString(KEY_THEME_MODE, WonderFoodThemeMode.SYSTEM.name)
           .orEmpty(),
       )
-    }.getOrDefault(WonderFoodThemeMode.LIGHT)
+    }.getOrDefault(WonderFoodThemeMode.SYSTEM)
 
   private fun saveThemeMode(mode: WonderFoodThemeMode) {
     getSharedPreferences(THEME_PREFS_NAME, MODE_PRIVATE).edit {

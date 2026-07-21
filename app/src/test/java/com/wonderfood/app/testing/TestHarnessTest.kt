@@ -54,7 +54,7 @@ class TestHarnessTest {
 
     @Test
     fun inMemoryRepositoryPreservesDisplayMetadata() {
-        val repository = InMemoryFoodMemoryRepository()
+        val repository = InMemoryHouseholdUiRepository()
 
         repository.applyDraft(InventoryDraft(listOf(TestFoodSeeds.candidate(name = "Generic Yogurt", imageUri = "🥣"))))
         repository.applyDraft(

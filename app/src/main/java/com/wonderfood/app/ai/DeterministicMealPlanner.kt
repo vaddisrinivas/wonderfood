@@ -1,6 +1,6 @@
 package com.wonderfood.app.ai
 
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.InventoryItem
 import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.MealPlanEntryDraft
@@ -12,7 +12,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 object DeterministicMealPlanner {
-    fun plan(memory: FoodMemory, nowMillis: Long = System.currentTimeMillis(), mealCount: Int = 5): DeterministicMealPlan {
+    fun plan(memory: HouseholdUiMemory, nowMillis: Long = System.currentTimeMillis(), mealCount: Int = 5): DeterministicMealPlan {
         val candidates = recipeCandidates(memory, nowMillis) + inventoryCandidates(memory, nowMillis)
         val ranked = candidates
             .filterNot { it.blocked }
@@ -53,7 +53,7 @@ object DeterministicMealPlanner {
         )
     }
 
-    private fun recipeCandidates(memory: FoodMemory, nowMillis: Long): List<PlanCandidate> =
+    private fun recipeCandidates(memory: HouseholdUiMemory, nowMillis: Long): List<PlanCandidate> =
         memory.recipes.map { recipe ->
             val ingredients = recipe.ingredientTokens()
             val inventoryMatches = memory.inventory.filter { item ->
@@ -84,7 +84,7 @@ object DeterministicMealPlanner {
             )
         }
 
-    private fun inventoryCandidates(memory: FoodMemory, nowMillis: Long): List<PlanCandidate> {
+    private fun inventoryCandidates(memory: HouseholdUiMemory, nowMillis: Long): List<PlanCandidate> {
         val preferred = memory.preferences.preferredStaples.tokens()
         val items = memory.inventory
             .sortedWith(compareByDescending<InventoryItem> { if (it.isExpiringSoon(nowMillis)) 1 else 0 }.thenBy { it.name })
@@ -140,7 +140,7 @@ object DeterministicMealPlanner {
         }
     }
 
-    private fun fallbackCandidates(memory: FoodMemory): List<PlanCandidate> {
+    private fun fallbackCandidates(memory: HouseholdUiMemory): List<PlanCandidate> {
         val dislikes = memory.preferences.dislikes.lowercase(Locale.US)
         return listOf("Eggs rice bowl", "Beans and greens", "Yogurt fruit plate", "Pantry pasta", "Flexible leftovers")
             .filterNot { dislikes.contains(it.lowercase(Locale.US)) }
@@ -171,7 +171,7 @@ object DeterministicMealPlanner {
             }
         }
 
-    private fun preferenceScore(title: String, details: String, memory: FoodMemory): Int {
+    private fun preferenceScore(title: String, details: String, memory: HouseholdUiMemory): Int {
         val haystack = "$title $details".lowercase(Locale.US)
         val preferred = (
             memory.preferences.preferredStaples.tokens() +
@@ -181,21 +181,21 @@ object DeterministicMealPlanner {
         return preferred * 7
     }
 
-    private fun nutritionScore(calories: Int, memory: FoodMemory): Int {
+    private fun nutritionScore(calories: Int, memory: HouseholdUiMemory): Int {
         val target = memory.preferences.calorieGoal.tokens()
             .firstNotNullOfOrNull { it.toIntOrNull() }
             ?: return 0
         return (12 - abs(target - calories) / 50).coerceAtLeast(-8)
     }
 
-    private fun repetitionPenalty(title: String, memory: FoodMemory): Int {
+    private fun repetitionPenalty(title: String, memory: HouseholdUiMemory): Int {
         val normalized = title.normalized()
         val mealLogPenalty = memory.mealLogs.count { it.title.normalized().overlaps(normalized) } * 12
         val planPenalty = memory.mealPlanEntries.count { it.title.normalized().overlaps(normalized) } * 8
         return mealLogPenalty + planPenalty
     }
 
-    private fun blockedByPreferences(title: String, details: String, memory: FoodMemory): Boolean {
+    private fun blockedByPreferences(title: String, details: String, memory: HouseholdUiMemory): Boolean {
         val haystack = "$title $details".lowercase(Locale.US)
         val blocked = memory.preferences.dislikes.tokens() + memory.preferences.allergies.tokens()
         return blocked.any { token -> token.length >= 3 && token in haystack }

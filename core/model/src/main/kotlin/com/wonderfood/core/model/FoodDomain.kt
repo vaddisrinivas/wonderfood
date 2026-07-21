@@ -714,6 +714,7 @@ data class Receipt(
     val purchasedAt: IsoTimestamp?,
     val itemIds: List<ShoppingItemId>,
     val subtotal: Money?,
+    val tax: Money?,
     val total: Money?,
     val attachmentIds: List<AttachmentId>,
     val status: ReceiptStatus,

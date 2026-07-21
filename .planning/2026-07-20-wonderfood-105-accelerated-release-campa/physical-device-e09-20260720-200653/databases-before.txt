@@ -1,0 +1,4 @@
+total 2016
+-rw-rw---- 1 u0_a385 u0_a385 1507328 2026-07-20 20:08 wonderfood-v105-household.db
+-rw------- 1 u0_a385 u0_a385   32768 2026-07-20 20:08 wonderfood-v105-household.db-shm
+-rw-rw---- 1 u0_a385 u0_a385  524288 2026-07-20 20:08 wonderfood-v105-household.db-wal

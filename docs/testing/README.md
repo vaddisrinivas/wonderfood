@@ -63,15 +63,17 @@ Issue #5 requires manual verification for Google Assistant, App Actions, and Sam
 - `app/src/test/java/com/wonderfood/app/testing/DeterministicTestIds.kt`: deterministic long IDs and UUIDs.
 - `app/src/test/java/com/wonderfood/app/testing/MainDispatcherRule.kt`: JUnit4 rule for `Dispatchers.Main`.
 - `app/src/test/java/com/wonderfood/app/testing/TestFoodSeeds.kt`: generic foods, recipes, meals, plans, receipts, events, and preferences.
-- `app/src/test/java/com/wonderfood/app/testing/InMemoryFoodMemoryRepository.kt`: test-only fake repository for prototype `FoodMemory` and `FoodDraft` models.
+- `app/src/test/java/com/wonderfood/app/testing/InMemoryHouseholdUiRepository.kt`: test-only fake repository for canonical household UI projections.
 - `app/src/test/java/com/wonderfood/app/testing/FakeAiGateway.kt`: test-only fake AI gateway and command-envelope fixture catalog.
 - `app/src/test/java/com/wonderfood/app/testing/TestFixtureResources.kt`: classpath fixture loader and lightweight JSON sanity probe.
 - `app/src/test/resources/fixtures/**`: generic offline JSON fixtures for nutrition, receipts, and command envelopes.
-- `app/src/androidTest/java/com/wonderfood/app/data/FoodChatStoreTest.kt`: isolated SQLite coverage for draft application plus editable object-page updates.
+- `core/data/src/test/kotlin/com/wonderfood/core/data/room/RoomHouseholdRepositoryTest.kt`: isolated Room repository coverage for canonical household state.
+- `core/data/src/test/kotlin/com/wonderfood/core/data/room/WonderFoodMigrationsTest.kt`: canonical SQLite migration coverage.
+- `app/src/androidTest/java/com/wonderfood/app/ui/main/MainScreenTest.kt`: connected Compose coverage for canonical app projections and flows.
 
-The app runtime uses `FoodChatStore` (`SQLiteOpenHelper`), while `core:data` owns
-the canonical Room repository and migration foundation. Both paths have dedicated
-tests; contract changes must remain synchronized until the runtime migration is done.
+The app runtime uses the canonical `HouseholdRepository` and Room-backed
+household state. Writes flow through `HouseholdCommandExecutor`; UI and AI
+surfaces render from `HouseholdUiMemory` projections over the canonical model.
 
 ## Harness Rules
 
@@ -81,6 +83,6 @@ tests; contract changes must remain synchronized until the runtime migration is 
 - Time, IDs, and UUIDs must come from deterministic test helpers when asserted.
 - Fakes should fail fast when no response is queued.
 - Fakes and seed builders must preserve display metadata such as `imageUri` and `imageUrl`; object pages depend on it.
-- New editable fields on inventory, grocery, recipe, meal, plan, or receipt pages need a persistence test.
+- New editable fields on inventory, grocery, recipe, meal, plan, or receipt pages need a canonical repository or connected UI persistence test.
 - Fixtures must stay generic and should not encode personal rows, locations, accounts, provider tokens, private screenshots, or real receipt images.
 - AI, nutrition, receipt, and command-envelope fixtures should keep unknown values as `null` instead of inventing defaults.

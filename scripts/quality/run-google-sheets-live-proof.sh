@@ -10,12 +10,45 @@ TOKEN_FILE="${GOOGLE_SHEETS_TOKEN_FILE:-${ROOT_DIR}/build/evidence/live-workspac
 mkdir -p "$(dirname "$TOKEN_FILE")"
 
 if [[ -z "${GOOGLE_SHEETS_ACCESS_TOKEN:-}" && -s "$TOKEN_FILE" ]]; then
+  : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required to refresh cached Google Sheets token}"
+  : "${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required to refresh cached Google Sheets token}"
   GOOGLE_SHEETS_ACCESS_TOKEN="$(python3 - "$TOKEN_FILE" <<'PY'
-import json, sys
+import json
+import os
+import sys
+import urllib.parse
+import urllib.request
+
+path = sys.argv[1]
 try:
-    print(json.load(open(sys.argv[1])).get("access_token", ""))
+    with open(path) as f:
+        cached = json.load(f)
 except Exception:
-    print("")
+    cached = {}
+
+refresh_token = cached.get("refresh_token", "")
+if refresh_token:
+    data = urllib.parse.urlencode(
+        {
+            "client_id": os.environ["GOOGLE_CLIENT_ID"],
+            "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+    ).encode()
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        refreshed = json.load(response)
+    cached.update(refreshed)
+    cached["refresh_token"] = refresh_token
+    with open(path, "w") as f:
+        json.dump(cached, f)
+
+print(cached.get("access_token", ""))
 PY
 )"
 fi

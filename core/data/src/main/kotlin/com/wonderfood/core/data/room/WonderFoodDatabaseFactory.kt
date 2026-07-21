@@ -6,7 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object WonderFoodDatabaseFactory {
-    const val DATABASE_NAME = "wonderfood-v2.db"
+    const val DATABASE_NAME = "wonderfood-v105-household.db"
 
     fun create(
         context: Context,

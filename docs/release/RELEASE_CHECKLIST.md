@@ -21,8 +21,8 @@ This checklist is required before calling a build release-ready.
 - Local SQLite starts without account, network, token, or permission.
 - Google Sheets connects with Sheet URL plus Google authorization, creates/checks schema, and avoids overwriting existing WonderFood data without review.
 - Notion connects with page URL plus token and exports a snapshot only after page access succeeds.
-- Supabase/PostgREST/WonderFood server connects over HTTPS and exports a household snapshot only after API validation succeeds.
-- Direct PostgreSQL DSN mode remains advanced/config-only unless a release includes a reviewed direct adapter.
+- PostgREST/WonderFood server connects over HTTPS and exports a household snapshot only after API validation succeeds.
+- Android Postgres data-home setup uses HTTPS API endpoints only; raw PostgreSQL DSNs, DB passwords, and database sockets are not accepted on-device.
 - Backend switching creates a local rollback snapshot before committing the new active backend.
 
 ## Privacy and security
@@ -34,9 +34,16 @@ This checklist is required before calling a build release-ready.
 
 ## Device proof
 
+- Run `./scripts/quality/triage-release-device-rows.sh` before final proof to
+  list current blockers for `E01`, `E07`, `E09`, and `E12`-`E16` without using
+  signing secrets or creating release state.
 - Install and launch the signed build on a physical Android device.
 - Capture proof for first-run onboarding, Local setup, and the selected release remote backend.
 - Run the focused unit/build gate and record command output.
 - Run `./scripts/quality/collect-release-evidence.sh` with release signing env set
   and archive the generated evidence directory.
 - Record any broad known test failures separately from release blockers.
+
+The triage output is only a time-saving manifest. It does not satisfy CI,
+physical-device, signing, checksum, PR, tag, release, or install-url proof by
+itself.

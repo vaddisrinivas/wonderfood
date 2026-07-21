@@ -1,6 +1,6 @@
 package com.wonderfood.app.ai
 
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.testing.TestFoodSeeds
@@ -13,7 +13,7 @@ class DeterministicMealPlannerTest {
     @Test
     fun expiringPantryCoverageRanksRecipeFirst() {
         val now = TestFoodSeeds.NOW_MILLIS
-        val memory = FoodMemory(
+        val memory = HouseholdUiMemory(
             inventory = listOf(
                 TestFoodSeeds.inventoryItem(id = 1, name = "Spinach", zone = StorageZone.FRIDGE, category = "produce")
                     .copy(expiresAtMillis = now + ONE_DAY_MILLIS),
@@ -37,7 +37,7 @@ class DeterministicMealPlannerTest {
     @Test
     fun allergiesAndDislikesBlockCandidates() {
         val now = TestFoodSeeds.NOW_MILLIS
-        val memory = FoodMemory(
+        val memory = HouseholdUiMemory(
             inventory = listOf(
                 TestFoodSeeds.inventoryItem(id = 1, name = "Spinach", zone = StorageZone.FRIDGE, category = "produce"),
                 TestFoodSeeds.inventoryItem(id = 2, name = "Rice", zone = StorageZone.PANTRY, category = "grain"),

@@ -1,6 +1,7 @@
 package com.wonderfood.app.ui.main
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,34 +17,51 @@ import com.wonderfood.app.ai.LiteLlmSettings
 import com.wonderfood.app.WonderFoodVoiceAction
 import com.wonderfood.app.WonderFoodVoiceCommand
 import com.wonderfood.app.data.AiTurn
+import com.wonderfood.app.data.CanonicalCartPreviewItem
+import com.wonderfood.app.data.CanonicalCartMutationCommandFactory
+import com.wonderfood.app.data.CanonicalHouseholdSearchItem
+import com.wonderfood.app.data.CanonicalHouseholdUiSummary
+import com.wonderfood.app.data.CanonicalKitchenMutationCommandFactory
+import com.wonderfood.app.data.CanonicalKitchenPreviewItem
+import com.wonderfood.app.data.CanonicalRecentSpendingItem
+import com.wonderfood.app.data.CanonicalRecipeMatchItem
+import com.wonderfood.app.data.CanonicalSavedRecipeItem
+import com.wonderfood.app.data.CanonicalWeekPlanItem
 import com.wonderfood.app.data.ChatRole
+import com.wonderfood.app.data.ChatMessage
 import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
-import com.wonderfood.app.data.FoodChatStore
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftCommand
-import com.wonderfood.app.data.FoodDraftCommandExecutor
 import com.wonderfood.app.data.FoodDraftCommandOrigin
+import com.wonderfood.app.data.FoodDraftCommandPolicy
 import com.wonderfood.app.data.FoodDraftExecutionResult
 import com.wonderfood.app.data.FoodDraftNormalizer
-import com.wonderfood.app.data.FoodEventConfidence
+import com.wonderfood.app.data.FoodDraftValidator
 import com.wonderfood.app.data.FoodEventType
-import com.wonderfood.app.data.FoodMemory
-import com.wonderfood.app.data.FoodMutationCommand
-import com.wonderfood.app.data.FoodMutationCommandExecutor
-import com.wonderfood.app.data.FoodMutationCommandType
-import com.wonderfood.app.data.FoodMutationExecutionResult
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodPreferences
+import com.wonderfood.app.data.GroceryItem
 import com.wonderfood.app.data.GroceryStatus
 import com.wonderfood.app.data.GroceryDraft
+import com.wonderfood.app.data.HouseholdDraftCommandMapper
+import com.wonderfood.app.data.InventoryItem
+import com.wonderfood.app.data.InventoryAction
+import com.wonderfood.app.data.InventoryTransaction
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.LinkActionDraft
+import com.wonderfood.app.data.MealLog
+import com.wonderfood.app.data.MealPlan
+import com.wonderfood.app.data.MealPlanEntry
+import com.wonderfood.app.data.MealPlanStatus
 import com.wonderfood.app.data.MealLogDraft
 import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.MealPlanEntryStatus
 import com.wonderfood.app.data.MealSlot
+import com.wonderfood.app.data.Recipe
 import com.wonderfood.app.data.ReceiptStatus
 import com.wonderfood.app.data.ReceiptDraft
+import com.wonderfood.app.data.ReceiptCapture
 import com.wonderfood.app.data.RecipeDraft
 import com.wonderfood.app.data.StorageZone
 import com.wonderfood.app.data.categorizeFood
@@ -56,21 +74,20 @@ import com.wonderfood.app.health.HealthExportResult
 import com.wonderfood.app.integration.capture.FoodCaptureGateway
 import com.wonderfood.app.integration.capture.FoodCaptureStatus
 import com.wonderfood.app.sync.AndroidKeystoreCredentialVault
+import com.wonderfood.app.sync.CanonicalHouseholdSnapshotExporter
 import com.wonderfood.app.sync.GoogleAccountProfile
 import com.wonderfood.app.sync.GoogleDriveAccess
 import com.wonderfood.app.sync.GoogleDriveAppDataGateway
 import com.wonderfood.app.sync.GoogleDriveBackupDownload
 import com.wonderfood.app.sync.GoogleSheetsGateway
-import com.wonderfood.app.sync.GoogleSheetsSnapshotSyncCoordinator
-import com.wonderfood.app.sync.GoogleSheetsSnapshotSyncResult
-import com.wonderfood.app.sync.LegacyFoodMemorySnapshotExporter
-import com.wonderfood.app.sync.LegacySnapshotDraftImporter
+import com.wonderfood.app.sync.GoogleSheetsV4InboundWorkspaceImporter
+import com.wonderfood.app.sync.V4InboundNeedsReviewDiagnostic
+import com.wonderfood.app.sync.V4InboundWorkspaceImportResult
 import com.wonderfood.app.sync.NotionGateway
 import com.wonderfood.app.sync.PostgresGateway
 import com.wonderfood.app.sync.WonderFoodBackupGateway
 import com.wonderfood.app.sync.WonderFoodCsvGateway
 import com.wonderfood.app.sync.WonderFoodCsvImport
-import com.wonderfood.app.sync.WorkspaceMergeResult
 import com.wonderfood.core.data.backend.BackendSecret
 import com.wonderfood.core.data.backend.BackendType
 import com.wonderfood.core.data.backend.CredentialRef
@@ -83,10 +100,42 @@ import com.wonderfood.core.data.backend.PostgresConfig
 import com.wonderfood.core.data.backend.PostgresConnectionMode
 import com.wonderfood.core.data.backend.PostgresConnectionParser
 import com.wonderfood.core.data.backend.SharedPreferencesBackendConfigurationStore
+import com.wonderfood.core.data.HouseholdRepositories
+import com.wonderfood.core.data.room.WonderFoodDatabaseFactory
+import com.wonderfood.core.engine.HouseholdCommandExecutor
+import com.wonderfood.core.engine.HouseholdCommandExecutionResult
 import com.wonderfood.core.model.WonderFoodSnapshot
+import com.wonderfood.core.engine.HouseholdCommand
+import com.wonderfood.core.model.household.Attachment
+import com.wonderfood.core.model.household.AttachmentKind
+import com.wonderfood.core.model.household.CalendarDate
+import com.wonderfood.core.model.household.ChangeProposal
+import com.wonderfood.core.model.household.CommandId
+import com.wonderfood.core.model.household.CommandIntent
+import com.wonderfood.core.model.household.CommandRecord
+import com.wonderfood.core.model.household.DataHomeKind
+import com.wonderfood.core.model.household.DecimalAmount
+import com.wonderfood.core.model.household.EntityMetadata
+import com.wonderfood.core.model.household.Household
+import com.wonderfood.core.model.household.HouseholdWorkspaceContract
+import com.wonderfood.core.model.household.EntityId
+import com.wonderfood.core.model.household.LatestSafetySnapshot
+import com.wonderfood.core.model.household.PayloadHash
+import com.wonderfood.core.model.household.Purchase
+import com.wonderfood.core.model.household.PurchaseStatus
+import com.wonderfood.core.model.household.Quantity
+import com.wonderfood.core.model.household.QuantityUnit
+import com.wonderfood.core.model.household.ReviewState
+import com.wonderfood.core.model.household.SourceKind
+import com.wonderfood.core.model.household.SourceRef
+import com.wonderfood.core.model.household.UtcTimestamp
+import java.nio.charset.StandardCharsets
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -97,9 +146,14 @@ import kotlinx.coroutines.launch
 
 class MainScreenViewModel(context: Context) : ViewModel() {
     private val appContext = context.applicationContext
-    private var store = FoodChatStore(appContext)
-    private val draftCommandExecutor = FoodDraftCommandExecutor { store }
-    private val mutationCommandExecutor = FoodMutationCommandExecutor { store }
+    private var householdDatabase = WonderFoodDatabaseFactory.create(appContext)
+    private var householdRepository = HouseholdRepositories.room(householdDatabase)
+    private var householdCommandExecutor = HouseholdCommandExecutor(householdRepository)
+    private val localChatLock = Any()
+    private val localChatMessages = mutableListOf<ChatMessage>()
+    private var localChatCounter = 1L
+    private var localMessageCounter = 0L
+    private val householdDraftCommandMapper = HouseholdDraftCommandMapper(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
     private val interpreter = FoodInterpreter()
     private val liteLlmInterpreter = LiteLlmFoodInterpreter.withBundledSkill(appContext)
     private val liteLlmSettings = LiteLlmSettings(appContext)
@@ -114,15 +168,27 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private val backendConfigurationStore = SharedPreferencesBackendConfigurationStore(appContext)
     private val credentialVault = AndroidKeystoreCredentialVault(appContext)
     private val shellPrefs = appContext.getSharedPreferences(SHELL_PREFS_NAME, Context.MODE_PRIVATE)
+    private val backendPrefs = appContext.getSharedPreferences(BACKEND_PREFS_NAME, Context.MODE_PRIVATE)
     private val directActionPrefs = appContext.getSharedPreferences(DIRECT_ACTION_PREFS_NAME, Context.MODE_PRIVATE)
     private val googleSyncPrefs = appContext.getSharedPreferences(GOOGLE_SYNC_PREFS_NAME, Context.MODE_PRIVATE)
+    private val backendPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        refreshBackendHome()
+    }
+    private val shellPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_WORKSPACE_CONFLICT_INBOX) {
+            _uiState.update { it.copy(workspaceConflictInbox = readWorkspaceConflictInbox()) }
+        }
+    }
     private var pendingUndo: PendingUndo? = null
     private var pendingDraftOrigin: FoodDraftCommandOrigin = FoodDraftCommandOrigin.AI_REVIEW
     private var preferenceAutoSaveJob: Job? = null
     private var backendSnapshotSyncJob: Job? = null
+    private var canonicalSearchJob: Job? = null
+    private val backendRefreshGeneration = AtomicInteger(0)
     private var pendingGoogleRestoreDownload: GoogleDriveBackupDownload? = null
-    private var pendingSheetsImportSnapshot: WonderFoodSnapshot? = null
-    private var pendingSheetsImportLabel: String = "Sheet data"
+    private var pendingProviderImportCommands: List<HouseholdCommand> = emptyList()
+    private var pendingProviderImportDiagnostics: List<V4InboundNeedsReviewDiagnostic> = emptyList()
+    private var pendingProviderImportLabel: String = "Provider data"
 
     private val _uiState = MutableStateFlow(
         WonderFoodUiState(
@@ -135,16 +201,112 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     val healthPermissionContract = health.permissionContract()
     val healthPermissions: Set<String> = health.healthPermissions
     val healthWritePermissions: Set<String> = health.nutritionWritePermissions
+    private val localChatSeedMessage = "Tell me food things naturally. Try: `I bought eggs, Greek yogurt, spinach and frozen berries` or `Log chicken rice bowl for lunch`."
+
+    private fun seedLocalChatIfNeeded() {
+        synchronized(localChatLock) {
+            if (localChatMessages.isNotEmpty()) return@synchronized
+            val now = System.currentTimeMillis()
+            localMessageCounter -= 1
+            localChatMessages.add(
+                ChatMessage(
+                    id = localMessageCounter,
+                    role = ChatRole.ASSISTANT,
+                    body = localChatSeedMessage,
+                    createdAtMillis = now,
+                    chatId = localChatCounter,
+                ),
+            )
+        }
+    }
+
+    private fun insertLocalChatMessage(role: ChatRole, body: String, chatId: Long = localChatCounter): Long {
+        val clean = body.trim()
+        if (clean.isBlank()) return -1L
+        val now = System.currentTimeMillis()
+        return synchronized(localChatLock) {
+            localMessageCounter -= 1
+            val message = ChatMessage(
+                id = localMessageCounter,
+                role = role,
+                body = clean,
+                createdAtMillis = now,
+                chatId = chatId,
+            )
+            localChatMessages.add(message)
+            message.id
+        }
+    }
+
+    private fun updateLocalChatMessage(id: Long, body: String): Boolean {
+        val clean = body.trim()
+        if (clean.isBlank()) return false
+        val now = System.currentTimeMillis()
+        return synchronized(localChatLock) {
+            val idx = localChatMessages.indexOfFirst { it.id == id }
+            if (idx < 0) return@synchronized false
+            val message = localChatMessages[idx]
+            localChatMessages[idx] = message.copy(body = clean, createdAtMillis = now)
+            true
+        }
+    }
+
+    private fun startLocalNewChat() {
+        synchronized(localChatLock) {
+            localChatCounter += 1
+            localMessageCounter = 0L
+            insertLocalChatMessage(
+                role = ChatRole.ASSISTANT,
+                body = "New chat started. Your kitchen, recipes, groceries, plans, and settings are still saved.",
+                chatId = localChatCounter,
+            )
+        }
+    }
+
+    private fun clearLocalChatHistory() {
+        synchronized(localChatLock) {
+            localChatCounter = 1L
+            localMessageCounter = 0L
+            localChatMessages.clear()
+            insertLocalChatMessage(
+                role = ChatRole.ASSISTANT,
+                body = "Chat memory reset. Your kitchen, recipes, groceries, plans, and settings are still saved.",
+                chatId = localChatCounter,
+            )
+        }
+    }
+
+    private fun localChatMessagesForMemory(): List<ChatMessage> =
+        synchronized(localChatLock) {
+            localChatMessages
+                .sortedWith(compareBy<ChatMessage> { it.createdAtMillis }.thenBy { it.id })
+                .map {
+                    it.copy()
+                }
+        }
+
+    private fun canonicalSafeSourceMessageId(sourceMessageId: Long?): Long? =
+        sourceMessageId.takeIf { it != null && it > 0L }
 
     init {
+        backendPrefs.registerOnSharedPreferenceChangeListener(backendPrefsListener)
+        shellPrefs.registerOnSharedPreferenceChangeListener(shellPrefsListener)
         viewModelScope.launch(Dispatchers.IO) {
-            store.seedIfEmpty()
+            seedLocalChatIfNeeded()
+            ensureCanonicalHousehold()
             refreshFromDisk()
+            refreshCanonicalSummary()
             refreshAiStatus()
             refreshHealthStatus()
             refreshSyncStatus()
             refreshBackendHome()
         }
+    }
+
+    override fun onCleared() {
+        backendPrefs.unregisterOnSharedPreferenceChangeListener(backendPrefsListener)
+        shellPrefs.unregisterOnSharedPreferenceChangeListener(shellPrefsListener)
+        super.onCleared()
     }
 
     fun onInputChange(value: String) {
@@ -157,6 +319,34 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun openDetail(target: FoodDetailTarget) {
         _uiState.update { it.copy(detailTarget = target) }
+    }
+
+    fun updateSearchQuery(query: String) {
+        val clean = query.trim()
+        canonicalSearchJob?.cancel()
+        if (clean.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    canonicalSearchQuery = "",
+                    canonicalSearchItems = emptyList(),
+                )
+            }
+            return
+        }
+        _uiState.update { it.copy(canonicalSearchQuery = clean) }
+        canonicalSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            ensureCanonicalHousehold()
+            val results = householdRepository
+                .searchItems(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID, clean)
+                .map(CanonicalHouseholdSearchItem::from)
+            _uiState.update { current ->
+                if (current.canonicalSearchQuery == clean) {
+                    current.copy(canonicalSearchItems = results)
+                } else {
+                    current
+                }
+            }
+        }
     }
 
     fun closeDetail() {
@@ -172,31 +362,19 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val action = pendingUndo ?: return
         pendingUndo = null
         viewModelScope.launch(Dispatchers.IO) {
-            val fallback = "Restored ${action.label}."
-            val result = executeMutationCommand(
-                type = FoodMutationCommandType.UNDO_ACTION,
-                label = "Undo ${action.kind.name.lowercase()}",
-                payload = mapOf(
-                    "kind" to action.kind.name,
-                    "id" to action.id.toString(),
-                    "ids" to action.ids.joinToString(","),
-                    "label" to action.label,
-                ),
-            ) {
-                when (action.kind) {
-                    UndoKind.EVENT -> store.deleteFoodEvent(action.id)
-                    UndoKind.INVENTORY -> store.restoreInventory(action.id)
-                    UndoKind.GROCERY -> store.restoreGrocery(action.id)
-                    UndoKind.GROCERY_BOUGHT -> store.undoGroceryBought(action.id)
-                    UndoKind.RECIPE -> store.restoreRecipe(action.id)
-                    UndoKind.MEAL -> store.restoreMealLog(action.id)
-                    UndoKind.PLAN_ENTRY -> store.restoreMealPlanEntry(action.id)
-                    UndoKind.PLAN_ENTRIES -> store.restoreMealPlanEntries(action.ids)
+            action.canonicalCommands?.let { commands ->
+                val failures = executeCanonicalHouseholdCommands(commands)
+                if (failures.isEmpty()) {
+                    refreshCanonicalSummary()
+                    queueBackendSnapshotSync("canonical_undo")
+                    showFeedback("Undid ${action.label}.")
+                } else {
+                    showFeedback("Undo failed: ${failures.joinToString("; ")}")
                 }
-                fallback
+                return@launch
             }
             refreshFromDisk()
-            showFeedback(result.summaryOrFallback(fallback))
+            showFeedback("Undo for ${action.label} needs canonical recovery history.")
         }
     }
 
@@ -232,14 +410,13 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             _uiState.update { it.copy(isWorking = true) }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            store.savePreferences(preferences)
             if (announce) {
-                store.insertMessage(ChatRole.ASSISTANT, "Saved your food preferences and AI instructions.")
+                insertLocalChatMessage(ChatRole.ASSISTANT, "Saved your food preferences and AI instructions.")
             }
-            val memory = store.readMemory()
+            val memory = canonicalRuntimeMemory(includeLegacyChat = true)
             _uiState.update {
                 it.copy(
-                    memory = memory,
+                    memory = memory.copy(preferences = preferences),
                     preferencesForm = preferences,
                     isWorking = false,
                     settingsSaveStatus = "Saved",
@@ -256,7 +433,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             liteLlmSettings.saveAll(listOf(primary, fallback))
             refreshAiStatus()
-            store.insertMessage(ChatRole.ASSISTANT, "Saved primary and fallback AI provider settings.")
+            insertLocalChatMessage(ChatRole.ASSISTANT, "Saved primary and fallback AI provider settings.")
             refreshFromDisk(isWorking = false)
             showFeedback("Primary and fallback AI providers saved.")
         }
@@ -310,54 +487,46 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 }
                 WonderFoodVoiceAction.LOG_WATER -> {
                     val amount = command.amount?.toInt() ?: 250
-                    var eventId = -1L
-                    val status = executeMutationCommand(
-                        type = FoodMutationCommandType.LOG_EVENT,
+                    val (eventId, eventSummary) = recordCanonicalActionEvent(
+                        eventType = "WATER",
                         label = "Google Assistant water log",
-                        origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
-                        payload = mapOf("amount_ml" to amount.toString(), "source" to "google_assistant"),
-                    ) {
-                        val (createdEventId, createdStatus) = store.logWaterEvent(amount, source = "google_assistant")
-                        eventId = createdEventId
-                        createdStatus
-                    }.summaryOrFallback("Logged $amount ml water.")
-                    if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "water log", status)
+                        note = "Logged $amount ml water.",
+                        sourceLabel = "google_assistant",
+                        payload = mapOf("amount_ml" to amount.toString()),
+                    )
+                    val status = recordCanonicalMutationApplied("log_event", eventSummary)
+                    registerUndo(UndoKind.EVENT, eventId, "water log", status)
                     status
                 }
                 WonderFoodVoiceAction.START_SHOPPING -> {
-                    var eventId = -1L
                     setSection(FoodSection.SHOP)
-                    val status = executeMutationCommand(
-                        type = FoodMutationCommandType.LOG_EVENT,
+                    val (eventId, eventSummary) = recordCanonicalActionEvent(
+                        eventType = "SHOP",
                         label = "Google Assistant start shopping",
-                        origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
+                        note = "Started shopping.",
+                        sourceLabel = "google_assistant",
                         payload = mapOf("event_type" to FoodEventType.SHOP.name, "note" to "Started shopping"),
-                    ) {
-                        eventId = store.logFoodEvent(FoodEventType.SHOP, source = "google_assistant", confidence = FoodEventConfidence.EXACT, note = "Started shopping")
-                        "Started shopping."
-                    }.summaryOrFallback("Started shopping.")
-                    if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "shopping start", status)
+                    )
+                    val status = recordCanonicalMutationApplied("log_event", eventSummary)
+                    registerUndo(UndoKind.EVENT, eventId, "shopping start", status)
                     status
                 }
                 WonderFoodVoiceAction.DONE_SHOPPING -> {
-                    var eventId = -1L
                     setSection(FoodSection.SHOP)
-                    val status = executeMutationCommand(
-                        type = FoodMutationCommandType.LOG_EVENT,
+                    val (eventId, eventSummary) = recordCanonicalActionEvent(
+                        eventType = "SHOP",
                         label = "Google Assistant finish shopping",
-                        origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
+                        note = "Finished shopping.",
+                        sourceLabel = "google_assistant",
                         payload = mapOf("event_type" to FoodEventType.SHOP.name, "note" to "Finished shopping"),
-                    ) {
-                        eventId = store.logFoodEvent(FoodEventType.SHOP, source = "google_assistant", confidence = FoodEventConfidence.EXACT, note = "Finished shopping")
-                        "Finished shopping."
-                    }.summaryOrFallback("Finished shopping.")
-                    if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "shopping finish", status)
+                    )
+                    val status = recordCanonicalMutationApplied("log_event", eventSummary)
+                    registerUndo(UndoKind.EVENT, eventId, "shopping finish", status)
                     status
                 }
                 WonderFoodVoiceAction.START_COOKING -> {
-                    val recipe = store.readMemory().recipes.findVoiceRecipe(command.recipeName)
+                    val recipe = canonicalRuntimeMemory(includeLegacyChat = false).recipes.findVoiceRecipe(command.recipeName)
                     val recipeLabel = recipe?.title ?: command.recipeName.ifBlank { "recipe" }
-                    var eventId = -1L
                     _uiState.update {
                         it.copy(
                             section = FoodSection.RECIPES,
@@ -365,56 +534,45 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         )
                     }
                     saveSelectedSection(FoodSection.RECIPES)
-                    val status = executeMutationCommand(
-                        type = FoodMutationCommandType.LOG_EVENT,
+                    val (eventId, eventSummary) = recordCanonicalActionEvent(
+                        eventType = "COOK",
                         label = "Google Assistant start cooking",
-                        origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
+                        note = "Started cooking $recipeLabel.",
+                        sourceLabel = "google_assistant",
                         payload = mapOf(
                             "event_type" to FoodEventType.COOK.name,
                             "recipe_id" to recipe?.id?.toString(),
                             "note" to "Started cooking $recipeLabel",
                         ),
-                    ) {
-                        eventId = store.logFoodEvent(
-                            type = FoodEventType.COOK,
-                            source = "google_assistant",
-                            confidence = FoodEventConfidence.EXACT,
-                            relatedRecipeId = recipe?.id,
-                            note = "Started cooking $recipeLabel",
-                        )
-                        "Started cooking $recipeLabel."
-                    }.summaryOrFallback("Started cooking $recipeLabel.")
-                    if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "cooking start", status)
+                    )
+                    val status = recordCanonicalMutationApplied("log_event", eventSummary)
+                    registerUndo(UndoKind.EVENT, eventId, "cooking start", status)
                     status
                 }
                 WonderFoodVoiceAction.DONE_COOKING -> {
-                    val recipe = store.readMemory().recipes.findVoiceRecipe(command.recipeName)
+                    val recipe = canonicalRuntimeMemory(includeLegacyChat = false).recipes.findVoiceRecipe(command.recipeName)
                     if (recipe == null) {
-                        var eventId = -1L
                         setSection(FoodSection.RECIPES)
-                        val status = executeMutationCommand(
-                            type = FoodMutationCommandType.LOG_EVENT,
+                        val (eventId, eventSummary) = recordCanonicalActionEvent(
+                            eventType = "COOK",
                             label = "Google Assistant finish cooking",
-                            origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
+                            note = "Finished cooking.",
+                            sourceLabel = "google_assistant",
                             payload = mapOf(
                                 "event_type" to FoodEventType.COOK.name,
                                 "note" to "Finished cooking ${command.recipeName}",
                             ),
-                        ) {
-                            eventId = store.logFoodEvent(FoodEventType.COOK, source = "google_assistant", confidence = FoodEventConfidence.ESTIMATED, note = "Finished cooking ${command.recipeName}")
-                            "Finished cooking."
-                        }.summaryOrFallback("Finished cooking.")
-                        if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "cooking finish", status)
+                        )
+                        val status = recordCanonicalMutationApplied("log_event", eventSummary)
+                        registerUndo(UndoKind.EVENT, eventId, "cooking finish", status)
                         status
                     } else {
-                        executeMutationCommand(
-                            type = FoodMutationCommandType.LOG_EVENT,
-                            label = "Google Assistant cook recipe",
-                            origin = FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
-                            payload = mapOf("recipe_id" to recipe.id.toString(), "recipe_title" to recipe.title),
-                        ) {
-                            store.cookRecipe(recipe.id)
-                        }.summaryOrFallback("Logged ${recipe.title}.")
+                        val recipeId = canonicalRecipeIdForLegacyRecipeId(recipe.id)
+                        if (recipeId == null) {
+                            "Could not log ${recipe.title}: canonical recipe not found."
+                        } else {
+                            cookCanonicalRecipe(recipeId)
+                        }
                     }
                 }
                 WonderFoodVoiceAction.LOG_MEAL -> {
@@ -571,8 +729,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val pageEdit = applyContextualPageEdit(text, target, memory)
             if (pageEdit != null) {
-                store.insertMessage(ChatRole.USER, text)
-                store.insertMessage(ChatRole.ASSISTANT, pageEdit)
+                insertLocalChatMessage(ChatRole.USER, text)
+                insertLocalChatMessage(ChatRole.ASSISTANT, pageEdit)
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
                 _uiState.update { it.copy(voiceStatus = pageEdit) }
             } else {
@@ -593,8 +751,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val pageEdit = applyContextualPageEdit(clean, target, memory)
             if (pageEdit != null) {
-                store.insertMessage(ChatRole.USER, "Voice note: $clean")
-                store.insertMessage(ChatRole.ASSISTANT, pageEdit)
+                insertLocalChatMessage(ChatRole.USER, "Voice note: $clean")
+                insertLocalChatMessage(ChatRole.ASSISTANT, pageEdit)
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
                 _uiState.update { it.copy(voiceStatus = pageEdit) }
             } else {
@@ -614,19 +772,22 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 capture.evidenceText,
                 cleanNote.takeIf { it.isNotBlank() }?.let { "User note:\n$it" },
             ).joinToString("\n\n")
-            val receiptId = store.insertReceiptCapture(
+            val receiptId = stableLegacyId("receipt:${privateUri}:${receiptEvidence.take(256)}")
+            val initialStatus = if (capture.status == FoodCaptureStatus.STAGED) ReceiptStatus.SAVED else ReceiptStatus.NEEDS_TEXT
+            val captureSummary = upsertCanonicalReceiptCapture(
+                receiptId = receiptId,
                 imageUri = privateUri.toString(),
                 rawText = receiptEvidence,
-                status = if (capture.status == FoodCaptureStatus.STAGED) ReceiptStatus.SAVED else ReceiptStatus.NEEDS_TEXT,
+                status = initialStatus,
             )
-            val sourceMessageId = store.insertMessage(
+            val sourceMessageId = insertLocalChatMessage(
                 ChatRole.USER,
                 buildString {
                     append("Attached receipt photo.")
                     if (cleanNote.isNotBlank()) append("\nReceipt note: $cleanNote")
                 },
             )
-            val memory = store.readMemory()
+            val memory = canonicalRuntimeMemory(includeLegacyChat = true)
             val configs = liteLlmSettings.readAll()
             val turn = if (capture.status == FoodCaptureStatus.STAGED) {
                 interpretReceiptPhotoWithVisibleRetries(privateUri, memory, configs, cleanNote)
@@ -634,43 +795,33 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 null
             }
             if (turn == null) {
-                executeMutationCommand(
-                    type = FoodMutationCommandType.UPDATE_RECEIPT,
-                    label = "Mark receipt needs text",
-                    origin = FoodDraftCommandOrigin.RECEIPT,
-                    sourceMessageId = sourceMessageId,
-                    payload = mapOf("id" to receiptId.toString(), "status" to ReceiptStatus.NEEDS_TEXT.name),
-                ) {
-                    store.updateReceiptStatus(receiptId, rawText = receiptEvidence, status = ReceiptStatus.NEEDS_TEXT)
-                    "Receipt needs text."
-                }
-                store.insertMessage(
+                val updateSummary = upsertCanonicalReceiptCapture(
+                    receiptId = receiptId,
+                    imageUri = privateUri.toString(),
+                    rawText = receiptEvidence,
+                    status = ReceiptStatus.NEEDS_TEXT,
+                )
+                recordCanonicalMutationApplied("update_receipt", updateSummary)
+                insertLocalChatMessage(
                     ChatRole.ASSISTANT,
-                    "I saved a private copy of the receipt. OCR or AI did not finish, so paste the visible lines or retry the capture when the provider is available.",
+                    "$captureSummary OCR or AI did not finish, so paste the visible lines or retry the capture when the provider is available.",
                 )
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             } else {
                 val linkedDraft = turn.draft?.linkReceipt(receiptId)
                 val receiptStatus = if (linkedDraft == null) ReceiptStatus.NEEDS_TEXT else ReceiptStatus.EXTRACTED
-                executeMutationCommand(
-                    type = FoodMutationCommandType.UPDATE_RECEIPT,
-                    label = "Update receipt extraction",
-                    origin = FoodDraftCommandOrigin.RECEIPT,
-                    sourceMessageId = sourceMessageId,
-                    payload = mapOf("id" to receiptId.toString(), "status" to receiptStatus.name),
-                ) {
-                    store.updateReceiptStatus(
-                        receiptId,
-                        rawText = listOfNotNull(
-                            cleanNote.takeIf { it.isNotBlank() }?.let { "User note:\n$it" },
-                            "Extraction:\n${turn.reply}",
-                            linkedDraft?.receiptAuditText(),
-                        ).joinToString("\n\n"),
-                        status = receiptStatus,
-                    )
-                    "Receipt page updated."
-                }
-                store.insertMessage(ChatRole.ASSISTANT, turn.reply)
+                val updateSummary = upsertCanonicalReceiptCapture(
+                    receiptId = receiptId,
+                    imageUri = privateUri.toString(),
+                    rawText = listOfNotNull(
+                        cleanNote.takeIf { it.isNotBlank() }?.let { "User note:\n$it" },
+                        "Extraction:\n${turn.reply}",
+                        linkedDraft?.receiptAuditText(),
+                    ).joinToString("\n\n"),
+                    status = receiptStatus,
+                )
+                recordCanonicalMutationApplied("update_receipt", updateSummary)
+                insertLocalChatMessage(ChatRole.ASSISTANT, turn.reply)
                 pendingDraftOrigin = if (linkedDraft == null) FoodDraftCommandOrigin.AI_REVIEW else FoodDraftCommandOrigin.RECEIPT
                 refreshFromDisk(
                     pendingDraft = linkedDraft,
@@ -685,20 +836,25 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val state = _uiState.value
         val draft = state.pendingDraft?.withPreferenceRiskWarnings(state.memory.preferences) ?: return
         val sourceMessageId = _uiState.value.pendingSourceMessageId
+        val origin = pendingDraftOrigin
         _uiState.update { it.copy(isWorking = true) }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val result = executeDraftCommand(draft, sourceMessageId, pendingDraftOrigin)
+            val result = if (draft.canApplyDirectlyToCanonicalHousehold(origin)) {
+                executeCanonicalDraftCommand(draft, sourceMessageId, origin)
+            } else {
+                executeDraftCommand(draft, sourceMessageId, origin)
+            }
             when (result) {
                 is FoodDraftExecutionResult.Applied -> {
-                    store.insertMessage(ChatRole.ASSISTANT, result.summary)
+                    insertLocalChatMessage(ChatRole.ASSISTANT, result.summary)
                     pendingDraftOrigin = FoodDraftCommandOrigin.AI_REVIEW
                     refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
                     _uiState.update { it.copy(aiAttemptStatus = "", voiceStatus = "") }
                 }
                 is FoodDraftExecutionResult.Rejected -> {
                     val summary = "Could not save this proposal: ${result.errors.joinToString("; ")}"
-                    store.insertMessage(ChatRole.ASSISTANT, summary)
+                    insertLocalChatMessage(ChatRole.ASSISTANT, summary)
                     refreshFromDisk(isWorking = false)
                     _uiState.update { it.copy(aiAttemptStatus = "", voiceStatus = summary) }
                 }
@@ -716,13 +872,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun rejectDraft() {
         val draft = _uiState.value.pendingDraft
-        val sourceMessageId = _uiState.value.pendingSourceMessageId
         viewModelScope.launch(Dispatchers.IO) {
             if (draft != null) {
-                draftCommandExecutor.reject(FoodDraftCommand(draft, sourceMessageId, pendingDraftOrigin))
                 pendingDraftOrigin = FoodDraftCommandOrigin.AI_REVIEW
             }
-            store.insertMessage(ChatRole.ASSISTANT, "Draft discarded. Keep chatting and I will revise.")
+            insertLocalChatMessage(ChatRole.ASSISTANT, "Draft discarded. Keep chatting and I will revise.")
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null)
             _uiState.update { it.copy(aiAttemptStatus = "", voiceStatus = "") }
         }
@@ -731,7 +885,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     fun startNewChat() {
         _uiState.update { it.copy(input = "", isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            store.startNewChat()
+            startLocalNewChat()
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             _uiState.update { it.copy(voiceStatus = "New chat started.") }
         }
@@ -740,7 +894,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     fun clearChatHistory() {
         _uiState.update { it.copy(input = "", isWorking = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            store.clearChatHistory()
+            clearLocalChatHistory()
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             _uiState.update { it.copy(voiceStatus = "Chat memory reset.") }
         }
@@ -748,7 +902,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun updateChatMessage(id: Long, body: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (store.updateMessage(id, body)) {
+            if (updateLocalChatMessage(id, body)) {
                 refreshFromDisk(isWorking = false)
                 showFeedback("Chat message updated.")
             }
@@ -758,53 +912,169 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     fun deleteInventory(id: Long) {
         val label = _uiState.value.memory.inventory.firstOrNull { it.id == id }?.name ?: "kitchen item"
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_INVENTORY,
-                label = "Archive pantry item",
-                payload = mapOf("id" to id.toString(), "name" to label),
-            ) {
-                store.deleteInventory(id)
-                "Archived $label."
+            val itemId = canonicalItemIdForLegacyInventoryId(id)
+            if (itemId == null) {
+                showFeedback("Could not archive $label: canonical kitchen row not found.")
+                return@launch
+            }
+            val result = applyCanonicalKitchenItemMutation(itemId.value, "Archived") { snapshot, canonicalId, now ->
+                CanonicalKitchenMutationCommandFactory.archiveItem(snapshot, canonicalId, now)
             }
             refreshFromDisk(isWorking = false)
-            registerUndo(UndoKind.INVENTORY, id, label, "Archived $label.")
+            showFeedback(result)
         }
     }
 
     fun deleteGrocery(id: Long) {
         val label = _uiState.value.memory.groceries.firstOrNull { it.id == id }?.name ?: "grocery item"
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_GROCERY,
-                label = "Archive grocery item",
-                payload = mapOf("id" to id.toString(), "name" to label),
-            ) {
-                store.deleteGrocery(id)
-                "Archived $label."
+            val lineId = canonicalShoppingLineIdForLegacyGroceryId(id)
+            if (lineId == null) {
+                showFeedback("Could not archive $label: canonical cart row not found.")
+                return@launch
+            }
+            val result = applyCanonicalCartLineMutation(lineId.value, "Archived") { line, now ->
+                CanonicalCartMutationCommandFactory.archive(line, now)
             }
             refreshFromDisk()
-            registerUndo(UndoKind.GROCERY, id, label, "Archived $label.")
+            showFeedback(result)
         }
     }
 
     fun markGroceryBought(id: Long) {
         val label = _uiState.value.memory.groceries.firstOrNull { it.id == id }?.name ?: "grocery item"
         viewModelScope.launch(Dispatchers.IO) {
-            val result = executeMutationCommand(
-                type = FoodMutationCommandType.MARK_GROCERY_BOUGHT,
-                label = "Move grocery to inventory",
-                payload = mapOf("id" to id.toString(), "name" to label),
-            ) {
-                store.markGroceryBought(id)
+            val lineId = canonicalShoppingLineIdForLegacyGroceryId(id)
+            if (lineId == null) {
+                showFeedback("Could not buy $label: canonical cart row not found.")
+                return@launch
             }
-            val summary = result.summaryOrFallback("Moved $label into inventory and recorded shopping.")
-            store.insertMessage(ChatRole.ASSISTANT, summary)
+            val summary = applyCanonicalCartLineMutation(lineId.value, "Bought") { line, now ->
+                CanonicalCartMutationCommandFactory.markPurchased(line, now)
+            }
+            insertLocalChatMessage(ChatRole.ASSISTANT, summary)
             refreshFromDisk()
-            if (summary.startsWith("Moved ")) {
-                registerUndo(UndoKind.GROCERY_BOUGHT, id, label, summary)
-            } else {
-                showFeedback(summary)
+            showFeedback(summary)
+        }
+    }
+
+    fun markCanonicalCartLinePurchased(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = applyCanonicalCartLineMutation(id, "Bought") { line, now ->
+                CanonicalCartMutationCommandFactory.markPurchased(line, now)
             }
+            showFeedback(result)
+        }
+    }
+
+    fun archiveCanonicalCartLine(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = applyCanonicalCartLineMutation(id, "Archived") { line, now ->
+                CanonicalCartMutationCommandFactory.archive(line, now)
+            }
+            showFeedback(result)
+        }
+    }
+
+    fun addCanonicalKitchenItemToCart(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            ensureCanonicalHousehold()
+            val itemId = runCatching { EntityId(id) }.getOrNull()
+            if (itemId == null) {
+                showFeedback("Could not update kitchen row: invalid canonical id.")
+                return@launch
+            }
+            val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            val item = snapshot?.items?.firstOrNull { it.metadata.id == itemId }
+            if (snapshot == null || item == null) {
+                showFeedback("Could not add kitchen item to cart: canonical kitchen row not found.")
+                return@launch
+            }
+            val now = UtcTimestamp(System.currentTimeMillis())
+            val command = CanonicalKitchenMutationCommandFactory.addToCart(snapshot, itemId, now)
+            if (command == null) {
+                showFeedback("Could not add ${item.name} to cart.")
+                return@launch
+            }
+            val failures = executeCanonicalHouseholdCommands(listOf(command))
+            if (failures.isNotEmpty()) {
+                showFeedback("Could not add ${item.name} to cart.")
+                return@launch
+            }
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_kitchen")
+            registerCanonicalUndo(
+                label = "add ${item.name} to cart",
+                message = "Added ${item.name} to cart.",
+                commands = listOf(CanonicalCartMutationCommandFactory.archive(command.line, UtcTimestamp(System.currentTimeMillis()))),
+            )
+        }
+    }
+
+    fun archiveCanonicalKitchenItem(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            ensureCanonicalHousehold()
+            val itemId = runCatching { EntityId(id) }.getOrNull()
+            if (itemId == null) {
+                showFeedback("Could not update kitchen row: invalid canonical id.")
+                return@launch
+            }
+            val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            val item = snapshot?.items?.firstOrNull { it.metadata.id == itemId }
+            if (snapshot == null || item == null) {
+                showFeedback("Could not archive kitchen item: canonical kitchen row not found.")
+                return@launch
+            }
+            val activeLots = snapshot.inventoryLots.filter { lot ->
+                lot.itemId == itemId && lot.metadata.archivedAt == null
+            }
+            val now = UtcTimestamp(System.currentTimeMillis())
+            val commands = CanonicalKitchenMutationCommandFactory.archiveItem(snapshot, itemId, now)
+            if (commands.isEmpty()) {
+                showFeedback("Could not archive ${item.name}.")
+                return@launch
+            }
+            val failures = executeCanonicalHouseholdCommands(commands)
+            if (failures.isNotEmpty()) {
+                showFeedback("Could not archive ${item.name}.")
+                return@launch
+            }
+            val undoAt = UtcTimestamp(System.currentTimeMillis())
+            val undoCommands = buildList {
+                add(
+                    HouseholdCommand.UpsertItem(
+                        record = canonicalCommandRecord(item.metadata.id, item.metadata.householdId, "UndoArchiveKitchenItem", undoAt),
+                        item = item.copy(
+                            metadata = item.metadata.copy(
+                                updatedAt = undoAt,
+                                revision = item.metadata.revision + 1,
+                                archivedAt = null,
+                            ),
+                        ),
+                    ),
+                )
+                activeLots.forEach { lot ->
+                    add(
+                        HouseholdCommand.UpsertInventoryLot(
+                            record = canonicalCommandRecord(lot.metadata.id, lot.metadata.householdId, "UndoArchiveInventoryLot", undoAt),
+                            lot = lot.copy(
+                                metadata = lot.metadata.copy(
+                                    updatedAt = undoAt,
+                                    revision = lot.metadata.revision + 1,
+                                    archivedAt = null,
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            }
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_kitchen")
+            registerCanonicalUndo(
+                label = "archive ${item.name}",
+                message = "Archived ${item.name}.",
+                commands = undoCommands,
+            )
         }
     }
 
@@ -828,39 +1098,25 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val safeName = name.ifBlank { "Untitled food" }
             val safeCategory = category.ifBlank { categorizeFood(safeName) }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_INVENTORY,
-                label = "Update pantry item",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "name" to safeName,
-                    "quantity" to quantity,
-                    "zone" to zone.name,
-                    "category" to safeCategory,
-                    "nutrition_source" to nutritionSource.ifBlank { "manual_edit" },
-                ),
-            ) {
-                store.updateInventory(
-                    id = id,
+            val itemId = canonicalItemIdForLegacyInventoryId(id)
+            if (itemId == null) {
+                showFeedback("Could not update $safeName: canonical kitchen row not found.")
+                return@launch
+            }
+            val result = applyCanonicalKitchenItemMutation(itemId.value, "Updated") { snapshot, canonicalId, now ->
+                CanonicalKitchenMutationCommandFactory.updateItem(
+                    snapshot = snapshot,
+                    itemId = canonicalId,
                     name = safeName,
-                    quantity = quantity,
-                    zone = zone,
+                    quantityText = quantity,
                     category = safeCategory,
-                    servingText = servingText,
-                    calories = calories,
-                    proteinGrams = proteinGrams,
-                    carbsGrams = carbsGrams,
-                    fatGrams = fatGrams,
-                    nutritionSource = nutritionSource.ifBlank { "manual_edit" },
                     notes = notes,
-                    imageUri = imageUri,
-                    imageUrl = imageUrl,
                     expiresAtMillis = expiresAtMillis,
+                    now = now,
                 )
-                "Kitchen page updated."
             }
             refreshFromDisk()
-            showFeedback("Kitchen page updated.")
+            showFeedback(result)
         }
     }
 
@@ -883,51 +1139,36 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val safeName = name.ifBlank { "Untitled grocery" }
             val safeCategory = category.ifBlank { categorizeFood(safeName) }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_GROCERY,
-                label = "Update grocery item",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "name" to safeName,
-                    "quantity" to quantity,
-                    "status" to status.name,
-                    "category" to safeCategory,
-                    "source" to source.ifBlank { "manual_edit" },
-                ),
-            ) {
-                store.updateGrocery(
-                    id = id,
+            val lineId = canonicalShoppingLineIdForLegacyGroceryId(id)
+            if (lineId == null) {
+                showFeedback("Could not update $safeName: canonical cart row not found.")
+                return@launch
+            }
+            val result = applyCanonicalCartLineMutation(lineId.value, "Updated") { line, now ->
+                CanonicalCartMutationCommandFactory.update(
+                    line = line,
                     name = safeName,
-                    quantity = quantity,
-                    status = status,
+                    quantityText = quantity,
+                    status = status.toCanonicalShoppingLineStatus(),
                     category = safeCategory,
-                    servingText = servingText,
-                    calories = calories,
-                    proteinGrams = proteinGrams,
-                    carbsGrams = carbsGrams,
-                    fatGrams = fatGrams,
-                    nutritionSource = nutritionSource.ifBlank { "manual_edit" },
-                    source = source.ifBlank { "manual_edit" },
-                    imageUri = imageUri,
-                    imageUrl = imageUrl,
+                    preferredStore = source.ifBlank { "manual_edit" },
+                    now = now,
                 )
-                "Grocery page updated."
             }
             refreshFromDisk()
-            showFeedback("Grocery page updated.")
+            showFeedback(result)
         }
     }
 
     fun cookRecipe(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            val summary = executeMutationCommand(
-                type = FoodMutationCommandType.LOG_EVENT,
-                label = "Cook recipe",
-                payload = mapOf("recipe_id" to id.toString()),
-            ) {
-                store.cookRecipe(id)
-            }.summaryOrFallback("Logged recipe.")
-            store.insertMessage(ChatRole.ASSISTANT, summary)
+            val recipeId = canonicalRecipeIdForLegacyRecipeId(id)
+            if (recipeId == null) {
+                showFeedback("Could not log recipe: canonical recipe not found.")
+                return@launch
+            }
+            val summary = cookCanonicalRecipe(recipeId)
+            insertLocalChatMessage(ChatRole.ASSISTANT, summary)
             refreshFromDisk()
             showFeedback(summary)
         }
@@ -935,14 +1176,13 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun addMissingRecipeGroceries(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            val summary = executeMutationCommand(
-                type = FoodMutationCommandType.ADD_MISSING_RECIPE_GROCERIES,
-                label = "Add missing recipe groceries",
-                payload = mapOf("recipe_id" to id.toString()),
-            ) {
-                store.addMissingRecipeGroceries(id)
-            }.summaryOrFallback("Added missing groceries.")
-            store.insertMessage(ChatRole.ASSISTANT, summary)
+            val recipeId = canonicalRecipeIdForLegacyRecipeId(id)
+            if (recipeId == null) {
+                showFeedback("Could not add groceries: canonical recipe not found.")
+                return@launch
+            }
+            val summary = addMissingCanonicalRecipeGroceries(recipeId)
+            insertLocalChatMessage(ChatRole.ASSISTANT, summary)
             refreshFromDisk()
             showFeedback(summary)
         }
@@ -951,16 +1191,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     fun deleteRecipe(id: Long) {
         val label = _uiState.value.memory.recipes.firstOrNull { it.id == id }?.title ?: "recipe"
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_RECIPE,
-                label = "Archive recipe",
-                payload = mapOf("id" to id.toString(), "title" to label),
-            ) {
-                store.deleteRecipe(id)
-                "Archived $label."
+            val recipeId = canonicalRecipeIdForLegacyRecipeId(id)
+            if (recipeId == null) {
+                showFeedback("Could not archive $label: canonical recipe not found.")
+                return@launch
             }
+            val summary = archiveCanonicalRecipe(recipeId)
             refreshFromDisk()
-            registerUndo(UndoKind.RECIPE, id, label, "Archived $label.")
+            showFeedback(summary)
         }
     }
 
@@ -977,37 +1215,31 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val safeTitle = title.ifBlank { "Untitled recipe" }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_RECIPE,
-                label = "Update recipe",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "title" to safeTitle,
-                    "servings" to servings?.toString(),
-                    "prep_minutes" to prepMinutes?.toString(),
-                    "tags" to tags,
-                ),
-            ) {
-                store.updateRecipe(id, safeTitle, ingredients, steps, servings, prepMinutes, tags, imageUri, imageUrl)
-                "Recipe updated."
+            val recipeId = canonicalRecipeIdForLegacyRecipeId(id)
+            if (recipeId == null) {
+                showFeedback("Could not update $safeTitle: canonical recipe not found.")
+                return@launch
             }
+            val result = updateCanonicalRecipe(
+                recipeId = recipeId,
+                title = safeTitle,
+                ingredients = ingredients,
+                steps = steps,
+                servings = servings,
+                prepMinutes = prepMinutes,
+                tags = tags,
+            )
             refreshFromDisk()
-            showFeedback("Recipe updated.")
+            showFeedback(result)
         }
     }
 
     fun updateRecipeImage(id: Long, imageUri: String?) {
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_RECIPE_IMAGE,
-                label = "Update recipe image",
-                payload = mapOf("id" to id.toString(), "image_uri" to imageUri),
-            ) {
-                store.updateRecipeImage(id, imageUri)
-                "Recipe image updated."
-            }
+            val summary = updateCanonicalRecipeImage(id, imageUri)
+            recordCanonicalMutationApplied("update_recipe_image", summary)
             refreshFromDisk()
-            showFeedback("Recipe image updated.")
+            showFeedback(summary)
         }
     }
 
@@ -1025,34 +1257,20 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val safeTitle = title.ifBlank { "Untitled meal" }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_MEAL_LOG,
-                label = "Update meal log",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "title" to safeTitle,
-                    "meal_slot" to mealSlot.name,
-                    "logged_date_epoch_day" to loggedDateEpochDay.toString(),
-                    "calories" to calories?.toString(),
-                    "source" to source.ifBlank { "manual_edit" },
-                ),
-            ) {
-                store.updateMealLog(
-                    id = id,
-                    title = safeTitle,
-                    calories = calories,
-                    proteinGrams = proteinGrams,
-                    carbsGrams = carbsGrams,
-                    fatGrams = fatGrams,
-                    mealSlot = mealSlot,
-                    usedItemsText = usedItemsText,
-                    loggedDateEpochDay = loggedDateEpochDay,
-                    source = source.ifBlank { "manual_edit" },
-                )
-                "Meal page updated."
+            val mealEntryId = canonicalMealEntryIdForLegacyMealLogId(id)
+            if (mealEntryId == null) {
+                showFeedback("Could not update $safeTitle: canonical meal not found.")
+                return@launch
             }
+            val result = updateCanonicalMealEntry(
+                mealEntryId = mealEntryId,
+                title = safeTitle,
+                mealSlot = mealSlot,
+                loggedDateEpochDay = loggedDateEpochDay,
+                usedItemsText = usedItemsText,
+            )
             refreshFromDisk()
-            showFeedback("Meal page updated.")
+            showFeedback(result)
         }
     }
 
@@ -1065,26 +1283,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val safeTitle = title.ifBlank { "Meal plan" }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_MEAL_PLAN,
-                label = "Update meal plan",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "title" to safeTitle,
-                    "start_date_epoch_day" to startDateEpochDay?.toString(),
-                ),
-            ) {
-                store.updateMealPlan(
-                    id = id,
-                    title = safeTitle,
-                    daysText = daysText,
-                    groceryHint = groceryHint,
-                    startDateEpochDay = startDateEpochDay,
-                )
-                "Meal plan updated."
+            val mealPlanId = canonicalMealPlanIdForLegacyMealPlanId(id)
+            if (mealPlanId == null) {
+                showFeedback("Could not update $safeTitle: canonical meal plan not found.")
+                return@launch
             }
+            val result = updateCanonicalMealPlan(mealPlanId, safeTitle, startDateEpochDay)
             refreshFromDisk()
-            showFeedback("Meal plan updated.")
+            showFeedback(result)
         }
     }
 
@@ -1096,26 +1302,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val safeTitle = title.ifBlank { "Planned meal" }
-            executeMutationCommand(
-                type = FoodMutationCommandType.ADD_MEAL_PLAN_ENTRY,
-                label = "Add planned meal",
-                payload = mapOf(
-                    "date_epoch_day" to dateEpochDay.toString(),
-                    "slot" to slot.name,
-                    "title" to safeTitle,
-                    "calorie_target" to calorieTarget?.toString(),
-                ),
-            ) {
-                store.addMealPlanEntry(
-                    dateEpochDay = dateEpochDay,
-                    slot = slot,
-                    title = safeTitle,
-                    calorieTarget = calorieTarget,
-                )
-                "Planned meal added."
-            }
+            val result = addCanonicalMealEntry(
+                title = safeTitle,
+                mealSlot = slot,
+                dateEpochDay = dateEpochDay,
+                status = com.wonderfood.core.model.household.MealEntryStatus.PLANNED,
+            )
             refreshFromDisk()
-            showFeedback("Planned meal added.")
+            showFeedback(result)
         }
     }
 
@@ -1129,46 +1323,35 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val safeTitle = title.ifBlank { "Planned meal" }
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_MEAL_PLAN_ENTRY,
-                label = "Update planned meal",
-                payload = mapOf(
-                    "id" to id.toString(),
-                    "date_epoch_day" to dateEpochDay.toString(),
-                    "slot" to slot.name,
-                    "title" to safeTitle,
-                    "calorie_target" to calorieTarget?.toString(),
-                    "status" to status.name,
-                ),
-            ) {
-                store.updateMealPlanEntry(
-                    id = id,
-                    dateEpochDay = dateEpochDay,
-                    slot = slot,
-                    title = safeTitle,
-                    calorieTarget = calorieTarget,
-                    status = status,
-                )
-                if (status == MealPlanEntryStatus.EATEN) "Planned meal marked eaten and added to meal log." else "Planned meal updated."
+            val mealEntryId = canonicalMealEntryIdForLegacyMealLogId(id)
+            if (mealEntryId == null) {
+                showFeedback("Could not update $safeTitle: canonical planned meal not found.")
+                return@launch
             }
+            val result = updateCanonicalMealEntry(
+                mealEntryId = mealEntryId,
+                title = safeTitle,
+                mealSlot = slot,
+                loggedDateEpochDay = dateEpochDay,
+                usedItemsText = "",
+                status = status.toCanonicalMealEntryStatus(),
+            )
             refreshFromDisk()
-            showFeedback(if (status == MealPlanEntryStatus.EATEN) "Planned meal marked eaten and added to meal log." else "Planned meal updated.")
+            showFeedback(result)
         }
     }
 
     fun deleteMealPlanEntry(id: Long) {
         val label = _uiState.value.memory.mealPlanEntries.firstOrNull { it.id == id }?.title ?: "planned meal"
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_MEAL_PLAN_ENTRY,
-                label = "Archive planned meal",
-                payload = mapOf("id" to id.toString(), "title" to label),
-            ) {
-                store.deleteMealPlanEntry(id)
-                "Archived planned meal: $label."
+            val mealEntryId = canonicalMealEntryIdForLegacyMealLogId(id)
+            if (mealEntryId == null) {
+                showFeedback("Could not archive $label: canonical planned meal not found.")
+                return@launch
             }
+            val summary = archiveCanonicalMealEntry(mealEntryId)
             refreshFromDisk()
-            registerUndo(UndoKind.PLAN_ENTRY, id, label, "Archived planned meal: $label.")
+            showFeedback(summary)
         }
     }
 
@@ -1177,43 +1360,23 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val selected = _uiState.value.memory.mealPlanEntries.filter { it.id in ids }
         if (selected.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_MEAL_PLAN_ENTRIES,
-                label = "Archive planned meals",
-                payload = mapOf(
-                    "ids" to ids.joinToString(","),
-                    "count" to selected.size.toString(),
-                ),
-            ) {
-                store.deleteMealPlanEntries(ids)
-                "Archived ${selected.size} planned meal${selected.size.pluralWord}."
+            val canonicalIds = selected.mapNotNull { canonicalMealEntryIdForLegacyMealLogId(it.id) }
+            if (canonicalIds.isEmpty()) {
+                showFeedback("Could not archive planned meals: canonical planned meals not found.")
+                return@launch
             }
+            canonicalIds.forEach { archiveCanonicalMealEntry(it) }
             refreshFromDisk()
-            registerUndo(
-                kind = UndoKind.PLAN_ENTRIES,
-                id = selected.first().id,
-                label = "${selected.size} planned meal${selected.size.pluralWord}",
-                message = "Archived ${selected.size} planned meal${selected.size.pluralWord}.",
-                ids = selected.map { it.id }.toSet(),
-            )
+            showFeedback("Archived ${canonicalIds.size} planned meal${canonicalIds.size.pluralWord}.")
         }
     }
 
     fun deleteAllMealPlans() {
         viewModelScope.launch(Dispatchers.IO) {
-            var planCount = 0
-            var entryCount = 0
-            val result = executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_ALL_MEAL_PLANS,
-                label = "Delete all meal plans",
-            ) {
-                val deleted = store.deleteAllMealPlans()
-                planCount = deleted.first
-                entryCount = deleted.second
-                "Deleted $planCount meal plan${planCount.pluralWord} and $entryCount planned entr${if (entryCount == 1) "y" else "ies"}."
-            }
+            val result = archiveAllCanonicalMealPlans()
             refreshFromDisk()
-            showFeedback(result.summaryOrFallback("Deleted meal plans."))
+            showFeedback(result)
+            insertLocalChatMessage(ChatRole.ASSISTANT, result)
         }
     }
 
@@ -1223,32 +1386,24 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         status: ReceiptStatus,
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.UPDATE_RECEIPT,
-                label = "Update receipt",
-                payload = mapOf("id" to id.toString(), "status" to status.name),
-            ) {
-                store.updateReceiptStatus(id, rawText, status)
-                "Receipt page updated."
-            }
+            val summary = updateCanonicalReceiptStatus(id, rawText, status)
+            recordCanonicalMutationApplied("update_receipt", summary)
             refreshFromDisk()
-            showFeedback("Receipt page updated.")
+            showFeedback(summary)
         }
     }
 
     fun deleteMealLog(id: Long) {
         val label = _uiState.value.memory.mealLogs.firstOrNull { it.id == id }?.title ?: "meal log"
         viewModelScope.launch(Dispatchers.IO) {
-            executeMutationCommand(
-                type = FoodMutationCommandType.DELETE_MEAL_LOG,
-                label = "Archive meal log",
-                payload = mapOf("id" to id.toString(), "title" to label),
-            ) {
-                store.deleteMealLog(id)
-                "Archived meal log: $label."
+            val mealEntryId = canonicalMealEntryIdForLegacyMealLogId(id)
+            if (mealEntryId == null) {
+                showFeedback("Could not archive $label: canonical meal not found.")
+                return@launch
             }
+            val summary = archiveCanonicalMealEntry(mealEntryId)
             refreshFromDisk()
-            registerUndo(UndoKind.MEAL, id, label, "Archived meal log: $label.")
+            showFeedback(summary)
         }
     }
 
@@ -1281,7 +1436,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     source = FoodDraftCommandOrigin.MANUAL_SAVE.writeSource,
                 )
             }
-            val result = executeDraftCommand(draft, sourceMessageId = null, origin = FoodDraftCommandOrigin.MANUAL_SAVE)
+            val result = if (draft.canApplyDirectlyToCanonicalHousehold(FoodDraftCommandOrigin.MANUAL_SAVE)) {
+                executeCanonicalDraftCommand(draft, sourceMessageId = null, origin = FoodDraftCommandOrigin.MANUAL_SAVE)
+            } else {
+                executeDraftCommand(draft, sourceMessageId = null, origin = FoodDraftCommandOrigin.MANUAL_SAVE)
+            }
             refreshFromDisk(isWorking = false)
             showFeedback(
                 when (result) {
@@ -1294,18 +1453,16 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun logWater(ml: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            var eventId = -1L
-            val message = executeMutationCommand(
-                type = FoodMutationCommandType.LOG_EVENT,
+            val (eventId, eventSummary) = recordCanonicalActionEvent(
+                eventType = "WATER",
                 label = "Log water",
-                payload = mapOf("amount_ml" to ml.toString(), "source" to "manual"),
-            ) {
-                val (createdEventId, status) = store.logWaterEvent(ml, source = "manual")
-                eventId = createdEventId
-                status
-            }.summaryOrFallback("Logged $ml ml water.")
+                note = "Logged $ml ml water.",
+                sourceLabel = "manual",
+                payload = mapOf("amount_ml" to ml.toString()),
+            )
+            val message = recordCanonicalMutationApplied("log_event", eventSummary)
             refreshFromDisk()
-            if (eventId != -1L) registerUndo(UndoKind.EVENT, eventId, "water log", message)
+            registerUndo(UndoKind.EVENT, eventId, "water log", message)
         }
     }
 
@@ -1333,11 +1490,13 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun refreshBackendHome() {
+        val generation = backendRefreshGeneration.incrementAndGet()
         viewModelScope.launch(Dispatchers.IO) {
             val config = backendConfigurationStore.activeConfiguration()
             val dismissed = backendConfigurationStore.onboardingDismissed()
             val syncStatus = shellPrefs.getString(KEY_BACKEND_SYNC_STATUS, "").orEmpty()
             val safetyStatus = backupGateway.latestBackendSwitchSafetyLabel()
+            if (generation != backendRefreshGeneration.get()) return@launch
             _uiState.update {
                 it.copy(
                     backendHome = BackendHomeUiState.fromConfig(
@@ -1379,6 +1538,47 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         connectGoogleSheetsBackend(sheetInput, readGoogleAccountEmail(), accessToken = "pending")
     }
 
+    fun createGoogleSheetsBackend(accountEmail: String, accessToken: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (accessToken.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets permission did not return access. Try again.",
+                        ),
+                    )
+                }
+                return@launch
+            }
+            createBackendSwitchSafety("Google Sheets")
+            val created = runCatching {
+                googleSheetsGateway.createWonderFoodSpreadsheet(accessToken)
+            }.getOrElse { error ->
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheet creation failed: ${error.safeMessage()}",
+                        ),
+                    )
+                }
+                showFeedback("Google Sheet creation failed: ${error.safeMessage()}")
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    backendHome = it.backendHome.copy(
+                        message = "Created ${created.title}. Setting up WonderFood tabs...",
+                    ),
+                )
+            }
+            connectGoogleSheetsBackend(
+                sheetInput = created.spreadsheetUrl,
+                accountEmail = accountEmail,
+                accessToken = accessToken,
+            )
+        }
+    }
+
     fun connectGoogleSheetsBackend(sheetInput: String, accountEmail: String, accessToken: String) {
         viewModelScope.launch(Dispatchers.IO) {
             if (accessToken.isBlank()) {
@@ -1402,6 +1602,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     }
                     return@launch
                 }
+            val safety = createBackendSwitchSafety("Google Sheets")
             val bootstrap = runCatching {
                 googleSheetsGateway.ensureWonderFoodSchema(accessToken, reference.spreadsheetId)
             }.getOrElse { error ->
@@ -1415,57 +1616,48 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 showFeedback("Google Sheets check failed: ${error.safeMessage()}")
                 return@launch
             }
-            val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
-            val coordinator = GoogleSheetsSnapshotSyncCoordinator(
-                sheetsGateway = googleSheetsGateway,
-                clock = { java.time.Instant.now().toString() },
+            val householdSnapshot = canonicalHouseholdSnapshotForBackup()
+            val updatedAt = java.time.Instant.now().toString()
+            val workspaceRows = runCatching {
+                googleSheetsGateway.readWorkspaceRows(accessToken, reference.spreadsheetId)
+            }.getOrElse { error ->
+                _uiState.update {
+                    it.copy(
+                        backendHome = it.backendHome.copy(
+                            message = "Google Sheets workspace import check failed: ${error.safeMessage()}",
+                        ),
+                    )
+                }
+                showFeedback("Google Sheets workspace import check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val inbound = GoogleSheetsV4InboundWorkspaceImporter.importRows(
+                rows = workspaceRows,
+                householdId = householdSnapshot.household.id,
+                now = UtcTimestamp(java.time.Instant.parse(updatedAt).toEpochMilli()),
+                defaultCurrency = householdSnapshot.household.defaultCurrency,
+                providerKey = "google_sheets",
+                baseSnapshot = householdSnapshot,
             )
-            val workspaceMerge = runCatching {
-                coordinator.readRemoteWorkspaceMerge(accessToken, reference.spreadsheetId, snapshot)
-            }.getOrElse { error ->
-                _uiState.update {
-                    it.copy(
-                        backendHome = it.backendHome.copy(
-                            message = "Google Sheets workspace merge check failed: ${error.safeMessage()}",
-                        ),
-                    )
-                }
-                showFeedback("Google Sheets workspace merge check failed: ${error.safeMessage()}")
-                return@launch
+            val shouldPreserveRemote = workspaceRows.isNotEmpty()
+            val sheetsImportPreview = if (shouldPreserveRemote) {
+                inbound.toSheetsImportPreview(
+                    workspaceUrl = reference.canonicalUrl,
+                    workspaceRowCount = workspaceRows.size,
+                    providerLabel = "Google Sheets",
+                    mergeClock = updatedAt,
+                )
+            } else {
+                null
             }
-            val remoteSnapshot = runCatching {
-                coordinator.readRemoteSnapshot(accessToken, reference.spreadsheetId)
-            }.getOrElse { error ->
-                _uiState.update {
-                    it.copy(
-                        backendHome = it.backendHome.copy(
-                            message = "Google Sheets import check failed: ${error.safeMessage()}",
-                        ),
-                    )
-                }
-                showFeedback("Google Sheets import check failed: ${error.safeMessage()}")
-                return@launch
-            }
-            val workspaceImportPreview = (workspaceMerge as? GoogleSheetsSnapshotSyncResult.RemoteWorkspaceMerge)
-                ?.merge
-                ?.toSheetsImportPreview(reference.canonicalUrl, workspaceMerge.rowCount)
-            val shouldPreserveRemote = workspaceImportPreview != null || remoteSnapshot is GoogleSheetsSnapshotSyncResult.RemoteSnapshot &&
-                remoteSnapshot.snapshot.hasUserData()
-            val rawSnapshotImportPreview = (remoteSnapshot as? GoogleSheetsSnapshotSyncResult.RemoteSnapshot)
-                ?.snapshot
-                ?.takeIf { workspaceImportPreview == null && shouldPreserveRemote }
-                ?.toSheetsImportPreview(reference.canonicalUrl)
-            val sheetsImportPreview = workspaceImportPreview ?: rawSnapshotImportPreview
-            pendingSheetsImportSnapshot = sheetsImportPreview?.let {
-                workspaceImportPreview?.let { workspaceMerge.merge.snapshot }
-                    ?: (remoteSnapshot as GoogleSheetsSnapshotSyncResult.RemoteSnapshot).snapshot
-            }
-            pendingSheetsImportLabel = if (workspaceImportPreview != null) "Sheet workspace merge" else "Sheet data"
+            pendingProviderImportCommands = if (shouldPreserveRemote) inbound.commands else emptyList()
+            pendingProviderImportDiagnostics = if (shouldPreserveRemote) inbound.diagnostics else emptyList()
+            pendingProviderImportLabel = if (shouldPreserveRemote) "Google Sheets V4 workspace" else "Provider data"
             val export = if (shouldPreserveRemote) {
                 null
             } else {
                 runCatching {
-                    coordinator.exportSnapshot(accessToken, reference.spreadsheetId, snapshot)
+                    googleSheetsGateway.exportGraph(accessToken, reference.spreadsheetId, householdSnapshot)
                 }.getOrElse { error ->
                     _uiState.update {
                         it.copy(
@@ -1478,7 +1670,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     return@launch
                 }
             }
-            val safety = createBackendSwitchSafety("Google Sheets")
             val credentialRef = CredentialRef(BackendType.GOOGLE_SHEETS, "google-sheets-primary")
             credentialVault.put(
                 credentialRef,
@@ -1517,7 +1708,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             val feedback = if (shouldPreserveRemote) {
                 "Google Sheets ready: existing WonderFood data found and preserved for import."
             } else {
-                "Google Sheets ready: ${bootstrap.createdCount} tabs created, ${bootstrap.initializedCount} headers checked, ${export?.rowCount ?: 0} sync rows exported plus Home, Kitchen, Recipes, Meals, Plans, Shopping, Purchases, Goals, and managed data tabs."
+                "Google Sheets ready: ${bootstrap.createdCount} tabs created, ${bootstrap.initializedCount} headers checked, ${export?.rowCount ?: 0} sync rows exported plus Home, Kitchen, Shopping, Meals, Recipes, Spending, Lists & Help, and managed sync tabs."
             }
             shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, feedback) }
             showFeedback(feedback)
@@ -1525,13 +1716,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun cancelSheetsImportPreview() {
-        val preview = _uiState.value.sheetsImportPreview
+            val preview = _uiState.value.sheetsImportPreview
         val inbox = preview.toConflictInbox(
             decision = "Preserved remote workspace; no local changes applied.",
         )
         inbox?.let(::rememberWorkspaceConflictInbox)
-        pendingSheetsImportSnapshot = null
-        pendingSheetsImportLabel = "Sheet data"
+        pendingProviderImportCommands = emptyList()
+        pendingProviderImportDiagnostics = emptyList()
+        pendingProviderImportLabel = "Provider data"
         _uiState.update {
             it.copy(
                 sheetsImportPreview = null,
@@ -1544,46 +1736,58 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun confirmSheetsImportPreview() {
-        val snapshot = pendingSheetsImportSnapshot
+        val commands = pendingProviderImportCommands
+        val diagnostics = pendingProviderImportDiagnostics
+        val label = pendingProviderImportLabel
         val preview = _uiState.value.sheetsImportPreview
-        if (snapshot == null) {
+        if (preview == null) {
             _uiState.update {
                 it.copy(
                     sheetsImportPreview = null,
-                    backendHome = it.backendHome.copy(message = "Sheet import preview expired. Reconnect to review it again."),
+                    backendHome = it.backendHome.copy(message = "Provider import preview expired. Reconnect to review it again."),
                 )
             }
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val draft = LegacySnapshotDraftImporter.toDraft(snapshot)
-            if (draft == null) {
-                pendingSheetsImportSnapshot = null
+            if (commands.isEmpty()) {
+                pendingProviderImportCommands = emptyList()
+                pendingProviderImportDiagnostics = emptyList()
+                pendingProviderImportLabel = "Provider data"
+                val message = if (diagnostics.isNotEmpty()) {
+                    "$label has ${diagnostics.size} issue${diagnostics.size.pluralWord} to review. No safe commands were applied."
+                } else {
+                    "$label had no safe V4 changes to apply."
+                }
+                val inbox = preview.toConflictInbox(decision = message)
+                inbox?.let(::rememberWorkspaceConflictInbox)
                 _uiState.update {
                     it.copy(
                         sheetsImportPreview = null,
-                        backendHome = it.backendHome.copy(message = "Sheet import found no daily food records to apply."),
+                        workspaceConflictInbox = inbox ?: it.workspaceConflictInbox,
+                        backendHome = it.backendHome.copy(message = message),
                     )
                 }
+                shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, message) }
+                showFeedback(message)
                 return@launch
             }
-            val result = executeDraftCommand(
-                draft = draft,
-                sourceMessageId = null,
-                origin = FoodDraftCommandOrigin.CSV_IMPORT,
-            )
-            pendingSheetsImportSnapshot = null
-            val label = pendingSheetsImportLabel
-            pendingSheetsImportLabel = "Sheet data"
-            val message = when (result) {
-                is FoodDraftExecutionResult.Applied -> "Imported $label. ${result.summary}"
-                is FoodDraftExecutionResult.Rejected -> "$label rejected: ${result.errors.joinToString("; ")}"
+            ensureCanonicalHousehold()
+            val failures = executeCanonicalHouseholdCommands(commands)
+            pendingProviderImportCommands = emptyList()
+            pendingProviderImportDiagnostics = emptyList()
+            pendingProviderImportLabel = "Provider data"
+            val message = if (failures.isEmpty()) {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("provider_v4_import")
+                "Imported $label: ${commands.size} canonical command${commands.size.pluralWord} applied."
+            } else {
+                "$label rejected: ${failures.joinToString("; ")}"
             }
             val inbox = preview.toConflictInbox(decision = message)
             inbox?.let(::rememberWorkspaceConflictInbox)
             _uiState.update {
                 it.copy(
-                    memory = store.readMemory(),
                     sheetsImportPreview = null,
                     workspaceConflictInbox = inbox ?: it.workspaceConflictInbox,
                     backendHome = it.backendHome.copy(message = message),
@@ -1611,43 +1815,42 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     showBackendMessage(error.safeMessage())
                     return@launch
                 }
+            val safety = createBackendSwitchSafety("Notion")
             val access = runCatching { notionGateway.retrievePage(cleanToken, reference.pageId) }
                 .getOrElse { error ->
                     showBackendMessage("Notion check failed: ${error.safeMessage()}")
                     return@launch
                 }
-            val remoteSnapshot = runCatching { notionGateway.readRemoteSnapshot(cleanToken, reference.pageId) }
-                .getOrElse { error ->
-                    showBackendMessage("Notion import check failed: ${error.safeMessage()}")
-                    return@launch
-                }
-            val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
+            val householdSnapshot = canonicalHouseholdSnapshotForBackup()
             val updatedAt = java.time.Instant.now().toString()
-            val workspaceMerge = runCatching {
-                notionGateway.readRemoteWorkspaceMerge(
-                    token = cleanToken,
-                    pageId = reference.pageId,
-                    baseSnapshot = snapshot,
-                    updatedAt = updatedAt,
-                )
+            val workspaceRows = runCatching {
+                notionGateway.readWorkspaceRows(cleanToken, reference.pageId)
             }.getOrElse { error ->
-                showBackendMessage("Notion workspace merge check failed: ${error.safeMessage()}")
+                showBackendMessage("Notion workspace import check failed: ${error.safeMessage()}")
                 return@launch
             }
-            val notionImportPreview = workspaceMerge.merge?.toSheetsImportPreview(
-                spreadsheetUrl = reference.canonicalUrl,
-                workspaceRowCount = workspaceMerge.rowCount,
-                providerLabel = "Notion",
+            val inbound = GoogleSheetsV4InboundWorkspaceImporter.importRows(
+                rows = workspaceRows,
+                householdId = householdSnapshot.household.id,
+                now = UtcTimestamp(java.time.Instant.parse(updatedAt).toEpochMilli()),
+                defaultCurrency = householdSnapshot.household.defaultCurrency,
+                providerKey = "notion",
+                baseSnapshot = householdSnapshot,
             )
-            val rawSnapshotImportPreview = remoteSnapshot.snapshot
-                ?.takeIf { notionImportPreview == null && it.hasUserData() }
-                ?.toSheetsImportPreview(reference.canonicalUrl, providerLabel = "Notion")
-            val importPreview = notionImportPreview ?: rawSnapshotImportPreview
-            val foundRemoteData = importPreview != null
-            pendingSheetsImportSnapshot = importPreview?.let {
-                notionImportPreview?.let { workspaceMerge.merge.snapshot } ?: requireNotNull(remoteSnapshot.snapshot)
+            val foundRemoteData = workspaceRows.isNotEmpty()
+            val importPreview = if (foundRemoteData) {
+                inbound.toSheetsImportPreview(
+                    workspaceUrl = reference.canonicalUrl,
+                    workspaceRowCount = workspaceRows.size,
+                    providerLabel = "Notion",
+                    mergeClock = updatedAt,
+                )
+            } else {
+                null
             }
-            pendingSheetsImportLabel = if (notionImportPreview != null) "Notion workspace merge" else "Notion data"
+            pendingProviderImportCommands = if (foundRemoteData) inbound.commands else emptyList()
+            pendingProviderImportDiagnostics = if (foundRemoteData) inbound.diagnostics else emptyList()
+            pendingProviderImportLabel = if (foundRemoteData) "Notion V4 workspace" else "Provider data"
             val workspaceProvision = runCatching {
                 if (foundRemoteData) {
                     notionGateway.ensureWorkspaceDatabases(cleanToken, reference.pageId)
@@ -1665,7 +1868,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     notionGateway.exportWorkspace(
                         token = cleanToken,
                         pageId = reference.pageId,
-                        snapshot = snapshot,
+                        snapshot = householdSnapshot,
                         updatedAt = updatedAt,
                     )
                 }.getOrElse { error ->
@@ -1673,22 +1876,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     return@launch
                 }
             }
-            val export = if (foundRemoteData) {
-                null
-            } else {
-                runCatching {
-                    notionGateway.exportSnapshot(
-                        token = cleanToken,
-                        pageId = reference.pageId,
-                        snapshot = snapshot,
-                        updatedAt = updatedAt,
-                    )
-                }.getOrElse { error ->
-                    showBackendMessage("Notion export failed: ${error.safeMessage()}")
-                    return@launch
-                }
-            }
-            val safety = createBackendSwitchSafety("Notion")
             val credentialRef = CredentialRef(BackendType.NOTION, "notion-primary")
             credentialVault.put(credentialRef, BackendSecret.BearerToken(cleanToken))
             backendConfigurationStore.saveActiveConfiguration(
@@ -1717,8 +1904,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         } else {
                             val createdCount = workspaceExport?.createdDatabases?.size ?: 0
                             val upsertedRows = workspaceExport?.upsertedRows ?: 0
-                            val chunkCount = export?.chunkCount ?: 0
-                            "Notion created $createdCount database${createdCount.pluralWord}, upserted $upsertedRows workspace row${upsertedRows.pluralWord}, and exported $chunkCount snapshot block${chunkCount.pluralWord}."
+                            "Notion created $createdCount database${createdCount.pluralWord} and upserted $upsertedRows linked workspace row${upsertedRows.pluralWord}."
                         },
                         safetyMessage = safety,
                     ),
@@ -1744,56 +1930,44 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 showBackendMessage(error.safeMessage())
                 return@launch
             }
-            if (reference.mode != PostgresConnectionMode.DIRECT_DSN && cleanToken.isBlank()) {
+            if (cleanToken.isBlank()) {
                 showBackendMessage("Postgres API token is required.")
                 return@launch
             }
-            val hostedAccess = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
-                null
-            } else {
-                runCatching {
-                    postgresGateway.validateHostedApi(reference.mode, reference.endpoint, cleanToken)
-                }.getOrElse { error ->
-                    showBackendMessage("${reference.mode.label} check failed: ${error.safeMessage()}")
-                    return@launch
-                }
-            }
-            val export = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
-                null
-            } else {
-                val remoteSnapshot = runCatching {
-                    postgresGateway.readRemoteSnapshot(
-                        mode = reference.mode,
-                        endpoint = reference.endpoint,
-                        token = cleanToken,
-                        householdId = reference.householdId,
-                    )
-                }.getOrElse { error ->
-                    showBackendMessage("${reference.mode.label} import check failed: ${error.safeMessage()}")
-                    return@launch
-                }
-                val foundRemoteData = remoteSnapshot.snapshot?.hasUserData() == true
-                runCatching {
-                    postgresGateway.exportSnapshot(
-                        mode = reference.mode,
-                        endpoint = reference.endpoint,
-                        token = cleanToken,
-                        householdId = reference.householdId,
-                        snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory()),
-                        updatedAt = java.time.Instant.now().toString(),
-                    )
-                }.getOrElse { error ->
-                    showBackendMessage("${reference.mode.label} export failed: ${error.safeMessage()}")
-                    return@launch
-                } to foundRemoteData
-            }
             val safety = createBackendSwitchSafety(reference.mode.label)
-            val credentialRef = CredentialRef(BackendType.POSTGRES, "postgres-primary")
-            val secret = if (reference.mode == PostgresConnectionMode.DIRECT_DSN) {
-                BackendSecret.ConnectionString(requireNotNull(reference.credentialSecret))
-            } else {
-                BackendSecret.ApiToken(cleanToken)
+            val hostedAccess = runCatching {
+                postgresGateway.validateHostedApi(reference.mode, reference.endpoint, cleanToken)
+            }.getOrElse { error ->
+                showBackendMessage("${reference.mode.label} check failed: ${error.safeMessage()}")
+                return@launch
             }
+            val remoteSnapshot = runCatching {
+                postgresGateway.readRemoteSnapshot(
+                    mode = reference.mode,
+                    endpoint = reference.endpoint,
+                    token = cleanToken,
+                    householdId = reference.householdId,
+                )
+            }.getOrElse { error ->
+                showBackendMessage("${reference.mode.label} import check failed: ${error.safeMessage()}")
+                return@launch
+            }
+            val foundRemoteData = remoteSnapshot.snapshot?.hasUserData() == true
+            val export = runCatching {
+                postgresGateway.exportSnapshot(
+                    mode = reference.mode,
+                    endpoint = reference.endpoint,
+                    token = cleanToken,
+                    householdId = reference.householdId,
+                    snapshot = canonicalSnapshotForPostgresApi(),
+                    updatedAt = java.time.Instant.now().toString(),
+                )
+            }.getOrElse { error ->
+                showBackendMessage("${reference.mode.label} export failed: ${error.safeMessage()}")
+                return@launch
+            } to foundRemoteData
+            val credentialRef = CredentialRef(BackendType.POSTGRES, "postgres-primary")
+            val secret = BackendSecret.ApiToken(cleanToken)
             credentialVault.put(credentialRef, secret)
             backendConfigurationStore.saveActiveConfiguration(
                 PostgresConfig(
@@ -1809,34 +1983,26 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     backendHome = BackendHomeUiState(
                         activeType = BackendType.POSTGRES,
                         label = reference.mode.label,
-                        detail = if (hostedAccess == null) {
-                            "Direct PostgreSQL connection string saved for ${reference.householdId}."
-                        } else if (export?.second == true) {
+                        detail = if (export.second) {
                             "${hostedAccess.mode.label} has existing WonderFood data for ${reference.householdId}. Snapshot export is active; import review is next."
                         } else {
                             "${hostedAccess.mode.label} snapshot export is active for ${reference.householdId}."
                         },
                         requiresOnboarding = false,
-                        message = export?.let {
-                            if (it.second) {
-                                "${reference.mode.label} preserved existing remote data and exported ${it.first.byteCount} bytes."
-                            } else {
-                                "${reference.mode.label} exported ${it.first.byteCount} bytes."
-                            }
-                        }
-                            ?: "${reference.mode.label} connected.",
+                        message = if (export.second) {
+                            "${reference.mode.label} preserved existing remote data and exported ${export.first.byteCount} bytes."
+                        } else {
+                            "${reference.mode.label} exported ${export.first.byteCount} bytes."
+                        },
                         safetyMessage = safety,
                     ),
                 )
             }
-            val feedback = export?.let {
-                if (it.second) {
-                    "${reference.mode.label} connected: existing remote data detected; exported ${it.first.byteCount} bytes."
-                } else {
-                    "${reference.mode.label} connected: exported ${it.first.byteCount} bytes."
-                }
+            val feedback = if (export.second) {
+                "${reference.mode.label} connected: existing remote data detected; exported ${export.first.byteCount} bytes."
+            } else {
+                "${reference.mode.label} connected: exported ${export.first.byteCount} bytes."
             }
-                ?: "${reference.mode.label} connected."
             shellPrefs.edit { putString(KEY_BACKEND_SYNC_STATUS, feedback) }
             showFeedback(feedback)
         }
@@ -1854,20 +2020,42 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     private val PostgresConnectionMode.label: String
         get() = when (this) {
-            PostgresConnectionMode.SUPABASE -> "Supabase"
             PostgresConnectionMode.POSTGREST -> "PostgREST"
             PostgresConnectionMode.WONDERFOOD_SERVER -> "WonderFood server"
-            PostgresConnectionMode.DIRECT_DSN -> "Direct PostgreSQL"
         }
 
-    private fun createBackendSwitchSafety(toLabel: String): String {
+    private suspend fun createBackendSwitchSafety(toLabel: String): String {
         val fromLabel = _uiState.value.backendHome.label
-        val snapshot = backupGateway.createBackendSwitchSafetyBackup(
-            memory = store.readMemory(),
+        val householdSnapshot = canonicalHouseholdSnapshotForBackup()
+        val backup = backupGateway.createBackendSwitchSafetyBackup(
+            snapshot = householdSnapshot,
             fromLabel = fromLabel,
             toLabel = toLabel,
         )
-        return "Rollback snapshot before $fromLabel -> $toLabel: ${snapshot.sizeBytes / 1024} KB"
+        val now = UtcTimestamp(java.time.Instant.now().toEpochMilli())
+        val safetyId = EntityId(stableUuid("${householdSnapshot.household.id.value}:latest-safety:${backup.fileName}"))
+        val record = canonicalCommandRecord(
+            affectedId = safetyId,
+            householdId = householdSnapshot.household.id,
+            type = "StoreLatestSafetySnapshot",
+            now = now,
+        )
+        val safety = LatestSafetySnapshot(
+            id = safetyId,
+            householdId = householdSnapshot.household.id,
+            reason = "latest-safety before switch from $fromLabel to $toLabel",
+            createdAt = now,
+            localReplicaHash = PayloadHash("backup:${backup.fileName}:${backup.sizeBytes}"),
+            activeDataHome = householdSnapshot.household.activeDataHome,
+            commandId = record.commandId,
+        )
+        householdCommandExecutor.execute(
+            HouseholdCommand.StoreLatestSafetySnapshot(
+                record = record,
+                safetySnapshot = safety,
+            ),
+        )
+        return "Rollback snapshot before $fromLabel -> $toLabel: ${backup.sizeBytes / 1024} KB"
     }
 
     private fun showBackendMessage(message: String) {
@@ -1935,13 +2123,12 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                store.checkpointForBackup()
-                val memory = store.readMemory()
-                val payload = backupGateway.createGoogleDriveBackup(memory)
+                val snapshot = canonicalHouseholdSnapshotForBackup()
+                val payload = backupGateway.createGoogleDriveBackup(snapshot)
                 val remote = googleDriveGateway.uploadBackup(access.accessToken, payload)
-                store.insertMessage(
+                insertLocalChatMessage(
                     ChatRole.ASSISTANT,
-                    "Backed up WonderFood to Google Drive app data: ${payload.snapshot.itemCount} food objects.",
+                    "Backed up WonderFood to Google Drive app data: ${payload.snapshot.itemCount} household objects.",
                 )
                 remote to payload
             }.onSuccess { (_, payload) ->
@@ -1950,7 +2137,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     it.copy(
                         syncStatus = backupGateway.latestBackupLabel(),
                         googleAccountEmail = readGoogleAccountEmail(),
-                        googleSyncStatus = "Google backup complete: ${payload.snapshot.itemCount} food objects, ${payload.sizeBytes / 1024} KB.",
+                        googleSyncStatus = "Google backup complete: ${payload.snapshot.itemCount} household objects, ${payload.sizeBytes / 1024} KB.",
                     )
                 }
                 showFeedback("Backed up to Google Drive.")
@@ -1994,7 +2181,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         isWorking = false,
                         googleAccountEmail = readGoogleAccountEmail(),
                         googleRestorePreview = preview,
-                        googleSyncStatus = "Restore preview ready: ${preview.itemCount} food objects.",
+                        googleSyncStatus = "Restore preview ready: ${preview.itemCount} household objects.",
                     )
                 }
             }.onFailure { error ->
@@ -2026,12 +2213,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                store.checkpointForBackup()
-                val safety = backupGateway.createRestoreSafetyBackup(store.readMemory())
-                store.close()
+                val safety = backupGateway.createRestoreSafetyBackup(canonicalHouseholdSnapshotForBackup())
+                closeCanonicalHouseholdDatabase()
                 val snapshot = backupGateway.restoreGoogleDriveBackup(download.bytes, download.remoteFile.name)
-                store = FoodChatStore(appContext)
-                store.insertMessage(
+                reopenCanonicalHouseholdDatabase()
+                insertLocalChatMessage(
                     ChatRole.ASSISTANT,
                     "Restored WonderFood from Google Drive backup `${download.remoteFile.name}`. Safety backup created: ${safety.fileName}.",
                 )
@@ -2039,16 +2225,17 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             }.onSuccess { (safety, snapshot) ->
                 pendingGoogleRestoreDownload = null
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
+                refreshCanonicalSummary()
                 _uiState.update {
                     it.copy(
                         syncStatus = backupGateway.latestBackupLabel(),
                         googleAccountEmail = readGoogleAccountEmail(),
-                        googleSyncStatus = "Restored ${snapshot.itemCount} food objects from Google Drive. Safety backup: ${safety.fileName}.",
+                        googleSyncStatus = "Restored ${snapshot.itemCount} household objects from Google Drive. Safety backup: ${safety.fileName}.",
                     )
                 }
                 showFeedback("Restored WonderFood from Google Drive.")
             }.onFailure { error ->
-                store = FoodChatStore(appContext)
+                reopenCanonicalHouseholdDatabase()
                 refreshFromDisk(isWorking = false)
                 _uiState.update {
                     it.copy(googleSyncStatus = "Google restore failed: ${error.safeMessage()}")
@@ -2117,23 +2304,23 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 pendingUndo = null
                 pendingGoogleRestoreDownload = null
                 preferenceAutoSaveJob?.cancel()
-                store.close()
+                closeCanonicalHouseholdDatabase()
                 appContext.deleteDatabase("wonderfood.db")
                 backupGateway.deleteLocalBackups()
                 liteLlmSettings.clear()
                 googleSyncPrefs.edit { clear() }
                 directActionPrefs.edit { clear() }
                 shellPrefs.edit { clear() }
-                store = FoodChatStore(appContext)
-                store.seedIfEmpty()
+                reopenCanonicalHouseholdDatabase()
+                seedLocalChatIfNeeded()
             }.onSuccess {
-                _uiState.update { WonderFoodUiState(section = FoodSection.TODAY, memory = store.readMemory(), isWorking = false) }
+                _uiState.update { WonderFoodUiState(section = FoodSection.TODAY, memory = canonicalRuntimeMemory(includeLegacyChat = true), isWorking = false) }
                 refreshAiStatus()
                 refreshHealthStatus()
                 refreshSyncStatus()
                 showFeedback("Deleted local WonderFood data on this device.")
             }.onFailure { error ->
-                store = FoodChatStore(appContext)
+                reopenCanonicalHouseholdDatabase()
                 refreshFromDisk(isWorking = false)
                 showFeedback("Delete all app data failed: ${error.safeMessage()}")
             }
@@ -2154,7 +2341,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 HealthExportResult.Unavailable -> "Health Connect is unavailable on this device."
                 HealthExportResult.Failed -> "Health Connect export failed. The local meal log is still saved."
             }
-            store.insertMessage(ChatRole.ASSISTANT, message)
+            insertLocalChatMessage(ChatRole.ASSISTANT, message)
             refreshHealthStatus()
             refreshFromDisk(isWorking = false)
             showFeedback(message)
@@ -2169,12 +2356,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         _uiState.update { it.copy(isWorking = true, syncStatus = "Creating encrypted backup…") }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                store.checkpointForBackup()
-                backupGateway.createEncryptedBackup(passphrase, store.readMemory())
+                backupGateway.createEncryptedBackup(passphrase, canonicalHouseholdSnapshotForBackup())
             }.onSuccess { snapshot ->
                 refreshFromDisk(isWorking = false)
                 _uiState.update {
-                    it.copy(syncStatus = "Encrypted local backup ready: ${snapshot.sizeBytes / 1024} KB.")
+                    it.copy(syncStatus = "Encrypted canonical backup ready: ${snapshot.itemCount} household objects, ${snapshot.sizeBytes / 1024} KB.")
                 }
                 showFeedback("Encrypted backup created.")
             }.onFailure { error ->
@@ -2193,17 +2379,18 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         _uiState.update { it.copy(isWorking = true, syncStatus = "Restoring encrypted backup…") }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                store.close()
+                closeCanonicalHouseholdDatabase()
                 backupGateway.restoreLatestEncryptedBackup(passphrase)
             }.onSuccess { snapshot ->
-                store = FoodChatStore(appContext)
+                reopenCanonicalHouseholdDatabase()
                 refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
+                refreshCanonicalSummary()
                 _uiState.update {
-                    it.copy(syncStatus = "Restored ${snapshot.itemCount} food objects from latest backup.")
+                    it.copy(syncStatus = "Restored ${snapshot.itemCount} household objects from latest backup.")
                 }
                 showFeedback("Restored latest WonderFood backup.")
             }.onFailure { error ->
-                store = FoodChatStore(appContext)
+                reopenCanonicalHouseholdDatabase()
                 refreshFromDisk(isWorking = false)
                 _uiState.update { it.copy(syncStatus = "Restore failed: ${error.safeMessage()}") }
                 showFeedback("Restore failed: ${error.safeMessage()}")
@@ -2215,17 +2402,17 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         _uiState.update { it.copy(isWorking = true, syncStatus = "Exporting CSV…") }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val memory = store.readMemory()
-                val csv = WonderFoodCsvGateway.export(memory)
+                val snapshot = canonicalHouseholdSnapshotForBackup()
+                val csv = WonderFoodCsvGateway.export(snapshot)
                 val resolver = appContext.contentResolver
                 resolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
                     writer.write(csv)
                 } ?: error("Could not open selected CSV destination.")
-                memory
-            }.onSuccess { memory ->
+                snapshot
+            }.onSuccess { snapshot ->
                 refreshFromDisk(isWorking = false)
                 _uiState.update {
-                    it.copy(syncStatus = "CSV exported: ${memory.inventory.size} kitchen, ${memory.groceries.size} shopping, ${memory.recipes.size} recipes.")
+                    it.copy(syncStatus = "CSV exported: ${snapshot.items.size} items, ${snapshot.inventoryLots.size} lots, ${snapshot.shoppingLines.size} shopping lines.")
                 }
                 showFeedback("WonderFood CSV exported.")
             }.onFailure { error ->
@@ -2243,8 +2430,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 val raw = readImportText(uri)
                 val proposal = CommandEnvelopeDraftMapper.tryMap(raw)
                 if (proposal != null) {
-                    val sourceMessageId = store.insertMessage(ChatRole.USER, "Imported external WonderFood proposal file.")
-                    store.insertMessage(ChatRole.ASSISTANT, proposal.reply)
+                    val sourceMessageId = insertLocalChatMessage(ChatRole.USER, "Imported external WonderFood proposal file.")
+                    insertLocalChatMessage(ChatRole.ASSISTANT, proposal.reply)
                     return@runCatching ImportReadResult.Proposal(
                         turn = proposal,
                         sourceMessageId = sourceMessageId,
@@ -2338,27 +2525,942 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             reader.readText()
         } ?: error("Could not open selected import file.")
 
-    private fun applyCsvImport(imported: WonderFoodCsvImport) {
+    private suspend fun applyCsvImport(imported: WonderFoodCsvImport) {
+        if (imported.canImportDirectlyToCanonicalHousehold()) {
+            applyCanonicalCsvImport(imported)
+            insertLocalChatMessage(ChatRole.ASSISTANT, "Imported CSV to canonical household store: ${imported.summary()}.")
+            return
+        }
         val drafts = buildList {
             if (imported.inventory.isNotEmpty()) add(InventoryDraft(imported.inventory))
             if (imported.groceries.isNotEmpty()) add(GroceryDraft(imported.groceries))
             addAll(imported.recipes)
+            addAll(imported.receipts)
             addAll(imported.mealLogs)
             addAll(imported.mealPlans)
         }
         if (drafts.isNotEmpty()) {
             val draft = if (drafts.size == 1) drafts.single() else CompositeDraft(drafts)
             when (val result = executeDraftCommand(draft, sourceMessageId = null, origin = FoodDraftCommandOrigin.CSV_IMPORT)) {
-                is FoodDraftExecutionResult.Applied -> store.insertMessage(ChatRole.ASSISTANT, result.summary)
-                is FoodDraftExecutionResult.Rejected -> store.insertMessage(
+                is FoodDraftExecutionResult.Applied -> insertLocalChatMessage(ChatRole.ASSISTANT, result.summary)
+                is FoodDraftExecutionResult.Rejected -> insertLocalChatMessage(
                     ChatRole.ASSISTANT,
                     "CSV draft rejected before saving: ${result.errors.joinToString("; ")}",
                 )
             }
         }
-        imported.preferences?.let(store::savePreferences)
-        store.insertMessage(ChatRole.ASSISTANT, "Imported CSV: ${imported.summary()}.")
+        imported.preferences?.let { preferences ->
+            _uiState.update { state ->
+                state.copy(
+                    memory = state.memory.copy(preferences = preferences),
+                    preferencesForm = preferences,
+                )
+            }
+        }
+        insertLocalChatMessage(ChatRole.ASSISTANT, "Imported CSV: ${imported.summary()}.")
     }
+
+    private suspend fun applyCanonicalCsvImport(imported: WonderFoodCsvImport) {
+        val drafts = buildList {
+            if (imported.inventory.isNotEmpty()) add(InventoryDraft(imported.inventory))
+            if (imported.groceries.isNotEmpty()) add(GroceryDraft(imported.groceries))
+            addAll(imported.recipes)
+            addAll(imported.receipts)
+            addAll(imported.mealLogs)
+            addAll(imported.mealPlans)
+        }
+        val draft = if (drafts.size == 1) drafts.single() else CompositeDraft(drafts)
+        applyCanonicalDraftImport(draft, FoodDraftCommandOrigin.CSV_IMPORT)
+    }
+
+    private suspend fun applyCanonicalDraftImport(draft: FoodDraft, origin: FoodDraftCommandOrigin) {
+        val errors = FoodDraftValidator.validate(draft)
+        require(errors.isEmpty()) { "Import draft rejected before saving: ${errors.joinToString("; ")}" }
+        val commands = householdDraftCommandMapper.toCommands(draft, origin)
+        require(commands.isNotEmpty()) { "Import did not contain canonical household rows." }
+        ensureCanonicalHousehold()
+        val failures = executeCanonicalHouseholdCommands(commands)
+        require(failures.isEmpty()) { "Import canonical commands rejected: ${failures.joinToString("; ")}" }
+        refreshCanonicalSummary()
+        queueBackendSnapshotSync(origin.writeSource)
+    }
+
+    private suspend fun executeCanonicalDraftCommand(
+        draft: FoodDraft,
+        sourceMessageId: Long?,
+        origin: FoodDraftCommandOrigin,
+    ): FoodDraftExecutionResult {
+        val normalized = FoodDraftNormalizer.normalize(draft)
+        val command = FoodDraftCommand(
+            draft = normalized,
+            sourceMessageId = canonicalSafeSourceMessageId(sourceMessageId),
+            origin = origin,
+        )
+        val errors = FoodDraftValidator.validate(normalized) + FoodDraftCommandPolicy.validate(command)
+        if (errors.isNotEmpty()) return FoodDraftExecutionResult.Rejected(errors)
+        val commands = householdDraftCommandMapper.toCommands(normalized, origin)
+        if (commands.isEmpty()) {
+            return FoodDraftExecutionResult.Rejected(listOf("Draft did not contain canonical household rows."))
+        }
+        return runCatching {
+            ensureCanonicalHousehold()
+            val failures = executeCanonicalHouseholdCommands(commands)
+            check(failures.isEmpty()) { "Canonical commands rejected: ${failures.joinToString("; ")}" }
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync(origin.writeSource)
+            "Saved ${normalized.title.lowercase()} to household."
+        }.fold(
+            onSuccess = FoodDraftExecutionResult::Applied,
+            onFailure = { error ->
+                FoodDraftExecutionResult.Rejected(
+                    listOf(error.message?.takeIf { it.isNotBlank() } ?: "Draft could not be saved. No changes were applied."),
+                )
+            },
+        )
+    }
+
+    private suspend fun applyCanonicalCartLineMutation(
+        id: String,
+        verb: String,
+        commandFor: (com.wonderfood.core.model.household.ShoppingLine, UtcTimestamp) -> HouseholdCommand,
+    ): String {
+        ensureCanonicalHousehold()
+        val lineId = runCatching { EntityId(id) }.getOrNull()
+            ?: return "Could not update cart row: invalid canonical id."
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update cart row: household is not ready."
+        val line = snapshot.shoppingLines.firstOrNull { it.metadata.id == lineId }
+            ?: return "Could not update cart row: it is no longer in the household cart."
+        val command = commandFor(line, UtcTimestamp(System.currentTimeMillis()))
+        return when (householdCommandExecutor.execute(command)) {
+            is com.wonderfood.core.engine.HouseholdCommandExecutionResult.Applied,
+            is com.wonderfood.core.engine.HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_cart")
+                "$verb ${line.displayName}."
+            }
+            is com.wonderfood.core.engine.HouseholdCommandExecutionResult.Rejected ->
+                "Could not update ${line.displayName}."
+        }
+    }
+
+    private suspend fun applyCanonicalKitchenItemMutation(
+        id: String,
+        verb: String,
+        commandsFor: (
+            com.wonderfood.core.model.household.HouseholdSnapshot,
+            EntityId,
+            UtcTimestamp,
+        ) -> List<HouseholdCommand>,
+    ): String {
+        ensureCanonicalHousehold()
+        val itemId = runCatching { EntityId(id) }.getOrNull()
+            ?: return "Could not update kitchen row: invalid canonical id."
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update kitchen row: household is not ready."
+        val item = snapshot.items.firstOrNull { it.metadata.id == itemId }
+            ?: return "Could not update kitchen row: it is no longer in the household."
+        val commands = commandsFor(snapshot, itemId, UtcTimestamp(System.currentTimeMillis()))
+        if (commands.isEmpty()) return "Could not update ${item.name}."
+        val rejected = commands.map { householdCommandExecutor.execute(it) }
+            .filterIsInstance<com.wonderfood.core.engine.HouseholdCommandExecutionResult.Rejected>()
+        return if (rejected.isEmpty()) {
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_kitchen")
+            "$verb ${item.name}."
+        } else {
+            "Could not update ${item.name}."
+        }
+    }
+
+    private suspend fun canonicalItemIdForLegacyInventoryId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.items.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private suspend fun canonicalShoppingLineIdForLegacyGroceryId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.shoppingLines.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private suspend fun canonicalRecipeIdForLegacyRecipeId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.recipes.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private suspend fun canonicalMealEntryIdForLegacyMealLogId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.mealEntries.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private suspend fun canonicalMealPlanIdForLegacyMealPlanId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.mealPlans.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private suspend fun canonicalPurchaseIdForLegacyReceiptId(id: Long): EntityId? {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) ?: return null
+        return snapshot.purchases.firstOrNull { stableLegacyId(it.metadata.id.value) == id }?.metadata?.id
+    }
+
+    private fun canonicalReceiptPurchaseId(receiptId: Long): EntityId {
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        val scope = "receipt:receipt_id:$receiptId"
+        return EntityId(stableUuid("${householdId.value}:$scope:purchase:purchase"))
+    }
+
+    private fun canonicalReceiptAttachmentId(receiptId: Long): EntityId {
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        return EntityId(stableUuid("${householdId.value}:receipt_attachment:$receiptId:attachment"))
+    }
+
+    private suspend fun upsertCanonicalReceiptCapture(
+        receiptId: Long,
+        imageUri: String,
+        rawText: String,
+        status: ReceiptStatus,
+    ): String {
+        ensureCanonicalHousehold()
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        val attachmentId = canonicalReceiptAttachmentId(receiptId)
+        val purchaseId = canonicalPurchaseIdForLegacyReceiptId(receiptId) ?: canonicalReceiptPurchaseId(receiptId)
+        val existing = householdRepository.snapshot(householdId)?.purchases?.firstOrNull { it.metadata.id == purchaseId }
+        val attachment = Attachment(
+            metadata = EntityMetadata(
+                id = attachmentId,
+                householdId = householdId,
+                createdAt = now,
+                updatedAt = now,
+                revision = 1,
+                source = SourceRef(SourceKind.RECEIPT, "receipt_capture"),
+            ),
+            kind = AttachmentKind.RECEIPT,
+            localUri = imageUri,
+            label = rawText.take(160).ifBlank { "Receipt photo" },
+            capturedAt = now,
+        )
+        val purchase = (existing ?: Purchase(
+            metadata = EntityMetadata(
+                id = purchaseId,
+                householdId = householdId,
+                createdAt = now,
+                updatedAt = now,
+                revision = 1,
+                source = SourceRef(SourceKind.RECEIPT, "receipt_capture"),
+            ),
+            occurredAt = now,
+            status = status.toCanonicalPurchaseStatus(),
+            paymentNote = rawText.take(2_000).ifBlank { null },
+        )).copy(
+            metadata = (existing?.metadata ?: EntityMetadata(
+                id = purchaseId,
+                householdId = householdId,
+                createdAt = now,
+                updatedAt = now,
+                revision = 1,
+                source = SourceRef(SourceKind.RECEIPT, "receipt_capture"),
+            )).copy(
+                updatedAt = now,
+                revision = (existing?.metadata?.revision ?: 0) + 1,
+                source = SourceRef(SourceKind.RECEIPT, "receipt_capture"),
+            ),
+            receiptAttachmentIds = (existing?.receiptAttachmentIds.orEmpty() + attachmentId).distinct(),
+            paymentNote = rawText.take(2_000).ifBlank { existing?.paymentNote },
+            status = status.toCanonicalPurchaseStatus(),
+        )
+        val failures = executeCanonicalHouseholdCommands(
+            listOf(
+                HouseholdCommand.UpsertAttachment(
+                    record = canonicalReceiptCommandRecord(attachmentId, "UpsertReceiptAttachment", now),
+                    attachment = attachment,
+                ),
+                HouseholdCommand.UpsertPurchase(
+                    record = canonicalReceiptCommandRecord(purchaseId, "UpsertReceiptPurchase", now),
+                    purchase = purchase,
+                ),
+            ),
+        )
+        if (failures.isNotEmpty()) return "Receipt could not be saved: ${failures.joinToString("; ")}"
+        refreshCanonicalSummary()
+        queueBackendSnapshotSync("canonical_receipt")
+        return if (status == ReceiptStatus.NEEDS_TEXT) "Receipt needs text." else "Receipt page updated."
+    }
+
+    private suspend fun updateCanonicalReceiptStatus(id: Long, rawText: String, status: ReceiptStatus): String {
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update receipt: household is not ready."
+        val purchase = snapshot.purchases.firstOrNull { stableLegacyId(it.metadata.id.value) == id }
+            ?: return "Could not update receipt: canonical receipt not found."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val updated = purchase.copy(
+            metadata = purchase.metadata.copy(
+                updatedAt = now,
+                revision = purchase.metadata.revision + 1,
+                source = SourceRef(SourceKind.RECEIPT, "receipt_update"),
+            ),
+            paymentNote = rawText.take(2_000).ifBlank { purchase.paymentNote },
+            status = status.toCanonicalPurchaseStatus(),
+        )
+        val result = householdCommandExecutor.execute(
+            HouseholdCommand.UpsertPurchase(
+                record = canonicalReceiptCommandRecord(purchase.metadata.id, "UpdateReceiptPurchase", now),
+                purchase = updated,
+            ),
+        )
+        return when (result) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_receipt")
+                "Receipt page updated."
+            }
+            is HouseholdCommandExecutionResult.Rejected ->
+                "Receipt could not be updated: ${result.errors.joinToString("; ")}"
+        }
+    }
+
+    private suspend fun recordCanonicalActionEvent(
+        eventType: String,
+        label: String,
+        note: String,
+        sourceLabel: String,
+        payload: Map<String, String?>,
+    ): Pair<Long, String> {
+        ensureCanonicalHousehold()
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        val normalizedPayload = payload
+            .filterValues { !it.isNullOrBlank() }
+            .toSortedMap()
+            .entries
+            .joinToString("|") { "${it.key}=${it.value}" }
+        val proposalId = EntityId(stableUuid("${householdId.value}:action-event:$eventType:$sourceLabel:$normalizedPayload:${now.epochMillis}"))
+        val payloadHash = stableUuid("action-event:$eventType:$sourceLabel:$normalizedPayload")
+        val proposal = ChangeProposal(
+            metadata = EntityMetadata(
+                id = proposalId,
+                householdId = householdId,
+                createdAt = now,
+                updatedAt = now,
+                revision = 1,
+                source = SourceRef(SourceKind.MANUAL, sourceLabel),
+            ),
+            sourcePayloadReference = "local-action:$eventType:${now.epochMillis}",
+            requestedCommands = listOf(CommandIntent("LogActionEvent:$eventType", payloadHash)),
+            warnings = listOf("Action event is recorded as canonical audit history; undo requires recovery history."),
+            status = ReviewState.ACCEPTED,
+            reviewedAt = now,
+            reviewer = "app",
+        )
+        val result = householdCommandExecutor.execute(
+            HouseholdCommand.StoreProposal(
+                record = CommandRecord(
+                    commandId = CommandId.new(),
+                    householdId = householdId,
+                    type = "LogActionEvent",
+                    source = SourceRef(SourceKind.MANUAL, sourceLabel),
+                    requestedAt = now,
+                    appliedAt = now,
+                    affectedEntityIds = listOf(proposalId),
+                ),
+                proposal = proposal,
+            ),
+        )
+        val summary = when (result) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> note
+            is HouseholdCommandExecutionResult.Rejected ->
+                "Could not log ${label.lowercase()}: ${result.errors.joinToString("; ")}"
+        }
+        refreshCanonicalSummary()
+        queueBackendSnapshotSync("canonical_action_event")
+        return stableLegacyId(proposalId.value) to summary
+    }
+
+    private suspend fun updateCanonicalRecipeImage(id: Long, imageUri: String?): String {
+        val recipeId = canonicalRecipeIdForLegacyRecipeId(id)
+            ?: return "Could not update recipe image: canonical recipe not found."
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update recipe image: household is not ready."
+        val recipe = snapshot.recipes.firstOrNull { it.metadata.id == recipeId }
+            ?: return "Could not update recipe image: canonical recipe not found."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val attachmentId = EntityId(stableUuid("${recipeId.value}:recipe_image"))
+        val attachment = imageUri?.takeIf { it.isNotBlank() }?.let { uri ->
+            Attachment(
+                metadata = EntityMetadata(
+                    id = attachmentId,
+                    householdId = recipe.metadata.householdId,
+                    createdAt = now,
+                    updatedAt = now,
+                    revision = 1,
+                    source = SourceRef(SourceKind.MANUAL, "recipe_image"),
+                ),
+                kind = AttachmentKind.IMAGE,
+                localUri = uri,
+                label = "${recipe.name} image",
+                capturedAt = now,
+            )
+        }
+        val updatedRecipe = recipe.copy(
+            metadata = recipe.metadata.copy(
+                updatedAt = now,
+                revision = recipe.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "recipe_image"),
+            ),
+            attachmentIds = attachment?.let { (recipe.attachmentIds + attachmentId).distinct() } ?: recipe.attachmentIds,
+        )
+        val commands = listOfNotNull(
+            attachment?.let {
+                HouseholdCommand.UpsertAttachment(
+                    record = canonicalCommandRecord(attachmentId, recipe.metadata.householdId, "UpsertRecipeImageAttachment", now),
+                    attachment = it,
+                )
+            },
+            HouseholdCommand.UpsertRecipe(
+                record = canonicalCommandRecord(recipeId, recipe.metadata.householdId, "UpdateRecipeImage", now),
+                recipe = updatedRecipe,
+            ),
+        )
+        val failures = executeCanonicalHouseholdCommands(commands)
+        if (failures.isNotEmpty()) return "Recipe image could not be updated: ${failures.joinToString("; ")}"
+        refreshCanonicalSummary()
+        queueBackendSnapshotSync("canonical_recipe")
+        return "Recipe image updated."
+    }
+
+    private fun canonicalReceiptCommandRecord(
+        affectedId: EntityId,
+        type: String,
+        now: UtcTimestamp,
+    ): CommandRecord =
+        CommandRecord(
+            commandId = CommandId.new(),
+            householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID,
+            type = type,
+            source = SourceRef(SourceKind.RECEIPT, "canonical_receipt"),
+            requestedAt = now,
+            appliedAt = now,
+            affectedEntityIds = listOf(affectedId),
+        )
+
+    private fun ReceiptStatus.toCanonicalPurchaseStatus(): PurchaseStatus =
+        when (this) {
+            ReceiptStatus.SAVED -> PurchaseStatus.DRAFT
+            ReceiptStatus.NEEDS_TEXT -> PurchaseStatus.ARCHIVED
+            ReceiptStatus.EXTRACTED -> PurchaseStatus.REVIEWED
+        }
+
+    private suspend fun archiveCanonicalRecipe(recipeId: EntityId): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not archive recipe: household is not ready."
+        val recipe = snapshot.recipes.firstOrNull { it.metadata.id == recipeId }
+            ?: return "Could not archive recipe: it is no longer in the household."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val archived = recipe.copy(
+            metadata = recipe.metadata.copy(
+                updatedAt = now,
+                archivedAt = now,
+                revision = recipe.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+            ),
+            status = com.wonderfood.core.model.household.RecipeStatus.ARCHIVED,
+        )
+        val result = householdCommandExecutor.execute(
+            HouseholdCommand.UpsertRecipe(
+                record = CommandRecord(
+                    commandId = CommandId.new(),
+                    householdId = recipe.metadata.householdId,
+                    type = "ArchiveRecipe",
+                    source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+                    requestedAt = now,
+                    appliedAt = now,
+                    affectedEntityIds = listOf(recipe.metadata.id),
+                ),
+                recipe = archived,
+            ),
+        )
+        return when (result) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_recipe")
+                "Archived ${recipe.name}."
+            }
+            is HouseholdCommandExecutionResult.Rejected -> "Could not archive ${recipe.name}."
+        }
+    }
+
+    private suspend fun updateCanonicalRecipe(
+        recipeId: EntityId,
+        title: String,
+        ingredients: String,
+        steps: String,
+        servings: Int?,
+        prepMinutes: Int?,
+        tags: String,
+    ): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update recipe: household is not ready."
+        val recipe = snapshot.recipes.firstOrNull { it.metadata.id == recipeId }
+            ?: return "Could not update recipe: it is no longer in the household."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val ingredientLines = ingredients.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val stepLines = steps.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val ingredientIds = ingredientLines.mapIndexed { index, line ->
+            EntityId(stableUuid("${recipeId.value}:ingredient:$index:${line.lowercase()}"))
+        }
+        val stepIds = stepLines.mapIndexed { index, line ->
+            EntityId(stableUuid("${recipeId.value}:step:$index:${line.lowercase()}"))
+        }
+        val updatedRecipe = recipe.copy(
+            metadata = recipe.metadata.copy(
+                updatedAt = now,
+                revision = recipe.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+            ),
+            name = title.trim().ifBlank { recipe.name },
+            yield = servings?.takeIf { it > 0 }?.let {
+                Quantity(DecimalAmount.of(it.toString()), QuantityUnit.SERVING)
+            } ?: recipe.yield,
+            prepMinutes = prepMinutes?.takeIf { it >= 0 },
+            tags = tags.split(',')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toSet(),
+            status = com.wonderfood.core.model.household.RecipeStatus.ACTIVE,
+            ingredientIds = ingredientIds,
+            stepIds = stepIds,
+        )
+        val archiveOldIngredients = snapshot.recipeIngredients
+            .filter { it.recipeId == recipeId && it.metadata.id !in ingredientIds && it.metadata.archivedAt == null }
+            .map { ingredient ->
+                HouseholdCommand.UpsertRecipeIngredient(
+                    record = canonicalCommandRecord(ingredient.metadata.id, ingredient.metadata.householdId, "ArchiveRecipeIngredient", now),
+                    ingredient = ingredient.copy(
+                        metadata = ingredient.metadata.copy(
+                            updatedAt = now,
+                            archivedAt = now,
+                            revision = ingredient.metadata.revision + 1,
+                            source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+                        ),
+                    ),
+                )
+            }
+        val archiveOldSteps = snapshot.recipeSteps
+            .filter { it.recipeId == recipeId && it.metadata.id !in stepIds && it.metadata.archivedAt == null }
+            .map { step ->
+                HouseholdCommand.UpsertRecipeStep(
+                    record = canonicalCommandRecord(step.metadata.id, step.metadata.householdId, "ArchiveRecipeStep", now),
+                    step = step.copy(
+                        metadata = step.metadata.copy(
+                            updatedAt = now,
+                            archivedAt = now,
+                            revision = step.metadata.revision + 1,
+                            source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+                        ),
+                    ),
+                )
+            }
+        val newIngredients = ingredientLines.mapIndexed { index, line ->
+            val id = ingredientIds[index]
+            HouseholdCommand.UpsertRecipeIngredient(
+                record = canonicalCommandRecord(id, recipe.metadata.householdId, "UpsertRecipeIngredient", now),
+                ingredient = com.wonderfood.core.model.household.RecipeIngredient(
+                    metadata = EntityMetadata(
+                        id = id,
+                        householdId = recipe.metadata.householdId,
+                        createdAt = now,
+                        updatedAt = now,
+                        revision = 1,
+                        source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+                    ),
+                    recipeId = recipeId,
+                    originalText = line,
+                    quantity = Quantity.unknown(),
+                    order = index,
+                ),
+            )
+        }
+        val newSteps = stepLines.mapIndexed { index, line ->
+            val id = stepIds[index]
+            HouseholdCommand.UpsertRecipeStep(
+                record = canonicalCommandRecord(id, recipe.metadata.householdId, "UpsertRecipeStep", now),
+                step = com.wonderfood.core.model.household.RecipeStep(
+                    metadata = EntityMetadata(
+                        id = id,
+                        householdId = recipe.metadata.householdId,
+                        createdAt = now,
+                        updatedAt = now,
+                        revision = 1,
+                        source = SourceRef(SourceKind.MANUAL, "canonical_recipe"),
+                    ),
+                    recipeId = recipeId,
+                    order = index,
+                    instruction = line,
+                ),
+            )
+        }
+        val commands = listOf(
+            HouseholdCommand.UpsertRecipe(
+                record = canonicalCommandRecord(recipe.metadata.id, recipe.metadata.householdId, "UpdateRecipe", now),
+                recipe = updatedRecipe,
+            ),
+        ) + archiveOldIngredients + archiveOldSteps + newIngredients + newSteps
+        val rejected = commands.map { householdCommandExecutor.execute(it) }
+            .filterIsInstance<HouseholdCommandExecutionResult.Rejected>()
+        return if (rejected.isEmpty()) {
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_recipe")
+            "Updated recipe page: ${updatedRecipe.name}."
+        } else {
+            "Could not update recipe page: ${rejected.flatMap { it.errors }.joinToString("; ").take(140)}"
+        }
+    }
+
+    private suspend fun addMissingCanonicalRecipeGroceries(recipeId: EntityId): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not add recipe groceries: household is not ready."
+        val recipe = snapshot.recipes.firstOrNull { it.metadata.id == recipeId }
+            ?: return "Could not add recipe groceries: recipe is no longer in the household."
+        val existingNames = snapshot.shoppingLines
+            .filter { it.metadata.archivedAt == null }
+            .map { it.displayName.lowercase() }
+            .toSet()
+        val ingredients = snapshot.recipeIngredients
+            .filter { it.recipeId == recipeId && it.metadata.archivedAt == null }
+            .filter { it.originalText.isNotBlank() }
+            .filterNot { it.originalText.lowercase() in existingNames }
+        if (ingredients.isEmpty()) return "No missing groceries found for ${recipe.name}."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val commands = ingredients.mapIndexed { index, ingredient ->
+            val displayName = ingredient.originalText.trim()
+            val lineId = EntityId(stableUuid("${recipeId.value}:recipe-grocery:$index:${displayName.lowercase()}"))
+            HouseholdCommand.UpsertShoppingLine(
+                record = canonicalCommandRecord(lineId, recipe.metadata.householdId, "AddRecipeGrocery", now),
+                line = com.wonderfood.core.model.household.ShoppingLine(
+                    metadata = EntityMetadata(
+                        id = lineId,
+                        householdId = recipe.metadata.householdId,
+                        createdAt = now,
+                        updatedAt = now,
+                        revision = 1,
+                        source = SourceRef(SourceKind.RECIPE, "canonical_recipe"),
+                    ),
+                    shoppingListId = HouseholdDraftCommandMapper.DEFAULT_SHOPPING_LIST_ID,
+                    itemId = ingredient.itemId,
+                    displayName = displayName,
+                    quantity = ingredient.quantity,
+                    category = recipe.category,
+                    status = com.wonderfood.core.model.household.ShoppingLineStatus.NEEDED,
+                    reason = com.wonderfood.core.model.household.ShoppingReason.RECIPE_GAP,
+                    sourceEntityIds = listOf(recipeId, ingredient.metadata.id),
+                ),
+            )
+        }
+        val rejected = commands.map { householdCommandExecutor.execute(it) }
+            .filterIsInstance<HouseholdCommandExecutionResult.Rejected>()
+        return if (rejected.isEmpty()) {
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_recipe")
+            "Added ${commands.size} missing grocer${if (commands.size == 1) "y" else "ies"} for ${recipe.name}."
+        } else {
+            "Could not add missing groceries for ${recipe.name}."
+        }
+    }
+
+    private suspend fun cookCanonicalRecipe(recipeId: EntityId): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not log recipe: household is not ready."
+        val recipe = snapshot.recipes.firstOrNull { it.metadata.id == recipeId }
+            ?: return "Could not log recipe: it is no longer in the household."
+        val result = addCanonicalMealEntry(
+            title = recipe.name,
+            mealSlot = MealSlot.DINNER,
+            dateEpochDay = java.time.LocalDate.now().toEpochDay(),
+            status = com.wonderfood.core.model.household.MealEntryStatus.COOKED,
+            recipeId = recipeId,
+        )
+        return if (result == "Planned meal added.") "Logged ${recipe.name}." else result
+    }
+
+    private suspend fun updateCanonicalMealEntry(
+        mealEntryId: EntityId,
+        title: String,
+        mealSlot: MealSlot,
+        loggedDateEpochDay: Long,
+        usedItemsText: String,
+        status: com.wonderfood.core.model.household.MealEntryStatus = com.wonderfood.core.model.household.MealEntryStatus.EATEN,
+    ): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update meal: household is not ready."
+        val meal = snapshot.mealEntries.firstOrNull { it.metadata.id == mealEntryId }
+            ?: return "Could not update meal: it is no longer in the household."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val scheduledAt = java.time.LocalDate.ofEpochDay(loggedDateEpochDay)
+            .atStartOfDay(java.time.ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+            .let(::UtcTimestamp)
+        val updated = meal.copy(
+            metadata = meal.metadata.copy(
+                updatedAt = now,
+                revision = meal.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_meal"),
+            ),
+            scheduledAt = scheduledAt,
+            slot = mealSlot.name.lowercase(),
+            title = title.trim().ifBlank { meal.title },
+            status = status,
+            notes = usedItemsText.ifBlank { meal.notes },
+        )
+        return when (
+            householdCommandExecutor.execute(
+                HouseholdCommand.UpsertMealEntry(
+                    record = canonicalCommandRecord(meal.metadata.id, meal.metadata.householdId, "UpdateMealEntry", now),
+                    entry = updated,
+                ),
+            )
+        ) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_meal")
+                "Updated meal page: ${updated.title}."
+            }
+            is HouseholdCommandExecutionResult.Rejected -> "Could not update meal page: ${meal.title}."
+        }
+    }
+
+    private suspend fun addCanonicalMealEntry(
+        title: String,
+        mealSlot: MealSlot,
+        dateEpochDay: Long,
+        status: com.wonderfood.core.model.household.MealEntryStatus,
+        recipeId: EntityId? = null,
+    ): String {
+        ensureCanonicalHousehold()
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val entryId = EntityId(stableUuid("${householdId.value}:meal:${dateEpochDay}:${mealSlot.name}:${title.lowercase()}"))
+        val scheduledAt = java.time.LocalDate.ofEpochDay(dateEpochDay)
+            .atStartOfDay(java.time.ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+            .let(::UtcTimestamp)
+        val entry = com.wonderfood.core.model.household.MealEntry(
+            metadata = EntityMetadata(
+                id = entryId,
+                householdId = householdId,
+                createdAt = now,
+                updatedAt = now,
+                revision = 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_meal"),
+            ),
+            scheduledAt = scheduledAt,
+            slot = mealSlot.name.lowercase(),
+            title = title,
+            recipeId = recipeId,
+            status = status,
+        )
+        return when (
+            householdCommandExecutor.execute(
+                HouseholdCommand.UpsertMealEntry(
+                    record = canonicalCommandRecord(entryId, householdId, "AddMealEntry", now),
+                    entry = entry,
+                ),
+            )
+        ) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_meal")
+                "Planned meal added."
+            }
+            is HouseholdCommandExecutionResult.Rejected -> "Could not add planned meal."
+        }
+    }
+
+    private suspend fun updateCanonicalMealPlan(
+        mealPlanId: EntityId,
+        title: String,
+        startDateEpochDay: Long?,
+    ): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not update meal plan: household is not ready."
+        val plan = snapshot.mealPlans.firstOrNull { it.metadata.id == mealPlanId }
+            ?: return "Could not update meal plan: it is no longer in the household."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val startsOn = startDateEpochDay?.toCalendarDate() ?: plan.startsOn
+        val updated = plan.copy(
+            metadata = plan.metadata.copy(
+                updatedAt = now,
+                revision = plan.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_meal_plan"),
+            ),
+            name = title.trim().ifBlank { plan.name },
+            startsOn = startsOn,
+            endsOn = runCatching {
+                java.time.LocalDate.parse(startsOn.value).plusDays(6).toString()
+            }.map(::CalendarDate).getOrDefault(plan.endsOn),
+            status = com.wonderfood.core.model.household.MealPlanStatus.ACTIVE,
+        )
+        return when (
+            householdCommandExecutor.execute(
+                HouseholdCommand.UpsertMealPlan(
+                    record = canonicalCommandRecord(plan.metadata.id, plan.metadata.householdId, "UpdateMealPlan", now),
+                    plan = updated,
+                ),
+            )
+        ) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_meal_plan")
+                "Meal plan updated: ${updated.name}."
+            }
+            is HouseholdCommandExecutionResult.Rejected -> "Could not update meal plan: ${plan.name}."
+        }
+    }
+
+    private suspend fun archiveCanonicalMealEntry(mealEntryId: EntityId): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not archive meal: household is not ready."
+        val meal = snapshot.mealEntries.firstOrNull { it.metadata.id == mealEntryId }
+            ?: return "Could not archive meal: it is no longer in the household."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val archived = meal.copy(
+            metadata = meal.metadata.copy(
+                updatedAt = now,
+                archivedAt = now,
+                revision = meal.metadata.revision + 1,
+                source = SourceRef(SourceKind.MANUAL, "canonical_meal"),
+            ),
+            status = com.wonderfood.core.model.household.MealEntryStatus.ARCHIVED,
+        )
+        return when (
+            householdCommandExecutor.execute(
+                HouseholdCommand.UpsertMealEntry(
+                    record = canonicalCommandRecord(meal.metadata.id, meal.metadata.householdId, "ArchiveMealEntry", now),
+                    entry = archived,
+                ),
+            )
+        ) {
+            is HouseholdCommandExecutionResult.Applied,
+            is HouseholdCommandExecutionResult.Duplicate,
+            -> {
+                refreshCanonicalSummary()
+                queueBackendSnapshotSync("canonical_meal")
+                "Archived meal log: ${meal.title}."
+            }
+            is HouseholdCommandExecutionResult.Rejected -> "Could not archive meal log: ${meal.title}."
+        }
+    }
+
+    private suspend fun archiveAllCanonicalMealPlans(): String {
+        ensureCanonicalHousehold()
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+            ?: return "Could not archive meal plans: household is not ready."
+        val activePlans = snapshot.mealPlans.filter { it.metadata.archivedAt == null }
+        val activeEntries = snapshot.mealEntries.filter { it.metadata.archivedAt == null }
+        if (activePlans.isEmpty() && activeEntries.isEmpty()) return "No meal plans to archive."
+        val now = UtcTimestamp(System.currentTimeMillis())
+        val planCommands = activePlans.map { plan ->
+            HouseholdCommand.UpsertMealPlan(
+                record = canonicalCommandRecord(plan.metadata.id, plan.metadata.householdId, "ArchiveMealPlan", now),
+                plan = plan.copy(
+                    metadata = plan.metadata.copy(
+                        updatedAt = now,
+                        archivedAt = now,
+                        revision = plan.metadata.revision + 1,
+                        source = SourceRef(SourceKind.MANUAL, "canonical_meal_plan"),
+                    ),
+                    status = com.wonderfood.core.model.household.MealPlanStatus.ARCHIVED,
+                ),
+            )
+        }
+        val entryCommands = activeEntries.map { entry ->
+            HouseholdCommand.UpsertMealEntry(
+                record = canonicalCommandRecord(entry.metadata.id, entry.metadata.householdId, "ArchiveMealEntry", now),
+                entry = entry.copy(
+                    metadata = entry.metadata.copy(
+                        updatedAt = now,
+                        archivedAt = now,
+                        revision = entry.metadata.revision + 1,
+                        source = SourceRef(SourceKind.MANUAL, "canonical_meal"),
+                    ),
+                    status = com.wonderfood.core.model.household.MealEntryStatus.ARCHIVED,
+                ),
+            )
+        }
+        val rejected = (planCommands + entryCommands)
+            .map { householdCommandExecutor.execute(it) }
+            .filterIsInstance<HouseholdCommandExecutionResult.Rejected>()
+        return if (rejected.isEmpty()) {
+            refreshCanonicalSummary()
+            queueBackendSnapshotSync("canonical_meal_plan")
+            "Archived ${activePlans.size} meal plan${activePlans.size.pluralWord} and ${activeEntries.size} planned entr${if (activeEntries.size == 1) "y" else "ies"}."
+        } else {
+            "Could not archive all meal plans."
+        }
+    }
+
+    private fun canonicalCommandRecord(
+        affectedId: EntityId,
+        householdId: com.wonderfood.core.model.household.HouseholdId,
+        type: String,
+        now: UtcTimestamp,
+    ): CommandRecord =
+        CommandRecord(
+            commandId = CommandId.new(),
+            householdId = householdId,
+            type = type,
+            source = SourceRef(SourceKind.MANUAL, "canonical_runtime"),
+            requestedAt = now,
+            appliedAt = now,
+            affectedEntityIds = listOf(affectedId),
+        )
+
+    private fun stableUuid(input: String): String =
+        UUID.nameUUIDFromBytes(input.toByteArray(StandardCharsets.UTF_8)).toString()
+
+    private fun Long.toCalendarDate(): CalendarDate =
+        CalendarDate(java.time.LocalDate.ofEpochDay(this).toString())
+
+    private fun FoodDraft.canApplyDirectlyToCanonicalHousehold(origin: FoodDraftCommandOrigin): Boolean =
+        when (this) {
+            is InventoryDraft,
+            is GroceryDraft,
+            is ReceiptDraft,
+            is RecipeDraft,
+            is MealLogDraft,
+            is MealPlanDraft,
+            -> householdDraftCommandMapper.toCommands(this, origin).isNotEmpty()
+            is CompositeDraft -> drafts.isNotEmpty() && drafts.all { it.canApplyDirectlyToCanonicalHousehold(origin) }
+            is LinkActionDraft,
+            -> false
+        }
 
     private data class AiInterpretation(
         val turn: AiTurn,
@@ -2367,9 +3469,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val status: String,
     )
 
-    private fun submitToAi(text: String, source: String, promptContext: String? = null, autoAccept: Boolean = false) {
-        val sourceMessageId = store.insertMessage(ChatRole.USER, if (source == "voice") "Voice note: $text" else text)
-        val memory = store.readMemory()
+    private suspend fun submitToAi(text: String, source: String, promptContext: String? = null, autoAccept: Boolean = false) {
+        val sourceMessageId = insertLocalChatMessage(ChatRole.USER, if (source == "voice") "Voice note: $text" else text)
+        val memory = canonicalRuntimeMemory(includeLegacyChat = false)
         val configs = liteLlmSettings.readAll()
         val promptText = promptContext
             ?.takeIf { it.isNotBlank() }
@@ -2377,9 +3479,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             ?: text
         val interpretation = interpretWithVisibleRetries(promptText, text, memory, promptContext, configs)
         val turn = interpretation.turn
-        store.insertMessage(ChatRole.ASSISTANT, turn.reply)
+        insertLocalChatMessage(ChatRole.ASSISTANT, turn.reply)
         if (autoAccept && turn.draft != null && interpretation.autoAcceptAllowed) {
-            val result = executeDraftCommand(turn.draft, sourceMessageId, FoodDraftCommandOrigin.VOICE_AUTO_ACCEPT)
+            val origin = FoodDraftCommandOrigin.VOICE_AUTO_ACCEPT
+            val result = if (turn.draft.canApplyDirectlyToCanonicalHousehold(origin)) {
+                executeCanonicalDraftCommand(turn.draft, sourceMessageId, origin)
+            } else {
+                executeDraftCommand(turn.draft, sourceMessageId, origin)
+            }
             val summary = when (result) {
                 is FoodDraftExecutionResult.Applied -> result.summary
                 is FoodDraftExecutionResult.Rejected -> "Draft rejected before saving: ${result.errors.joinToString("; ")}"
@@ -2426,7 +3533,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private fun interpretWithVisibleRetries(
         promptText: String,
         originalText: String,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         promptContext: String?,
         configs: List<LiteLlmConfig>,
     ): AiInterpretation {
@@ -2517,7 +3624,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     private fun interpretReceiptPhotoWithVisibleRetries(
         uri: Uri,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         configs: List<LiteLlmConfig>,
         userNote: String,
     ): com.wonderfood.app.data.AiTurn? {
@@ -2559,7 +3666,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         isWorking: Boolean = _uiState.value.isWorking,
         pendingDraftOrigin: FoodDraftCommandOrigin = this.pendingDraftOrigin,
     ) {
-        val memory = store.readMemory()
+        val memory = canonicalRuntimeMemory(includeLegacyChat = true)
         _uiState.update {
             it.copy(
                 memory = memory,
@@ -2570,6 +3677,397 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 isWorking = isWorking,
             )
         }
+    }
+
+    private fun canonicalRuntimeMemory(includeLegacyChat: Boolean = false): HouseholdUiMemory {
+        val canonicalSnapshot = runBlocking {
+            householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+        }
+        val canonicalMemory = canonicalSnapshot?.toCanonicalHouseholdUiMemory() ?: HouseholdUiMemory()
+        return if (includeLegacyChat) {
+            canonicalMemory.copy(messages = localChatMessagesForMemory())
+        } else {
+            canonicalMemory
+        }
+    }
+
+    private fun com.wonderfood.core.model.household.HouseholdSnapshot.toCanonicalHouseholdUiMemory(): HouseholdUiMemory {
+        val locationById = storageLocations.associateBy { it.metadata.id }
+        val lotsByItem = inventoryLots.filter { it.metadata.archivedAt == null }
+            .groupBy { it.itemId }
+        val recipeIngredientsByRecipe = recipeIngredients
+            .filter { it.metadata.archivedAt == null }
+            .groupBy { it.recipeId }
+        val recipeStepsByRecipe = recipeSteps
+            .filter { it.metadata.archivedAt == null }
+            .groupBy { it.recipeId }
+        val visibleMealEntries = mealEntries.filter { it.metadata.archivedAt == null }
+        val mealEntriesByPlan = visibleMealEntries.groupBy { it.mealPlanId }
+
+        val inventory = items
+            .asSequence()
+            .filter { it.kind == com.wonderfood.core.model.household.ItemKind.FOOD }
+            .mapNotNull { item ->
+                val lot = lotsByItem[item.metadata.id]?.maxByOrNull { it.metadata.updatedAt.epochMillis }
+                if (item.metadata.archivedAt != null) return@mapNotNull null
+                val lotLocation = lot?.locationId?.let { locationById[it] }
+                InventoryItem(
+                    id = stableLegacyId(item.metadata.id.value),
+                    name = item.name,
+                    quantity = lot?.quantity?.toLegacyQuantityText() ?: "",
+                    zone = lotLocation?.type?.toStorageZone() ?: classifyStorageZone(item.name),
+                    category = item.category.orEmpty(),
+                    servingText = item.foodDetailsId?.let { id ->
+                        foodDetails.firstOrNull { it.itemId == id }?.defaultServing?.toLegacyQuantityText().orEmpty()
+                    } ?: "",
+                    calories = null,
+                    proteinGrams = null,
+                    carbsGrams = null,
+                    fatGrams = null,
+                    nutritionSource = "canonical",
+                    notes = item.notes.orEmpty(),
+                    imageUri = null,
+                    expiresAtMillis = lot?.expiresOn?.let { java.time.LocalDate.parse(it.value).toEpochDay() * 86_400_000L },
+                    source = item.preferredStore.orEmpty().ifBlank { "canonical" },
+                    createdAtMillis = item.metadata.createdAt.epochMillis,
+                    updatedAtMillis = item.metadata.updatedAt.epochMillis,
+                    imageUrl = "",
+                    purchaseDateEpochDay = lot?.purchasedAt?.epochMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay() },
+                    purchasePriceCents = lot?.unitCost?.minorUnits,
+                    currencyCode = lot?.unitCost?.currencyCode ?: "USD",
+                    storeName = item.preferredStore.orEmpty(),
+                )
+            }.toList()
+
+        val groceries = shoppingLines
+            .filter { it.metadata.archivedAt == null }
+            .map { line ->
+                GroceryItem(
+                    id = stableLegacyId(line.metadata.id.value),
+                    name = line.displayName,
+                    quantity = line.quantity.toLegacyQuantityText(),
+                    status = when (line.status) {
+                        com.wonderfood.core.model.household.ShoppingLineStatus.PURCHASED -> GroceryStatus.BOUGHT
+                        else -> GroceryStatus.NEEDED
+                    },
+                    category = line.category ?: "",
+                    servingText = "",
+                    calories = null,
+                    proteinGrams = null,
+                    carbsGrams = null,
+                    fatGrams = null,
+                    nutritionSource = "canonical",
+                    source = line.reason.name,
+                    imageUri = null,
+                    createdAtMillis = line.metadata.createdAt.epochMillis,
+                    updatedAtMillis = line.metadata.updatedAt.epochMillis,
+                    imageUrl = "",
+                )
+            }
+
+        val canonicalRecipes = recipes
+            .asSequence()
+            .filter { it.metadata.archivedAt == null }
+            .mapNotNull { recipe ->
+                val ingredients = recipeIngredientsByRecipe[recipe.metadata.id]
+                    ?.sortedBy { it.order }
+                    ?.joinToString("\n") { ingredient ->
+                        val text = ingredient.originalText.ifBlank { "ingredient" }
+                        buildString {
+                            append(text)
+                            if (ingredient.quantity.isKnown) {
+                                append(" (")
+                                append(ingredient.quantity.toLegacyQuantityText())
+                                append(")")
+                            }
+                        }
+                    }.orEmpty()
+                val steps = recipeStepsByRecipe[recipe.metadata.id]
+                    ?.sortedBy { it.order }
+                    ?.joinToString("\n") { it.instruction }
+                    .orEmpty()
+                val servings = recipe.yield.amount
+                    ?.toBigDecimal()
+                    ?.toDouble()
+                    ?.toInt()
+                if (recipe.name.isBlank()) return@mapNotNull null
+                Recipe(
+                    id = stableLegacyId(recipe.metadata.id.value),
+                    title = recipe.name,
+                    ingredients = ingredients,
+                    steps = steps,
+                    servings = servings,
+                    prepMinutes = recipe.prepMinutes,
+                    tags = recipe.tags.toList().sorted().joinToString(", "),
+                    rating = null,
+                    imageUri = null,
+                    createdAtMillis = recipe.metadata.createdAt.epochMillis,
+                    updatedAtMillis = recipe.metadata.updatedAt.epochMillis,
+                    imageUrl = "",
+                )
+            }
+            .toList()
+
+        val mealLogs = visibleMealEntries
+            .asSequence()
+            .filter { it.status == com.wonderfood.core.model.household.MealEntryStatus.EATEN || it.status == com.wonderfood.core.model.household.MealEntryStatus.COOKED }
+            .map { entry ->
+                MealLog(
+                    id = stableLegacyId(entry.metadata.id.value),
+                    title = entry.title,
+                    calories = null,
+                    proteinGrams = null,
+                    carbsGrams = null,
+                    fatGrams = null,
+                    mealSlot = canonicalMealSlot(entry.slot),
+                    usedItemsText = "",
+                    loggedDateEpochDay = java.time.Instant.ofEpochMilli(entry.scheduledAt.epochMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay(),
+                    source = "canonical",
+                    createdAtMillis = entry.metadata.createdAt.epochMillis,
+                    updatedAtMillis = entry.metadata.updatedAt.epochMillis,
+                )
+            }.toList()
+
+        val mealPlans = mealPlans
+            .asSequence()
+            .filter { it.metadata.archivedAt == null }
+            .map { plan ->
+                val entries = mealEntriesByPlan[plan.metadata.id].orEmpty()
+                val daysText = buildString {
+                    append("${entries.size} planned entries")
+                    if (entries.isNotEmpty()) {
+                        append(", from ")
+                        append(java.time.Instant.ofEpochMilli(entries.minByOrNull { it.scheduledAt.epochMillis }!!.scheduledAt.epochMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay())
+                        append(" to ")
+                        append(java.time.Instant.ofEpochMilli(entries.maxByOrNull { it.scheduledAt.epochMillis }!!.scheduledAt.epochMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay())
+                    }
+                }
+                MealPlan(
+                    id = stableLegacyId(plan.metadata.id.value),
+                    title = plan.name,
+                    daysText = daysText,
+                    groceryHint = "",
+                    status = if (plan.status == com.wonderfood.core.model.household.MealPlanStatus.ACTIVE) MealPlanStatus.ACCEPTED else MealPlanStatus.DRAFT,
+                    startDateEpochDay = null,
+                    createdAtMillis = plan.metadata.createdAt.epochMillis,
+                    updatedAtMillis = plan.metadata.updatedAt.epochMillis,
+                )
+            }.toList()
+
+        val mealPlanEntries = visibleMealEntries
+            .map { entry ->
+                val planId = entry.mealPlanId?.let { stableLegacyId(it.value) }
+                MealPlanEntry(
+                    id = stableLegacyId(entry.metadata.id.value),
+                    planId = planId ?: -1,
+                    dateEpochDay = java.time.Instant.ofEpochMilli(entry.scheduledAt.epochMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay(),
+                    slot = canonicalMealSlot(entry.slot),
+                    title = entry.title,
+                    calorieTarget = null,
+                    status = when (entry.status) {
+                        com.wonderfood.core.model.household.MealEntryStatus.EATEN -> MealPlanEntryStatus.EATEN
+                        com.wonderfood.core.model.household.MealEntryStatus.SKIPPED -> MealPlanEntryStatus.SKIPPED
+                        com.wonderfood.core.model.household.MealEntryStatus.COOKED -> MealPlanEntryStatus.PLANNED
+                        else -> MealPlanEntryStatus.DRAFT
+                    },
+                    source = "canonical",
+                    imageUri = null,
+                    imageUrl = "",
+                    recipeId = entry.recipeId?.let { stableLegacyId(it.value) },
+                    createdAtMillis = entry.metadata.createdAt.epochMillis,
+                    updatedAtMillis = entry.metadata.updatedAt.epochMillis,
+                )
+            }
+
+        val receipts = purchases
+            .asSequence()
+            .filter { it.metadata.archivedAt == null }
+            .map { purchase ->
+                val lines = purchaseLines.filter { it.purchaseId == purchase.metadata.id }
+                ReceiptCapture(
+                    id = stableLegacyId(purchase.metadata.id.value),
+                    imageUri = attachments
+                        .firstOrNull { attachment ->
+                            purchase.receiptAttachmentIds.contains(attachment.metadata.id)
+                        }
+                        ?.localUri
+                        ?: "canonical:${purchase.metadata.id.value}",
+                    rawText = lines.joinToString("\n") { it.displayName },
+                    status = when (purchase.status) {
+                        com.wonderfood.core.model.household.PurchaseStatus.DRAFT -> ReceiptStatus.SAVED
+                        com.wonderfood.core.model.household.PurchaseStatus.ARCHIVED -> ReceiptStatus.NEEDS_TEXT
+                        else -> ReceiptStatus.EXTRACTED
+                    },
+                    createdAtMillis = purchase.metadata.createdAt.epochMillis,
+                )
+            }
+
+        val inventoryTransactions = inventoryEvents
+            .map { event ->
+                InventoryTransaction(
+                    id = stableLegacyId(event.metadata.id.value),
+                    inventoryItemId = event.itemId.toString().let(::stableLegacyId),
+                    itemName = lotItemName(event.itemId, items),
+                    quantityText = event.quantityDelta?.toLegacyQuantityText() ?: "",
+                    zone = StorageZone.PANTRY,
+                    action = when (event.type) {
+                        com.wonderfood.core.model.household.InventoryEventType.ADD -> InventoryAction.ADDED
+                        com.wonderfood.core.model.household.InventoryEventType.CONSUME -> InventoryAction.USED
+                        com.wonderfood.core.model.household.InventoryEventType.DISCARD -> InventoryAction.REMOVED
+                        else -> InventoryAction.UPDATED
+                    },
+                    reason = event.reason.orEmpty(),
+                    relatedRecipeId = event.relatedEntityId?.let { stableLegacyId(it.value) },
+                    relatedMealLogId = null,
+                    occurredDateEpochDay = java.time.Instant.ofEpochMilli(event.metadata.updatedAt.epochMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toEpochDay(),
+                    source = event.type.name.lowercase(),
+                    createdAtMillis = event.metadata.createdAt.epochMillis,
+                )
+            }
+
+        return HouseholdUiMemory(
+            messages = emptyList(),
+            actions = emptyList(),
+            events = emptyList(),
+            inventory = inventory,
+            inventoryTransactions = inventoryTransactions,
+            groceries = groceries,
+            recipes = canonicalRecipes,
+            mealLogs = mealLogs,
+            mealPlans = mealPlans,
+            mealPlanEntries = mealPlanEntries,
+            receipts = receipts.toList(),
+            preferences = toCanonicalPreferences(),
+        )
+    }
+
+    private fun com.wonderfood.core.model.household.HouseholdSnapshot.toCanonicalPreferences(): FoodPreferences {
+        val profile = profiles.firstOrNull()
+        val allergies = profile?.allergies.orEmpty().joinToString(", ")
+        val dislikes = profile?.dislikes.orEmpty().joinToString(", ")
+        val staples = profile?.dietaryTags.orEmpty().joinToString(", ")
+        val caloriesGoal = profile?.nutritionGoals?.values
+            ?.firstOrNull { it.value.isNotBlank() }
+            ?.toString()
+            ?: ""
+        return FoodPreferences(
+            allergies = allergies,
+            dislikes = dislikes,
+            preferredStaples = staples,
+            calorieGoal = caloriesGoal,
+        )
+    }
+
+    private fun stableLegacyId(value: String): Long =
+        value.fold(1469598103934665603L) { acc, char -> (acc xor char.code.toLong()) * 1099511628211L }.let {
+            if (it == Long.MIN_VALUE) 0L else kotlin.math.abs(it)
+        }
+
+    private fun com.wonderfood.core.model.household.Quantity.toLegacyQuantityText(): String {
+        val amount = this.amount?.value?.trim().orEmpty()
+        return if (amount.isBlank()) "" else if (unit == com.wonderfood.core.model.household.QuantityUnit.UNKNOWN) amount else "$amount ${unit.code}"
+    }
+
+    private fun canonicalMealSlot(slot: String): MealSlot =
+        when (slot.lowercase()) {
+            "breakfast" -> MealSlot.BREAKFAST
+            "lunch" -> MealSlot.LUNCH
+            "dinner" -> MealSlot.DINNER
+            "snack" -> MealSlot.SNACK
+            else -> MealSlot.FLEX
+        }
+
+    private fun lotItemName(itemId: com.wonderfood.core.model.household.EntityId, items: List<com.wonderfood.core.model.household.Item>): String =
+        items.firstOrNull { it.metadata.id == itemId }?.name.orEmpty()
+
+    private fun com.wonderfood.core.model.household.StorageLocationType.toStorageZone(): StorageZone =
+        when (this) {
+            com.wonderfood.core.model.household.StorageLocationType.FRIDGE -> StorageZone.FRIDGE
+            com.wonderfood.core.model.household.StorageLocationType.FREEZER -> StorageZone.FREEZER
+            else -> StorageZone.PANTRY
+        }
+
+    private fun com.wonderfood.core.model.household.CalendarDate.toEpochDay(): Long =
+        java.time.LocalDate.parse(value).toEpochDay()
+
+
+    private suspend fun ensureCanonicalHousehold() {
+        val householdId = HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID
+        if (householdRepository.snapshot(householdId) != null) return
+        val now = UtcTimestamp(System.currentTimeMillis())
+        householdCommandExecutor.execute(
+            HouseholdCommand.UpsertHousehold(
+                record = CommandRecord(
+                    commandId = CommandId("00000000-0000-0000-0000-000000000105"),
+                    householdId = householdId,
+                    type = "UpsertHousehold",
+                    source = SourceRef(SourceKind.SYSTEM, "app_start"),
+                    requestedAt = now,
+                    appliedAt = now,
+                    affectedEntityIds = emptyList(),
+                ),
+                household = Household(
+                    id = householdId,
+                    name = "My household",
+                    defaultCurrency = "USD",
+                    timezone = "America/New_York",
+                    locale = "en-US",
+                    activeDataHome = DataHomeKind.LOCAL,
+                    schemaVersion = HouseholdWorkspaceContract.SCHEMA_VERSION,
+                    createdAt = now,
+                    updatedAt = now,
+                    revision = 0,
+                ),
+            ),
+        )
+    }
+
+    private suspend fun refreshCanonicalSummary() {
+        val snapshot = householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+        val summary = CanonicalHouseholdUiSummary.fromSnapshot(snapshot)
+        val cartPreview = CanonicalCartPreviewItem.fromSnapshot(snapshot)
+        val kitchenPreview = CanonicalKitchenPreviewItem.fromSnapshot(snapshot)
+        val spendingPreview = CanonicalRecentSpendingItem.fromSnapshot(snapshot)
+        val recipeMatches = CanonicalRecipeMatchItem.fromSnapshot(snapshot)
+        val recipePreview = CanonicalSavedRecipeItem.fromSnapshot(snapshot)
+        val weekPreview = CanonicalWeekPlanItem.fromSnapshot(snapshot)
+        _uiState.update {
+            it.copy(
+                canonicalSummary = summary,
+                canonicalCartPreview = cartPreview,
+                canonicalKitchenPreview = kitchenPreview,
+                canonicalSpendingPreview = spendingPreview,
+                canonicalRecipeMatches = recipeMatches,
+                canonicalRecipePreview = recipePreview,
+                canonicalWeekPreview = weekPreview,
+            )
+        }
+    }
+
+    private suspend fun canonicalHouseholdSnapshotForBackup() =
+        run {
+            ensureCanonicalHousehold()
+            checkpointCanonicalHouseholdDatabase()
+            householdRepository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID)
+                ?: error("Canonical household was not initialized.")
+        }
+
+    private suspend fun canonicalSnapshotForPostgresApi(): WonderFoodSnapshot =
+        CanonicalHouseholdSnapshotExporter.toSnapshot(canonicalHouseholdSnapshotForBackup())
+
+    private fun checkpointCanonicalHouseholdDatabase() {
+        householdDatabase.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { }
+    }
+
+    private fun closeCanonicalHouseholdDatabase() {
+        runCatching { householdDatabase.close() }
+    }
+
+    private fun reopenCanonicalHouseholdDatabase() {
+        if (householdDatabase.isOpen) return
+        householdDatabase = WonderFoodDatabaseFactory.create(appContext)
+        householdRepository = HouseholdRepositories.room(householdDatabase)
+        householdCommandExecutor = HouseholdCommandExecutor(householdRepository)
     }
 
     private fun setSection(section: FoodSection) {
@@ -2645,40 +4143,45 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private fun WonderFoodVoiceCommand.directActionPreferenceKey(): String =
         "handled:$idempotencyKey"
 
-    private fun executeDraftCommand(
+    private suspend fun executeDraftCommand(
         draft: FoodDraft,
         sourceMessageId: Long?,
         origin: FoodDraftCommandOrigin,
     ): FoodDraftExecutionResult {
-        val result = draftCommandExecutor.execute(FoodDraftCommand(draft, sourceMessageId, origin))
-        if (result is FoodDraftExecutionResult.Applied) {
-            queueBackendSnapshotSync("draft")
-        }
-        return result
+        return executeCanonicalDraftCommand(draft, sourceMessageId, origin)
     }
 
-    private fun executeMutationCommand(
-        type: FoodMutationCommandType,
-        label: String,
-        origin: FoodDraftCommandOrigin = FoodDraftCommandOrigin.MANUAL_SAVE,
-        sourceMessageId: Long? = null,
-        payload: Map<String, String?> = emptyMap(),
-        write: () -> String,
-    ): FoodMutationExecutionResult {
-        val result = mutationCommandExecutor.execute(
-            FoodMutationCommand(
-                type = type,
-                label = label,
-                origin = origin,
-                sourceMessageId = sourceMessageId,
-                payload = payload,
-            ),
-            write = write,
-        )
-        if (result is FoodMutationExecutionResult.Applied) {
-            queueBackendSnapshotSync(type.name.lowercase())
+    private fun mirrorDraftToHouseholdRepository(draft: FoodDraft, origin: FoodDraftCommandOrigin) {
+        val commands = householdDraftCommandMapper.toCommands(draft, origin)
+        if (commands.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                ensureCanonicalHousehold()
+                val failures = executeCanonicalHouseholdCommands(commands)
+                check(failures.isEmpty()) { "Canonical commands rejected: ${failures.joinToString("; ")}" }
+                refreshCanonicalSummary()
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(syncStatus = "Canonical repository update failed: ${error.safeMessage()}")
+                }
+            }
         }
-        return result
+    }
+
+    private suspend fun executeCanonicalHouseholdCommands(commands: List<HouseholdCommand>): List<String> =
+        commands.mapNotNull { command ->
+            when (val result = householdCommandExecutor.execute(command)) {
+                is HouseholdCommandExecutionResult.Applied,
+                is HouseholdCommandExecutionResult.Duplicate,
+                -> null
+                is HouseholdCommandExecutionResult.Rejected ->
+                    "${command.record.type}: ${result.errors.joinToString("; ")}"
+            }
+        }
+
+    private fun recordCanonicalMutationApplied(reason: String, summary: String): String {
+        queueBackendSnapshotSync(reason)
+        return summary
     }
 
     private fun queueBackendSnapshotSync(reason: String) {
@@ -2699,17 +4202,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     private suspend fun exportSnapshotToActiveBackend(config: com.wonderfood.core.data.backend.BackendConfig): String {
-        val snapshot = LegacyFoodMemorySnapshotExporter.toSnapshot(store.readMemory())
+        val householdSnapshot = canonicalHouseholdSnapshotForBackup()
         return when (config) {
             is GoogleSheetsConfig -> {
                 val secret = credentialVault.get(config.credentialRef) as? BackendSecret.OAuthAccess ?: return "Google Sheets sync skipped: missing OAuth token"
-                val result = GoogleSheetsSnapshotSyncCoordinator(
-                    sheetsGateway = googleSheetsGateway,
-                    clock = { java.time.Instant.now().toString() },
-                ).exportSnapshot(
+                val result = googleSheetsGateway.exportGraph(
                     accessToken = secret.accessToken,
                     spreadsheetId = config.spreadsheetId,
-                    snapshot = snapshot,
+                    snapshot = householdSnapshot,
                 )
                 "Google Sheets synced ${result.rowCount} rows"
             }
@@ -2719,26 +4219,19 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 val workspaceResult = notionGateway.exportWorkspace(
                     token = secret.token,
                     pageId = config.rootPageId,
-                    snapshot = snapshot,
+                    snapshot = householdSnapshot,
                     updatedAt = updatedAt,
                 )
-                val result = notionGateway.exportSnapshot(
-                    token = secret.token,
-                    pageId = config.rootPageId,
-                    snapshot = snapshot,
-                    updatedAt = updatedAt,
-                )
-                "Notion synced ${workspaceResult.upsertedRows} workspace row${workspaceResult.upsertedRows.pluralWord} and ${result.chunkCount} snapshot block${result.chunkCount.pluralWord}"
+                "Notion synced ${workspaceResult.upsertedRows} linked workspace row${workspaceResult.upsertedRows.pluralWord}"
             }
             is PostgresConfig -> {
-                if (config.connectionMode == PostgresConnectionMode.DIRECT_DSN) return "Direct PostgreSQL sync skipped: server-side adapter required"
                 val secret = credentialVault.get(config.credentialRef) as? BackendSecret.ApiToken ?: return "${config.connectionMode.label} sync skipped: missing API token"
                 val result = postgresGateway.exportSnapshot(
                     mode = config.connectionMode,
                     endpoint = config.endpoint,
                     token = secret.token,
                     householdId = config.householdId,
-                    snapshot = snapshot,
+                    snapshot = CanonicalHouseholdSnapshotExporter.toSnapshot(householdSnapshot),
                     updatedAt = java.time.Instant.now().toString(),
                 )
                 "${config.connectionMode.label} synced ${result.byteCount} bytes"
@@ -2746,13 +4239,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             else -> "Backend sync skipped: ${config.type.label} export is not implemented yet"
         }
     }
-
-    private fun FoodMutationExecutionResult.summaryOrFallback(successFallback: String): String =
-        when (this) {
-            is FoodMutationExecutionResult.Applied -> summary.ifBlank { successFallback }
-            is FoodMutationExecutionResult.Rejected -> "Command rejected: ${errors.joinToString("; ")}"
-            is FoodMutationExecutionResult.Failed -> "Command failed: $summary"
-        }
 
     private fun stageVoiceDraftForReview(
         command: WonderFoodVoiceCommand,
@@ -2765,11 +4251,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val normalizedDraft = FoodDraftNormalizer.normalize(draft)
         pendingDraftOrigin = origin
         val sourceText = command.voiceSourceText()
-        val sourceMessageId = store.insertMessage(
+        val sourceMessageId = insertLocalChatMessage(
             ChatRole.USER,
             if (sourceText.isBlank()) "$sourceLabel request." else "$sourceLabel: $sourceText",
         )
-        store.insertMessage(ChatRole.ASSISTANT, "$status Nothing is saved until you accept.")
+        insertLocalChatMessage(ChatRole.ASSISTANT, "$status Nothing is saved until you accept.")
         setSection(section)
         refreshFromDisk(
             pendingDraft = normalizedDraft,
@@ -2818,7 +4304,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val packedText = text.takeIf { it.contains(",") || it.contains(" and ", ignoreCase = true) } ?: return null
         val turn = interpreter.interpret(
             text = "Need $packedText",
-            memory = store.readMemory(),
+            memory = canonicalRuntimeMemory(includeLegacyChat = false),
             promptContext = "Current WonderFood section: Shop. Infer the smallest food-memory operation.",
         )
         return turn.draft as? GroceryDraft
@@ -2828,7 +4314,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val packedText = text.takeIf { it.contains(",") || it.contains(" and ", ignoreCase = true) } ?: return null
         val turn = interpreter.interpret(
             text = "I have $packedText",
-            memory = store.readMemory(),
+            memory = canonicalRuntimeMemory(includeLegacyChat = false),
             promptContext = "Current WonderFood section: Kitchen. Infer the smallest food-memory operation.",
         )
         return turn.draft as? InventoryDraft
@@ -2837,7 +4323,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private fun applyContextualPageEdit(
         text: String,
         target: FoodDetailTarget?,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
     ): String? =
         when (target?.kind) {
             FoodDetailKind.RECIPE -> memory.recipes.firstOrNull { it.id == target.id }?.let { recipe ->
@@ -2892,21 +4378,18 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
 
         if (!changed) return null
-        return executeMutationCommand(
-            type = FoodMutationCommandType.UPDATE_RECIPE,
-            label = "AI page edit recipe",
-            origin = FoodDraftCommandOrigin.AI_REVIEW,
-            payload = mapOf(
-                "id" to recipe.id.toString(),
-                "title" to title,
-                "servings" to servings?.toString(),
-                "prep_minutes" to prepMinutes?.toString(),
-                "tags" to tags,
-            ),
-        ) {
-            store.updateRecipe(recipe.id, title, ingredients, steps, servings, prepMinutes, tags, recipe.imageUri, recipe.imageUrl)
-            "Updated recipe page: $title."
-        }.summaryOrFallback("Updated recipe page: $title.")
+        val recipeId = runBlocking { canonicalRecipeIdForLegacyRecipeId(recipe.id) } ?: return "Could not update recipe page: canonical recipe not found."
+        return runBlocking {
+            updateCanonicalRecipe(
+                recipeId = recipeId,
+                title = title,
+                ingredients = ingredients,
+                steps = steps,
+                servings = servings,
+                prepMinutes = prepMinutes,
+                tags = tags,
+            )
+        }
     }
 
     private fun applyMealPageEdit(
@@ -2953,32 +4436,17 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
 
         if (!changed) return null
-        return executeMutationCommand(
-            type = FoodMutationCommandType.UPDATE_MEAL_LOG,
-            label = "AI page edit meal",
-            origin = FoodDraftCommandOrigin.AI_REVIEW,
-            payload = mapOf(
-                "id" to meal.id.toString(),
-                "title" to title,
-                "meal_slot" to mealSlot.name,
-                "calories" to calories?.toString(),
-                "source" to meal.source.ifBlank { "ai_page_edit" },
-            ),
-        ) {
-            store.updateMealLog(
-                id = meal.id,
+        val mealEntryId = runBlocking { canonicalMealEntryIdForLegacyMealLogId(meal.id) }
+            ?: return "Could not update meal page: canonical meal not found."
+        return runBlocking {
+            updateCanonicalMealEntry(
+                mealEntryId = mealEntryId,
                 title = title,
-                calories = calories,
-                proteinGrams = proteinGrams,
-                carbsGrams = carbsGrams,
-                fatGrams = fatGrams,
                 mealSlot = mealSlot,
-                usedItemsText = usedItemsText,
                 loggedDateEpochDay = meal.loggedDateEpochDay,
-                source = meal.source.ifBlank { "ai_page_edit" },
+                usedItemsText = usedItemsText,
             )
-            "Updated meal page: $title."
-        }.summaryOrFallback("Updated meal page: $title.")
+        }
     }
 
     private fun showFeedback(message: String) {
@@ -3003,14 +4471,28 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
+    private fun registerCanonicalUndo(label: String, message: String, commands: List<HouseholdCommand>) {
+        pendingUndo = PendingUndo(UndoKind.CANONICAL, 0L, label, emptySet(), commands)
+        _uiState.update {
+            it.copy(
+                detailTarget = null,
+                feedbackMessage = "",
+                undoMessage = message,
+                isWorking = false,
+            )
+        }
+    }
+
     private data class PendingUndo(
         val kind: UndoKind,
         val id: Long,
         val label: String,
         val ids: Set<Long>,
+        val canonicalCommands: List<HouseholdCommand>? = null,
     )
 
     private enum class UndoKind {
+        CANONICAL,
         EVENT,
         INVENTORY,
         GROCERY,
@@ -3023,6 +4505,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     private companion object {
         const val SHELL_PREFS_NAME = "wonderfood_shell"
+        const val BACKEND_PREFS_NAME = "wonderfood_backend_configuration"
         const val DIRECT_ACTION_PREFS_NAME = "wonderfood_direct_actions"
         const val GOOGLE_SYNC_PREFS_NAME = "wonderfood_google_sync"
         const val KEY_SELECTED_SECTION = "selected_section"
@@ -3042,6 +4525,20 @@ private val Int.pluralWord: String
 private fun Throwable.safeMessage(): String =
     message?.take(140)?.ifBlank { null } ?: "unknown error"
 
+private fun GroceryStatus.toCanonicalShoppingLineStatus(): com.wonderfood.core.model.household.ShoppingLineStatus =
+    when (this) {
+        GroceryStatus.NEEDED -> com.wonderfood.core.model.household.ShoppingLineStatus.NEEDED
+        GroceryStatus.BOUGHT -> com.wonderfood.core.model.household.ShoppingLineStatus.PURCHASED
+    }
+
+private fun MealPlanEntryStatus.toCanonicalMealEntryStatus(): com.wonderfood.core.model.household.MealEntryStatus =
+    when (this) {
+        MealPlanEntryStatus.DRAFT -> com.wonderfood.core.model.household.MealEntryStatus.PROPOSED
+        MealPlanEntryStatus.PLANNED -> com.wonderfood.core.model.household.MealEntryStatus.PLANNED
+        MealPlanEntryStatus.EATEN -> com.wonderfood.core.model.household.MealEntryStatus.EATEN
+        MealPlanEntryStatus.SKIPPED -> com.wonderfood.core.model.household.MealEntryStatus.SKIPPED
+    }
+
 private fun WonderFoodSnapshot.hasUserData(): Boolean =
     foods.isNotEmpty() ||
         stockLots.isNotEmpty() ||
@@ -3052,47 +4549,30 @@ private fun WonderFoodSnapshot.hasUserData(): Boolean =
         receipts.isNotEmpty() ||
         foodEvents.isNotEmpty()
 
-private fun WonderFoodSnapshot.toSheetsImportPreview(
-    spreadsheetUrl: String,
-    providerLabel: String = "Google Sheets",
-): SheetsImportPreview =
-    SheetsImportPreview(
-        spreadsheetUrl = spreadsheetUrl,
-        providerLabel = providerLabel,
-        sourceLabel = "Raw WonderFood snapshot",
-        schemaVersion = schemaVersion,
-        foodCount = foods.size,
-        stockLotCount = stockLots.size,
-        shoppingItemCount = shoppingItems.size,
-        recipeCount = recipes.size,
-        mealPlanCount = mealPlans.size,
-        mealLogCount = mealLogs.size,
-        eventCount = foodEvents.size,
-    )
-
-private fun WorkspaceMergeResult.toSheetsImportPreview(
-    spreadsheetUrl: String,
+private fun V4InboundWorkspaceImportResult.toSheetsImportPreview(
+    workspaceUrl: String,
     workspaceRowCount: Int,
     providerLabel: String = "Google Sheets",
+    mergeClock: String,
 ): SheetsImportPreview =
     SheetsImportPreview(
-        spreadsheetUrl = spreadsheetUrl,
+        spreadsheetUrl = workspaceUrl,
         providerLabel = providerLabel,
-        sourceLabel = "Editable workspace tabs",
-        schemaVersion = snapshot.schemaVersion,
-        foodCount = snapshot.foods.size,
-        stockLotCount = snapshot.stockLots.size,
-        shoppingItemCount = snapshot.shoppingItems.size,
-        recipeCount = snapshot.recipes.size,
-        mealPlanCount = snapshot.mealPlans.size,
-        mealLogCount = snapshot.mealLogs.size,
-        eventCount = snapshot.foodEvents.size,
+        sourceLabel = "V4 linked workspace",
+        schemaVersion = 4,
+        foodCount = commands.filterIsInstance<HouseholdCommand.UpsertItem>().size,
+        stockLotCount = commands.filterIsInstance<HouseholdCommand.UpsertInventoryLot>().size,
+        shoppingItemCount = commands.filterIsInstance<HouseholdCommand.UpsertShoppingLine>().size,
+        recipeCount = commands.filterIsInstance<HouseholdCommand.UpsertRecipe>().size,
+        mealPlanCount = 0,
+        mealLogCount = commands.filterIsInstance<HouseholdCommand.UpsertMealEntry>().size,
+        eventCount = 0,
         workspaceRowCount = workspaceRowCount,
-        changeCount = changes.size,
-        conflictCount = conflicts.size,
-        fieldClockCount = fieldClocks.size,
+        changeCount = commands.size,
+        conflictCount = diagnostics.size,
+        fieldClockCount = 0,
         mergeClock = mergeClock,
-        conflictSummary = conflicts.take(4).map { "${it.table}: ${it.field} - ${it.reason}" },
+        conflictSummary = diagnostics.take(4).map { "${it.surface.label}: ${it.field} - ${it.message}" },
     )
 
 private fun LiteLlmConfig.connectionFailureHint(message: String): String {
@@ -3108,7 +4588,7 @@ private fun LiteLlmConfig.connectionFailureHint(message: String): String {
 }
 
 data class WonderFoodUiState(
-    val memory: FoodMemory = FoodMemory(),
+    val memory: HouseholdUiMemory = HouseholdUiMemory(),
     val input: String = "",
     val section: FoodSection = FoodSection.TODAY,
     val pendingDraft: FoodDraft? = null,
@@ -3119,6 +4599,15 @@ data class WonderFoodUiState(
     val healthStatus: String = "Checking Health Connect",
     val healthSummary: HealthDailySummary = HealthDailySummary(),
     val syncStatus: String = "Local encrypted backup ready.",
+    val canonicalSummary: CanonicalHouseholdUiSummary = CanonicalHouseholdUiSummary(),
+    val canonicalCartPreview: List<CanonicalCartPreviewItem> = emptyList(),
+    val canonicalKitchenPreview: List<CanonicalKitchenPreviewItem> = emptyList(),
+    val canonicalSpendingPreview: List<CanonicalRecentSpendingItem> = emptyList(),
+    val canonicalRecipeMatches: List<CanonicalRecipeMatchItem> = emptyList(),
+    val canonicalRecipePreview: List<CanonicalSavedRecipeItem> = emptyList(),
+    val canonicalWeekPreview: List<CanonicalWeekPlanItem> = emptyList(),
+    val canonicalSearchQuery: String = "",
+    val canonicalSearchItems: List<CanonicalHouseholdSearchItem> = emptyList(),
     val googleAccountEmail: String = "",
     val googleOAuthClientId: String = "",
     val googleSyncStatus: String = "Paste the Google Web OAuth client ID on this phone, then sign in.",
@@ -3188,7 +4677,7 @@ val BackendType.label: String
         BackendType.LOCAL_SQLITE -> "On this phone"
         BackendType.GOOGLE_SHEETS -> "Google Sheets"
         BackendType.NOTION -> "Notion"
-        BackendType.POSTGRES -> "Postgres / Supabase"
+        BackendType.POSTGRES -> "Postgres"
     }
 
 data class GoogleRestorePreview(
@@ -3458,7 +4947,7 @@ private fun String.toStorageZone(itemName: String): StorageZone =
         else -> classifyStorageZone(itemName)
     }
 
-private fun FoodDetailTarget?.toAiPromptContext(memory: FoodMemory, section: FoodSection): String? =
+private fun FoodDetailTarget?.toAiPromptContext(memory: HouseholdUiMemory, section: FoodSection): String? =
     when (this?.kind) {
         FoodDetailKind.RECIPE -> memory.recipes.firstOrNull { it.id == id }?.let { recipe ->
             """

@@ -5,9 +5,15 @@ structure.
 
 ## Unreleased
 
+### Changed
+
+- Removed previous combined Postgres provider language from the active 1.0.5 scope. Postgres is supported only through a Postgres-backed HTTPS API or user-owned service endpoint; Android must not ship raw database credentials, privileged server tokens, or raw database socket paths.
+- Renamed the remaining UI/AI memory projection from `FoodMemory` to `HouseholdUiMemory` so public and production code no longer presents it as the legacy runtime model.
+- Updated public docs to avoid claiming live-provider, device, signing, CI, PR, tag, release, checksum, or install proof before those gates are evidenced.
+
 ## 1.0.4 - 2026-07-19
 
-WonderFood 1.0.4 is a workspace foundation release. It keeps the app usable
+WonderFood 1.0.4 is a workspace release. It keeps the app usable
 offline with local SQLite, adds the first real Notion/Google Sheets/Postgres
 data-home contracts, and upgrades the Android shell toward the AI home-space
 model.
@@ -18,14 +24,14 @@ model.
 - Install the FOSS APK when you want the no-Google dependency build: `WonderFood-foss-v1.0.4.apk`.
 - Existing local data stays local. Connecting another data home should create a
   rollback snapshot before the new backend is committed.
-- Google Sheets, Notion, and Postgres/Supabase support are foundation-level in
+- Google Sheets, Notion, and Postgres support are early in
   this release. They validate configuration, preserve local-first behavior, and
   establish uniform schemas; full two-way production sync remains marked partial
   in `FEATURES.md`.
 
 ### Added
 
-- Added local-first SQLite plus optional Notion, Google Sheets, and Postgres workspace sync foundations.
+- Added local-first SQLite plus optional Notion, Google Sheets, and Postgres workspace sync contracts.
 - Added polished Notion/Sheets human workspace schema, seeded provider proof harnesses, and durable conflict inbox handling.
 - Added provider contracts for recipe lookup, barcode/package lookup, nutrition lookup attribution, cache policy, and provider warnings.
 - Added TheMealDB recipe lookup preview mapping and Open Food Facts package lookup mapping.
@@ -34,11 +40,11 @@ model.
 - Added plan/cart plain-text sharing formatter that excludes secrets and provider credentials.
 - Added focused tests for provider mapping, AI skill proposals, Sheets/Notion workspace sync, backend switch safety, and conflict handling.
 - Added a V3 Android workspace shell with `Now`, `Food`, `Week`, `Saved`, and `Cart` destinations.
-- Added first-run data-home onboarding foundations for local SQLite, Google Sheets, Notion, and Postgres/Supabase-style endpoints.
+- Added first-run data-home onboarding for local SQLite, Google Sheets, Notion, and Postgres HTTPS endpoints.
 - Added a backend router so one app data contract can point at local SQLite or an optional external data home.
-- Added URL/config parsers for Google Sheets, Notion pages, and Postgres/Supabase connection strings.
-- Added Android Keystore-backed credential storage foundations for provider tokens.
-- Added shared workspace snapshot export, legacy memory export, legacy snapshot import, and snapshot merge foundations.
+- Added URL/config parsers for Google Sheets, Notion pages, and Postgres HTTPS endpoint configuration.
+- Added Android Keystore-backed credential storage for provider tokens.
+- Added shared workspace snapshot export, canonical import, and snapshot merge contracts.
 - Added seed workspace fixtures so Notion, Sheets, and app mapping can be tested with realistic food, recipe, meal, cart, and purchase data.
 - Added typed contracts for recipe import, pantry normalization, can-cook ranking, cart generation, meal planning, personalization, cooking coach, receipt parsing, nutrition estimation, TheMealDB mapping, and Open Food Facts mapping.
 - Added deterministic/manual coverage for food entry, cart item creation, recipe creation, meal logging, and AI capture surfaces.
@@ -61,7 +67,7 @@ model.
 
 - Added Android AppFunctions workflow actions for food workspace automation.
 - Added production receipt capture provider wiring and safer receipt-to-Kitchen put-away.
-- Added pantry-first planning, nutrition provider-chain scaffolding, meal-prep batch planning, recipe import parsing, scaled shopping-list gaps, household profiles, compatibility export, and prepared-base remix suggestions.
+- Added pantry-first planning, nutrition provider-chain work, meal-prep batch planning, recipe import parsing, scaled shopping-list gaps, household profiles, compatibility export, and prepared-base remix suggestions.
 - Added cross-channel golden tests, risk-policy coverage, and external automation validation scripts.
 
 ### Changed

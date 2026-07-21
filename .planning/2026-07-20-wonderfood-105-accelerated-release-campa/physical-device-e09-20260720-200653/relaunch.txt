@@ -1,0 +1,15 @@
+  bash arg: -p
+  bash arg: com.wonderfood.app.foss
+  bash arg: -c
+  bash arg: android.intent.category.LAUNCHER
+  bash arg: 1
+args: [-p, com.wonderfood.app.foss, -c, android.intent.category.LAUNCHER, 1]
+ arg: "-p"
+ arg: "com.wonderfood.app.foss"
+ arg: "-c"
+ arg: "android.intent.category.LAUNCHER"
+ arg: "1"
+data="com.wonderfood.app.foss"
+data="android.intent.category.LAUNCHER"
+Events injected: 1
+## Network stats: elapsed time=29ms (0ms mobile, 0ms wifi, 29ms not connected)

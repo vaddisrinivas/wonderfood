@@ -117,10 +117,8 @@ public data class PostgresConfig(
 }
 
 public enum class PostgresConnectionMode {
-    SUPABASE,
     POSTGREST,
     WONDERFOOD_SERVER,
-    DIRECT_DSN,
 }
 
 public data class CredentialRef(

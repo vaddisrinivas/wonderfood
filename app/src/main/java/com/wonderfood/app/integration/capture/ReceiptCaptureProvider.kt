@@ -6,7 +6,7 @@ import com.wonderfood.app.ai.LiteLlmConfig
 import com.wonderfood.app.ai.LiteLlmFoodInterpreter
 import com.wonderfood.app.data.AiTurn
 import com.wonderfood.app.data.FoodCandidate
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.TrustedFoodLookup
 
 interface BarcodeLookupProvider {
@@ -49,7 +49,7 @@ interface ReceiptCaptureProvider {
     fun interpretReceiptPhoto(
         context: Context,
         uri: Uri,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         config: LiteLlmConfig,
         userNote: String,
     ): AiTurn?
@@ -63,7 +63,7 @@ class ProductionReceiptCaptureProvider(
     override fun interpretReceiptPhoto(
         context: Context,
         uri: Uri,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         config: LiteLlmConfig,
         userNote: String,
     ): AiTurn? = interpreter.interpretReceiptPhoto(context, uri, memory, config, userNote)

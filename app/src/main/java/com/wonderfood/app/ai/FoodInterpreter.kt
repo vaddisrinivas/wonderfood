@@ -4,7 +4,7 @@ import com.wonderfood.app.data.AiTurn
 import com.wonderfood.app.data.ChatRole
 import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealLogDraft
@@ -18,7 +18,7 @@ import com.wonderfood.app.data.foodEmojiForName
 import kotlin.math.roundToInt
 
 class FoodInterpreter {
-    fun interpret(text: String, memory: FoodMemory, promptContext: String? = null): AiTurn {
+    fun interpret(text: String, memory: HouseholdUiMemory, promptContext: String? = null): AiTurn {
         CommandEnvelopeDraftMapper.tryMap(text)?.let { return it }
         val lower = text.lowercase()
         val contextLower = promptContext.orEmpty().lowercase()
@@ -83,7 +83,7 @@ class FoodInterpreter {
         }
     }
 
-    private fun mealLogTurn(text: String, memory: FoodMemory): AiTurn {
+    private fun mealLogTurn(text: String, memory: HouseholdUiMemory): AiTurn {
         val estimate = estimateNutrition(text)
         val explicit = text.extractExplicitNutrition()
         val lower = text.lowercase()
@@ -117,7 +117,7 @@ class FoodInterpreter {
             draft = null,
         )
 
-    private fun plannedMealTurn(text: String, memory: FoodMemory, includeRecipe: Boolean): AiTurn {
+    private fun plannedMealTurn(text: String, memory: HouseholdUiMemory, includeRecipe: Boolean): AiTurn {
         val lower = text.lowercase()
         val slot = lower.detectMealSlot()
         val dayOffset = lower.detectDayOffset()
@@ -161,7 +161,7 @@ class FoodInterpreter {
         )
     }
 
-    private fun recipeTurn(text: String, memory: FoodMemory): AiTurn {
+    private fun recipeTurn(text: String, memory: HouseholdUiMemory): AiTurn {
         val clean = text.cleanTitle(prefixes = listOf("recipe for", "recepie for", "reciepe for", "save recipe", "save recepie", "make", "cook", "i made"))
         val title = clean.substringBeforeRecipeDetails().takeIf { it.isNotBlank() }?.toDisplayName() ?: "House recipe"
         return AiTurn(
@@ -170,7 +170,7 @@ class FoodInterpreter {
         )
     }
 
-    private fun recipeDraftForPlannedMeal(title: String, memory: FoodMemory, detailsText: String = ""): RecipeDraft {
+    private fun recipeDraftForPlannedMeal(title: String, memory: HouseholdUiMemory, detailsText: String = ""): RecipeDraft {
         val inventoryNames = memory.inventory.take(8).joinToString(", ") { it.name }.ifBlank { "what you have on hand" }
         val details = detailsText.trim()
         return RecipeDraft(
@@ -184,7 +184,7 @@ class FoodInterpreter {
         )
     }
 
-    private fun mealPlanTurn(memory: FoodMemory): AiTurn {
+    private fun mealPlanTurn(memory: HouseholdUiMemory): AiTurn {
         val plan = DeterministicMealPlanner.plan(memory)
         return AiTurn(
             reply = "I drafted an explainable no-LLM meal plan from pantry coverage, expiry urgency, preferences, nutrition targets, variety, missing ingredients, and repetition. Review before saving.",
@@ -192,7 +192,7 @@ class FoodInterpreter {
         )
     }
 
-    private fun suggestionTurn(memory: FoodMemory): AiTurn {
+    private fun suggestionTurn(memory: HouseholdUiMemory): AiTurn {
         val fridge = memory.inventory.filter { it.zone.label == "Fridge" }.take(3).joinToString(", ") { it.name }
         val pantry = memory.inventory.filter { it.zone.label == "Pantry" }.take(3).joinToString(", ") { it.name }
         val allergies = memory.preferences.allergies.takeIf { it.isNotBlank() }?.let { " Avoid: $it." }.orEmpty()
@@ -309,7 +309,7 @@ private fun extractFoodCandidates(raw: String): List<FoodCandidate> {
         .take(20)
 }
 
-private fun String.effectiveFoodListText(memory: FoodMemory): String {
+private fun String.effectiveFoodListText(memory: HouseholdUiMemory): String {
     if (!referencesPreviousFoodItemsForChange() && !isBareFoodListTargetCommand()) return this
     return memory.messages
         .asReversed()
