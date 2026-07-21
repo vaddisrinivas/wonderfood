@@ -951,6 +951,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food profile").assertIsDisplayed()
         composeTestRule.onNodeWithText("Goals & health").assertIsDisplayed()
+        composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Canonical household store"))
         composeTestRule.onNodeWithText("Canonical household store").assertIsDisplayed()
         pressActivityBack()
     }
@@ -978,6 +979,7 @@ class MainScreenTest {
     @Test
     fun baKitchenRowAlternativesAddArchiveAndUndo() {
         restoreDefaultBackendState()
+        seedCanonicalRecipe(InstrumentationRegistry.getInstrumentation().targetContext)
         recreateActivity()
         assumeEmulatorAndWaitForShell()
 
@@ -1078,6 +1080,8 @@ class MainScreenTest {
     @Test
     fun daPlannedEntryCardSupportsLongPressSelection() {
         assumeEmulatorAndWaitForShell()
+        seedCanonicalWeekMeal(InstrumentationRegistry.getInstrumentation().targetContext)
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Week").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1132,6 +1136,7 @@ class MainScreenTest {
     fun gSearchUsesCanonicalHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
         seedCanonicalSearchItem()
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Search WonderFood").performClick()
         composeTestRule.onNodeWithContentDescription("WonderFood search text").performTextInput("canonical proof")
@@ -1146,6 +1151,7 @@ class MainScreenTest {
     fun gaSearchResultsExposeStableContentDescriptions() {
         assumeEmulatorAndWaitForShell()
         seedCanonicalSearchItem()
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Search WonderFood").performClick()
         composeTestRule.onNodeWithContentDescription("WonderFood search text").performTextInput("canonical proof")
@@ -1160,7 +1166,7 @@ class MainScreenTest {
     fun hTodayShowsCanonicalRecentSpendingFromHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
         seedCanonicalSpendingLine(InstrumentationRegistry.getInstrumentation().targetContext)
-        recreateActivity()
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Now").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1175,6 +1181,8 @@ class MainScreenTest {
     @Test
     fun iWeekShowsCanonicalPlannedMealsFromHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
+        seedCanonicalWeekMeal(InstrumentationRegistry.getInstrumentation().targetContext)
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Week").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1207,6 +1215,8 @@ class MainScreenTest {
     @Test
     fun jSavedShowsCanonicalRecipesFromHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
+        seedCanonicalRecipe(InstrumentationRegistry.getInstrumentation().targetContext)
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Saved").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1222,6 +1232,8 @@ class MainScreenTest {
     @Test
     fun kFoodCanMakeUsesCanonicalRecipeIngredientsFromHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
+        seedCanonicalRecipe(InstrumentationRegistry.getInstrumentation().targetContext)
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Food").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1234,6 +1246,8 @@ class MainScreenTest {
     @Test
     fun lCartShowsCanonicalMealPlanRecipeGapFromHouseholdRepository() {
         assumeEmulatorAndWaitForShell()
+        seedCanonicalMealPlanCartGap(InstrumentationRegistry.getInstrumentation().targetContext)
+        reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Cart").performClick()
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
@@ -1326,6 +1340,14 @@ class MainScreenTest {
             composeTestRule.waitUntil(timeoutMillis = 5_000) {
                 runCatching { composeTestRule.onAllNodesWithText("Start local now").fetchSemanticsNodes().isEmpty() }.getOrDefault(false)
             }
+        }
+    }
+
+    private fun reloadShellAfterSeeding() {
+        recreateActivity()
+        dismissFoodHomeChooserIfPresent()
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            isShellVisible()
         }
     }
 
