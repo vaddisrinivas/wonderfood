@@ -29,20 +29,47 @@ import os
 import urllib.request
 
 token = os.environ["NOTION_TOKEN"]
-body = json.dumps({"filter": {"property": "object", "value": "page"}, "page_size": 1}).encode()
-req = urllib.request.Request(
-    "https://api.notion.com/v1/search",
-    data=body,
-    headers={
-        "Authorization": "Bearer " + token,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-    },
-    method="POST",
-)
-with urllib.request.urlopen(req, timeout=30) as response:
-    data = json.load(response)
-print((data.get("results") or [{}])[0].get("id", ""))
+
+def search_pages(query=None, page_size=25):
+    payload = {"filter": {"property": "object", "value": "page"}, "page_size": page_size}
+    if query:
+        payload["query"] = query
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/search",
+        data=body,
+        headers={
+            "Authorization": "Bearer " + token,
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return json.load(response).get("results", [])
+
+def page_title(page):
+    props = page.get("properties") or {}
+    for prop in props.values():
+        title = prop.get("title") if isinstance(prop, dict) else None
+        if title:
+            return "".join(part.get("plain_text", "") for part in title).strip()
+    return ""
+
+preferred = [
+    page for page in search_pages("OpenClaw LifeOS", page_size=5)
+    if not page.get("archived") and page_title(page) == "OpenClaw LifeOS"
+]
+pages = [page for page in search_pages(page_size=25) if not page.get("archived")]
+fallback = [
+    page for page in pages
+    if (page.get("parent") or {}).get("type") == "workspace"
+    and not page_title(page).startswith("WonderFood C14 Scenario Proof")
+    and not page_title(page).startswith("WonderFood V4 Linked Workspace")
+]
+
+chosen = (preferred or fallback or pages or [{}])[0]
+print(chosen.get("id", ""))
 PY
 )"
 fi
@@ -189,9 +216,16 @@ def prop_text(prop):
         return str(prop.get("checkbox", False)).lower()
     return ""
 
-def find_by_identifier(database_id, identifier):
+def find_by_title(database_id, title_value):
     for result in query_database(database_id):
-        if prop_text(result.get("properties", {}).get("identifier", {})) == identifier:
+        for prop in result.get("properties", {}).values():
+            if prop_text(prop) == title_value:
+                return result
+    return None
+
+def find_by_page_id(database_id, page_id_value):
+    for result in query_database(database_id):
+        if result.get("id") == page_id_value:
             return result
     return None
 
@@ -205,44 +239,41 @@ kitchen_rows = query_database(kitchen_db)
 if not kitchen_rows:
     raise SystemExit("Kitchen database has no exported seed rows.")
 kitchen_page = kitchen_rows[0]
-kitchen_identifier = prop_text(kitchen_page.get("properties", {}).get("identifier", {}))
+kitchen_title = prop_text(kitchen_page.get("properties", {}).get("Item", {}))
 
 request(
     "PATCH",
     "/pages/" + urllib.parse.quote(kitchen_page["id"], safe=""),
-    {"properties": {"On hand": number(999), "Pantry state": select("Low")}},
+    {"properties": {"On hand": number(999), "Buy next": checkbox(True)}},
 )
-edited_kitchen = find_by_identifier(kitchen_db, kitchen_identifier)
+edited_kitchen = find_by_page_id(kitchen_db, kitchen_page["id"])
 notion_edit_read_back = prop_text(edited_kitchen.get("properties", {}).get("On hand", {})).startswith("999")
 
-scenario_identifier = "scenario:notion:shopping:" + str(int(time.time()))
+scenario_title = "Scenario Notion apples " + str(int(time.time()))
 request(
     "POST",
     "/pages",
     {
         "parent": {"database_id": shopping_db},
         "properties": {
-            "Item": title("Scenario Notion apples"),
-            "Needed": number(4),
-            "Unit": select("item"),
-            "Cart state": select("Need"),
-            "Buy next": checkbox(True),
-            "Reason": rich_text("C14 live create"),
-            "Updated": {"date": {"start": "2026-07-20"}},
-            "identifier": rich_text(scenario_identifier),
+            "Item": title(scenario_title),
+            "Amount": number(4),
+            "Unit": select("each"),
+            "Status": select("Needed"),
+            "Reason": select("Manual"),
         },
     },
 )
-created_shopping = find_by_identifier(shopping_db, scenario_identifier)
+created_shopping = find_by_title(shopping_db, scenario_title)
 live_create_row = created_shopping is not None
 
 request(
     "PATCH",
     "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
-    {"properties": {"Cart state": select("In Cart")}},
+    {"properties": {"Status": select("In cart")}},
 )
-edited_shopping = find_by_identifier(shopping_db, scenario_identifier)
-live_app_edit_read_back = prop_text(edited_shopping.get("properties", {}).get("Cart state", {})) == "In Cart"
+edited_shopping = find_by_title(shopping_db, scenario_title)
+live_app_edit_read_back = prop_text(edited_shopping.get("properties", {}).get("Status", {})) == "In cart"
 
 request(
     "PATCH",
@@ -252,7 +283,7 @@ request(
 archive_read_back = request("GET", "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""), retry=False).get("archived") is True
 
 database_before_repair = request("GET", "/databases/" + urllib.parse.quote(shopping_db, safe=""), retry=False)
-repair_detected = "Cart state" in database_before_repair.get("properties", {})
+repair_detected = "Status" in database_before_repair.get("properties", {})
 request(
     "PATCH",
     "/databases/" + urllib.parse.quote(shopping_db, safe=""),
@@ -266,7 +297,7 @@ request(
     {"properties": {"Scenario repair marker": None}},
 )
 database_after_repair = request("GET", "/databases/" + urllib.parse.quote(shopping_db, safe=""), retry=False)
-repair_verified = "Scenario repair marker" not in database_after_repair.get("properties", {}) and "Cart state" in database_after_repair.get("properties", {})
+repair_verified = "Scenario repair marker" not in database_after_repair.get("properties", {}) and "Status" in database_after_repair.get("properties", {})
 
 payload = {
     "provider": "notion",
@@ -274,7 +305,7 @@ payload = {
     "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "page_id": page_id[:4] + "..." + page_id[-4:],
     "provision_bind_created_databases": len(databases) >= 7,
-    "app_create_exported_seed": bool(kitchen_identifier),
+    "app_create_exported_seed": bool(kitchen_title),
     "notion_edit_pull_read_back": notion_edit_read_back,
     "live_create_row": live_create_row,
     "app_edit_read_back": live_app_edit_read_back,

@@ -732,7 +732,7 @@ class NotionGateway : NotionWorkspaceGateway {
         )
 
     private fun notionFormulaExpression(formulaKey: String): String = when (formulaKey) {
-        "kitchen_low_stock" -> "if(empty(prop(\"Low at\")), false, prop(\"On hand\") <= prop(\"Low at\"))"
+        "kitchen_low_stock" -> "if(or(empty(prop(\"On hand\")), empty(prop(\"Low at\"))), false, prop(\"On hand\") <= prop(\"Low at\"))"
         "ingredient_missing_amount" -> "if(or(empty(prop(\"Amount\")), empty(prop(\"Kitchen item\"))), 0, if(prop(\"Amount\") > prop(\"On hand\"), prop(\"Amount\") - prop(\"On hand\"), 0))"
         "ingredient_status" -> "if(prop(\"Optional\"), \"Optional\", if(empty(prop(\"Kitchen item\")), \"Unlinked\", if(empty(prop(\"Amount\")), \"Check\", if(prop(\"On hand\") < prop(\"Amount\"), \"Need\", \"Have\"))))"
         "ingredient_ready_score" -> "if(prop(\"Optional\"), 1, if(empty(prop(\"Kitchen item\")), 0, if(empty(prop(\"Amount\")), 0, if(prop(\"On hand\") >= prop(\"Amount\"), 1, 0))))"
