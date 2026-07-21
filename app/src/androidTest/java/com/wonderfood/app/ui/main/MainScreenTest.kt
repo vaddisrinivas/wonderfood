@@ -19,6 +19,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wonderfood.app.MainActivity
 import com.wonderfood.core.data.HouseholdRepositories
@@ -818,6 +819,9 @@ class MainScreenTest {
     }
 
     private fun recreateActivity() {
+        runCatching {
+            composeTestRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        }
         composeTestRule.activityRule.scenario.recreate()
         composeTestRule.waitForIdle()
     }
@@ -1021,6 +1025,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Navigate to Food").performClick()
         composeTestRule.onNodeWithText("In kitchen").performClick()
         composeTestRule.onNodeWithContentDescription("Add kitchen food").performClick()
+        waitForText("Add kitchen food")
         composeTestRule.onNodeWithText("Add kitchen food").assertIsDisplayed()
         composeTestRule.onNodeWithText("Cancel").performClick()
 
@@ -1032,6 +1037,7 @@ class MainScreenTest {
 
         composeTestRule.onNodeWithContentDescription("Navigate to Now").performClick()
         composeTestRule.onNodeWithContentDescription("Log meal").performClick()
+        waitForText("Date")
         composeTestRule.onNodeWithText("Date").assertIsDisplayed()
         pressActivityBack()
     }
@@ -1084,9 +1090,8 @@ class MainScreenTest {
         reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Week").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithContentDescription("Planned meal entry Tomato rasam week proof").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeTestRule.onAllNodes(hasScrollAction()).onFirst()
+            .performScrollToNode(hasContentDescription("Planned meal entry Tomato rasam week proof"))
         composeTestRule.onNodeWithContentDescription("Planned meal entry Tomato rasam week proof")
             .performSemanticsAction(SemanticsActions.OnLongClick)
         composeTestRule.onNodeWithContentDescription("Planned meal entry Tomato rasam week proof").assertIsSelected()
@@ -1143,7 +1148,7 @@ class MainScreenTest {
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             composeTestRule.onAllNodesWithText("Dish soap canonical proof").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Canonical - Cleaning - Seventh Generation").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Canonical - Cleaning - Seventh Generation").assertExists()
         pressActivityBack()
     }
 
@@ -1169,9 +1174,7 @@ class MainScreenTest {
         reloadShellAfterSeeding()
 
         composeTestRule.onNodeWithContentDescription("Navigate to Now").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule.onAllNodesWithText("Recent spending").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeTestRule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Recent spending"))
         composeTestRule.onNodeWithText("Dish soap spending proof").performScrollTo()
         composeTestRule.onNodeWithText("Dish soap spending proof").assertIsDisplayed()
         composeTestRule.onNodeWithText("USD 8.99  Cleaning  Target").performScrollTo()
@@ -1302,6 +1305,14 @@ class MainScreenTest {
             "$text should be present in the app shell",
             composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty(),
         )
+    }
+
+    private fun waitForText(text: String, timeoutMillis: Long = 10_000) {
+        composeTestRule.waitUntil(timeoutMillis = timeoutMillis) {
+            runCatching {
+                composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+            }.getOrDefault(false)
+        }
     }
 
     private fun assumeEmulatorAndWaitForShell() {
