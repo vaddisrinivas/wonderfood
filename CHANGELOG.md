@@ -5,6 +5,43 @@ structure.
 
 ## Unreleased
 
+## 1.0.5 - 2026-07-21
+
+WonderFood 1.0.5 is the canonical household reset release. It completes the
+local-first SQLite runtime cutover, replaces lossy provider projections with
+interlinked V4 Notion and Google Sheets workspaces, and keeps Postgres behind a
+user-owned HTTPS service endpoint rather than raw Android database credentials.
+
+### Added
+
+- Added canonical household runtime coverage for Kitchen, Shopping, Meals,
+  Recipes, Spending, proposals, audit, sync bases, conflicts, tombstones, and
+  recovery snapshots.
+- Added V4 Notion and Google Sheets workspace projections with linked Kitchen,
+  Shopping, Meals, Recipes, Ingredients, Spending, Purchase Lines, support
+  bindings, protected formulas, and repair proof.
+- Added Postgres HTTPS/schema proof with household membership checks and no
+  direct Android DSN/password/socket path.
+- Added seven proposal-only WonderFood AI skill contracts with typed fixtures,
+  provenance, confidence, warnings, and fail-closed safety coverage.
+
+### Changed
+
+- Replaced the legacy `FoodChatStore` runtime with canonical
+  `HouseholdRepository` and `HouseholdCommandExecutor` authority.
+- Updated first-run data homes to Local, Notion, Google Sheets, and Postgres,
+  with Local as the fastest no-account/no-network path.
+- Updated provider proof scripts and docs to use V4 fields and current live
+  evidence instead of V3 workspace names.
+
+### Verified
+
+- GitHub Android Quality passed on the final main release commit with local
+  quality plus connected device-quality lanes for API 26 and API 35.
+- Live Notion, Google Sheets, and local Postgres-backed HTTPS proofs passed.
+- Physical Samsung S23 Ultra install/restart proof preserved canonical local
+  state for the 1.0.5 release candidate.
+
 ### Changed
 
 - Removed previous combined Postgres provider language from the active 1.0.5 scope. Postgres is supported only through a Postgres-backed HTTPS API or user-owned service endpoint; Android must not ship raw database credentials, privileged server tokens, or raw database socket paths.
