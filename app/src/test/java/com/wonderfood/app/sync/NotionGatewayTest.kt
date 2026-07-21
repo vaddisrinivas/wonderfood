@@ -100,7 +100,9 @@ class NotionGatewayTest {
                 .getJSONObject("relation")
                 .getString("data_source_id"),
         )
-        assertTrue(kitchenProperties.getJSONObject("Low stock").getJSONObject("formula").getString("expression").contains("Low at"))
+        val lowStockFormula = kitchenProperties.getJSONObject("Low stock").getJSONObject("formula").getString("expression")
+        assertTrue(lowStockFormula.contains("On hand"))
+        assertTrue(lowStockFormula.contains("Low at"))
         assertEquals(
             "ds-recipes",
             ingredientProperties.getJSONObject("Recipe")
@@ -114,7 +116,11 @@ class NotionGatewayTest {
                 .getString("function"),
         )
         assertEquals("show_original", ingredientProperties.getJSONObject("Kitchen unit").getJSONObject("rollup").getString("function"))
-        assertTrue(ingredientProperties.getJSONObject("Status").getJSONObject("formula").getString("expression").contains("Unlinked"))
+        val ingredientStatusFormula = ingredientProperties.getJSONObject("Status").getJSONObject("formula").getString("expression")
+        val ingredientMissingFormula = ingredientProperties.getJSONObject("Missing amount").getJSONObject("formula").getString("expression")
+        assertTrue(ingredientStatusFormula.contains("Unlinked"))
+        assertTrue(ingredientMissingFormula.contains("Amount"))
+        assertTrue(ingredientMissingFormula.contains("Kitchen item"))
         assertEquals("show_original", mealProperties.getJSONObject("Recipe readiness").getJSONObject("rollup").getString("function"))
         assertTrue(mealProperties.getJSONObject("Missing items").getJSONObject("formula").getString("expression").contains("linked Recipe"))
         assertEquals("sum", shoppingProperties.getJSONObject("On hand").getJSONObject("rollup").getString("function"))
