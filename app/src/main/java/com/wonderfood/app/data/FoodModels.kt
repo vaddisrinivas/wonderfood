@@ -269,7 +269,7 @@ data class FoodPreferences(
         ).all { it.isBlank() }
 }
 
-data class FoodMemory(
+data class HouseholdUiMemory(
     val messages: List<ChatMessage> = emptyList(),
     val actions: List<ChatAction> = emptyList(),
     val events: List<FoodEvent> = emptyList(),
@@ -315,6 +315,8 @@ data class FoodCandidate(
 enum class ReceiptItemDisposition(val label: String) {
     INVENTORY("Put away"),
     HOUSEHOLD("Non-food"),
+    RETURN_REFUND("Return/refund"),
+    CORRECTION("Correction"),
     IGNORE("Ignore"),
 }
 
@@ -455,6 +457,7 @@ data class ReceiptDraft(
     val currencyCode: String = "USD",
     val subtotalCents: Long? = null,
     val taxCents: Long? = null,
+    val discountCents: Long? = null,
     val totalCents: Long? = null,
     val rawText: String = "",
     val receiptId: Long? = null,

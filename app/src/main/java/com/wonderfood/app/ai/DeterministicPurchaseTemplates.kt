@@ -2,7 +2,7 @@ package com.wonderfood.app.ai
 
 import com.wonderfood.app.data.AiTurn
 import com.wonderfood.app.data.FoodCandidate
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.StorageZone
@@ -12,7 +12,7 @@ import com.wonderfood.app.data.foodEmojiForName
 import java.util.Locale
 
 object DeterministicPurchaseTemplates {
-    fun tryTurn(text: String, memory: FoodMemory, promptContext: String? = null): AiTurn? {
+    fun tryTurn(text: String, memory: HouseholdUiMemory, promptContext: String? = null): AiTurn? {
         val lower = text.lowercase()
         val contextLower = promptContext.orEmpty().lowercase()
         val target = targetFor(lower, contextLower)
@@ -71,7 +71,7 @@ object DeterministicPurchaseTemplates {
         }
     }
 
-    private fun preferredStaplesTemplate(memory: FoodMemory): Template {
+    private fun preferredStaplesTemplate(memory: HouseholdUiMemory): Template {
         val customStaples = memory.preferences.preferredStaples
             .split(",", ";", "\n")
             .map { it.trim() }

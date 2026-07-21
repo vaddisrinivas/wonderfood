@@ -10,13 +10,12 @@ import java.nio.charset.StandardCharsets
 import org.json.JSONArray
 import org.json.JSONObject
 
-class PostgresGateway {
-    fun validateHostedApi(
+class PostgresGateway : PostgresHostedGateway {
+    override fun validateHostedApi(
         mode: PostgresConnectionMode,
         endpoint: String,
         token: String,
     ): PostgresGatewayConnection {
-        require(mode != PostgresConnectionMode.DIRECT_DSN) { "Direct DSN mode is validated by local parsing only." }
         require(endpoint.isNotBlank()) { "Postgres endpoint must not be blank." }
         require(token.isNotBlank()) { "Postgres API token must not be blank." }
         val url = apiRootFor(mode, endpoint)
@@ -24,7 +23,6 @@ class PostgresGateway {
             method = "GET",
             url = url,
             token = token,
-            includeSupabaseApiKey = mode == PostgresConnectionMode.SUPABASE,
         )
         return PostgresGatewayConnection(
             mode = mode,
@@ -34,13 +32,12 @@ class PostgresGateway {
         )
     }
 
-    fun readRemoteSnapshot(
+    override fun readRemoteSnapshot(
         mode: PostgresConnectionMode,
         endpoint: String,
         token: String,
         householdId: String,
     ): PostgresRemoteSnapshotResult {
-        require(mode != PostgresConnectionMode.DIRECT_DSN) { "Direct DSN mode needs a server-side sync adapter before remote snapshot read." }
         require(endpoint.isNotBlank()) { "Postgres endpoint must not be blank." }
         require(token.isNotBlank()) { "Postgres API token must not be blank." }
         require(householdId.isNotBlank()) { "Household ID must not be blank." }
@@ -48,12 +45,12 @@ class PostgresGateway {
             method = "GET",
             url = snapshotReadUrl(mode, endpoint, householdId),
             token = token,
-            includeSupabaseApiKey = mode == PostgresConnectionMode.SUPABASE,
+            householdId = householdId,
         )
         return parseSnapshotResponse(mode, endpoint, householdId, response)
     }
 
-    fun exportSnapshot(
+    override fun exportSnapshot(
         mode: PostgresConnectionMode,
         endpoint: String,
         token: String,
@@ -61,20 +58,19 @@ class PostgresGateway {
         snapshot: WonderFoodSnapshot,
         updatedAt: String,
     ): PostgresSnapshotExportResult {
-        require(mode != PostgresConnectionMode.DIRECT_DSN) { "Direct DSN mode needs a server-side sync adapter before snapshot export." }
         require(endpoint.isNotBlank()) { "Postgres endpoint must not be blank." }
         require(token.isNotBlank()) { "Postgres API token must not be blank." }
         require(householdId.isNotBlank()) { "Household ID must not be blank." }
         require(updatedAt.isNotBlank()) { "Snapshot updated timestamp must not be blank." }
         val body = snapshotExportBody(householdId, snapshot, updatedAt)
-        val url = snapshotExportUrl(mode, endpoint)
+        val url = snapshotExportUrl(mode, endpoint, householdId)
         val response = request(
             method = if (mode == PostgresConnectionMode.WONDERFOOD_SERVER) "POST" else "POST",
             url = url,
             token = token,
-            includeSupabaseApiKey = mode == PostgresConnectionMode.SUPABASE,
             body = body,
-            preferResolutionMerge = mode == PostgresConnectionMode.SUPABASE || mode == PostgresConnectionMode.POSTGREST,
+            householdId = householdId,
+            preferResolutionMerge = mode == PostgresConnectionMode.POSTGREST,
         )
         return PostgresSnapshotExportResult(
             mode = mode,
@@ -89,33 +85,45 @@ class PostgresGateway {
     internal fun apiRootFor(mode: PostgresConnectionMode, endpoint: String): String {
         val clean = endpoint.trimEnd('/')
         return when (mode) {
-            PostgresConnectionMode.SUPABASE -> "$clean/rest/v1/"
             PostgresConnectionMode.POSTGREST -> if (clean.endsWith("/rest/v1")) "$clean/" else "$clean/"
             PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/health"
-            PostgresConnectionMode.DIRECT_DSN -> error("Direct DSN has no hosted API root.")
         }
     }
 
-    internal fun snapshotExportUrl(mode: PostgresConnectionMode, endpoint: String): String {
+    internal fun snapshotExportUrl(mode: PostgresConnectionMode, endpoint: String, householdId: String): String {
         val clean = endpoint.trimEnd('/')
+        val household = url(householdId)
         return when (mode) {
-            PostgresConnectionMode.SUPABASE -> "$clean/rest/v1/wonderfood_snapshots"
             PostgresConnectionMode.POSTGREST -> "$clean/wonderfood_snapshots"
-            PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/snapshots"
-            PostgresConnectionMode.DIRECT_DSN -> error("Direct DSN has no hosted snapshot URL.")
+            PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/households/$household/snapshot/current"
         }
     }
+
+    internal fun schemaCheckUrl(mode: PostgresConnectionMode, endpoint: String): String {
+        val clean = endpoint.trimEnd('/')
+        return when (mode) {
+            PostgresConnectionMode.POSTGREST ->
+                "$clean/wonderfood_schema_versions?schema_fingerprint=eq.${PostgresSchemaContract.SCHEMA_FINGERPRINT}&select=schema_version,schema_fingerprint&limit=1"
+            PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/schema"
+        }
+    }
+
+    internal fun sessionHeaders(token: String, householdId: String? = null): Map<String, String> =
+        buildMap {
+            put("Authorization", "Bearer $token")
+            put("Accept", "application/openapi+json, application/json")
+            if (householdId != null) {
+                put(PostgresSchemaContract.SESSION_HOUSEHOLD_HEADER, householdId)
+            }
+        }
 
     internal fun snapshotReadUrl(mode: PostgresConnectionMode, endpoint: String, householdId: String): String {
         val clean = endpoint.trimEnd('/')
         val household = url(householdId)
         return when (mode) {
-            PostgresConnectionMode.SUPABASE ->
-                "$clean/rest/v1/wonderfood_snapshots?household_id=eq.$household&snapshot_id=eq.current&select=snapshot_json,updated_at&order=updated_at.desc&limit=1"
             PostgresConnectionMode.POSTGREST ->
                 "$clean/wonderfood_snapshots?household_id=eq.$household&snapshot_id=eq.current&select=snapshot_json,updated_at&order=updated_at.desc&limit=1"
-            PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/snapshots/$household/current"
-            PostgresConnectionMode.DIRECT_DSN -> error("Direct DSN has no hosted snapshot URL.")
+            PostgresConnectionMode.WONDERFOOD_SERVER -> "$clean/households/$household/snapshot/current"
         }
     }
 
@@ -148,10 +156,8 @@ class PostgresGateway {
             return PostgresRemoteSnapshotResult(mode, endpoint, householdId, null, null)
         }
         val record = when (mode) {
-            PostgresConnectionMode.SUPABASE,
             PostgresConnectionMode.POSTGREST -> JSONArray(response).optJSONObject(0)
             PostgresConnectionMode.WONDERFOOD_SERVER -> JSONObject(response)
-            PostgresConnectionMode.DIRECT_DSN -> error("Direct DSN has no hosted snapshot response.")
         } ?: return PostgresRemoteSnapshotResult(mode, endpoint, householdId, null, null)
         val snapshotJson = record.optString("snapshot_json").ifBlank {
             record.optJSONObject("snapshot")?.toString().orEmpty()
@@ -172,17 +178,15 @@ class PostgresGateway {
         method: String,
         url: String,
         token: String,
-        includeSupabaseApiKey: Boolean,
         body: JSONObject? = null,
+        householdId: String? = null,
         preferResolutionMerge: Boolean = false,
     ): String {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = TIMEOUT_MILLIS
             readTimeout = TIMEOUT_MILLIS
-            setRequestProperty("Authorization", "Bearer $token")
-            if (includeSupabaseApiKey) setRequestProperty("apikey", token)
-            setRequestProperty("Accept", "application/openapi+json, application/json")
+            sessionHeaders(token, householdId).forEach { (name, value) -> setRequestProperty(name, value) }
             if (preferResolutionMerge) setRequestProperty("Prefer", "resolution=merge-duplicates,return=representation")
             if (body != null) {
                 doOutput = true

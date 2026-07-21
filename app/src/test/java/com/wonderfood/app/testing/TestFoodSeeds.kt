@@ -4,7 +4,7 @@ import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodEvent
 import com.wonderfood.app.data.FoodEventConfidence
 import com.wonderfood.app.data.FoodEventType
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.GroceryItem
 import com.wonderfood.app.data.GroceryStatus
@@ -215,8 +215,8 @@ object TestFoodSeeds {
             customAiInstructions = "",
         )
 
-    fun memory(): FoodMemory =
-        FoodMemory(
+    fun memory(): HouseholdUiMemory =
+        HouseholdUiMemory(
             events = listOf(event()),
             inventory = listOf(inventoryItem()),
             groceries = listOf(groceryItem()),

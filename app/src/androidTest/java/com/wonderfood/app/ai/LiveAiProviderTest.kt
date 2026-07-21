@@ -3,7 +3,7 @@ package com.wonderfood.app.ai
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,7 +20,7 @@ class LiveAiProviderTest {
 
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "Reply with a short provider health message. Do not create a draft.",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = config,
         )
         Log.i(LOG_TAG, result.diagnostic)

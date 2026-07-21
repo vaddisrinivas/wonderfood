@@ -30,6 +30,7 @@ import com.wonderfood.core.model.StockLotStatus
 import com.wonderfood.core.model.TruthState
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
@@ -46,6 +47,14 @@ class WonderFoodRoomConverters {
     @TypeConverter
     fun jsonToStringList(value: String): List<String> =
         json.decodeFromString(ListSerializer(String.serializer()), value)
+
+    @TypeConverter
+    fun stringMapToJson(value: Map<String, String>): String =
+        json.encodeToString(MapSerializer(String.serializer(), String.serializer()), value)
+
+    @TypeConverter
+    fun jsonToStringMap(value: String): Map<String, String> =
+        json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), value)
 
     @TypeConverter
     fun entityRefToJson(value: EntityRef?): String? =

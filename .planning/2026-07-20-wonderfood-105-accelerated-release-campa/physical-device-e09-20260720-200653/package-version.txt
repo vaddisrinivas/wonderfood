@@ -1,0 +1,6 @@
+    versionCode=5 minSdk=26 targetSdk=36
+    versionName=1.0.5-foss
+    lastUpdateTime=2026-07-20 20:07:58
+      firstInstallTime=2026-07-20 20:07:58
+      firstInstallTime=2026-07-20 20:07:58
+      firstInstallTime=2026-07-20 20:07:58

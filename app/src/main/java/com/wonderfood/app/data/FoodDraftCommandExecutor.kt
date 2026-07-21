@@ -88,33 +88,6 @@ interface FoodDraftCommandSink {
 
 class FoodDraftApplyException(message: String) : IllegalStateException(message)
 
-class FoodMutationCommandExecutor(
-    private val sinkProvider: () -> FoodMutationCommandSink,
-) {
-    fun execute(command: FoodMutationCommand, write: () -> String): FoodMutationExecutionResult {
-        val normalized = command.normalized()
-        val errors = FoodMutationValidator.validate(normalized)
-        if (errors.isNotEmpty()) {
-            val summary = "Command rejected: ${errors.joinToString("; ")}"
-            sinkProvider().recordMutationCommand(normalized, status = "REJECTED", summary = summary)
-            return FoodMutationExecutionResult.Rejected(errors)
-        }
-        return runCatching {
-            val summary = write()
-            sinkProvider().recordMutationCommand(normalized, status = "APPLIED", summary = summary)
-            FoodMutationExecutionResult.Applied(summary)
-        }.getOrElse { error ->
-            val summary = error.message?.takeIf { it.isNotBlank() } ?: error::class.java.simpleName
-            sinkProvider().recordMutationCommand(normalized, status = "FAILED", summary = summary)
-            FoodMutationExecutionResult.Failed(summary)
-        }
-    }
-}
-
-interface FoodMutationCommandSink {
-    fun recordMutationCommand(command: FoodMutationCommand, status: String, summary: String)
-}
-
 data class FoodDraftCommand(
     val draft: FoodDraft,
     val sourceMessageId: Long?,
@@ -132,55 +105,9 @@ enum class FoodDraftCommandOrigin(val writeSource: String) {
     VOICE_AUTO_ACCEPT("voice_auto_accept"),
 }
 
-data class FoodMutationCommand(
-    val type: FoodMutationCommandType,
-    val label: String,
-    val origin: FoodDraftCommandOrigin,
-    val sourceMessageId: Long? = null,
-    val payload: Map<String, String?> = emptyMap(),
-) {
-    fun normalized(): FoodMutationCommand =
-        copy(
-            label = label.trim(),
-            payload = payload
-                .filterKeys { it.isNotBlank() }
-                .mapKeys { it.key.trim() }
-                .mapValues { it.value?.trim() },
-        )
-}
-
-enum class FoodMutationCommandType(val commandType: String, val destructive: Boolean = false) {
-    ADD_MISSING_RECIPE_GROCERIES("ADD_MISSING_RECIPE_GROCERIES"),
-    ADD_MEAL_PLAN_ENTRY("ADD_MEAL_PLAN_ENTRY"),
-    DELETE_ALL_MEAL_PLANS("DELETE_ALL_MEAL_PLANS", destructive = true),
-    DELETE_GROCERY("DELETE_GROCERY", destructive = true),
-    DELETE_INVENTORY("DELETE_INVENTORY", destructive = true),
-    DELETE_MEAL_LOG("DELETE_MEAL_LOG", destructive = true),
-    DELETE_MEAL_PLAN_ENTRIES("DELETE_MEAL_PLAN_ENTRIES", destructive = true),
-    DELETE_MEAL_PLAN_ENTRY("DELETE_MEAL_PLAN_ENTRY", destructive = true),
-    DELETE_RECIPE("DELETE_RECIPE", destructive = true),
-    LOG_EVENT("LOG_EVENT"),
-    MARK_GROCERY_BOUGHT("MARK_GROCERY_BOUGHT"),
-    UPDATE_GROCERY("UPDATE_GROCERY"),
-    UPDATE_INVENTORY("UPDATE_INVENTORY"),
-    UPDATE_MEAL_LOG("UPDATE_MEAL_LOG"),
-    UPDATE_MEAL_PLAN("UPDATE_MEAL_PLAN"),
-    UPDATE_MEAL_PLAN_ENTRY("UPDATE_MEAL_PLAN_ENTRY"),
-    UPDATE_RECEIPT("UPDATE_RECEIPT"),
-    UPDATE_RECIPE("UPDATE_RECIPE"),
-    UPDATE_RECIPE_IMAGE("UPDATE_RECIPE_IMAGE"),
-    UNDO_ACTION("UNDO_ACTION"),
-}
-
 sealed interface FoodDraftExecutionResult {
     data class Applied(val summary: String) : FoodDraftExecutionResult
     data class Rejected(val errors: List<String>) : FoodDraftExecutionResult
-}
-
-sealed interface FoodMutationExecutionResult {
-    data class Applied(val summary: String) : FoodMutationExecutionResult
-    data class Rejected(val errors: List<String>) : FoodMutationExecutionResult
-    data class Failed(val summary: String) : FoodMutationExecutionResult
 }
 
 object FoodDraftValidator {
@@ -376,28 +303,3 @@ private val VALID_EVENT_TYPES = setOf("water", "hydration", "meal", "cook", "coo
 private val VALID_CONFIDENCE_VALUES = setOf("exact", "estimated", "estimate", "ai_estimated", "ai estimated")
 private val VALID_GROCERY_STATUSES = setOf("bought", "done", "purchased", "needed", "need", "todo")
 private val VALID_PLAN_ENTRY_STATUSES = setOf("eaten", "skipped", "draft", "planned")
-
-object FoodMutationValidator {
-    fun validate(command: FoodMutationCommand): List<String> =
-        buildList {
-            if (command.label.isBlank()) add("Mutation command needs a label.")
-            if (command.type.destructive && command.origin.blocksDirectDestructiveMutation) {
-                add("${command.origin.writeSource} cannot execute destructive mutations directly.")
-            }
-        }
-
-    private val FoodDraftCommandOrigin.blocksDirectDestructiveMutation: Boolean
-        get() =
-            when (this) {
-                FoodDraftCommandOrigin.AI_REVIEW,
-                FoodDraftCommandOrigin.EXTERNAL_PROPOSAL,
-                FoodDraftCommandOrigin.GOOGLE_ASSISTANT,
-                FoodDraftCommandOrigin.LOCAL_FALLBACK,
-                FoodDraftCommandOrigin.RECEIPT,
-                FoodDraftCommandOrigin.VOICE_AUTO_ACCEPT,
-                -> true
-                FoodDraftCommandOrigin.CSV_IMPORT,
-                FoodDraftCommandOrigin.MANUAL_SAVE,
-                -> false
-            }
-}

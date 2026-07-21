@@ -6,6 +6,8 @@ import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealLogDraft
 import com.wonderfood.app.data.MealPlanDraft
 import com.wonderfood.app.data.MealSlot
+import com.wonderfood.app.data.ReceiptDraft
+import com.wonderfood.app.data.ReceiptItemDisposition
 import com.wonderfood.app.data.RecipeDraft
 import com.wonderfood.app.data.StorageZone
 import org.junit.Assert.assertEquals
@@ -17,48 +19,89 @@ class GoogleSheetsWorkspaceDraftImporterTest {
         val draft = GoogleSheetsWorkspaceDraftImporter.toDraft(
             listOf(
                 row(
-                    WonderFoodWorkspaceSchema.KITCHEN,
+                    WorkspaceGraphSurface.KITCHEN.label,
                     "lot-rice",
-                    "Food" to "Basmati Rice",
+                    "Item" to "Basmati Rice",
                     "On hand" to "2",
                     "Unit" to "kg",
                     "Location" to "Pantry",
-                    "Best by" to "2026-08-20",
+                    "Best before" to "2026-08-20",
+                    "Archived" to "FALSE",
                 ),
                 row(
-                    WonderFoodWorkspaceSchema.SHOPPING,
+                    WorkspaceGraphSurface.SHOPPING.label,
                     "shop-spinach",
                     "Item" to "Spinach",
-                    "Needed" to "1",
+                    "Amount" to "1",
                     "Unit" to "bunch",
-                    "Cart state" to "Need",
+                    "Status" to "Needed",
                 ),
                 row(
-                    WonderFoodWorkspaceSchema.RECIPES,
+                    WorkspaceGraphSurface.RECIPES.label,
                     "recipe-bowl",
                     "Recipe" to "Rice Bowl",
-                    "Recipe state" to "Regular",
                     "Servings" to "2",
-                    "Prep" to "10",
-                    "Ingredients" to "rice\nspinach",
-                    "Directions" to "Cook rice\nTop with spinach",
+                    "Prep minutes" to "10",
+                    "Instructions" to "Cook rice\nTop with spinach",
                 ),
                 row(
-                    WonderFoodWorkspaceSchema.MEALS,
+                    WorkspaceGraphSurface.INGREDIENTS.label,
+                    "ingredient-rice",
+                    "Ingredient" to "Basmati Rice",
+                    "Recipe" to "Rice Bowl",
+                    "Amount" to "1",
+                    "Unit" to "cup",
+                ),
+                row(
+                    WorkspaceGraphSurface.SPENDING.label,
+                    "purchase-trader-joes",
+                    "Purchase" to "Trader Joe's receipt",
+                    "Merchant" to "Trader Joe's",
+                    "Date" to "2026-07-18",
+                    "Tax" to "0.98",
+                    "Entered total" to "16.97",
+                    "Currency" to "USD",
+                    "Status" to "Reviewed",
+                ),
+                row(
+                    WorkspaceGraphSurface.PURCHASE_LINES.label,
+                    "line-rice",
+                    "Line" to "Basmati Rice",
+                    "_wf_purchase_id" to "purchase-trader-joes",
+                    "Quantity" to "1",
+                    "Unit" to "bag",
+                    "Category" to "grain",
+                    "Disposition" to "Inventory",
+                    "Subtotal" to "8.99",
+                    "Final amount" to "999.99",
+                ),
+                row(
+                    WorkspaceGraphSurface.PURCHASE_LINES.label,
+                    "line-soap",
+                    "Line" to "Dish soap",
+                    "_wf_purchase_id" to "purchase-trader-joes",
+                    "Quantity" to "1",
+                    "Unit" to "bottle",
+                    "Category" to "cleaning",
+                    "Disposition" to "Household",
+                    "Subtotal" to "3.99",
+                ),
+                row(
+                    WorkspaceGraphSurface.MEALS.label,
                     "meal-eaten",
                     "Meal" to "Rice Bowl lunch",
-                    "When" to "2026-07-19",
-                    "Slot" to "Lunch",
-                    "Meal state" to "Eaten",
-                    "Food IDs" to "food-rice",
+                    "Date" to "2026-07-19",
+                    "Meal slot" to "Lunch",
+                    "Status" to "Eaten",
+                    "Recipe" to "Rice Bowl",
                 ),
                 row(
-                    WonderFoodWorkspaceSchema.MEALS,
+                    WorkspaceGraphSurface.MEALS.label,
                     "meal-planned",
                     "Meal" to "Dosa night",
-                    "When" to "2026-07-20",
-                    "Slot" to "Dinner",
-                    "Meal state" to "Planned",
+                    "Date" to "2026-07-20",
+                    "Meal slot" to "Dinner",
+                    "Status" to "Planned",
                 ),
             ),
         ) as CompositeDraft
@@ -66,6 +109,7 @@ class GoogleSheetsWorkspaceDraftImporterTest {
         val inventory = draft.drafts.filterIsInstance<InventoryDraft>().single()
         val grocery = draft.drafts.filterIsInstance<GroceryDraft>().single()
         val recipe = draft.drafts.filterIsInstance<RecipeDraft>().single()
+        val receipt = draft.drafts.filterIsInstance<ReceiptDraft>().single()
         val mealLog = draft.drafts.filterIsInstance<MealLogDraft>().single()
         val mealPlan = draft.drafts.filterIsInstance<MealPlanDraft>().single()
 
@@ -74,7 +118,21 @@ class GoogleSheetsWorkspaceDraftImporterTest {
         assertEquals(StorageZone.PANTRY, inventory.items.single().zone)
         assertEquals("Spinach", grocery.items.single().name)
         assertEquals("Rice Bowl", recipe.titleText)
+        assertEquals("1 cup Basmati Rice", recipe.ingredientsText)
         assertEquals(2, recipe.servings)
+        assertEquals("Trader Joe's", receipt.merchant)
+        assertEquals(20_652L, receipt.purchasedAtMillis?.div(86_400_000L))
+        assertEquals(null, receipt.subtotalCents)
+        assertEquals(98L, receipt.taxCents)
+        assertEquals(1_697L, receipt.totalCents)
+        val receiptItemsByName = receipt.items.associateBy { it.food.name }
+        assertEquals("1 bag", receiptItemsByName.getValue("Basmati Rice").food.quantity)
+        assertEquals(ReceiptItemDisposition.INVENTORY, receiptItemsByName.getValue("Basmati Rice").disposition)
+        assertEquals(899L, receiptItemsByName.getValue("Basmati Rice").linePriceCents)
+        assertEquals("1 bottle", receiptItemsByName.getValue("Dish soap").food.quantity)
+        assertEquals("cleaning", receiptItemsByName.getValue("Dish soap").food.category)
+        assertEquals(ReceiptItemDisposition.HOUSEHOLD, receiptItemsByName.getValue("Dish soap").disposition)
+        assertEquals(399L, receiptItemsByName.getValue("Dish soap").linePriceCents)
         assertEquals("Rice Bowl lunch", mealLog.titleText)
         assertEquals(MealSlot.LUNCH, mealLog.mealSlot)
         assertEquals("Imported Google Sheets plan", mealPlan.titleText)

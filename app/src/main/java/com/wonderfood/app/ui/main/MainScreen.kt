@@ -97,8 +97,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -148,14 +151,21 @@ import com.wonderfood.app.data.ChatMessage
 import com.wonderfood.app.data.ChatAction
 import com.wonderfood.app.data.ChatActionStatus
 import com.wonderfood.app.data.ChatRole
+import com.wonderfood.app.data.CanonicalCartPreviewItem
+import com.wonderfood.app.data.CanonicalHouseholdSearchItem
+import com.wonderfood.app.data.CanonicalHouseholdUiSummary
+import com.wonderfood.app.data.CanonicalKitchenPreviewItem
+import com.wonderfood.app.data.CanonicalRecentSpendingItem
+import com.wonderfood.app.data.CanonicalRecipeMatchItem
+import com.wonderfood.app.data.CanonicalSavedRecipeItem
+import com.wonderfood.app.data.CanonicalWeekPlanItem
 import com.wonderfood.app.data.CompositeDraft
-import com.wonderfood.app.data.FoodChatStore
 import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftCommandOrigin
 import com.wonderfood.app.data.FoodEvent
 import com.wonderfood.app.data.FoodEventType
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodOperation
 import com.wonderfood.app.data.GroceryItem
 import com.wonderfood.app.data.GroceryDraft
@@ -175,6 +185,7 @@ import com.wonderfood.app.data.LinkActionDraft
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.Recipe
 import com.wonderfood.app.data.RecipeDraft
+import com.wonderfood.core.data.room.WonderFoodDatabase
 import com.wonderfood.app.data.ReceiptCapture
 import com.wonderfood.app.data.ReceiptDraft
 import com.wonderfood.app.data.ReceiptItemDisposition
@@ -246,6 +257,8 @@ private enum class GoogleSyncAction {
     BACKUP,
     RESTORE,
 }
+
+private const val CREATE_GOOGLE_SHEET_REQUEST = "wonderfood:create-google-sheet"
 
 private data class FoodPrimaryAction(
     val label: String,
@@ -355,11 +368,18 @@ fun MainScreen(
             runCatching {
                 GoogleSheetsAuthorization.accessTokenFromResultIntent(context, result.data)
             }.onSuccess { accessToken ->
-                viewModel.connectGoogleSheetsBackend(
-                    sheetInput = pendingGoogleSheetUrl,
-                    accountEmail = pendingGoogleEmail.ifBlank { state.googleAccountEmail },
-                    accessToken = accessToken,
-                )
+                if (pendingGoogleSheetUrl == CREATE_GOOGLE_SHEET_REQUEST) {
+                    viewModel.createGoogleSheetsBackend(
+                        accountEmail = pendingGoogleEmail.ifBlank { state.googleAccountEmail },
+                        accessToken = accessToken,
+                    )
+                } else {
+                    viewModel.connectGoogleSheetsBackend(
+                        sheetInput = pendingGoogleSheetUrl,
+                        accountEmail = pendingGoogleEmail.ifBlank { state.googleAccountEmail },
+                        accessToken = accessToken,
+                    )
+                }
                 pendingGoogleSheetUrl = ""
             }.onFailure { error ->
                 pendingGoogleSheetUrl = ""
@@ -421,11 +441,18 @@ fun MainScreen(
             accountEmail = accountEmail,
             onResolution = googleSheetsAuthorizationLauncher::launch,
             onAccessToken = { accessToken ->
-                viewModel.connectGoogleSheetsBackend(
-                    sheetInput = sheetUrl,
-                    accountEmail = accountEmail,
-                    accessToken = accessToken,
-                )
+                if (sheetUrl == CREATE_GOOGLE_SHEET_REQUEST) {
+                    viewModel.createGoogleSheetsBackend(
+                        accountEmail = accountEmail,
+                        accessToken = accessToken,
+                    )
+                } else {
+                    viewModel.connectGoogleSheetsBackend(
+                        sheetInput = sheetUrl,
+                        accountEmail = accountEmail,
+                        accessToken = accessToken,
+                    )
+                }
                 pendingGoogleSheetUrl = ""
             },
             onFailure = { error ->
@@ -449,6 +476,26 @@ fun MainScreen(
                 pendingGoogleEmail = profile.email
                 viewModel.onGoogleSignIn(profile)
                 requestGoogleSheetsAccess(sheetUrl, profile.email)
+            }.onFailure { error ->
+                viewModel.onGoogleSyncError("Google sign-in failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+    fun signInAndCreateGoogleSheets() {
+        val clientId = state.googleOAuthClientId.trim()
+        if (clientId.isBlank() || clientId.startsWith("TODO_")) {
+            viewModel.onGoogleSyncError(
+                "Paste the Google Web OAuth client ID in Settings > Backup & restore before using Google Sheets.",
+            )
+            return
+        }
+        googleScope.launch {
+            runCatching {
+                googleSignInGateway.signIn(clientId)
+            }.onSuccess { profile ->
+                pendingGoogleEmail = profile.email
+                viewModel.onGoogleSignIn(profile)
+                requestGoogleSheetsAccess(CREATE_GOOGLE_SHEET_REQUEST, profile.email)
             }.onFailure { error ->
                 viewModel.onGoogleSyncError("Google sign-in failed: ${error.message ?: "unknown error"}")
             }
@@ -486,6 +533,10 @@ fun MainScreen(
         onDeleteGrocery = viewModel::deleteGrocery,
         onUpdateGrocery = viewModel::updateGrocery,
         onMarkGroceryBought = viewModel::markGroceryBought,
+        onMarkCanonicalCartLinePurchased = viewModel::markCanonicalCartLinePurchased,
+        onArchiveCanonicalCartLine = viewModel::archiveCanonicalCartLine,
+        onAddCanonicalKitchenItemToCart = viewModel::addCanonicalKitchenItemToCart,
+        onArchiveCanonicalKitchenItem = viewModel::archiveCanonicalKitchenItem,
         onDeleteRecipe = viewModel::deleteRecipe,
         onCookRecipe = viewModel::cookRecipe,
         onAddRecipeMissingToList = viewModel::addMissingRecipeGroceries,
@@ -507,6 +558,7 @@ fun MainScreen(
         onUpdateReceipt = viewModel::updateReceipt,
         onExportMeal = viewModel::exportMeal,
         onOpenDetail = viewModel::openDetail,
+        onSearchQueryChange = viewModel::updateSearchQuery,
         onCloseDetail = viewModel::closeDetail,
         onPreferencesChange = viewModel::onPreferencesChange,
         onSavePreferences = viewModel::savePreferences,
@@ -560,6 +612,7 @@ fun MainScreen(
         onDismissFeedback = viewModel::clearFeedback,
         onChooseLocalBackend = viewModel::chooseLocalBackend,
         onValidateGoogleSheetsBackend = ::signInAndConnectGoogleSheets,
+        onCreateGoogleSheetsBackend = ::signInAndCreateGoogleSheets,
         onConnectNotionBackend = viewModel::connectNotionBackend,
         onConnectPostgresBackend = viewModel::connectPostgresBackend,
         onSelectPendingBackend = viewModel::selectPendingBackend,
@@ -816,6 +869,7 @@ private fun BackendOnboardingDialog(
     conflictInbox: WorkspaceConflictInbox?,
     onUseLocal: () -> Unit,
     onConnectSheets: (String) -> Unit,
+    onCreateSheets: () -> Unit,
     onConnectNotion: (String, String) -> Unit,
     onConnectPostgres: (String, String, String) -> Unit,
     onSelectPending: (BackendType) -> Unit,
@@ -835,6 +889,14 @@ private fun BackendOnboardingDialog(
     val activeType = backendHome.activeType
     val isBackendSwitch = activeType != null && selectedBackend != activeType
     val switchReady = !isBackendSwitch || switchAcknowledged
+    val scrollState = rememberScrollState()
+    LaunchedEffect(selectedBackend, isBackendSwitch) {
+        if (selectedBackend == BackendType.LOCAL_SQLITE) {
+            scrollState.animateScrollTo(0)
+        } else {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -852,10 +914,10 @@ private fun BackendOnboardingDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                BackendSafetyBanner()
                 conflictInbox?.let { inbox ->
                     WorkspaceConflictInboxCard(
                         inbox = inbox,
@@ -900,9 +962,9 @@ private fun BackendOnboardingDialog(
                 )
                 BackendChoiceRow(
                     icon = Icons.Rounded.ShoppingCart,
-                    title = "Postgres / Supabase",
-                    subtitle = "For Supabase, PostgREST, or a server.",
-                    helper = "Advanced. Needs URL, household, and token.",
+                    title = "Postgres",
+                    subtitle = "For a Postgres-backed HTTPS API or server.",
+                    helper = "Advanced. Needs API URL, household, and token.",
                     selected = selectedBackend == BackendType.POSTGRES,
                     onClick = {
                         selectedBackend = BackendType.POSTGRES
@@ -910,6 +972,7 @@ private fun BackendOnboardingDialog(
                         onSelectPending(BackendType.POSTGRES)
                     },
                 )
+                BackendSafetyBanner()
                 if (isBackendSwitch) {
                     BackendSwitchCheckpoint(
                         fromLabel = activeType.label,
@@ -920,15 +983,13 @@ private fun BackendOnboardingDialog(
                 }
                 HorizontalDivider()
                 when (selectedBackend) {
-                    BackendType.LOCAL_SQLITE -> LocalBackendSetup(
-                        enabled = switchReady,
-                        onUseLocal = onUseLocal,
-                    )
+                    BackendType.LOCAL_SQLITE -> Unit
                     BackendType.GOOGLE_SHEETS -> GoogleSheetsBackendSetup(
                         sheetUrl = sheetUrl,
                         onSheetUrlChange = { sheetUrl = it.take(600) },
                         enabled = switchReady,
                         onConnect = { onConnectSheets(sheetUrl) },
+                        onCreateNew = onCreateSheets,
                     )
                     BackendType.NOTION -> NotionBackendSetup(
                         pageUrl = notionPageUrl,
@@ -952,6 +1013,7 @@ private fun BackendOnboardingDialog(
                 if (backendHome.message.isNotBlank()) {
                     BackendStatusMessage(backendHome.message)
                 }
+                Spacer(Modifier.height(8.dp))
             }
         },
         confirmButton = {
@@ -971,7 +1033,11 @@ private fun WorkspaceConflictInboxCard(
     onClear: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "${inbox.providerLabel.ifBlank { "Workspace" }} conflict inbox"
+            },
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.errorContainer,
     ) {
@@ -1014,7 +1080,11 @@ private fun WorkspaceConflictInboxCard(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
-            TextButton(onClick = onClear, shape = RoundedCornerShape(18.dp)) {
+            TextButton(
+                onClick = onClear,
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.semantics { contentDescription = "Clear workspace conflict inbox" },
+            ) {
                 Text("Dismiss reviewed conflicts")
             }
         }
@@ -1064,25 +1134,40 @@ private fun BackendChoiceRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription = buildString {
+                    append("Backend option $title")
+                    if (selected) append(" selected")
+                    append(". ")
+                    append(helper)
+                }
+                this.selected = selected
+            }
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 icon,
                 contentDescription = null,
+                modifier = Modifier.size(28.dp),
                 tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(helper, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (selected) {
                 Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1131,11 +1216,20 @@ private fun GoogleSheetsBackendSetup(
     onSheetUrlChange: (String) -> Unit,
     enabled: Boolean = true,
     onConnect: () -> Unit,
+    onCreateNew: () -> Unit,
 ) {
     BackendSetupPanel(
         title = "What you need",
-        body = "A Google Sheet you can edit. WonderFood creates tabs, preserves existing WonderFood data, and asks Google for Sheets access.",
+        body = "Create a new WonderFood Sheet or select an existing one by URL. WonderFood creates tabs, preserves existing WonderFood data, and asks Google for Sheets access.",
     ) {
+        Button(
+            onClick = onCreateNew,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            enabled = enabled,
+        ) {
+            Text("Create new Sheet")
+        }
         OutlinedTextField(
             value = sheetUrl,
             onValueChange = onSheetUrlChange,
@@ -1145,13 +1239,13 @@ private fun GoogleSheetsBackendSetup(
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
         )
-        Button(
+        OutlinedButton(
             onClick = onConnect,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             enabled = enabled && sheetUrl.isNotBlank(),
         ) {
-            Text("Continue with Google")
+            Text("Select existing by URL")
         }
     }
 }
@@ -1213,14 +1307,14 @@ private fun PostgresBackendSetup(
 ) {
     BackendSetupPanel(
         title = "Advanced setup",
-        body = "Supabase and PostgREST work with HTTPS API URLs. Direct PostgreSQL DSN is saved for advanced/internal use only.",
+        body = "Use a Postgres-backed HTTPS API or user-owned service endpoint. Android must not ship a raw database password or direct PostgreSQL socket.",
     ) {
         OutlinedTextField(
             value = endpoint,
             onValueChange = onEndpointChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Server URL or PostgreSQL DSN") },
-            placeholder = { Text("https://project.supabase.co") },
+            label = { Text("Postgres API URL") },
+            placeholder = { Text("https://food.example.com") },
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
         )
@@ -1249,9 +1343,9 @@ private fun PostgresBackendSetup(
             enabled = enabled &&
                 endpoint.isNotBlank() &&
                 householdId.isNotBlank() &&
-                (token.isNotBlank() || endpoint.trim().startsWith("postgres", ignoreCase = true)),
+                token.isNotBlank(),
         ) {
-            Text("Use Postgres / Supabase")
+            Text("Use Postgres")
         }
     }
 }
@@ -1302,6 +1396,10 @@ private fun WonderFoodScreen(
     onDeleteGrocery: (Long) -> Unit,
     onUpdateGrocery: GroceryUpdateHandler,
     onMarkGroceryBought: (Long) -> Unit,
+    onMarkCanonicalCartLinePurchased: (String) -> Unit,
+    onArchiveCanonicalCartLine: (String) -> Unit,
+    onAddCanonicalKitchenItemToCart: (String) -> Unit,
+    onArchiveCanonicalKitchenItem: (String) -> Unit,
     onDeleteRecipe: (Long) -> Unit,
     onCookRecipe: (Long) -> Unit,
     onAddRecipeMissingToList: (Long) -> Unit,
@@ -1318,6 +1416,7 @@ private fun WonderFoodScreen(
     onUpdateReceipt: ReceiptUpdateHandler,
     onExportMeal: (Long) -> Unit,
     onOpenDetail: (FoodDetailTarget) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onCloseDetail: () -> Unit,
     onPreferencesChange: (FoodPreferences) -> Unit,
     onSavePreferences: () -> Unit,
@@ -1346,6 +1445,7 @@ private fun WonderFoodScreen(
     onDismissFeedback: () -> Unit,
     onChooseLocalBackend: () -> Unit,
     onValidateGoogleSheetsBackend: (String) -> Unit,
+    onCreateGoogleSheetsBackend: () -> Unit,
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
@@ -1387,6 +1487,10 @@ private fun WonderFoodScreen(
                     onDeleteGrocery = onDeleteGrocery,
                     onUpdateGrocery = onUpdateGrocery,
                     onMarkGroceryBought = onMarkGroceryBought,
+                    onMarkCanonicalCartLinePurchased = onMarkCanonicalCartLinePurchased,
+                    onArchiveCanonicalCartLine = onArchiveCanonicalCartLine,
+                    onAddCanonicalKitchenItemToCart = onAddCanonicalKitchenItemToCart,
+                    onArchiveCanonicalKitchenItem = onArchiveCanonicalKitchenItem,
                     onDeleteRecipe = onDeleteRecipe,
                     onCookRecipe = onCookRecipe,
                     onAddRecipeMissingToList = onAddRecipeMissingToList,
@@ -1403,6 +1507,7 @@ private fun WonderFoodScreen(
                     onUpdateReceipt = onUpdateReceipt,
                     onExportMeal = onExportMeal,
                     onOpenDetail = onOpenDetail,
+                    onSearchQueryChange = onSearchQueryChange,
                     onCloseDetail = onCloseDetail,
                     onPreferencesChange = onPreferencesChange,
                     onSavePreferences = onSavePreferences,
@@ -1431,6 +1536,7 @@ private fun WonderFoodScreen(
                     onDismissFeedback = onDismissFeedback,
                     onChooseLocalBackend = onChooseLocalBackend,
                     onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                    onCreateGoogleSheetsBackend = onCreateGoogleSheetsBackend,
                     onConnectNotionBackend = onConnectNotionBackend,
                     onConnectPostgresBackend = onConnectPostgresBackend,
                     onSelectPendingBackend = onSelectPendingBackend,
@@ -1467,6 +1573,10 @@ private fun WonderFoodScreen(
                 onDeleteGrocery = onDeleteGrocery,
                 onUpdateGrocery = onUpdateGrocery,
                 onMarkGroceryBought = onMarkGroceryBought,
+                onMarkCanonicalCartLinePurchased = onMarkCanonicalCartLinePurchased,
+                onArchiveCanonicalCartLine = onArchiveCanonicalCartLine,
+                onAddCanonicalKitchenItemToCart = onAddCanonicalKitchenItemToCart,
+                onArchiveCanonicalKitchenItem = onArchiveCanonicalKitchenItem,
                 onDeleteRecipe = onDeleteRecipe,
                 onCookRecipe = onCookRecipe,
                 onAddRecipeMissingToList = onAddRecipeMissingToList,
@@ -1483,6 +1593,7 @@ private fun WonderFoodScreen(
                 onUpdateReceipt = onUpdateReceipt,
                 onExportMeal = onExportMeal,
                 onOpenDetail = onOpenDetail,
+                onSearchQueryChange = onSearchQueryChange,
                 onCloseDetail = onCloseDetail,
                 onPreferencesChange = onPreferencesChange,
                 onSavePreferences = onSavePreferences,
@@ -1511,6 +1622,7 @@ private fun WonderFoodScreen(
                 onDismissFeedback = onDismissFeedback,
                 onChooseLocalBackend = onChooseLocalBackend,
                 onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                onCreateGoogleSheetsBackend = onCreateGoogleSheetsBackend,
                 onConnectNotionBackend = onConnectNotionBackend,
                 onConnectPostgresBackend = onConnectPostgresBackend,
                 onSelectPendingBackend = onSelectPendingBackend,
@@ -1565,6 +1677,10 @@ private fun MainWorkspace(
     onDeleteGrocery: (Long) -> Unit,
     onUpdateGrocery: GroceryUpdateHandler,
     onMarkGroceryBought: (Long) -> Unit,
+    onMarkCanonicalCartLinePurchased: (String) -> Unit,
+    onArchiveCanonicalCartLine: (String) -> Unit,
+    onAddCanonicalKitchenItemToCart: (String) -> Unit,
+    onArchiveCanonicalKitchenItem: (String) -> Unit,
     onDeleteRecipe: (Long) -> Unit,
     onCookRecipe: (Long) -> Unit,
     onAddRecipeMissingToList: (Long) -> Unit,
@@ -1581,6 +1697,7 @@ private fun MainWorkspace(
     onUpdateReceipt: ReceiptUpdateHandler,
     onExportMeal: (Long) -> Unit,
     onOpenDetail: (FoodDetailTarget) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onCloseDetail: () -> Unit,
     onPreferencesChange: (FoodPreferences) -> Unit,
     onSavePreferences: () -> Unit,
@@ -1609,6 +1726,7 @@ private fun MainWorkspace(
     onDismissFeedback: () -> Unit,
     onChooseLocalBackend: () -> Unit,
     onValidateGoogleSheetsBackend: (String) -> Unit,
+    onCreateGoogleSheetsBackend: () -> Unit,
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
@@ -1689,7 +1807,7 @@ private fun MainWorkspace(
             FoodSection.SHOP -> {
                 val addItem = FoodPrimaryAction(
                     label = "Add item",
-                    contentDescription = "Add shopping item",
+                    contentDescription = "Add cart line",
                     icon = Icons.Rounded.Add,
                     onClick = addShoppingItem,
                 )
@@ -1799,6 +1917,8 @@ private fun MainWorkspace(
                     )
                     secondaryPane == SecondaryPane.SEARCH -> SearchContent(
                         memory = state.memory,
+                        canonicalItems = state.canonicalSearchItems,
+                        onSearchQueryChange = onSearchQueryChange,
                         onBack = closeSecondaryPane,
                         onOpenDetail = { target ->
                             onDismissFeedback()
@@ -1815,6 +1935,7 @@ private fun MainWorkspace(
                         healthStatus = state.healthStatus,
                         healthSummary = state.healthSummary,
                         syncStatus = state.syncStatus,
+                        canonicalSummary = state.canonicalSummary,
                         backendHome = state.backendHome,
                         workspaceConflictInbox = state.workspaceConflictInbox,
                         googleAccountEmail = state.googleAccountEmail,
@@ -1840,6 +1961,7 @@ private fun MainWorkspace(
                         onDeleteAllAppData = onDeleteAllAppData,
                         onChooseLocalBackend = onChooseLocalBackend,
                         onValidateGoogleSheetsBackend = onValidateGoogleSheetsBackend,
+                        onCreateGoogleSheetsBackend = onCreateGoogleSheetsBackend,
                         onConnectNotionBackend = onConnectNotionBackend,
                         onConnectPostgresBackend = onConnectPostgresBackend,
                         onSelectPendingBackend = onSelectPendingBackend,
@@ -1884,6 +2006,10 @@ private fun MainWorkspace(
                     else -> sectionStateHolder.SaveableStateProvider(state.section.name) { when (state.section) {
                     FoodSection.KITCHEN -> FoodHubContent(
                         memory = state.memory,
+                        canonicalKitchenPreview = state.canonicalKitchenPreview,
+                        canonicalRecipeMatches = state.canonicalRecipeMatches,
+                        onCanonicalAddToCart = onAddCanonicalKitchenItemToCart,
+                        onCanonicalArchive = onArchiveCanonicalKitchenItem,
                         onOpenInventory = { item ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.INVENTORY, id = item.id))
                         },
@@ -1894,6 +2020,7 @@ private fun MainWorkspace(
                     )
                     FoodSection.SHOP -> GroceryContent(
                         memory = state.memory,
+                        canonicalCartPreview = state.canonicalCartPreview,
                         mode = shopMode,
                         onModeChange = { shopMode = it },
                         onOpen = { item ->
@@ -1901,12 +2028,16 @@ private fun MainWorkspace(
                         },
                         onBought = onMarkGroceryBought,
                         onDelete = onDeleteGrocery,
+                        onCanonicalBought = onMarkCanonicalCartLinePurchased,
+                        onCanonicalArchive = onArchiveCanonicalCartLine,
                         onOpenReceipt = { receipt ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.RECEIPT, id = receipt.id))
                         },
                     )
                     FoodSection.TODAY -> TodayContent(
                         memory = state.memory,
+                        canonicalSummary = state.canonicalSummary,
+                        canonicalSpendingPreview = state.canonicalSpendingPreview,
                         healthSummary = state.healthSummary,
                         onOpenDetail = onOpenDetail,
                         onDeleteMeal = onDeleteMeal,
@@ -1918,6 +2049,7 @@ private fun MainWorkspace(
                     )
                     FoodSection.PLAN -> PlanContent(
                         memory = state.memory,
+                        canonicalWeekPreview = state.canonicalWeekPreview,
                         showCalendar = showInlineCalendar,
                         onOpenDetail = onOpenDetail,
                         onDeleteMealPlanEntries = onDeleteMealPlanEntries,
@@ -1925,6 +2057,7 @@ private fun MainWorkspace(
                     )
                     FoodSection.RECIPES -> RecipesContent(
                         memory = state.memory,
+                        canonicalRecipePreview = state.canonicalRecipePreview,
                         onOpen = { recipe ->
                             onOpenDetail(FoodDetailTarget(FoodDetailKind.RECIPE, id = recipe.id))
                         },
@@ -2033,6 +2166,7 @@ private fun MainWorkspace(
                 conflictInbox = state.workspaceConflictInbox,
                 onUseLocal = onChooseLocalBackend,
                 onConnectSheets = onValidateGoogleSheetsBackend,
+                onCreateSheets = onCreateGoogleSheetsBackend,
                 onConnectNotion = onConnectNotionBackend,
                 onConnectPostgres = onConnectPostgresBackend,
                 onSelectPending = onSelectPendingBackend,
@@ -3071,7 +3205,11 @@ private enum class FoodHubMode(val label: String) {
 
 @Composable
 private fun FoodHubContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalKitchenPreview: List<CanonicalKitchenPreviewItem>,
+    canonicalRecipeMatches: List<CanonicalRecipeMatchItem>,
+    onCanonicalAddToCart: (String) -> Unit,
+    onCanonicalArchive: (String) -> Unit,
     onOpenInventory: (InventoryItem) -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onOpenRecipe: (Recipe) -> Unit,
@@ -3105,18 +3243,112 @@ private fun FoodHubContent(
             }
         }
         when (mode) {
-            FoodHubMode.CAN_MAKE -> CanMakeRecipesContent(memory = memory, onOpen = onOpenRecipe)
-            FoodHubMode.IN_KITCHEN -> PantryContent(items = memory.inventory, onOpen = onOpenInventory, onDelete = onDeleteInventory)
-            FoodHubMode.SAVED -> RecipesContent(memory = memory, onOpen = onOpenRecipe)
+            FoodHubMode.CAN_MAKE -> CanMakeRecipesContent(
+                memory = memory,
+                canonicalRecipeMatches = canonicalRecipeMatches,
+                onOpen = onOpenRecipe,
+            )
+            FoodHubMode.IN_KITCHEN -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (canonicalKitchenPreview.isNotEmpty()) {
+                    CanonicalKitchenPreviewSection(
+                        items = canonicalKitchenPreview,
+                        onAddToCart = onCanonicalAddToCart,
+                        onArchive = onCanonicalArchive,
+                    )
+                }
+                PantryContent(items = memory.inventory, onOpen = onOpenInventory, onDelete = onDeleteInventory)
+            }
+            FoodHubMode.SAVED -> RecipesContent(
+                memory = memory,
+                canonicalRecipePreview = emptyList(),
+                onOpen = onOpenRecipe,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CanonicalKitchenPreviewSection(
+    items: List<CanonicalKitchenPreviewItem>,
+    onAddToCart: (String) -> Unit,
+    onArchive: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Household kitchen")
+        items.take(5).forEach { item ->
+            val dismissState = rememberSwipeToDismissBoxState(
+                confirmValueChange = { value ->
+                    when (value) {
+                        SwipeToDismissBoxValue.StartToEnd -> onAddToCart(item.id)
+                        SwipeToDismissBoxValue.EndToStart -> onArchive(item.id)
+                        SwipeToDismissBoxValue.Settled -> Unit
+                    }
+                    false
+                },
+            )
+            SwipeToDismissBox(
+                modifier = Modifier.semantics {
+                    contentDescription = "Kitchen row ${item.title}"
+                },
+                state = dismissState,
+                backgroundContent = {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Add to cart", style = MaterialTheme.typography.labelMedium)
+                        Text("Archive", style = MaterialTheme.typography.labelMedium)
+                    }
+                },
+            ) {
+                MemoryCard(
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    accent = MaterialTheme.colorScheme.tertiaryContainer,
+                    image = "K",
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(onClick = { onAddToCart(item.id) }) {
+                                Icon(Icons.Rounded.ShoppingCart, contentDescription = "Add ${item.title} to cart")
+                            }
+                            IconButton(onClick = { onArchive(item.id) }) {
+                                Icon(Icons.Rounded.Delete, contentDescription = "Archive ${item.title}")
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun CanMakeRecipesContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalRecipeMatches: List<CanonicalRecipeMatchItem>,
     onOpen: (Recipe) -> Unit,
 ) {
+    if (canonicalRecipeMatches.isNotEmpty()) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            item { SectionLabel("Best from your kitchen") }
+            items(canonicalRecipeMatches.take(8), key = { it.id }) { item ->
+                MemoryCard(
+                    title = item.title,
+                    subtitle = "${item.status}  ${item.subtitle}",
+                    accent = when (item.status) {
+                        "Can make" -> MaterialTheme.colorScheme.primaryContainer
+                        "Almost" -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> MaterialTheme.colorScheme.tertiaryContainer
+                    },
+                    image = "R",
+                )
+            }
+        }
+        return
+    }
     val ranked = remember(memory.recipes, memory.inventory) {
         memory.recipes
             .map { recipe -> recipe to recipe.kitchenMatch(memory) }
@@ -3301,12 +3533,15 @@ private fun KitchenSelectionBar(selectedCount: Int, onClear: () -> Unit, onArchi
 
 @Composable
 private fun GroceryContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalCartPreview: List<CanonicalCartPreviewItem>,
     mode: ShopMode,
     onModeChange: (ShopMode) -> Unit,
     onOpen: (GroceryItem) -> Unit,
     onBought: (Long) -> Unit,
     onDelete: (Long) -> Unit,
+    onCanonicalBought: (String) -> Unit,
+    onCanonicalArchive: (String) -> Unit,
     onOpenReceipt: (ReceiptCapture) -> Unit = {},
 ) {
     val items = memory.groceries
@@ -3318,6 +3553,15 @@ private fun GroceryContent(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 12.dp),
     ) {
+        if (mode == ShopMode.TO_BUY && canonicalCartPreview.isNotEmpty()) {
+            item {
+                CanonicalCartPreviewSection(
+                    items = canonicalCartPreview,
+                    onBought = onCanonicalBought,
+                    onArchive = onCanonicalArchive,
+                )
+            }
+        }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ShopMode.entries) { option ->
@@ -3383,6 +3627,35 @@ private fun GroceryContent(
     }
 }
 
+@Composable
+private fun CanonicalCartPreviewSection(
+    items: List<CanonicalCartPreviewItem>,
+    onBought: (String) -> Unit,
+    onArchive: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Canonical cart")
+        items.take(5).forEach { item ->
+            MemoryCard(
+                title = item.title,
+                subtitle = item.subtitle,
+                accent = MaterialTheme.colorScheme.primaryContainer,
+                image = "⌂",
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = { onBought(item.id) }) {
+                            Icon(Icons.Rounded.Check, contentDescription = "Bought ${item.title}")
+                        }
+                        IconButton(onClick = { onArchive(item.id) }) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Remove ${item.title}")
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
 private enum class ShopMode(val label: String) {
     TO_BUY("To buy"),
     RECEIPTS("Receipts"),
@@ -3391,7 +3664,9 @@ private enum class ShopMode(val label: String) {
 
 @Composable
 private fun TodayContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalSummary: CanonicalHouseholdUiSummary,
+    canonicalSpendingPreview: List<CanonicalRecentSpendingItem>,
     healthSummary: HealthDailySummary,
     onOpenDetail: (FoodDetailTarget) -> Unit,
     onDeleteMeal: (Long) -> Unit,
@@ -3413,7 +3688,16 @@ private fun TodayContent(
             }
         }
         item {
-            TodayDashboard(memory = memory, healthSummary = healthSummary, onOpenDetail = onOpenDetail, onLogMeal = onLogMeal)
+            TodayDashboard(
+                memory = memory,
+                canonicalSummary = canonicalSummary,
+                healthSummary = healthSummary,
+                onOpenDetail = onOpenDetail,
+                onLogMeal = onLogMeal,
+            )
+        }
+        if (canonicalSpendingPreview.isNotEmpty()) {
+            item { CanonicalSpendingPreviewSection(items = canonicalSpendingPreview) }
         }
         if (memory.inventory.isNotEmpty()) {
             item { KitchenUseFirstRail(items = memory.inventory, onOpen = { item ->
@@ -3435,6 +3719,21 @@ private fun TodayContent(
                 meal = meal,
                 onOpen = { onOpenDetail(FoodDetailTarget(FoodDetailKind.MEAL, id = meal.id)) },
                 onDelete = { onDeleteMeal(meal.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CanonicalSpendingPreviewSection(items: List<CanonicalRecentSpendingItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Recent spending")
+        items.take(5).forEach { item ->
+            MemoryCard(
+                title = item.title,
+                subtitle = item.subtitle,
+                accent = MaterialTheme.colorScheme.secondaryContainer,
+                image = "$",
             )
         }
     }
@@ -3472,7 +3771,8 @@ private fun TodayAttentionCard(receipt: ReceiptCapture, onOpen: () -> Unit) {
 
 @Composable
 private fun PlanContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalWeekPreview: List<CanonicalWeekPlanItem>,
     showCalendar: Boolean,
     onOpenDetail: (FoodDetailTarget) -> Unit,
     onDeleteMealPlanEntries: (Set<Long>) -> Unit,
@@ -3508,6 +3808,9 @@ private fun PlanContent(
             PlanWeekStrip(memory = memory, onOpenDay = { day ->
                 onOpenDetail(FoodDetailTarget(FoodDetailKind.DAY, epochDay = day))
             })
+        }
+        if (canonicalWeekPreview.isNotEmpty()) {
+            item { CanonicalWeekPreviewSection(items = canonicalWeekPreview) }
         }
         if (plans.isNotEmpty() || plannedEntries.isNotEmpty()) {
             item {
@@ -3644,7 +3947,22 @@ private fun PlanContent(
 }
 
 @Composable
-private fun PlanWeekStrip(memory: FoodMemory, onOpenDay: (Long) -> Unit) {
+private fun CanonicalWeekPreviewSection(items: List<CanonicalWeekPlanItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Household week")
+        items.take(7).forEach { item ->
+            MemoryCard(
+                title = item.title,
+                subtitle = item.subtitle,
+                accent = MaterialTheme.colorScheme.tertiaryContainer,
+                image = "W",
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlanWeekStrip(memory: HouseholdUiMemory, onOpenDay: (Long) -> Unit) {
     val today = LocalDate.now()
     val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
     val days = remember(today) { (0L..6L).map(weekStart::plusDays) }
@@ -3720,6 +4038,7 @@ private fun PlannedEntrySelectableCard(
             .semantics {
                 role = Role.Button
                 this.selected = selected
+                contentDescription = "Planned meal entry ${entry.title}"
             }
             .combinedClickable(
                 onClick = onOpen,
@@ -3771,25 +4090,42 @@ private fun TodayPlanEntryCard(entry: MealPlanEntry, onOpen: () -> Unit) {
 
 @Composable
 private fun SearchContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalItems: List<CanonicalHouseholdSearchItem>,
+    onSearchQueryChange: (String) -> Unit,
     onBack: () -> Unit,
     onOpenDetail: (FoodDetailTarget) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val searchFocusRequester = remember { FocusRequester() }
     val allResults = remember(memory) { memory.globalSearchResults() }
-    val visible = remember(allResults, query) {
+    val canonicalResults = remember(canonicalItems) {
+        canonicalItems.map { item ->
+            SearchResult(
+                kind = "canonical",
+                id = item.id,
+                title = item.name,
+                subtitle = item.subtitle,
+                image = foodEmoji(item.name),
+                target = null,
+            )
+        }
+    }
+    val visible = remember(allResults, canonicalResults, query) {
         val clean = query.trim()
         if (clean.isBlank()) {
             allResults.take(12)
         } else {
-            allResults.filter { result ->
-                result.title.contains(clean, ignoreCase = true) ||
-                    result.subtitle.contains(clean, ignoreCase = true)
+            canonicalResults + allResults.filter { result ->
+                result.kind != "kitchen" && (
+                    result.title.contains(clean, ignoreCase = true) ||
+                        result.subtitle.contains(clean, ignoreCase = true)
+                    )
             }
         }
     }
     LaunchedEffect(Unit) {
+        onSearchQueryChange("")
         searchFocusRequester.requestFocus()
     }
     LazyColumn(
@@ -3806,10 +4142,14 @@ private fun SearchContent(
             ) {
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = {
+                        query = it
+                        onSearchQueryChange(it)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(searchFocusRequester),
+                        .focusRequester(searchFocusRequester)
+                        .semantics { contentDescription = "WonderFood search text" },
                     placeholder = { Text("Search meals, recipes, kitchen, shopping") },
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -3825,13 +4165,13 @@ private fun SearchContent(
             item { EmptyState("No matches.", "Try a food, recipe, meal, receipt, or shopping item.") }
         }
         items(visible, key = { "${it.kind}-${it.id}-${it.title}" }) { result ->
-            SearchResultCard(result = result, onOpen = { onOpenDetail(result.target) })
+            SearchResultCard(result = result, onOpen = result.target?.let { target -> { onOpenDetail(target) } })
         }
     }
 }
 
 @Composable
-private fun SearchResultCard(result: SearchResult, onOpen: () -> Unit) {
+private fun SearchResultCard(result: SearchResult, onOpen: (() -> Unit)?) {
     MemoryCard(
         title = result.title,
         subtitle = result.subtitle,
@@ -3843,7 +4183,8 @@ private fun SearchResultCard(result: SearchResult, onOpen: () -> Unit) {
 
 @Composable
 private fun TodayDashboard(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalSummary: CanonicalHouseholdUiSummary,
     healthSummary: HealthDailySummary,
     onOpenDetail: (FoodDetailTarget) -> Unit,
     onLogMeal: (MealSlot) -> Unit,
@@ -3864,6 +4205,8 @@ private fun TodayDashboard(
         .toInt()
     val shopCount = todayEvents.count { it.type == FoodEventType.SHOP || it.type == FoodEventType.GROCERY_PURCHASE }
     val cookCount = todayEvents.count { it.type == FoodEventType.COOK }
+    val canonicalDashboardLabel = canonicalSummary.dashboardLabel()
+    val canonicalSpendingLabel = canonicalSummary.spendingDashboardLabel()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -3909,9 +4252,12 @@ private fun TodayDashboard(
             }
         }
         if (hasCalories || hasProtein || waterMl > 0 || shopCount > 0 || cookCount > 0 ||
-            healthSummary.steps != null || healthSummary.activeCaloriesKcal != null
+            healthSummary.steps != null || healthSummary.activeCaloriesKcal != null ||
+            canonicalDashboardLabel != null || canonicalSpendingLabel != null
         ) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                canonicalDashboardLabel?.let { item { MetricPill("⌂", it) } }
+                canonicalSpendingLabel?.let { item { MetricPill("💵", it) } }
                 if (hasCalories) item {
                     MetricPill("🔥", calorieGoal?.let { "$calories/$it kcal" } ?: "$calories kcal")
                 }
@@ -4046,11 +4392,12 @@ private fun MealSlotRow(
 
 @Composable
 private fun RecipesContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
+    canonicalRecipePreview: List<CanonicalSavedRecipeItem>,
     onOpen: (Recipe) -> Unit,
 ) {
     val recipes = memory.recipes
-    if (recipes.isEmpty()) {
+    if (recipes.isEmpty() && canonicalRecipePreview.isEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             EmptyState("No personal recipes yet.", "Create one directly or ask AI to draft it from your Kitchen.")
         }
@@ -4088,6 +4435,9 @@ private fun RecipesContent(
         .toList()
     if (viewMode == DatabaseViewMode.LIST) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            if (canonicalRecipePreview.isNotEmpty()) {
+                item { CanonicalRecipePreviewSection(items = canonicalRecipePreview) }
+            }
             item {
                 RecipeAvailabilityFilters(
                     selected = availability,
@@ -4125,6 +4475,11 @@ private fun RecipesContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
+            if (canonicalRecipePreview.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    CanonicalRecipePreviewSection(items = canonicalRecipePreview)
+                }
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 RecipeAvailabilityFilters(
                     selected = availability,
@@ -4155,6 +4510,21 @@ private fun RecipesContent(
                     onCook = { onOpen(recipe) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CanonicalRecipePreviewSection(items: List<CanonicalSavedRecipeItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel("Household recipes")
+        items.take(6).forEach { item ->
+            MemoryCard(
+                title = item.title,
+                subtitle = item.subtitle,
+                accent = MaterialTheme.colorScheme.primaryContainer,
+                image = "R",
+            )
         }
     }
 }
@@ -4223,7 +4593,7 @@ private fun RecipeControlPanel(
 
 @Composable
 private fun PreferencesContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     preferences: FoodPreferences,
     aiConfig: LiteLlmConfig,
     aiFallbackConfig: LiteLlmConfig,
@@ -4231,6 +4601,7 @@ private fun PreferencesContent(
     healthStatus: String,
     healthSummary: HealthDailySummary,
     syncStatus: String,
+    canonicalSummary: CanonicalHouseholdUiSummary,
     backendHome: BackendHomeUiState,
     workspaceConflictInbox: WorkspaceConflictInbox?,
     googleAccountEmail: String,
@@ -4256,6 +4627,7 @@ private fun PreferencesContent(
     onDeleteAllAppData: () -> Unit,
     onChooseLocalBackend: () -> Unit,
     onValidateGoogleSheetsBackend: (String) -> Unit,
+    onCreateGoogleSheetsBackend: () -> Unit,
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
@@ -4279,6 +4651,7 @@ private fun PreferencesContent(
             healthStatus = healthStatus,
             healthSummary = healthSummary,
             backendHome = backendHome,
+            canonicalSummary = canonicalSummary,
             googleAccountEmail = googleAccountEmail,
             googleSyncStatus = googleSyncStatus,
             settingsSaveStatus = settingsSaveStatus,
@@ -4358,6 +4731,7 @@ private fun PreferencesContent(
             backendHome = backendHome,
             onUseLocal = onChooseLocalBackend,
             onConnectSheets = onValidateGoogleSheetsBackend,
+            onCreateSheets = onCreateGoogleSheetsBackend,
             onConnectNotion = onConnectNotionBackend,
             onConnectPostgres = onConnectPostgresBackend,
             onSelectPending = onSelectPendingBackend,
@@ -4398,12 +4772,13 @@ private fun PreferencesContent(
 
 @Composable
 private fun SettingsHomeContent(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     preferences: FoodPreferences,
     aiStatus: String,
     healthStatus: String,
     healthSummary: HealthDailySummary,
     backendHome: BackendHomeUiState,
+    canonicalSummary: CanonicalHouseholdUiSummary,
     googleAccountEmail: String,
     googleSyncStatus: String,
     settingsSaveStatus: String,
@@ -4469,6 +4844,14 @@ private fun SettingsHomeContent(
             )
         }
         item { SettingsSectionHeader("YOUR DATA") }
+        item {
+            SettingsHomeRow(
+                icon = Icons.Rounded.Inventory2,
+                title = "Canonical household store",
+                subtitle = canonicalSummary.label(),
+                onClick = { onOpen(SettingsDestination.IMPORT_EXPORT_PRIVACY) },
+            )
+        }
         item {
             SettingsHomeRow(
                 icon = Icons.Rounded.Inventory2,
@@ -5230,7 +5613,7 @@ private fun BackupRestoreSettings(
 
 @Composable
 private fun DataPrivacySettings(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     syncStatus: String,
     backupPassphrase: String,
     onBackupPassphraseChange: (String) -> Unit,
@@ -5349,7 +5732,7 @@ private fun HelpAboutSettings() {
     )
     DetailSection(
         "Diagnostics",
-        "App version: $version\nDatabase schema: v${FoodChatStore.SCHEMA_VERSION}\nPackage: ${context.packageName}",
+        "App version: $version\nDatabase schema: v${WonderFoodDatabase.SCHEMA_VERSION}\nPackage: ${context.packageName}",
     )
     DetailSection(
         "Send feedback",
@@ -5615,7 +5998,7 @@ private fun PreferenceInfoField(
 
 @Composable
 private fun CalendarPane(
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     onOpenDay: (CalendarSlot) -> Unit = {},
@@ -5671,7 +6054,13 @@ private fun CalendarPane(
 @Composable
 private fun CalendarDayCard(day: CalendarSlot, onOpen: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }.clickable(onClick = onOpen),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open calendar day ${day.title} ${day.weekday} ${day.dayNumber}"
+            }
+            .clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (day.isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
@@ -5735,7 +6124,7 @@ private fun CalendarSignals(day: CalendarSlot) {
 @Composable
 private fun DetailPage(
     target: FoodDetailTarget,
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     onBack: () -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onUpdateInventory: InventoryUpdateHandler,
@@ -6130,7 +6519,7 @@ private fun GroceryDetail(
 @Composable
 private fun RecipeDetail(
     recipe: Recipe,
-    memory: FoodMemory,
+    memory: HouseholdUiMemory,
     onBack: () -> Unit,
     onDelete: (Long) -> Unit,
     onCook: (Long) -> Unit,
@@ -6855,7 +7244,13 @@ private fun InventoryCard(
     onOpen: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open inventory item ${item.name}"
+            }
+            .clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
@@ -6896,7 +7291,14 @@ private fun InventoryTile(
     onOpen: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 172.dp).clickable(onClick = onOpen),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 172.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open inventory tile ${item.name}"
+            }
+            .clickable(onClick = onOpen),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
@@ -7093,11 +7495,26 @@ private fun MemoryCard(
     subtitle: String,
     accent: Color,
     image: String,
-    onOpen: () -> Unit = {},
+    onOpen: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
+    val cardModifier = if (onOpen == null) {
+        Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "Open $title"
+            }
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open ${title}"
+            }
+            .clickable(onClick = onOpen)
+    }
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        modifier = cardModifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -7188,7 +7605,9 @@ private fun EmptyState(
     onAction: () -> Unit = {},
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Empty state: $title" },
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
@@ -8117,13 +8536,13 @@ private fun zoneColor(zone: StorageZone): Color =
         StorageZone.PANTRY -> MaterialTheme.colorScheme.secondaryContainer
     }
 
-private fun FoodMemory.globalSearchResults(): List<SearchResult> =
+private fun HouseholdUiMemory.globalSearchResults(): List<SearchResult> =
     buildList {
         inventory.sortedByDescending { it.updatedAtMillis }.forEach { item ->
             add(
                 SearchResult(
                     kind = "kitchen",
-                    id = item.id,
+                    id = item.id.toString(),
                     title = item.name,
                     subtitle = "Kitchen • ${item.zone.label} • ${item.quantity.ifBlank { "quantity unknown" }}",
                     image = foodEmoji(item.name),
@@ -8135,7 +8554,7 @@ private fun FoodMemory.globalSearchResults(): List<SearchResult> =
             add(
                 SearchResult(
                     kind = "shop",
-                    id = item.id,
+                    id = item.id.toString(),
                     title = item.name,
                     subtitle = "Shop • ${item.status.name.lowercase()} • ${item.quantity.ifBlank { "as needed" }}",
                     image = foodEmoji(item.name),
@@ -8147,7 +8566,7 @@ private fun FoodMemory.globalSearchResults(): List<SearchResult> =
             add(
                 SearchResult(
                     kind = "recipe",
-                    id = recipe.id,
+                    id = recipe.id.toString(),
                     title = recipe.title,
                     subtitle = "Recipe • ${recipe.tags.ifBlank { "untagged" }}",
                     image = recipe.imageUri ?: foodEmoji(recipe.title),
@@ -8159,7 +8578,7 @@ private fun FoodMemory.globalSearchResults(): List<SearchResult> =
             add(
                 SearchResult(
                     kind = "meal",
-                    id = meal.id,
+                    id = meal.id.toString(),
                     title = meal.title,
                     subtitle = "Today • ${meal.mealSlot.label} • ${meal.loggedDateEpochDay.epochDayShortDate()}",
                     image = foodEmoji(meal.title),
@@ -8171,7 +8590,7 @@ private fun FoodMemory.globalSearchResults(): List<SearchResult> =
             add(
                 SearchResult(
                     kind = "plan",
-                    id = plan.id,
+                    id = plan.id.toString(),
                     title = plan.title,
                     subtitle = "Plan • ${plan.status.name.lowercase()}",
                     image = "🗓️",
@@ -8183,7 +8602,7 @@ private fun FoodMemory.globalSearchResults(): List<SearchResult> =
             add(
                 SearchResult(
                     kind = "receipt",
-                    id = receipt.id,
+                    id = receipt.id.toString(),
                     title = "Receipt ${receipt.id}",
                     subtitle = "Shop • ${receipt.status.name.lowercase()} • ${receipt.createdAtMillis.shortDate()}",
                     image = "🧾",
@@ -8320,7 +8739,7 @@ private data class RecipeKitchenMatch(
     val need: List<String>,
 )
 
-private fun FoodMemory.lastHad(recipe: Recipe): Long? =
+private fun HouseholdUiMemory.lastHad(recipe: Recipe): Long? =
     mealLogs
         .filter { it.title.recipeMatches(recipe.title) || it.usedItemsText.recipeMatches(recipe.title) }
         .maxOfOrNull { it.loggedDateEpochDay }
@@ -8331,7 +8750,7 @@ private fun String.recipeMatches(other: String): Boolean {
     return left.contains(right) || right.contains(left)
 }
 
-private fun Recipe.kitchenMatch(memory: FoodMemory): RecipeKitchenMatch {
+private fun Recipe.kitchenMatch(memory: HouseholdUiMemory): RecipeKitchenMatch {
     val ingredients = ingredients
         .split(",", "\n", ";")
         .map { it.cleanIngredientName() }
@@ -8360,11 +8779,11 @@ private enum class SecondaryPane {
 
 private data class SearchResult(
     val kind: String,
-    val id: Long,
+    val id: String,
     val title: String,
     val subtitle: String,
     val image: String,
-    val target: FoodDetailTarget,
+    val target: FoodDetailTarget?,
 )
 
 private data class AiPageContext(
@@ -8542,7 +8961,7 @@ private data class CalendarSlot(
         }
 }
 
-private fun calendarSlots(memory: FoodMemory): List<CalendarSlot> {
+private fun calendarSlots(memory: HouseholdUiMemory): List<CalendarSlot> {
     val planLines = memory.mealPlans.firstOrNull()?.daysText
         ?.lines()
         ?.map { it.trim() }
@@ -8617,7 +9036,7 @@ private fun mealNutritionSummary(meal: MealLog): String {
 
 private fun foodEmoji(name: String): String = foodEmojiForName(name)
 
-private fun FoodMemory.aiVisibleContextSummary(): String = buildString {
+private fun HouseholdUiMemory.aiVisibleContextSummary(): String = buildString {
     appendLine("Sent when relevant:")
     appendLine(
         "• Current message, page context, ${if (preferences.aiSkillOverride.isBlank()) "bundled" else "custom override"} WonderFood skill, and your Assistant instructions",
@@ -8643,7 +9062,7 @@ private fun WonderFoodPreview() {
     WonderFoodTheme(dynamicColor = false, darkTheme = false) {
         WonderFoodScreen(
             state = WonderFoodUiState(
-                memory = FoodMemory(
+                memory = HouseholdUiMemory(
                     messages = listOf(
                         ChatMessage(1, ChatRole.ASSISTANT, "Tell me what you bought or ate.", 0),
                         ChatMessage(2, ChatRole.USER, "I bought eggs and spinach", 0),
@@ -8664,6 +9083,10 @@ private fun WonderFoodPreview() {
             onDeleteGrocery = {},
             onUpdateGrocery = { _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
             onMarkGroceryBought = {},
+            onMarkCanonicalCartLinePurchased = {},
+            onArchiveCanonicalCartLine = {},
+            onAddCanonicalKitchenItemToCart = {},
+            onArchiveCanonicalKitchenItem = {},
             onDeleteRecipe = {},
             onCookRecipe = {},
             onAddRecipeMissingToList = {},
@@ -8680,6 +9103,7 @@ private fun WonderFoodPreview() {
             onUpdateReceipt = { _, _, _ -> },
             onExportMeal = {},
             onOpenDetail = {},
+            onSearchQueryChange = {},
             onCloseDetail = {},
             onPreferencesChange = {},
             onSavePreferences = {},
@@ -8708,6 +9132,7 @@ private fun WonderFoodPreview() {
             onDismissFeedback = {},
             onChooseLocalBackend = {},
             onValidateGoogleSheetsBackend = {},
+            onCreateGoogleSheetsBackend = {},
             onConnectNotionBackend = { _, _ -> },
             onConnectPostgresBackend = { _, _, _ -> },
             onSelectPendingBackend = {},

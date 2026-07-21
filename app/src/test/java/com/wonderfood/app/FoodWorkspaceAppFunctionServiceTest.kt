@@ -3,6 +3,10 @@ package com.wonderfood.app
 import android.content.Context
 import androidx.core.content.edit
 import androidx.appfunctions.AppFunctionInvalidArgumentException
+import com.wonderfood.app.data.HouseholdDraftCommandMapper
+import com.wonderfood.core.data.HouseholdRepositories
+import com.wonderfood.core.data.room.WonderFoodDatabaseFactory
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -114,6 +118,70 @@ class FoodWorkspaceAppFunctionServiceTest {
     }
 
     @Test
+    fun executeRequestWritesCanonicalInventoryRows() {
+        val request = FoodWorkspaceActionRequest(
+            requestId = "wf-af-inventory-canonical",
+            action = FoodWorkspaceAction(
+                type = "inventory.add",
+                targetKind = "inventory",
+                targetRef = "",
+                displayName = "Canned beans",
+                fields = listOf(
+                    FoodWorkspaceActionField("quantity", "2"),
+                    FoodWorkspaceActionField("notes", "canonical write test"),
+                ),
+                idempotencyKey = "",
+            ),
+            actions = emptyList(),
+        )
+
+        val response = service.executeRequest(request, executeChanges = true)
+        val firstSnapshot = currentCanonicalSnapshot()
+
+        assertEquals(1, response.totalCount)
+        assertEquals(1, response.appliedCount)
+        assertEquals("APPLIED", response.attempts.single().status)
+        assertEquals("Canned beans", firstSnapshot?.items?.singleOrNull()?.name)
+        assertEquals(
+            1,
+            currentCanonicalSnapshot()?.items?.count { it.name.equals("Canned beans", ignoreCase = true) },
+        )
+    }
+
+    @Test
+    fun executeRequestReplaysCanonicalWritesByIdempotencyKey() {
+        val request = FoodWorkspaceActionRequest(
+            requestId = "wf-af-inventory-replay",
+            action = FoodWorkspaceAction(
+                type = "meal_plan.add",
+                targetKind = "meal_plan",
+                targetRef = "",
+                displayName = "One-pan chicken",
+                fields = listOf(
+                    FoodWorkspaceActionField("title", "One-pan chicken"),
+                    FoodWorkspaceActionField("days", "3"),
+                ),
+                idempotencyKey = "",
+            ),
+            actions = emptyList(),
+        )
+
+        val first = service.executeRequest(request, executeChanges = true)
+        val afterFirst = currentCanonicalSnapshot()
+        val second = service.executeRequest(request, executeChanges = true)
+
+        assertEquals(1, first.appliedCount)
+        assertEquals("APPLIED", first.attempts.single().status)
+        assertEquals(1, second.replayedCount)
+        assertEquals("REPLAYED", second.attempts.single().status)
+        assertEquals(1, second.attempts.size)
+        assertEquals(
+            afterFirst?.mealPlans?.count { it.name == "One-pan chicken" },
+            currentCanonicalSnapshot()?.mealPlans?.count { it.name == "One-pan chicken" },
+        )
+    }
+
+    @Test
     fun executeRequestReplaysIdenticalRequestIdWithBoundedWrites() {
         val request = FoodWorkspaceActionRequest(
             requestId = "wf-af-replay",
@@ -165,4 +233,10 @@ class FoodWorkspaceAppFunctionServiceTest {
             clear()
         }
     }
+
+    private fun currentCanonicalSnapshot() =
+        runCatching {
+            val repository = HouseholdRepositories.room(WonderFoodDatabaseFactory.create(context))
+            runBlocking { repository.snapshot(HouseholdDraftCommandMapper.DEFAULT_HOUSEHOLD_ID) }
+        }.getOrNull()
 }

@@ -1,7 +1,7 @@
 package com.wonderfood.app.testing
 
 import com.wonderfood.app.data.AiTurn
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealLogDraft
@@ -12,7 +12,7 @@ import com.wonderfood.app.data.RecipeDraft
 
 data class FakeAiGatewayRequest(
     val text: String,
-    val memory: FoodMemory,
+    val memory: HouseholdUiMemory,
 )
 
 class FakeAiGateway(
@@ -28,7 +28,7 @@ class FakeAiGateway(
         responsesByText[text] = turn
     }
 
-    fun interpret(text: String, memory: FoodMemory = FoodMemory()): AiTurn {
+    fun interpret(text: String, memory: HouseholdUiMemory = HouseholdUiMemory()): AiTurn {
         mutableRequests += FakeAiGatewayRequest(text = text, memory = memory)
         return responsesByText[text] ?: error("No fake AI response queued for: $text")
     }

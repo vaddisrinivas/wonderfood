@@ -1,0 +1,19 @@
+WonderFood release evidence
+timestamp=20260720-151233
+version_name=1.0.5
+version_code=5
+package=com.wonderfood.app
+git_head=db7202f
+
+missing_env=ANDROID_KEYSTORE_PATH
+missing_env=ANDROID_KEYSTORE_PASSWORD
+missing_env=ANDROID_KEY_ALIAS
+missing_env=ANDROID_KEY_PASSWORD
+signing_env=missing
+release_build=skipped_missing_signing_env
+verified_apk=none
+google_web_client_id=placeholder
+assetlinks=placeholder
+device_evidence=.planning/2026-07-20-wonderfood-105-accelerated-release-campa/release-evidence-20260720-1513/device
+manifest=.planning/2026-07-20-wonderfood-105-accelerated-release-campa/release-evidence-20260720-1513/manifest.txt
+done=.planning/2026-07-20-wonderfood-105-accelerated-release-campa/release-evidence-20260720-1513

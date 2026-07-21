@@ -9,7 +9,7 @@ import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftNormalizer
 import com.wonderfood.app.data.FoodDraftValidator
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealPlanEntryDraft
@@ -56,7 +56,7 @@ class LiteLlmFoodInterpreter(
 ) {
     fun isConfigured(config: LiteLlmConfig): Boolean = config.isUsable
 
-    fun interpret(text: String, memory: FoodMemory, configs: List<LiteLlmConfig>): AiTurn? =
+    fun interpret(text: String, memory: HouseholdUiMemory, configs: List<LiteLlmConfig>): AiTurn? =
         configs.firstNotNullOfOrNull { config -> interpret(text, memory, config) }
 
     fun testConnection(config: LiteLlmConfig): Result<String> =
@@ -80,11 +80,11 @@ class LiteLlmFoodInterpreter(
             "Connected: ${config.statusLabel}"
         }
 
-    fun interpret(text: String, memory: FoodMemory, config: LiteLlmConfig): AiTurn? {
+    fun interpret(text: String, memory: HouseholdUiMemory, config: LiteLlmConfig): AiTurn? {
         return (interpretWithDiagnostics(text, memory, config) as? LiteLlmInterpretation.Success)?.turn
     }
 
-    fun interpretWithDiagnostics(text: String, memory: FoodMemory, config: LiteLlmConfig): LiteLlmInterpretation {
+    fun interpretWithDiagnostics(text: String, memory: HouseholdUiMemory, config: LiteLlmConfig): LiteLlmInterpretation {
         if (!config.isUsable) return LiteLlmInterpretation.Failure("Provider is not configured.")
         val body = JSONObject()
             .put("model", config.model)
@@ -111,7 +111,7 @@ class LiteLlmFoodInterpreter(
     fun interpretReceiptPhoto(
         context: Context,
         uri: Uri,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         configs: List<LiteLlmConfig>,
         userNote: String = "",
     ): AiTurn? {
@@ -129,7 +129,7 @@ class LiteLlmFoodInterpreter(
     fun interpretReceiptPhoto(
         context: Context,
         uri: Uri,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         config: LiteLlmConfig,
         userNote: String = "",
     ): AiTurn? {
@@ -144,7 +144,7 @@ class LiteLlmFoodInterpreter(
 
     private fun interpretReceiptDataUri(
         dataUri: String,
-        memory: FoodMemory,
+        memory: HouseholdUiMemory,
         config: LiteLlmConfig,
         userNote: String,
     ): AiTurn? {
@@ -547,7 +547,7 @@ class LiteLlmFoodInterpreter(
         }.trim()
     }
 
-    private fun parseTurn(raw: String, userText: String, memory: FoodMemory): AiTurn? =
+    private fun parseTurn(raw: String, userText: String, memory: HouseholdUiMemory): AiTurn? =
         runCatching {
             CommandEnvelopeDraftMapper.tryMap(raw)?.let { return@runCatching it }
             val jsonText = raw.substringAfter('{', raw).let { "{" + it.substringBeforeLast('}', it) + "}" }
@@ -718,7 +718,7 @@ class LiteLlmFoodInterpreter(
     private fun parseMealSlot(value: String): MealSlot =
         runCatching { MealSlot.valueOf(value.trim().uppercase()) }.getOrDefault(MealSlot.FLEX)
 
-    private fun buildUserPrompt(text: String, memory: FoodMemory): String {
+    private fun buildUserPrompt(text: String, memory: HouseholdUiMemory): String {
         val inventory = memory.inventory.take(32).joinToString("\n") { item ->
             "id=${item.id} name=${item.name} quantity=${item.quantity.ifBlank { "unknown" }} zone=${item.zone.name} " +
                 "category=${item.category.ifBlank { "unknown" }} nutrition=${item.calories?.let { "$it kcal/${item.servingText.ifBlank { "serving unknown" }}" } ?: "unknown"} " +
@@ -792,7 +792,7 @@ class LiteLlmFoodInterpreter(
         """.trimIndent()
     }
 
-    private fun effectiveSystemPrompt(memory: FoodMemory): String {
+    private fun effectiveSystemPrompt(memory: HouseholdUiMemory): String {
         val selectedSkill = memory.preferences.aiSkillOverride.trim().ifBlank { bundledSkill.trim() }
         if (selectedSkill.isBlank()) return systemPrompt
         return listOf(selectedSkill, RUNTIME_CONTRACT, systemPrompt).joinToString("\n\n")

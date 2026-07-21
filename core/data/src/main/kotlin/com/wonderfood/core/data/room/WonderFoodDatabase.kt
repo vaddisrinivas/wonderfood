@@ -30,14 +30,50 @@ import androidx.room.withTransaction
         FoodActionEntity::class,
         RelationEntity::class,
         AttachmentEntity::class,
+        HouseholdEntity::class,
+        HouseholdProfileEntity::class,
+        HouseholdItemEntity::class,
+        HouseholdFoodDetailsEntity::class,
+        HouseholdStorageLocationEntity::class,
+        HouseholdInventoryLotEntity::class,
+        HouseholdInventoryEventEntity::class,
+        HouseholdShoppingListEntity::class,
+        HouseholdShoppingLineEntity::class,
+        HouseholdRecipeEntity::class,
+        HouseholdRecipeIngredientEntity::class,
+        HouseholdRecipeStepEntity::class,
+        HouseholdCookingSessionEntity::class,
+        HouseholdPreparedBatchEntity::class,
+        HouseholdMerchantEntity::class,
+        HouseholdPurchaseEntity::class,
+        HouseholdPurchaseLineEntity::class,
+        HouseholdWasteEventEntity::class,
+        HouseholdMealPlanEntity::class,
+        HouseholdMealEntryEntity::class,
+        HouseholdNutritionSnapshotEntity::class,
+        HouseholdChangeProposalEntity::class,
+        HouseholdCommandRecordEntity::class,
+        HouseholdSyncOutboxEntity::class,
+        HouseholdRemoteBindingEntity::class,
+        HouseholdSyncBaseEntity::class,
+        HouseholdSyncCursorEntity::class,
+        HouseholdConflictEntity::class,
+        HouseholdLatestSafetySnapshotEntity::class,
+        HouseholdRecoverySnapshotEntity::class,
+        HouseholdTombstoneEntity::class,
     ],
-    version = 2,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(WonderFoodRoomConverters::class)
 abstract class WonderFoodDatabase : RoomDatabase() {
     internal abstract fun wonderFoodDao(): WonderFoodDao
+    internal abstract fun householdDao(): HouseholdDao
 
     suspend fun <T> inTransaction(block: suspend () -> T): T =
         withTransaction(block)
+
+    companion object {
+        const val SCHEMA_VERSION = 10
+    }
 }

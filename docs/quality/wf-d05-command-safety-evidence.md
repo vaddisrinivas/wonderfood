@@ -2,9 +2,9 @@
 
 ## Scope
 
-This evidence covers the canonical `core:engine` and `core:data` FoodCommand path.
-The prototype app still has `FoodChatStore` SQLite code until the planned prototype migration
-ticket moves app flows fully onto the canonical repositories.
+This evidence covers the canonical `core:engine` and `core:data` command path.
+App writes now flow through `HouseholdCommandExecutor` and the Room-backed
+`HouseholdRepository`; UI and AI surfaces consume canonical household projections.
 
 ## Added Coverage
 

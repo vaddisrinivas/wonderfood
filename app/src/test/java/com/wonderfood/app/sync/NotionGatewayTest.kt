@@ -1,10 +1,10 @@
 package com.wonderfood.app.sync
 
-import com.wonderfood.core.model.WonderFoodSnapshot
-import com.wonderfood.core.model.WonderFoodSnapshotCodec
+import java.math.BigDecimal
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,103 +15,12 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class NotionGatewayTest {
     @Test
-    fun snapshotAppendBodyCreatesSummaryAndChunkedJsonBlocks() {
-        val body = NotionGateway().snapshotAppendBody(
-            snapshot = emptySnapshot(),
-            updatedAt = "2026-07-19T12:00:00Z",
-            chunks = listOf("""{"schemaVersion":1}"""),
-        )
-
-        val children = body.getJSONArray("children")
-
-        assertEquals(3, children.length())
-        assertEquals("heading_2", children.getJSONObject(0).getString("type"))
-        assertEquals("paragraph", children.getJSONObject(1).getString("type"))
-        assertEquals("code", children.getJSONObject(2).getString("type"))
-        assertEquals(
-            "json",
-            children.getJSONObject(2)
-                .getJSONObject("code")
-                .getString("language"),
-        )
-        assertTrue(
-            children.getJSONObject(1)
-                .getJSONObject("paragraph")
-                .getJSONArray("rich_text")
-                .getJSONObject(0)
-                .getJSONObject("text")
-                .getString("content")
-                .contains("Schema v1"),
-        )
-    }
-
-    @Test
-    fun parseRemoteSnapshotReturnsLatestCompleteSnapshotGroup() {
-        val latest = emptySnapshot()
-        val blocks = buildList {
-            addAll(snapshotBlocks("2026-07-19T10:00:00Z", WonderFoodSnapshotCodec.encode(emptySnapshot()).chunked(10)))
-            addAll(snapshotBlocks("2026-07-19T12:00:00Z", WonderFoodSnapshotCodec.encode(latest).chunked(11)))
-        }
-
-        val result = NotionGateway().parseRemoteSnapshot("page-1", blocks)
-
-        assertEquals("page-1", result.pageId)
-        assertEquals("2026-07-19T12:00:00Z", result.updatedAt)
-        assertEquals(latest, result.snapshot)
-    }
-
-    @Test
-    fun parseRemoteSnapshotReturnsNoSnapshotWhenChunksAreIncomplete() {
-        val blocks = snapshotBlocks("2026-07-19T12:00:00Z", listOf("""{"schemaVersion":1}"""))
-            .mapIndexed { index, block ->
-                if (index == 2) {
-                    block.getJSONObject("code")
-                        .put("caption", org.json.JSONArray().put(notionText("WonderFood snapshot part 1 of 2")))
-                }
-                block
-            }
-
-        val result = NotionGateway().parseRemoteSnapshot("page-1", blocks)
-
-        assertEquals(null, result.updatedAt)
-        assertEquals(null, result.snapshot)
-    }
-
-    @Test
-    fun databaseCreateBodyCreatesRealWorkspaceDatabaseProperties() {
-        val body = NotionGateway().databaseCreateBody(
-            pageId = "page-1",
-            database = NotionWorkspaceDatabase(
-                title = "WonderFood Kitchen",
-                properties = listOf(
-                    NotionProperty("identifier", "rich_text"),
-                    NotionProperty("Food", "title"),
-                    NotionProperty("Pantry state", "select"),
-                    NotionProperty("Best by", "date"),
-                    NotionProperty("Source", "url"),
-                    NotionProperty("Optional", "checkbox"),
-                ),
-            ),
-        )
-
-        val properties = body.getJSONObject("properties")
-
-        assertEquals("page-1", body.getJSONObject("parent").getString("page_id"))
-        assertTrue(properties.getJSONObject("identifier").has("rich_text"))
-        assertTrue(properties.getJSONObject("Food").has("title"))
-        assertTrue(properties.getJSONObject("Pantry state").has("select"))
-        assertTrue(properties.getJSONObject("Best by").has("date"))
-        assertTrue(properties.getJSONObject("Source").has("url"))
-        assertTrue(properties.getJSONObject("Optional").has("checkbox"))
-    }
-
-    @Test
-    fun homeScaffoldBodyCreatesReadableWorkspaceSections() {
+    fun homeScaffoldBodyCreatesReadableV4WorkspaceSections() {
         val body = NotionGateway().homeScaffoldBody(
             databaseTitles = listOf(
                 "WonderFood Home",
                 "WonderFood Kitchen",
-                "WonderFood Recipe Ingredients",
+                "WonderFood Help & Setup",
             ),
         )
 
@@ -127,83 +36,204 @@ class NotionGatewayTest {
                 .getJSONObject("text")
                 .getString("content"),
         )
-        assertTrue(children.toString().contains("Everyday databases"))
-        assertTrue(children.toString().contains("WonderFood Kitchen"))
-        assertTrue(children.toString().contains("Managed data"))
-        assertTrue(children.toString().contains("WonderFood Recipe Ingredients"))
+        assertTrue(children.toString().contains("Daily dashboard"))
+        assertTrue(children.toString().contains("Formula and rollup columns"))
+        assertFalse(children.toString().contains("Everyday databases"))
+        assertFalse(children.toString().contains("Useful views"))
+        assertFalse(children.toString().contains("Setup safety"))
+        assertFalse(children.toString().contains("integration token"))
+        assertFalse(children.toString().contains("raw snapshot"))
     }
 
     @Test
-    fun parseWorkspacePageReadsFriendlyNotionProperties() {
-        val table = WonderFoodWorkspaceSchema.tables.first { it.title == WonderFoodWorkspaceSchema.KITCHEN }
-        val page = JSONObject()
-            .put(
-                "properties",
-                JSONObject()
-                    .put("Food", JSONObject().put("title", JSONArray().put(notionText("Eggs"))))
-                    .put("On hand", JSONObject().put("number", 12.0))
-                    .put("Unit", JSONObject().put("select", JSONObject().put("name", "item")))
-                    .put("Pantry state", JSONObject().put("select", JSONObject().put("name", "Available")))
-                    .put("Location", JSONObject().put("select", JSONObject().put("name", "Fridge")))
-                    .put("Best by", JSONObject().put("date", JSONObject().put("start", "2026-07-25")))
-                    .put("Source", JSONObject().put("rich_text", JSONArray().put(notionText("Manual"))))
-                    .put("identifier", JSONObject().put("rich_text", JSONArray().put(notionText("lot-eggs")))),
-            )
+    fun v4SourcesCreateFreshDataSourceContainersWithoutVisibleInternalIds() {
+        val gateway = NotionGateway()
+        val sources = gateway.v4Sources()
+        val ingredients = sources.single { it.surface == WorkspaceGraphSurface.INGREDIENTS }
+        val bindings = sources.single { it.surface == WorkspaceGraphSurface.BINDINGS }
 
-        val row = NotionGateway().parseWorkspacePage(table, page)
+        val body = gateway.databaseContainerCreateBody("page-1", WorkspaceGraphSurface.KITCHEN)
+        val bindingsBody = gateway.databaseContainerCreateBody("page-1", WorkspaceGraphSurface.BINDINGS)
+        val initialProperties = body.getJSONObject("initial_data_source").getJSONObject("properties")
+        val bindingProperties = bindingsBody.getJSONObject("initial_data_source").getJSONObject("properties")
 
-        requireNotNull(row)
-        assertEquals(WonderFoodWorkspaceSchema.KITCHEN, row.tab)
-        assertEquals("lot-eggs", row.identifier)
-        assertEquals("Eggs", row.values["Food"])
-        assertEquals("12", row.values["On hand"])
-        assertEquals("item", row.values["Unit"])
-        assertEquals("Fridge", row.values["Location"])
-        assertEquals("2026-07-25", row.values["Best by"])
+        assertEquals("2025-09-03", gateway.notionVersionHeader())
+        assertEquals("page-1", body.getJSONObject("parent").getString("page_id"))
+        assertEquals("WonderFood Kitchen", notionPlain(body.getJSONArray("title").getJSONObject(0)))
+        assertTrue(sources.none { it.surface == WorkspaceGraphSurface.HOME })
+        assertTrue(initialProperties.getJSONObject("Item").has("title"))
+        assertTrue(initialProperties.getJSONObject("On hand").has("number"))
+        assertTrue(initialProperties.getJSONObject("Unit").has("select"))
+        assertFalse(initialProperties.has("Ingredients"))
+        assertFalse(initialProperties.has("Stock lots"))
+        assertFalse(initialProperties.has("Low stock"))
+        assertFalse(initialProperties.has("identifier"))
+        assertFalse(initialProperties.has("Canonical ID"))
+        assertEquals("WonderFood Recipe Ingredients", ingredients.title)
+        assertEquals("WonderFood Bindings", bindings.title)
+        assertTrue(bindings.primaryNavigation.not())
+        assertTrue(bindingProperties.getJSONObject("Canonical ID").has("rich_text"))
+        assertTrue(bindingProperties.getJSONObject("Page ID").has("rich_text"))
     }
 
     @Test
-    fun mergeWorkspaceRowsAppliesFriendlyNotionRowsToBaseSnapshot() {
-        val base = WonderFoodWorkspaceSeedFixture.snapshot()
-        val kitchenId = base.stockLots.first().id.value
-        val result = NotionGateway().mergeWorkspaceRows(
-            pageId = "page-1",
-            baseSnapshot = base,
-            updatedAt = "2026-07-19T15:00:00Z",
-            rows = listOf(
-                GoogleSheetsWorkspaceRow(
-                    tab = WonderFoodWorkspaceSchema.KITCHEN,
-                    identifier = kitchenId,
-                    values = mapOf(
-                        "Food" to "Notion rice",
-                        "On hand" to "7",
-                        "Unit" to "kg",
-                        "identifier" to kitchenId,
-                    ),
-                ),
-            ),
+    fun v4SecondPassInstallsRelationsRollupsAndFormulasByDataSourceId() {
+        val gateway = NotionGateway()
+        val dataSourceIds = WorkspaceGraphSurface.entries.associateWith { surface -> "ds-${surface.key}" }
+
+        val kitchenPatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.KITCHEN, dataSourceIds)
+        val ingredientPatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.INGREDIENTS, dataSourceIds)
+        val mealPatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.MEALS, dataSourceIds)
+        val shoppingPatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.SHOPPING, dataSourceIds)
+        val spendingPatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.SPENDING, dataSourceIds)
+        val purchaseLinePatch = gateway.dataSourceRelationFormulaPatchBody(WorkspaceGraphSurface.PURCHASE_LINES, dataSourceIds)
+        val kitchenProperties = kitchenPatch.getJSONObject("properties")
+        val ingredientProperties = ingredientPatch.getJSONObject("properties")
+        val mealProperties = mealPatch.getJSONObject("properties")
+        val shoppingProperties = shoppingPatch.getJSONObject("properties")
+        val spendingProperties = spendingPatch.getJSONObject("properties")
+        val purchaseLineProperties = purchaseLinePatch.getJSONObject("properties")
+
+        assertEquals(
+            "ds-ingredients",
+            kitchenProperties.getJSONObject("Ingredients")
+                .getJSONObject("relation")
+                .getString("data_source_id"),
+        )
+        assertTrue(kitchenProperties.getJSONObject("Low stock").getJSONObject("formula").getString("expression").contains("Low at"))
+        assertEquals(
+            "ds-recipes",
+            ingredientProperties.getJSONObject("Recipe")
+                .getJSONObject("relation")
+                .getString("data_source_id"),
+        )
+        assertEquals(
+            "sum",
+            ingredientProperties.getJSONObject("On hand")
+                .getJSONObject("rollup")
+                .getString("function"),
+        )
+        assertEquals("show_original", ingredientProperties.getJSONObject("Kitchen unit").getJSONObject("rollup").getString("function"))
+        assertTrue(ingredientProperties.getJSONObject("Status").getJSONObject("formula").getString("expression").contains("Unlinked"))
+        assertEquals("show_original", mealProperties.getJSONObject("Recipe readiness").getJSONObject("rollup").getString("function"))
+        assertTrue(mealProperties.getJSONObject("Missing items").getJSONObject("formula").getString("expression").contains("linked Recipe"))
+        assertEquals("sum", shoppingProperties.getJSONObject("On hand").getJSONObject("rollup").getString("function"))
+        assertEquals("show_original", shoppingProperties.getJSONObject("Kitchen unit").getJSONObject("rollup").getString("function"))
+        assertEquals("show_original", purchaseLineProperties.getJSONObject("Currency").getJSONObject("rollup").getString("function"))
+        assertTrue(purchaseLineProperties.getJSONObject("Food amount component").getJSONObject("formula").getString("expression").contains("Category"))
+        assertTrue(purchaseLineProperties.getJSONObject("Non-food amount component").getJSONObject("formula").getString("expression").contains("Subtotal"))
+        assertEquals("sum", spendingProperties.getJSONObject("Food amount").getJSONObject("rollup").getString("function"))
+        assertEquals("sum", spendingProperties.getJSONObject("Non-food amount").getJSONObject("rollup").getString("function"))
+        assertEquals("Food amount component", spendingProperties.getJSONObject("Food amount").getJSONObject("rollup").getString("rollup_property_name"))
+        assertEquals("Non-food amount component", spendingProperties.getJSONObject("Non-food amount").getJSONObject("rollup").getString("rollup_property_name"))
+        assertFalse(shoppingPatch.toString().contains("prop(\"Kitchen item\")"))
+    }
+
+    @Test
+    fun v4DatabaseAndPageRequestsUseDataSourceIdsForRows() {
+        val gateway = NotionGateway()
+        val databaseResponse = JSONObject()
+            .put("id", "database-1")
+            .put("data_sources", JSONArray().put(JSONObject().put("id", "data-source-1").put("name", "Kitchen")))
+        val page = NotionGraphPage(
+            surface = WorkspaceGraphSurface.KITCHEN,
+            databaseTitle = "WonderFood Kitchen",
+            canonicalId = "item-1",
+            properties = mapOf("Item" to JSONObject().put("title", JSONArray().put(notionText("Rice")))),
+        )
+        val createBody = gateway.graphPageCreateBody("data-source-1", page)
+
+        assertEquals("data-source-1", gateway.databaseDataSourceId(databaseResponse))
+        assertTrue(gateway.dataSourceQueryUrl("data-source-1").endsWith("/data_sources/data-source-1/query"))
+        assertEquals("data-source-1", createBody.getJSONObject("parent").getString("data_source_id"))
+        assertFalse(createBody.getJSONObject("parent").has("database_id"))
+    }
+
+    @Test
+    fun structuredGraphPagesWriteBaseRowsBeforeRelationPageIdsAndNeverExposeCanonicalIds() {
+        val projection = WorkspaceGraphProjection(
+            schemaVersion = WORKSPACE_GRAPH_SCHEMA_VERSION,
+            householdId = "household-1",
+            defaultCurrency = "USD",
+            timezone = "UTC",
+            locale = "en-US",
+            schemas = WorkspaceGraphContract.schemas,
+            rows = WorkspaceGraphSurface.entries.associateWith { surface ->
+                when (surface) {
+                    WorkspaceGraphSurface.KITCHEN -> listOf(
+                        WorkspaceGraphRow(
+                            surface = surface,
+                            canonicalId = "kitchen-item-1",
+                            revision = 7,
+                            archived = false,
+                            updatedAt = 1_785_000_000_000,
+                            values = mapOf(
+                                "item" to WorkspaceGraphValue.Text("Basmati Rice"),
+                                "on_hand" to WorkspaceGraphValue.Decimal(BigDecimal("2")),
+                                "unit" to WorkspaceGraphValue.Text("cup"),
+                                "ingredients" to WorkspaceGraphValue.Relation(WorkspaceGraphSurface.INGREDIENTS, listOf("ingredient-1")),
+                            ),
+                        ),
+                    )
+                    WorkspaceGraphSurface.INGREDIENTS -> listOf(
+                        WorkspaceGraphRow(
+                            surface = surface,
+                            canonicalId = "ingredient-1",
+                            revision = 2,
+                            archived = false,
+                            updatedAt = 1_785_000_000_000,
+                            values = mapOf(
+                                "ingredient" to WorkspaceGraphValue.Text("Basmati Rice"),
+                                "amount" to WorkspaceGraphValue.Decimal(BigDecimal("1")),
+                                "unit" to WorkspaceGraphValue.Text("cup"),
+                                "recipe" to WorkspaceGraphValue.Relation(WorkspaceGraphSurface.RECIPES, listOf("recipe-1")),
+                                "kitchen_item" to WorkspaceGraphValue.Relation(WorkspaceGraphSurface.KITCHEN, listOf("kitchen-item-1")),
+                            ),
+                        ),
+                    )
+                    WorkspaceGraphSurface.RECIPES -> listOf(
+                        WorkspaceGraphRow(
+                            surface = surface,
+                            canonicalId = "recipe-1",
+                            revision = 3,
+                            archived = false,
+                            updatedAt = 1_785_000_000_000,
+                            values = mapOf(
+                                "recipe" to WorkspaceGraphValue.Text("Spinach Rice Bowl"),
+                                "ingredients" to WorkspaceGraphValue.Relation(WorkspaceGraphSurface.INGREDIENTS, listOf("ingredient-1")),
+                            ),
+                        ),
+                    )
+                    else -> emptyList()
+                }
+            },
         )
 
-        val merge = requireNotNull(result.merge)
-        val stockLot = merge.snapshot.stockLots.first { it.id.value == kitchenId }
-        val food = merge.snapshot.foods.first { it.id == stockLot.foodId }
+        val basePages = NotionGateway().structuredGraphPages(projection, emptyMap(), includeRelations = false)
+        val linkedPages = NotionGateway().structuredGraphPages(
+            projection,
+            pageIdsByCanonicalId = mapOf("ingredient-1" to "page-a", "kitchen-item-1" to "page-b", "recipe-1" to "page-c"),
+        )
+        val kitchenBase = basePages.single { it.canonicalId == "kitchen-item-1" }
+        val ingredientLinked = linkedPages.single { it.canonicalId == "ingredient-1" }
+        val serialized = linkedPages.joinToString("\n") { JSONObject(it.properties).toString() }
 
-        assertEquals("page-1", result.pageId)
-        assertEquals(1, result.rowCount)
-        assertEquals("Notion rice", food.name)
-        assertEquals(7.0, stockLot.quantity.amount)
-        assertEquals("2026-07-19T15:00:00Z", merge.mergeClock)
-        assertTrue(merge.fieldClocks.isNotEmpty())
+        assertFalse(kitchenBase.properties.containsKey("Ingredients"))
+        assertEquals("Basmati Rice", notionTitleValue(ingredientLinked.properties.getValue("Ingredient") as JSONObject))
+        assertEquals(1.0, (ingredientLinked.properties.getValue("Amount") as JSONObject).getDouble("number"), 0.0)
+        assertEquals(
+            "page-b",
+            (ingredientLinked.properties.getValue("Kitchen item") as JSONObject)
+                .getJSONArray("relation")
+                .getJSONObject(0)
+                .getString("id"),
+        )
+        assertFalse(serialized.contains("legacy:"))
+        assertFalse(serialized.contains("kitchen-item-1"))
+        assertFalse(serialized.contains("ingredient-1"))
+        assertFalse(serialized.contains("revision", ignoreCase = true))
+        assertFalse(serialized.contains("identifier", ignoreCase = true))
     }
-
-    private fun snapshotBlocks(updatedAt: String, chunks: List<String>): List<JSONObject> =
-        NotionGateway().snapshotAppendBody(
-            snapshot = emptySnapshot(),
-            updatedAt = updatedAt,
-            chunks = chunks,
-        ).getJSONArray("children").let { children ->
-            List(children.length()) { index -> children.getJSONObject(index) }
-        }
 
     private fun notionText(value: String): JSONObject =
         JSONObject()
@@ -211,20 +241,14 @@ class NotionGatewayTest {
             .put("text", JSONObject().put("content", value))
             .put("plain_text", value)
 
-    private fun emptySnapshot() = WonderFoodSnapshot(
-        schemaVersion = WonderFoodSnapshotCodec.CURRENT_SCHEMA_VERSION,
-        pages = emptyList(),
-        foods = emptyList(),
-        foodAliases = emptyList(),
-        stockLots = emptyList(),
-        nutritionSnapshots = emptyList(),
-        recipes = emptyList(),
-        mealPlans = emptyList(),
-        mealLogs = emptyList(),
-        shoppingItems = emptyList(),
-        receipts = emptyList(),
-        foodEvents = emptyList(),
-        relations = emptyList(),
-        attachments = emptyList(),
-    )
+    private fun notionPlain(value: JSONObject): String =
+        value.optString("plain_text").ifBlank {
+            value.optJSONObject("text")?.optString("content").orEmpty()
+        }
+
+    private fun notionTitleValue(value: JSONObject): String =
+        value.getJSONArray("title")
+            .getJSONObject(0)
+            .let(::notionPlain)
+
 }

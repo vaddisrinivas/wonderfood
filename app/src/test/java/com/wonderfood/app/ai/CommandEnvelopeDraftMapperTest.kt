@@ -296,7 +296,7 @@ class CommandEnvelopeDraftMapperTest {
   "skill_id": "planning",
   "skill_version": "1.0.0",
   "envelope_id": "env_compound_test",
-  "idempotency_key": "compound-test-001",
+  "idempotency_key": "repeat",
   "status": "commands",
   "evidence": [
     {

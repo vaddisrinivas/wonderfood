@@ -67,6 +67,40 @@ class BackendRouterTest {
         assertEquals(BackendType.LOCAL_SQLITE, router.activeBackend().descriptor.type)
     }
 
+    @Test
+    fun connectingAnotherBackendReplacesTheSingleActiveConfiguration() = runTest {
+        val store = InMemoryBackendConfigurationStore(LocalSqliteConfig())
+        val router = BackendRouter(
+            configurationStore = store,
+            backends = setOf(
+                FakeBackend(BackendType.LOCAL_SQLITE),
+                FakeBackend(BackendType.GOOGLE_SHEETS),
+                FakeBackend(BackendType.NOTION),
+            ),
+        )
+
+        router.connectAndActivate(
+            GoogleSheetsConfig(
+                spreadsheetUrl = "https://docs.google.com/spreadsheets/d/sheet-123/edit",
+                spreadsheetId = "sheet-123",
+                accountEmail = "user@example.com",
+                credentialRef = CredentialRef(BackendType.GOOGLE_SHEETS, "primary"),
+            ),
+        )
+        router.connectAndActivate(
+            NotionConfig(
+                pageUrl = "https://notion.so/wonderfood",
+                rootPageId = "page-123",
+                workspaceName = "WonderFood",
+                credentialRef = CredentialRef(BackendType.NOTION, "primary"),
+            ),
+        )
+
+        assertEquals(BackendType.NOTION, store.activeConfiguration()?.type)
+        assertEquals(BackendType.NOTION, router.activeBackend().descriptor.type)
+        assertEquals(1, store.activeSlotCount)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsDuplicateBackendAdapters() {
         BackendRouter(
@@ -79,6 +113,8 @@ class BackendRouterTest {
 private class InMemoryBackendConfigurationStore(
     private var active: BackendConfig? = null,
 ) : BackendConfigurationStore {
+    val activeSlotCount: Int get() = listOfNotNull(active).size
+
     override suspend fun activeConfiguration(): BackendConfig? = active
 
     override suspend fun saveActiveConfiguration(config: BackendConfig) {

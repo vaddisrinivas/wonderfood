@@ -1,18 +1,20 @@
 package com.wonderfood.app.sync
 
-import com.wonderfood.core.model.WonderFoodSnapshot
-import com.wonderfood.core.model.WonderFoodSnapshotCodec
+import com.wonderfood.core.model.household.HouseholdSnapshot
 import java.net.HttpURLConnection
 import java.net.ProtocolException
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.io.File
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import org.json.JSONArray
 import org.json.JSONObject
 
-class NotionGateway {
-    fun retrievePage(token: String, pageId: String): NotionPageAccess {
+class NotionGateway : NotionWorkspaceGateway {
+    override fun retrievePage(token: String, pageId: String): NotionPageAccess {
         require(token.isNotBlank()) { "Notion token must not be blank." }
         require(pageId.isNotBlank()) { "Notion page ID must not be blank." }
         val response = request(
@@ -27,302 +29,271 @@ class NotionGateway {
         )
     }
 
-    fun exportSnapshot(
-        token: String,
-        pageId: String,
-        snapshot: WonderFoodSnapshot,
-        updatedAt: String,
-    ): NotionSnapshotExportResult {
-        require(updatedAt.isNotBlank()) { "Notion snapshot updated timestamp must not be blank." }
-        val encoded = WonderFoodSnapshotCodec.encode(snapshot)
-        val chunks = encoded.chunked(MAX_RICH_TEXT_CHARS)
-        require(chunks.size <= MAX_APPEND_BLOCKS - 2) {
-            "Notion snapshot is too large for one no-deployment export. Export ${chunks.size} chunks needs a paged sync adapter."
-        }
-        request(
-            method = "PATCH",
-            url = "$NOTION_BASE/blocks/${urlPath(pageId)}/children",
-            token = token,
-            body = snapshotAppendBody(snapshot, updatedAt, chunks),
-        )
-        return NotionSnapshotExportResult(
-            pageId = pageId,
-            updatedAt = updatedAt,
-            chunkCount = chunks.size,
-            byteCount = encoded.toByteArray(StandardCharsets.UTF_8).size,
-        )
-    }
-
-    fun ensureWorkspaceDatabases(token: String, pageId: String): NotionWorkspaceProvisionResult {
+    override fun ensureWorkspaceDatabases(token: String, pageId: String): NotionWorkspaceProvisionResult {
         require(token.isNotBlank()) { "Notion token must not be blank." }
         require(pageId.isNotBlank()) { "Notion page ID must not be blank." }
-        val children = childWorkspaceChildren(token, pageId)
-        val existing = children.databasesByTitle
-        val created = mutableListOf<String>()
-        val databases = linkedMapOf<String, String>()
-        NOTION_DATABASES.forEach { database ->
-            val existingId = existing[database.title]
-            val id = existingId ?: createDatabase(token, pageId, database).also {
-                created += database.title
-            }
-            if (existingId != null) {
-                repairDatabaseSchema(token, existingId, database)
-            }
-            databases[database.title] = id
-        }
-        ensureWorkspaceHomeScaffold(token, pageId, children.textMarkers, databases)
-        return NotionWorkspaceProvisionResult(pageId = pageId, databaseIdsByTitle = databases, createdDatabases = created)
+        val workspace = ensureWorkspaceDataSourcesV4(token, pageId, emptyGraphProjection())
+        return NotionWorkspaceProvisionResult(
+            pageId = pageId,
+            databaseIdsByTitle = workspace.sourcesBySurface.values.associate { it.title to it.databaseId },
+            createdDatabases = workspace.createdSourceTitles,
+        )
     }
 
     fun exportWorkspace(
         token: String,
         pageId: String,
-        snapshot: WonderFoodSnapshot,
+        snapshot: HouseholdSnapshot,
+        updatedAt: String,
+    ): NotionWorkspaceExportResult =
+        exportWorkspace(token = token, pageId = pageId, projection = WorkspaceGraphProjector.project(snapshot), updatedAt = updatedAt)
+
+    internal fun exportWorkspace(
+        token: String,
+        pageId: String,
+        projection: WorkspaceGraphProjection,
         updatedAt: String,
     ): NotionWorkspaceExportResult {
-        val workspace = ensureWorkspaceDatabases(token, pageId)
+        require(token.isNotBlank()) { "Notion token must not be blank." }
+        require(pageId.isNotBlank()) { "Notion page ID must not be blank." }
+        require(updatedAt.isNotBlank()) { "Notion workspace updated timestamp must not be blank." }
+        val workspace = ensureWorkspaceDataSourcesV4(token, pageId, projection)
+        val bindingSource = requireNotNull(workspace.sourcesBySurface[WorkspaceGraphSurface.BINDINGS]) {
+            "Missing Notion V4 Bindings source."
+        }
+        val existingBindings = readCanonicalPageBindings(token, bindingSource.dataSourceId)
+        val basePages = structuredGraphPages(projection, pageIdsByCanonicalId = emptyMap(), includeRelations = false)
+            .filterNot { it.surface == WorkspaceGraphSurface.BINDINGS }
+        val pageIdsByCanonicalId = linkedMapOf<String, String>()
         var upserted = 0
-        structuredPages(snapshot, updatedAt).forEach { page ->
-            val databaseId = requireNotNull(workspace.databaseIdsByTitle[page.databaseTitle]) {
-                "Missing Notion database: ${page.databaseTitle}"
-            }
-            upsertWorkspacePage(token, databaseId, page)
+        basePages.forEach { page ->
+            val source = requireNotNull(workspace.sourcesBySurface[page.surface]) { "Missing Notion V4 source: ${page.surface.label}" }
+            val pageIdForCanonical = upsertGraphPage(token, source.dataSourceId, existingBindings[page.canonicalId], page)
+            pageIdsByCanonicalId[page.canonicalId] = pageIdForCanonical
+            upsertBindingPage(
+                token = token,
+                dataSourceId = bindingSource.dataSourceId,
+                existingBindingPageId = existingBindings["binding:${page.canonicalId}"],
+                canonicalId = page.canonicalId,
+                pageId = pageIdForCanonical,
+                surface = page.surface,
+            )
             upserted += 1
         }
+        structuredGraphPages(projection, pageIdsByCanonicalId = pageIdsByCanonicalId, includeRelations = true)
+            .filterNot { it.surface == WorkspaceGraphSurface.BINDINGS }
+            .filter { page -> page.properties.values.any { property -> property is JSONObject && property.has("relation") } }
+            .forEach { page ->
+                val existingPageId = requireNotNull(pageIdsByCanonicalId[page.canonicalId]) { "Missing Notion page binding for ${page.surface.key}." }
+                request(
+                    method = "PATCH",
+                    url = "$NOTION_BASE/pages/${urlPath(existingPageId)}",
+                    token = token,
+                    body = JSONObject().put("properties", JSONObject(page.properties.filterValues { it != JSONObject.NULL })),
+                )
+            }
         return NotionWorkspaceExportResult(
             pageId = pageId,
-            createdDatabases = workspace.createdDatabases,
+            createdDatabases = workspace.createdSourceTitles,
             upsertedRows = upserted,
         )
     }
 
-    fun readRemoteSnapshot(token: String, pageId: String): NotionRemoteSnapshotResult {
-        require(token.isNotBlank()) { "Notion token must not be blank." }
-        require(pageId.isNotBlank()) { "Notion page ID must not be blank." }
-        val blocks = mutableListOf<JSONObject>()
-        var cursor: String? = null
-        do {
-            val url = buildString {
-                append("$NOTION_BASE/blocks/${urlPath(pageId)}/children?page_size=100")
-                cursor?.let { append("&start_cursor=").append(urlPath(it)) }
-            }
-            val body = JSONObject(
-                request(
-                    method = "GET",
-                    url = url,
-                    token = token,
-                ),
-            )
-            body.optJSONArray("results").orEmptyObjects().forEach(blocks::add)
-            cursor = body.optString("next_cursor").takeIf { body.optBoolean("has_more") && it.isNotBlank() && it != "null" }
-        } while (cursor != null)
-        return parseRemoteSnapshot(pageId = pageId, blocks = blocks)
-    }
-
-    fun readWorkspaceRows(token: String, pageId: String): List<GoogleSheetsWorkspaceRow> {
+    override fun readWorkspaceRows(token: String, pageId: String): List<GoogleSheetsWorkspaceRow> {
         require(token.isNotBlank()) { "Notion token must not be blank." }
         require(pageId.isNotBlank()) { "Notion page ID must not be blank." }
         val databases = childWorkspaceChildren(token, pageId).databasesByTitle
-        return WonderFoodWorkspaceSchema.tables.flatMap { table ->
-            val databaseTitle = notionDatabaseTitle(table.title)
-            val databaseId = databases[databaseTitle] ?: return@flatMap emptyList()
-            queryWorkspaceDatabaseRows(token, databaseId, table)
+        val sources = v4Sources().filterNot { it.surface == WorkspaceGraphSurface.HOME }
+        val pagesBySurface = sources.associate { source ->
+            val databaseId = databases[source.title]
+            source.surface to if (databaseId == null) emptyList() else queryDataSourcePages(token, retrieveDatabaseDataSourceId(token, databaseId))
         }
+        val titleByPageId = buildMap {
+            sources.forEach { source ->
+                val titleLabel = source.schema.titleField.label
+                pagesBySurface[source.surface].orEmpty().forEach { page ->
+                    val title = page.optJSONObject("properties")?.optJSONObject(titleLabel).notionPropertyValue("title")
+                    if (title.isNotBlank()) put(page.optString("id"), title)
+                }
+            }
+        }
+        val bindingSource = sources.firstOrNull { it.surface == WorkspaceGraphSurface.BINDINGS }
+        val canonicalByPageId = bindingSource
+            ?.let { source -> databases[source.title]?.let { retrieveDatabaseDataSourceId(token, it) } }
+            ?.let { readCanonicalPageBindings(token, it) }
+            .orEmpty()
+            .filterKeys { !it.startsWith("binding:") }
+            .entries
+            .associate { (canonicalId, notionPageId) -> notionPageId to canonicalId }
+        return sources
+            .filter { it.surface !in setOf(WorkspaceGraphSurface.BINDINGS, WorkspaceGraphSurface.SYSTEM) }
+            .flatMap { source ->
+                pagesBySurface[source.surface].orEmpty().mapNotNull { page ->
+                    parseV4WorkspacePage(source.schema, page, canonicalByPageId, titleByPageId)
+                }
+            }
     }
 
-    fun readRemoteWorkspaceDraft(token: String, pageId: String): NotionRemoteWorkspaceDraftResult {
-        val rows = readWorkspaceRows(token, pageId)
-        val draft = GoogleSheetsWorkspaceDraftImporter.toDraft(rows)
-            ?: return NotionRemoteWorkspaceDraftResult(pageId = pageId, rowCount = rows.size, draft = null)
-        return NotionRemoteWorkspaceDraftResult(pageId = pageId, rowCount = rows.size, draft = draft)
+    private fun queryDataSourcePages(token: String, dataSourceId: String): List<JSONObject> {
+        val pages = mutableListOf<JSONObject>()
+        var cursor: String? = null
+        do {
+            val body = JSONObject().put("page_size", 100)
+            cursor?.let { body.put("start_cursor", it) }
+            val response = JSONObject(request("POST", dataSourceQueryUrl(dataSourceId), token, body))
+            pages += response.optJSONArray("results").orEmptyObjects()
+            cursor = response.optString("next_cursor").takeIf { response.optBoolean("has_more") && it.isNotBlank() && it != "null" }
+        } while (cursor != null)
+        return pages
     }
 
-    fun readRemoteWorkspaceMerge(
-        token: String,
-        pageId: String,
-        baseSnapshot: WonderFoodSnapshot,
-        updatedAt: String,
-    ): NotionRemoteWorkspaceMergeResult {
-        val rows = readWorkspaceRows(token, pageId)
-        return mergeWorkspaceRows(pageId = pageId, rows = rows, baseSnapshot = baseSnapshot, updatedAt = updatedAt)
-    }
-
-    internal fun mergeWorkspaceRows(
-        pageId: String,
-        rows: List<GoogleSheetsWorkspaceRow>,
-        baseSnapshot: WonderFoodSnapshot,
-        updatedAt: String,
-    ): NotionRemoteWorkspaceMergeResult {
-        if (rows.isEmpty()) return NotionRemoteWorkspaceMergeResult(pageId = pageId, rowCount = rows.size, merge = null)
-        val merge = WonderFoodWorkspaceSnapshotMerger.merge(
-            snapshot = baseSnapshot,
-            rows = rows,
-            updatedAt = updatedAt,
+    private fun parseV4WorkspacePage(
+        schema: WorkspaceGraphSurfaceSchema,
+        page: JSONObject,
+        canonicalByPageId: Map<String, String>,
+        titleByPageId: Map<String, String>,
+    ): GoogleSheetsWorkspaceRow? {
+        val properties = page.optJSONObject("properties") ?: return null
+        val values = schema.fields.associate { field ->
+            val property = properties.optJSONObject(field.label)
+            field.label to property.notionV4PropertyValue(field.type, titleByPageId)
+        }
+        if (values.values.none(String::isNotBlank)) return null
+        val notionPageId = page.optString("id")
+        return GoogleSheetsWorkspaceRow(
+            tab = schema.surface.label,
+            identifier = canonicalByPageId[notionPageId].orEmpty().ifBlank { notionPageId },
+            values = values,
+            remoteIdentity = "notion:page:$notionPageId",
         )
-        if (merge.changes.isEmpty() && merge.conflicts.isEmpty()) {
-            return NotionRemoteWorkspaceMergeResult(pageId = pageId, rowCount = rows.size, merge = null)
-        }
-        return NotionRemoteWorkspaceMergeResult(pageId = pageId, rowCount = rows.size, merge = merge)
     }
 
-    internal fun snapshotAppendBody(
-        snapshot: WonderFoodSnapshot,
-        updatedAt: String,
-        chunks: List<String> = WonderFoodSnapshotCodec.encode(snapshot).chunked(MAX_RICH_TEXT_CHARS),
-    ): JSONObject {
-        val children = JSONArray()
-            .put(
-                JSONObject()
-                    .put("object", "block")
-                    .put("type", "heading_2")
-                    .put(
-                        "heading_2",
-                        JSONObject().put(
-                            "rich_text",
-                            JSONArray().put(text("WonderFood snapshot $updatedAt")),
-                        ),
-                    ),
-            )
-            .put(
-                JSONObject()
-                    .put("object", "block")
-                    .put("type", "paragraph")
-                    .put(
-                        "paragraph",
-                        JSONObject().put(
-                            "rich_text",
-                            JSONArray().put(
-                                text(
-                                    "Schema v${snapshot.schemaVersion}; ${snapshot.foods.size} foods, ${snapshot.shoppingItems.size} shopping items, ${snapshot.recipes.size} recipes, ${snapshot.mealPlans.size} meal plans.",
-                                ),
-                            ),
-                        ),
-                    ),
-            )
-        chunks.forEachIndexed { index, chunk ->
-            children.put(
-                JSONObject()
-                    .put("object", "block")
-                    .put("type", "code")
-                    .put(
-                        "code",
-                        JSONObject()
-                            .put("language", "json")
-                            .put("caption", JSONArray().put(text("WonderFood snapshot part ${index + 1} of ${chunks.size}")))
-                            .put("rich_text", JSONArray().put(text(chunk))),
-                    ),
-            )
+    private fun JSONObject?.notionV4PropertyValue(
+        type: WorkspaceGraphValueType,
+        titleByPageId: Map<String, String>,
+    ): String {
+        if (this == null) return ""
+        return when (type) {
+            WorkspaceGraphValueType.TITLE -> notionPropertyValue("title")
+            WorkspaceGraphValueType.TEXT, WorkspaceGraphValueType.LONG_TEXT -> notionPropertyValue("rich_text")
+            WorkspaceGraphValueType.DECIMAL, WorkspaceGraphValueType.MONEY -> notionPropertyValue("number")
+            WorkspaceGraphValueType.DATE, WorkspaceGraphValueType.DATE_TIME -> notionPropertyValue("date")
+            WorkspaceGraphValueType.BOOLEAN -> notionPropertyValue("checkbox")
+            WorkspaceGraphValueType.URL -> notionPropertyValue("url")
+            WorkspaceGraphValueType.SELECT -> notionPropertyValue("select")
+            WorkspaceGraphValueType.MULTI_SELECT -> optJSONArray("multi_select").orEmptyObjects().joinToString(", ") { it.optString("name") }
+            WorkspaceGraphValueType.RELATION -> optJSONArray("relation").orEmptyObjects().joinToString(", ") { relation ->
+                val id = relation.optString("id")
+                titleByPageId[id] ?: id
+            }
+            WorkspaceGraphValueType.COMPUTED -> optJSONObject("formula").notionComputedValue()
+                .ifBlank { optJSONObject("rollup").notionComputedValue() }
         }
-        return JSONObject().put("children", children)
     }
 
-    internal fun databaseCreateBody(pageId: String, database: NotionWorkspaceDatabase): JSONObject =
+    private fun JSONObject?.notionComputedValue(): String {
+        if (this == null) return ""
+        return when (optString("type")) {
+            "number" -> if (isNull("number")) "" else optDouble("number").trimNumber()
+            "string" -> optString("string").takeIf { it != "null" }.orEmpty()
+            "boolean" -> optBoolean("boolean").toString()
+            "date" -> optJSONObject("date")?.optString("start").orEmpty()
+            "array" -> optJSONArray("array").orEmptyObjects().joinToString(", ") { item ->
+                item.notionComputedValue().ifBlank { item.notionTextProperty() }
+            }
+            else -> ""
+        }
+    }
+
+    internal fun v4Sources(projection: WorkspaceGraphProjection = emptyGraphProjection()): List<NotionV4Source> =
+        projection.schemas.filterNot { it.surface == WorkspaceGraphSurface.HOME }.map { schema ->
+            NotionV4Source(
+                surface = schema.surface,
+                title = schema.surface.notionTitle(),
+                schema = schema,
+                primaryNavigation = schema.surface.primary,
+            )
+        }
+
+    internal fun databaseContainerCreateBody(pageId: String, source: NotionV4Source): JSONObject =
         JSONObject()
             .put("parent", JSONObject().put("type", "page_id").put("page_id", pageId))
-            .put("title", JSONArray().put(text(database.title)))
+            .put("title", JSONArray().put(text(source.title)))
+            .put("is_inline", true)
             .put(
-                "properties",
-                JSONObject().apply {
-                    database.properties.forEach { property ->
-                        put(property.name, JSONObject().put(property.type, property.config))
-                    }
-                },
+                "initial_data_source",
+                JSONObject()
+                    .put("properties", notionBasePropertySchemas(source.schema)),
             )
 
+    internal fun databaseContainerCreateBody(pageId: String, surface: WorkspaceGraphSurface): JSONObject =
+        databaseContainerCreateBody(pageId, requireNotNull(v4Sources().firstOrNull { it.surface == surface }) { "Missing Notion V4 source: ${surface.label}" })
+
+    internal fun dataSourceRelationFormulaPatchBody(
+        source: NotionV4Source,
+        dataSourceIdsBySurface: Map<WorkspaceGraphSurface, String>,
+        includeField: (WorkspaceGraphField) -> Boolean = { true },
+    ): JSONObject =
+        JSONObject().put(
+            "properties",
+            JSONObject().apply {
+                source.schema.fields
+                    .filter { field -> field.type == WorkspaceGraphValueType.RELATION || field.type == WorkspaceGraphValueType.COMPUTED }
+                    .filterNot { field -> source.surface.primary && field.hidden }
+                    .filter(includeField)
+                    .forEach { field ->
+                        val schema = when (field.type) {
+                            WorkspaceGraphValueType.RELATION -> {
+                                val target = requireNotNull(field.relationTarget) { "Relation ${field.key} has no target." }
+                                val targetDataSourceId = requireNotNull(dataSourceIdsBySurface[target]) {
+                                    "Missing target data source for ${field.label} -> ${target.label}."
+                                }
+                                JSONObject().put(
+                                    "relation",
+                                    JSONObject()
+                                        .put("data_source_id", targetDataSourceId)
+                                        .put("type", "single_property")
+                                        .put("single_property", JSONObject()),
+                                )
+                            }
+                            WorkspaceGraphValueType.COMPUTED -> notionComputedPropertySchema(field)
+                            else -> null
+                        }
+                        if (schema != null) put(field.label, schema)
+                }
+            },
+        )
+
+    internal fun dataSourceRelationFormulaPatchBody(surface: WorkspaceGraphSurface, dataSourceIdsBySurface: Map<WorkspaceGraphSurface, String>): JSONObject =
+        dataSourceRelationFormulaPatchBody(requireNotNull(v4Sources().firstOrNull { it.surface == surface }) { "Missing Notion V4 source: ${surface.label}" }, dataSourceIdsBySurface)
+
+    internal fun databaseDataSourceId(response: JSONObject): String =
+        response.firstDataSourceIdOrNull()
+            ?: error("Notion database ${response.optString("id")} has no data_sources[0].id.")
+
+    internal fun dataSourceQueryUrl(dataSourceId: String): String =
+        "$NOTION_BASE/data_sources/${urlPath(dataSourceId)}/query"
+
+    internal fun structuredGraphPages(
+        projection: WorkspaceGraphProjection,
+        pageIdsByCanonicalId: Map<String, String>,
+        includeRelations: Boolean = true,
+    ): List<NotionGraphPage> =
+        projection.schemas.filterNot { it.surface == WorkspaceGraphSurface.HOME }.flatMap { schema ->
+            projection.rows[schema.surface].orEmpty().map { row ->
+                NotionGraphPage(
+                    surface = row.surface,
+                    databaseTitle = schema.surface.notionTitle(),
+                    canonicalId = row.canonicalId,
+                    properties = row.toNotionProperties(schema, pageIdsByCanonicalId, includeRelations),
+                )
+            }
+        }
+
+    internal fun notionVersionHeader(): String = NOTION_VERSION
+
     internal fun homeScaffoldBody(databaseTitles: List<String>): JSONObject {
-        val children = JSONArray()
-            .put(heading("heading_1", HOME_SCAFFOLD_MARKER))
-            .put(paragraph("WonderFood is the fast app layer. This page is the household workspace: planning, cooking, shopping, purchases, and the managed data that keeps automation honest."))
-            .put(heading("heading_2", "Today"))
-            .put(bulleted("Open Home for current metrics, Kitchen for what you have, Shopping for the cart, and Recipes for what can be cooked from pantry matches."))
-            .put(heading("heading_2", "Everyday databases"))
-        WonderFoodWorkspaceSchema.everydayTables.forEach { table ->
-            children.put(bulleted(notionDatabaseTitle(table.title)))
-        }
-        children.put(heading("heading_2", "Managed data"))
-        databaseTitles
-            .filterNot { title -> WonderFoodWorkspaceSchema.everydayTables.any { notionDatabaseTitle(it.title) == title } }
-            .forEach { title -> children.put(bulleted(title)) }
-        return JSONObject().put("children", children)
-    }
-
-    internal fun structuredPages(snapshot: WonderFoodSnapshot, updatedAt: String): List<NotionWorkspacePage> {
-        val tablesByTitle = WonderFoodWorkspaceSchema.tables.associateBy { it.title }
-        return WonderFoodWorkspaceSchema.rows(snapshot, updatedAt)
-            .flatMap { (tableTitle, rows) ->
-                val table = requireNotNull(tablesByTitle[tableTitle])
-                rows.map { row ->
-                    NotionWorkspacePage(
-                        databaseTitle = notionDatabaseTitle(table.title),
-                        externalId = row.identifier,
-                        properties = table.fields.associate { field ->
-                            field.name to row.values[field.name].toNotionProperty(field)
-                        },
-                    )
-                }
-            }
-        }
-
-    internal fun parseRemoteSnapshot(pageId: String, blocks: List<JSONObject>): NotionRemoteSnapshotResult {
-        data class SnapshotGroup(
-            val updatedAt: String,
-            val parts: MutableMap<Int, String> = linkedMapOf(),
-            var expectedParts: Int = 0,
-        )
-
-        val groups = mutableListOf<SnapshotGroup>()
-        var current: SnapshotGroup? = null
-        blocks.forEach { block ->
-            when (block.optString("type")) {
-                "heading_2" -> {
-                    val heading = block.richText("heading_2")
-                    val updatedAt = heading.removePrefix("WonderFood snapshot").trim()
-                    current = if (heading.startsWith("WonderFood snapshot") && updatedAt.isNotBlank()) {
-                        SnapshotGroup(updatedAt = updatedAt).also(groups::add)
-                    } else {
-                        null
-                    }
-                }
-                "code" -> {
-                    val group = current ?: return@forEach
-                    val caption = block.optJSONObject("code")
-                        ?.optJSONArray("caption")
-                        .orEmptyObjects()
-                        .joinToString(separator = "") { it.richTextValue() }
-                    val match = SNAPSHOT_PART_CAPTION.matchEntire(caption.trim()) ?: return@forEach
-                    val part = match.groupValues[1].toInt()
-                    val total = match.groupValues[2].toInt()
-                    group.expectedParts = maxOf(group.expectedParts, total)
-                    group.parts[part] = block.richText("code")
-                }
-            }
-        }
-
-        val complete = groups.asReversed().firstOrNull { group ->
-            group.expectedParts > 0 && (1..group.expectedParts).all { group.parts[it] != null }
-        } ?: return NotionRemoteSnapshotResult(pageId = pageId, blockCount = blocks.size, updatedAt = null, snapshot = null)
-        val encoded = (1..complete.expectedParts).joinToString(separator = "") { requireNotNull(complete.parts[it]) }
-        return NotionRemoteSnapshotResult(
-            pageId = pageId,
-            blockCount = blocks.size,
-            updatedAt = complete.updatedAt,
-            snapshot = WonderFoodSnapshotCodec.decode(encoded),
-        )
-    }
-
-    internal fun parseWorkspacePage(table: WorkspaceTable, page: JSONObject): GoogleSheetsWorkspaceRow? {
-        val properties = page.optJSONObject("properties") ?: return null
-        val values = table.fields.associate { field ->
-            field.name to properties.optJSONObject(field.name).notionPropertyValue(field.notionType)
-        }
-        val identifier = values["identifier"].orEmpty()
-        val hasHumanValue = values.any { (key, value) -> key != "identifier" && value.isNotBlank() }
-        if (identifier.isBlank() && !hasHumanValue) return null
-        return GoogleSheetsWorkspaceRow(
-            tab = table.title,
-            identifier = identifier,
-            values = values,
-        )
+        return homeScaffoldBodyV4()
     }
 
     private fun request(
@@ -438,142 +409,186 @@ class NotionGateway {
         return NotionWorkspaceChildren(databasesByTitle = databases, textMarkers = textMarkers)
     }
 
-    private fun ensureWorkspaceHomeScaffold(
+    private fun ensureWorkspaceDataSourcesV4(
         token: String,
         pageId: String,
-        textMarkers: Set<String>,
-        databaseIdsByTitle: Map<String, String>,
-    ) {
-        if (textMarkers.any { it == HOME_SCAFFOLD_MARKER }) return
-        request(
-            method = "PATCH",
-            url = "$NOTION_BASE/blocks/${urlPath(pageId)}/children",
-            token = token,
-            body = homeScaffoldBody(databaseIdsByTitle.keys.toList()),
-        )
+        projection: WorkspaceGraphProjection,
+    ): NotionV4WorkspaceProvision {
+        val sources = v4Sources(projection)
+        val children = childWorkspaceChildren(token, pageId)
+        val created = mutableListOf<String>()
+        val createdSources = linkedMapOf<WorkspaceGraphSurface, NotionProvisionedV4Source>()
+        sources.forEach { source ->
+            val existingDatabaseId = children.databasesByTitle[source.title]
+            val provisioned = if (existingDatabaseId == null) {
+                createDataSourceContainer(token, pageId, source).also { created += source.title }
+            } else {
+                NotionProvisionedV4Source(source.surface, source.title, existingDatabaseId, retrieveDatabaseDataSourceId(token, existingDatabaseId))
+            }
+            createdSources[source.surface] = provisioned
+        }
+        val dataSourceIdsBySurface = createdSources.mapValues { it.value.dataSourceId }
+        sources.forEach { source ->
+            installV4SchemaFields(
+                token = token,
+                provisioned = requireNotNull(createdSources[source.surface]),
+                source = source,
+                dataSourceIdsBySurface = dataSourceIdsBySurface,
+                fields = source.schema.fields.filter { it.type == WorkspaceGraphValueType.RELATION },
+                stage = "relations",
+            )
+        }
+        sources.flatMap { source ->
+            source.schema.fields
+                .filter { it.type == WorkspaceGraphValueType.COMPUTED }
+                .map { field -> source to field }
+        }.sortedBy { (_, field) -> notionComputedDependencyOrder(field.formulaKey) }
+            .forEach { (source, field) ->
+                installV4SchemaFields(
+                    token = token,
+                    provisioned = requireNotNull(createdSources[source.surface]),
+                    source = source,
+                    dataSourceIdsBySurface = dataSourceIdsBySurface,
+                    fields = listOf(field),
+                    stage = field.label,
+                )
+            }
+        ensureV4HomeScaffold(token, pageId, children.textMarkers)
+        return NotionV4WorkspaceProvision(createdSources, created)
     }
 
-    private fun createDatabase(token: String, pageId: String, database: NotionWorkspaceDatabase): String =
-        JSONObject(
+    private fun installV4SchemaFields(
+        token: String,
+        provisioned: NotionProvisionedV4Source,
+        source: NotionV4Source,
+        dataSourceIdsBySurface: Map<WorkspaceGraphSurface, String>,
+        fields: List<WorkspaceGraphField>,
+        stage: String,
+    ) {
+        if (fields.isEmpty()) return
+        runCatching {
+            request(
+                method = "PATCH",
+                url = "$NOTION_BASE/data_sources/${urlPath(provisioned.dataSourceId)}",
+                token = token,
+                body = dataSourceRelationFormulaPatchBody(source, dataSourceIdsBySurface) { it in fields },
+            )
+        }.getOrElse { error ->
+            throw IllegalStateException("Notion V4 source ${source.title} could not install $stage: ${error.message}", error)
+        }
+    }
+
+    private fun createDataSourceContainer(token: String, pageId: String, source: NotionV4Source): NotionProvisionedV4Source {
+        val response = JSONObject(
             request(
                 method = "POST",
                 url = "$NOTION_BASE/databases",
                 token = token,
-                body = databaseCreateBody(pageId, database),
+                body = databaseContainerCreateBody(pageId, source),
+            ),
+        )
+        val databaseId = response.getString("id")
+        val dataSourceId = response.firstDataSourceIdOrNull() ?: retrieveDatabaseDataSourceId(token, databaseId)
+        return NotionProvisionedV4Source(source.surface, source.title, databaseId, dataSourceId)
+    }
+
+    private fun retrieveDatabaseDataSourceId(token: String, databaseId: String): String =
+        databaseDataSourceId(JSONObject(request("GET", "$NOTION_BASE/databases/${urlPath(databaseId)}", token)))
+
+    private fun upsertGraphPage(
+        token: String,
+        dataSourceId: String,
+        existingPageId: String?,
+        page: NotionGraphPage,
+    ): String =
+        if (existingPageId == null) {
+            createGraphPage(token, dataSourceId, page)
+        } else {
+            request(
+                method = "PATCH",
+                url = "$NOTION_BASE/pages/${urlPath(existingPageId)}",
+                token = token,
+                body = JSONObject().put("properties", JSONObject(page.properties.filterValues { it != JSONObject.NULL })),
+            )
+            existingPageId
+        }
+
+    private fun createGraphPage(token: String, dataSourceId: String, page: NotionGraphPage): String =
+        JSONObject(
+            request(
+                method = "POST",
+                url = "$NOTION_BASE/pages",
+                token = token,
+                body = graphPageCreateBody(dataSourceId, page),
             ),
         ).getString("id")
 
-    private fun repairDatabaseSchema(token: String, databaseId: String, database: NotionWorkspaceDatabase) {
-        val current = JSONObject(request("GET", "$NOTION_BASE/databases/${urlPath(databaseId)}", token))
-            .optJSONObject("properties") ?: JSONObject()
-        val titleProperty = database.properties.firstOrNull { it.type == "title" }?.name
-        val renameRequests = JSONObject()
-        if (titleProperty != null && !current.has(titleProperty)) {
-            val currentTitleProperty = legacyTitleField(database.title)
-                ?.takeIf(current::has)
-                ?: current.propertyNameByType("title")
-            currentTitleProperty?.let { existingTitle ->
-                renameRequests.put(existingTitle, JSONObject().put("name", titleProperty))
+    internal fun graphPageCreateBody(dataSourceId: String, page: NotionGraphPage): JSONObject =
+        JSONObject()
+            .put("parent", JSONObject().put("data_source_id", dataSourceId))
+            .put("properties", JSONObject(page.properties.filterValues { it != JSONObject.NULL }))
+
+    private fun readCanonicalPageBindings(token: String, dataSourceId: String): Map<String, String> {
+        val bindings = linkedMapOf<String, String>()
+        var cursor: String? = null
+        do {
+            val body = JSONObject().put("page_size", 100)
+            cursor?.let { body.put("start_cursor", it) }
+            val response = JSONObject(request("POST", dataSourceQueryUrl(dataSourceId), token, body))
+            response.optJSONArray("results").orEmptyObjects().forEach { page ->
+                val properties = page.optJSONObject("properties") ?: return@forEach
+                val canonicalId = properties.optJSONObject("Canonical ID").notionTextProperty()
+                val pageId = properties.optJSONObject("Page ID").notionTextProperty()
+                val bindingPageId = page.optString("id")
+                if (canonicalId.isNotBlank() && pageId.isNotBlank()) bindings[canonicalId] = pageId
+                if (canonicalId.isNotBlank() && bindingPageId.isNotBlank()) bindings["binding:$canonicalId"] = bindingPageId
             }
-        }
-        if (renameRequests.length() > 0) {
-            request(
-                method = "PATCH",
-                url = "$NOTION_BASE/databases/${urlPath(databaseId)}",
-                token = token,
-                body = JSONObject().put("properties", renameRequests),
-            )
-        }
-        val refreshed = if (renameRequests.length() > 0) {
-            JSONObject(request("GET", "$NOTION_BASE/databases/${urlPath(databaseId)}", token))
-                .optJSONObject("properties") ?: JSONObject()
-        } else {
-            current
-        }
-        val missing = JSONObject()
-        database.properties.forEach { property ->
-            if (!refreshed.has(property.name)) {
-                if (property.type != "title" || !refreshed.hasPropertyType("title")) {
-                    missing.put(property.name, JSONObject().put(property.type, property.config))
-                }
-            } else if (property.type != "title" && refreshed.optJSONObject(property.name)?.has(property.type) != true) {
-                missing.put(property.name, JSONObject().put(property.type, property.config))
-            }
-        }
-        if (missing.length() > 0) {
-            request(
-                method = "PATCH",
-                url = "$NOTION_BASE/databases/${urlPath(databaseId)}",
-                token = token,
-                body = JSONObject().put("properties", missing),
-            )
-        }
+            cursor = response.optString("next_cursor").takeIf { response.optBoolean("has_more") && it.isNotBlank() && it != "null" }
+        } while (cursor != null)
+        return bindings
     }
 
-    private fun upsertWorkspacePage(token: String, databaseId: String, page: NotionWorkspacePage) {
-        val existingPageId = queryWorkspacePage(token, databaseId, page.externalId)
-        val properties = JSONObject(page.properties.filterValues { it != JSONObject.NULL })
-        if (existingPageId == null) {
+    private fun upsertBindingPage(
+        token: String,
+        dataSourceId: String,
+        existingBindingPageId: String?,
+        canonicalId: String,
+        pageId: String,
+        surface: WorkspaceGraphSurface,
+    ) {
+        val properties = JSONObject()
+            .put("Binding", title("${surface.key}:$canonicalId".take(MAX_NOTION_TEXT_CHARS)))
+            .put("Canonical ID", richText(canonicalId))
+            .put("Page ID", richText(pageId))
+            .put("Entity type", richText(surface.key))
+            .put("Revision", richText(""))
+        if (existingBindingPageId == null) {
             request(
                 method = "POST",
                 url = "$NOTION_BASE/pages",
                 token = token,
                 body = JSONObject()
-                    .put("parent", JSONObject().put("database_id", databaseId))
+                    .put("parent", JSONObject().put("data_source_id", dataSourceId))
                     .put("properties", properties),
             )
         } else {
             request(
                 method = "PATCH",
-                url = "$NOTION_BASE/pages/${urlPath(existingPageId)}",
+                url = "$NOTION_BASE/pages/${urlPath(existingBindingPageId)}",
                 token = token,
                 body = JSONObject().put("properties", properties),
             )
         }
     }
 
-    private fun queryWorkspacePage(token: String, databaseId: String, externalId: String): String? {
-        val response = JSONObject(
-            request(
-                method = "POST",
-                url = "$NOTION_BASE/databases/${urlPath(databaseId)}/query",
-                token = token,
-                body = JSONObject()
-                    .put("page_size", 1)
-                    .put(
-                        "filter",
-                        JSONObject()
-                            .put("property", "identifier")
-                            .put("rich_text", JSONObject().put("equals", externalId)),
-                    ),
-            ),
+    private fun ensureV4HomeScaffold(token: String, pageId: String, textMarkers: Set<String>) {
+        if (textMarkers.any { it == V4_HOME_MARKER }) return
+        request(
+            method = "PATCH",
+            url = "$NOTION_BASE/blocks/${urlPath(pageId)}/children",
+            token = token,
+            body = homeScaffoldBodyV4(),
         )
-        return response.optJSONArray("results").orEmptyObjects().firstOrNull()?.optString("id")?.takeIf { it.isNotBlank() }
-    }
-
-    private fun queryWorkspaceDatabaseRows(
-        token: String,
-        databaseId: String,
-        table: WorkspaceTable,
-    ): List<GoogleSheetsWorkspaceRow> {
-        val rows = mutableListOf<GoogleSheetsWorkspaceRow>()
-        var cursor: String? = null
-        do {
-            val body = JSONObject().put("page_size", 100)
-            cursor?.let { body.put("start_cursor", it) }
-            val response = JSONObject(
-                request(
-                    method = "POST",
-                    url = "$NOTION_BASE/databases/${urlPath(databaseId)}/query",
-                    token = token,
-                    body = body,
-                ),
-            )
-            response.optJSONArray("results").orEmptyObjects()
-                .mapNotNullTo(rows) { page -> parseWorkspacePage(table, page) }
-            cursor = response.optString("next_cursor").takeIf { response.optBoolean("has_more") && it.isNotBlank() && it != "null" }
-        } while (cursor != null)
-        return rows
     }
 
     private fun urlPath(value: String): String =
@@ -625,30 +640,162 @@ class NotionGateway {
     private fun checkbox(value: Boolean): JSONObject =
         JSONObject().put("checkbox", value)
 
-    private fun Any?.toNotionProperty(field: WorkspaceField): Any = when (field.notionType) {
-        "title" -> title(toStringOrEmpty())
-        "rich_text" -> richText(toStringOrEmpty())
-        "select" -> select(toStringOrEmpty())
-        "number" -> number(asDoubleOrNull())
-        "date" -> date(toStringOrEmpty().takeIf { it.isNotBlank() })
-        "url" -> url(toStringOrEmpty())
-        "checkbox" -> checkbox(asBoolean())
-        else -> richText(toStringOrEmpty())
+    private fun notionBasePropertySchemas(schema: WorkspaceGraphSurfaceSchema): JSONObject =
+        JSONObject().apply {
+            schema.fields
+                .filterNot { it.type == WorkspaceGraphValueType.RELATION || it.type == WorkspaceGraphValueType.COMPUTED }
+                .filterNot { field -> schema.surface.primary && field.hidden }
+                .forEach { field -> put(field.label, notionBasePropertySchema(field)) }
+            if (schema.surface == WorkspaceGraphSurface.BINDINGS) {
+                put("Page ID", JSONObject().put("rich_text", JSONObject()))
+            }
+        }
+
+    private fun notionBasePropertySchema(field: WorkspaceGraphField): JSONObject =
+        when (field.type) {
+            WorkspaceGraphValueType.TITLE -> JSONObject().put("title", JSONObject())
+            WorkspaceGraphValueType.TEXT, WorkspaceGraphValueType.LONG_TEXT -> JSONObject().put("rich_text", JSONObject())
+            WorkspaceGraphValueType.DECIMAL, WorkspaceGraphValueType.MONEY -> JSONObject().put("number", JSONObject())
+            WorkspaceGraphValueType.DATE, WorkspaceGraphValueType.DATE_TIME -> JSONObject().put("date", JSONObject())
+            WorkspaceGraphValueType.BOOLEAN -> JSONObject().put("checkbox", JSONObject())
+            WorkspaceGraphValueType.URL -> JSONObject().put("url", JSONObject())
+            WorkspaceGraphValueType.SELECT -> JSONObject().put(
+                "select",
+                JSONObject().apply {
+                    if (field.key == "unit") {
+                        put("options", JSONArray().apply {
+                            (WorkspaceGraphContract.supportedUnits + "unknown").distinct().forEach { unit ->
+                                put(JSONObject().put("name", unit))
+                            }
+                        })
+                    }
+                },
+            )
+            WorkspaceGraphValueType.MULTI_SELECT -> JSONObject().put("multi_select", JSONObject())
+            WorkspaceGraphValueType.RELATION, WorkspaceGraphValueType.COMPUTED -> JSONObject()
+        }
+
+    private fun notionComputedPropertySchema(field: WorkspaceGraphField): JSONObject =
+        when (val formulaKey = field.formulaKey.orEmpty()) {
+            "ingredient_on_hand" -> rollup("Kitchen item", "On hand", "sum")
+            "ingredient_kitchen_unit" -> rollup("Kitchen item", "Unit", "show_original")
+            "recipe_ingredient_count" -> rollup("Ingredients", "Ingredient", "count")
+            "recipe_ready_count" -> rollup("Ingredients", "Ready score", "sum")
+            "recipe_missing_items" -> rollup("Ingredients", "Status", "show_original")
+            "meal_recipe_readiness" -> rollup("Recipe", "Can make %", "show_original")
+            "shopping_on_hand" -> rollup("Kitchen item", "On hand", "sum")
+            "shopping_kitchen_unit" -> rollup("Kitchen item", "Unit", "show_original")
+            "spending_lines_subtotal" -> rollup("Purchase lines", "Final amount", "sum")
+            "spending_food_amount" -> rollup("Purchase lines", "Food amount component", "sum")
+            "spending_non_food_amount" -> rollup("Purchase lines", "Non-food amount component", "sum")
+            "spending_line_count" -> rollup("Purchase lines", "Line", "count")
+            "purchase_line_currency" -> rollup("Purchase", "Currency", "show_original")
+            else -> JSONObject().put("formula", JSONObject().put("expression", notionFormulaExpression(formulaKey)))
+        }
+
+    private fun String?.isNotionRollup(): Boolean = this in setOf(
+        "ingredient_on_hand",
+        "ingredient_kitchen_unit",
+        "recipe_ingredient_count",
+        "recipe_ready_count",
+        "recipe_missing_items",
+        "meal_recipe_readiness",
+        "shopping_on_hand",
+        "shopping_kitchen_unit",
+        "spending_lines_subtotal",
+        "spending_food_amount",
+        "spending_non_food_amount",
+        "spending_line_count",
+        "purchase_line_currency",
+    )
+
+    private fun notionComputedDependencyOrder(formulaKey: String?): Int = when (formulaKey) {
+        "ingredient_on_hand", "ingredient_kitchen_unit", "shopping_on_hand", "shopping_kitchen_unit",
+        "purchase_line_currency", "recipe_ingredient_count", "spending_line_count", "kitchen_low_stock" -> 10
+        "ingredient_missing_amount", "ingredient_required_score", "purchase_line_final_amount" -> 20
+        "purchase_line_food_amount", "purchase_line_non_food_amount" -> 30
+        "ingredient_status" -> 30
+        "ingredient_ready_score" -> 40
+        "recipe_ready_count", "recipe_missing_items", "spending_lines_subtotal", "spending_food_amount", "spending_non_food_amount" -> 50
+        "recipe_can_make_percent", "shopping_still_needed", "spending_effective_total", "spending_difference" -> 60
+        "meal_recipe_readiness", "meal_missing_items" -> 70
+        else -> 100
     }
 
-    private fun Any?.toStringOrEmpty(): String = this?.toString().orEmpty()
+    private fun rollup(relation: String, property: String, function: String): JSONObject =
+        JSONObject().put(
+            "rollup",
+            JSONObject()
+                .put("relation_property_name", relation)
+                .put("rollup_property_name", property)
+                .put("function", function),
+        )
 
-    private fun Any?.asBoolean(): Boolean = when (this) {
-        is Boolean -> this
-        is Number -> toInt() != 0
-        else -> toStringOrEmpty().equals("true", ignoreCase = true)
+    private fun notionFormulaExpression(formulaKey: String): String = when (formulaKey) {
+        "kitchen_low_stock" -> "if(empty(prop(\"Low at\")), false, prop(\"On hand\") <= prop(\"Low at\"))"
+        "ingredient_missing_amount" -> "if(or(empty(prop(\"Amount\")), empty(prop(\"Kitchen item\"))), 0, if(prop(\"Amount\") > prop(\"On hand\"), prop(\"Amount\") - prop(\"On hand\"), 0))"
+        "ingredient_status" -> "if(prop(\"Optional\"), \"Optional\", if(empty(prop(\"Kitchen item\")), \"Unlinked\", if(empty(prop(\"Amount\")), \"Check\", if(prop(\"On hand\") < prop(\"Amount\"), \"Need\", \"Have\"))))"
+        "ingredient_ready_score" -> "if(prop(\"Optional\"), 1, if(empty(prop(\"Kitchen item\")), 0, if(empty(prop(\"Amount\")), 0, if(prop(\"On hand\") >= prop(\"Amount\"), 1, 0))))"
+        "ingredient_required_score" -> "if(prop(\"Optional\"), 0, 1)"
+        "recipe_can_make_percent" -> "if(prop(\"Ingredient count\") == 0, 0, prop(\"Ready count\") / prop(\"Ingredient count\"))"
+        "meal_missing_items" -> "if(empty(prop(\"Recipe\")), \"No recipe linked\", \"Open linked Recipe for missing items\")"
+        "shopping_still_needed" -> "if(empty(prop(\"Amount\")), 0, if(prop(\"Amount\") > prop(\"On hand\"), prop(\"Amount\") - prop(\"On hand\"), 0))"
+        "purchase_line_final_amount" -> "if(empty(prop(\"Subtotal\")), prop(\"Quantity\") * prop(\"Unit price\"), prop(\"Subtotal\")) - if(empty(prop(\"Discount\")), 0, prop(\"Discount\")) + if(empty(prop(\"Tax\")), 0, prop(\"Tax\"))"
+        "purchase_line_food_amount" -> "if(format(prop(\"Category\")) == \"food\", if(empty(prop(\"Subtotal\")), prop(\"Quantity\") * prop(\"Unit price\"), prop(\"Subtotal\")) - if(empty(prop(\"Discount\")), 0, prop(\"Discount\")) + if(empty(prop(\"Tax\")), 0, prop(\"Tax\")), 0)"
+        "purchase_line_non_food_amount" -> "if(format(prop(\"Category\")) == \"food\", 0, if(empty(prop(\"Subtotal\")), prop(\"Quantity\") * prop(\"Unit price\"), prop(\"Subtotal\")) - if(empty(prop(\"Discount\")), 0, prop(\"Discount\")) + if(empty(prop(\"Tax\")), 0, prop(\"Tax\")))"
+        "spending_effective_total" -> "if(empty(prop(\"Entered total\")), prop(\"Lines subtotal\"), prop(\"Entered total\"))"
+        "spending_difference" -> "if(empty(prop(\"Entered total\")), 0, prop(\"Entered total\") - prop(\"Lines subtotal\"))"
+        else -> "\"${formulaKey.take(80)}\""
     }
 
-    private fun Any?.asDoubleOrNull(): Double? = when (this) {
-        is Double -> this
-        is Number -> toDouble()
-        else -> toStringOrEmpty().toDoubleOrNull()
-    }
+    private fun WorkspaceGraphRow.toNotionProperties(
+        schema: WorkspaceGraphSurfaceSchema,
+        pageIdsByCanonicalId: Map<String, String>,
+        includeRelations: Boolean,
+    ): Map<String, Any> =
+        schema.fields
+            .filterNot { field -> schema.surface.primary && field.hidden }
+            .mapNotNull { field ->
+                val value = values[field.key] ?: return@mapNotNull null
+                if (value is WorkspaceGraphValue.Computed) return@mapNotNull null
+                if (value is WorkspaceGraphValue.Relation && !includeRelations) return@mapNotNull null
+                val property = value.toNotionPropertyValue(field, pageIdsByCanonicalId)
+                if (property == JSONObject.NULL) null else field.label to property
+            }
+            .toMap()
+
+    private fun WorkspaceGraphValue.toNotionPropertyValue(field: WorkspaceGraphField, pageIdsByCanonicalId: Map<String, String>): Any =
+        when (this) {
+            is WorkspaceGraphValue.Text -> when (field.type) {
+                WorkspaceGraphValueType.TITLE -> title(value)
+                WorkspaceGraphValueType.SELECT -> select(value)
+                WorkspaceGraphValueType.URL -> url(value)
+                else -> richText(value)
+            }
+            is WorkspaceGraphValue.Decimal -> number(value.toDouble())
+            is WorkspaceGraphValue.MoneyValue -> number(majorUnits.toDouble())
+            is WorkspaceGraphValue.Date -> date(value)
+            is WorkspaceGraphValue.DateTime -> dateTime(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC)))
+            is WorkspaceGraphValue.BooleanValue -> checkbox(value)
+            is WorkspaceGraphValue.TextList -> JSONObject().put("multi_select", JSONArray().apply { values.forEach { put(JSONObject().put("name", it.take(100))) } })
+            is WorkspaceGraphValue.Relation -> JSONObject().put(
+                "relation",
+                JSONArray().apply {
+                    canonicalIds.mapNotNull(pageIdsByCanonicalId::get).forEach { pageId -> put(JSONObject().put("id", pageId)) }
+                },
+            )
+            is WorkspaceGraphValue.Computed -> JSONObject.NULL
+        }
+
+    private fun homeScaffoldBodyV4(): JSONObject =
+        JSONObject().put(
+            "children",
+            JSONArray()
+                .put(heading("heading_1", V4_HOME_MARKER))
+                .put(paragraph("Daily dashboard for food, shopping, meals, recipes, and spending."))
+                .put(heading("heading_2", "Today"))
+                .put(paragraph("Use the linked databases below. Formula and rollup columns update inside Notion from linked rows.")),
+        )
 
     private fun JSONObject.richText(type: String): String =
         optJSONObject(type)
@@ -683,14 +830,21 @@ class NotionGateway {
         }
     }
 
+    private fun JSONObject?.notionTextProperty(): String {
+        if (this == null) return ""
+        return optJSONArray("title").orEmptyObjects().joinToString(separator = "") { it.richTextValue() }
+            .ifBlank { optJSONArray("rich_text").orEmptyObjects().joinToString(separator = "") { it.richTextValue() } }
+    }
+
     private fun Double.trimNumber(): String =
         if (this % 1.0 == 0.0) toLong().toString() else toString()
 
-    private fun JSONObject.hasPropertyType(type: String): Boolean =
-        keys().asSequence().any { key -> optJSONObject(key)?.has(type) == true }
-
-    private fun JSONObject.propertyNameByType(type: String): String? =
-        keys().asSequence().firstOrNull { key -> optJSONObject(key)?.has(type) == true }
+    private fun JSONObject.firstDataSourceIdOrNull(): String? =
+        optJSONArray("data_sources")
+            .orEmptyObjects()
+            .firstOrNull()
+            ?.optString("id")
+            ?.takeIf { it.isNotBlank() }
 
     private fun JSONArray?.orEmptyObjects(): List<JSONObject> =
         if (this == null) {
@@ -701,84 +855,69 @@ class NotionGateway {
 
     private companion object {
         const val NOTION_BASE = "https://api.notion.com/v1"
-        const val NOTION_VERSION = "2022-06-28"
+        const val NOTION_VERSION = "2025-09-03"
         const val TIMEOUT_MILLIS = 30_000
-        const val MAX_RICH_TEXT_CHARS = 1_800
-        const val MAX_APPEND_BLOCKS = 100
         const val MAX_NOTION_TEXT_CHARS = 1_900
-        const val HOME_SCAFFOLD_MARKER = "WonderFood Home"
-        fun notionDatabaseTitle(tableTitle: String): String = "WonderFood $tableTitle"
-        fun legacyTitleField(databaseTitle: String): String? = when (databaseTitle) {
-            "WonderFood Kitchen" -> "Item"
-            "WonderFood Shopping" -> "Item"
-            "WonderFood Meals" -> "Meal"
-            "WonderFood Plans" -> "Plan"
-            "WonderFood Recipes" -> "Recipe"
-            "WonderFood Purchases" -> "Purchase"
-            else -> null
-        }
-        val SNAPSHOT_PART_CAPTION = Regex("""WonderFood snapshot part (\d+) of (\d+)""")
-        val NOTION_DATABASES = WonderFoodWorkspaceSchema.tables.map { table ->
-            NotionWorkspaceDatabase(
-                title = notionDatabaseTitle(table.title),
-                properties = table.fields.map { field -> NotionProperty(field.name, field.notionType) },
-            )
-        }
+        const val V4_HOME_MARKER = "WonderFood Home"
+        fun notionUpgradeRequiredMessage(): String =
+            "Workspace upgrade required: Notion V3 snapshot export/import is disabled. Create a fresh V4 workspace from canonical HouseholdSnapshot."
     }
 }
+
+private fun WorkspaceGraphSurface.notionTitle(): String = when (this) {
+    WorkspaceGraphSurface.LISTS_HELP -> "WonderFood Help & Setup"
+    WorkspaceGraphSurface.INGREDIENTS -> "WonderFood Recipe Ingredients"
+    WorkspaceGraphSurface.STOCK_LOTS -> "WonderFood Stock Lots"
+    WorkspaceGraphSurface.BINDINGS -> "WonderFood Bindings"
+    else -> "WonderFood $label"
+}
+
+private fun emptyGraphProjection(): WorkspaceGraphProjection =
+    WorkspaceGraphProjection(
+        schemaVersion = WORKSPACE_GRAPH_SCHEMA_VERSION,
+        householdId = "00000000-0000-0000-0000-000000000000",
+        defaultCurrency = "USD",
+        timezone = "UTC",
+        locale = "en-US",
+        schemas = WorkspaceGraphContract.schemas,
+        rows = WorkspaceGraphContract.schemas.associate { it.surface to emptyList() },
+    )
 
 private data class NotionWorkspaceChildren(
     val databasesByTitle: Map<String, String>,
     val textMarkers: Set<String>,
 )
 
-data class NotionProperty(
-    val name: String,
-    val type: String,
-    val config: JSONObject = JSONObject(),
-)
-
-data class NotionWorkspaceDatabase(
+internal data class NotionV4Source(
+    val surface: WorkspaceGraphSurface,
     val title: String,
-    val properties: List<NotionProperty>,
+    val schema: WorkspaceGraphSurfaceSchema,
+    val primaryNavigation: Boolean,
 )
 
-data class NotionWorkspacePage(
+internal data class NotionGraphPage(
+    val surface: WorkspaceGraphSurface,
     val databaseTitle: String,
-    val externalId: String,
+    val canonicalId: String,
     val properties: Map<String, Any>,
+)
+
+private data class NotionProvisionedV4Source(
+    val surface: WorkspaceGraphSurface,
+    val title: String,
+    val databaseId: String,
+    val dataSourceId: String,
+)
+
+private data class NotionV4WorkspaceProvision(
+    val sourcesBySurface: Map<WorkspaceGraphSurface, NotionProvisionedV4Source>,
+    val createdSourceTitles: List<String>,
 )
 
 data class NotionPageAccess(
     val pageId: String,
     val reachable: Boolean,
     val summary: String,
-)
-
-data class NotionSnapshotExportResult(
-    val pageId: String,
-    val updatedAt: String,
-    val chunkCount: Int,
-    val byteCount: Int,
-)
-
-data class NotionRemoteSnapshotResult(
-    val pageId: String,
-    val blockCount: Int,
-    val updatedAt: String?,
-    val snapshot: WonderFoodSnapshot?,
-)
-
-data class NotionRemoteWorkspaceDraftResult(
-    val pageId: String,
-    val rowCount: Int,
-    val draft: com.wonderfood.app.data.FoodDraft?,
-)
-
-data class NotionRemoteWorkspaceMergeResult(
-    val pageId: String,
-    val rowCount: Int,
-    val merge: WorkspaceMergeResult?,
 )
 
 data class NotionWorkspaceProvisionResult(

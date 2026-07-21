@@ -1,6 +1,6 @@
 package com.wonderfood.app.ai
 
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.ChatMessage
 import com.wonderfood.app.data.ChatRole
@@ -25,7 +25,7 @@ class FoodInterpreterTest {
     fun boughtTextCreatesInventoryDraft() {
         val turn = interpreter.interpret(
             text = "I bought eggs, Greek yogurt, spinach and frozen berries",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as InventoryDraft
@@ -36,7 +36,7 @@ class FoodInterpreterTest {
     fun needTextCreatesGroceryDraft() {
         val turn = interpreter.interpret(
             text = "Need oats, bananas and chicken thighs",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as GroceryDraft
@@ -47,7 +47,7 @@ class FoodInterpreterTest {
     fun weeklyCostcoTemplateCreatesReviewableInventoryDraftInKitchenContext() {
         val turn = interpreter.interpret(
             text = "Stock weekly Costco",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Kitchen.",
         )
 
@@ -65,7 +65,7 @@ class FoodInterpreterTest {
     fun indianGroceriesTemplateCreatesReviewableGroceryDraftInShopContext() {
         val turn = interpreter.interpret(
             text = "Need Indian groceries",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Shop.",
         )
 
@@ -82,7 +82,7 @@ class FoodInterpreterTest {
     fun preferredStaplesTemplateUsesUserSettingsWithoutLlm() {
         val turn = interpreter.interpret(
             text = "Need preferred staples",
-            memory = FoodMemory(
+            memory = HouseholdUiMemory(
                 preferences = FoodPreferences(preferredStaples = "Ragi, rice, Greek yogurt"),
             ),
             promptContext = "Current WonderFood section: Shop.",
@@ -97,7 +97,7 @@ class FoodInterpreterTest {
     fun kitchenContextFoodListCreatesInventoryDraft() {
         val turn = interpreter.interpret(
             text = "mixed vegetables 2 bags 1dollar pouch from Walmart, orgain protein powder, frozen berries costco-3 servings left, frozen broccoli 2 bags Walmart",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Kitchen. Infer the smallest food-memory operation.",
         )
 
@@ -112,13 +112,13 @@ class FoodInterpreterTest {
 
     @Test
     fun pantryParserHandlesChecklistExamplesWithoutLlm() {
-        val one = interpreter.interpret("12 eggs", FoodMemory(), "Current WonderFood section: Kitchen.")
+        val one = interpreter.interpret("12 eggs", HouseholdUiMemory(), "Current WonderFood section: Kitchen.")
             .draft as InventoryDraft
-        val two = interpreter.interpret("milk 2 gallons fridge", FoodMemory(), "Current WonderFood section: Kitchen.")
+        val two = interpreter.interpret("milk 2 gallons fridge", HouseholdUiMemory(), "Current WonderFood section: Kitchen.")
             .draft as InventoryDraft
-        val three = interpreter.interpret("rice, lentils, onions", FoodMemory(), "Current WonderFood section: Kitchen.")
+        val three = interpreter.interpret("rice, lentils, onions", HouseholdUiMemory(), "Current WonderFood section: Kitchen.")
             .draft as InventoryDraft
-        val four = interpreter.interpret("add 3 frozen pizzas", FoodMemory(), "Current WonderFood section: Kitchen.")
+        val four = interpreter.interpret("add 3 frozen pizzas", HouseholdUiMemory(), "Current WonderFood section: Kitchen.")
             .draft as InventoryDraft
 
         assertEquals("Eggs", one.items.single().name)
@@ -137,7 +137,7 @@ class FoodInterpreterTest {
         val previousList = "onions, tomatoes, carrots"
         val turn = interpreter.interpret(
             text = "add them to groceries",
-            memory = FoodMemory(
+            memory = HouseholdUiMemory(
                 messages = listOf(
                     ChatMessage(1, ChatRole.USER, previousList, 0),
                     ChatMessage(2, ChatRole.ASSISTANT, "What should I do with those?", 0),
@@ -155,7 +155,7 @@ class FoodInterpreterTest {
     fun logMealCreatesNutritionDraft() {
         val turn = interpreter.interpret(
             text = "Log chicken rice bowl for lunch",
-            memory = FoodMemory(
+            memory = HouseholdUiMemory(
                 inventory = listOf(
                     InventoryItem(
                         id = 1,
@@ -186,7 +186,7 @@ class FoodInterpreterTest {
     fun logMealUsesExplicitCaloriesAndProtein() {
         val turn = interpreter.interpret(
             text = "Log breakfast oatmeal banana 320 calories 10g protein",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as MealLogDraft
@@ -200,7 +200,7 @@ class FoodInterpreterTest {
     fun mealPlanCreatesStructuredEntries() {
         val turn = interpreter.interpret(
             text = "Plan meals this week",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as MealPlanDraft
@@ -213,7 +213,7 @@ class FoodInterpreterTest {
     fun tomorrowLunchRecipeWithoutIngredientsAsksBeforeDrafting() {
         val turn = interpreter.interpret(
             text = "Plan tomato peanut curry for tomorrow lunch and save the recepie",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         assertNull(turn.draft)
@@ -224,7 +224,7 @@ class FoodInterpreterTest {
     fun tomorrowLunchRecipeWithIngredientsCreatesRecipeAndMealPlanDraft() {
         val turn = interpreter.interpret(
             text = "Plan tomato peanut curry with tomatoes, peanuts and onion for tomorrow lunch and save the recepie",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as CompositeDraft
@@ -242,7 +242,7 @@ class FoodInterpreterTest {
     fun nutritionWithoutServingAsksForPortionBeforeDrafting() {
         val turn = interpreter.interpret(
             text = "How many calories in tomato peanut curry?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         assertNull(turn.draft)
@@ -253,7 +253,7 @@ class FoodInterpreterTest {
     fun tomorrowLunchWithoutRecipeIsPlanNotMealLog() {
         val turn = interpreter.interpret(
             text = "Add tofu bowl for tomorrow lunch",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
         )
 
         val draft = turn.draft as MealPlanDraft

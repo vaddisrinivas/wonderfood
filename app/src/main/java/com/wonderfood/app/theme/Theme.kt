@@ -82,7 +82,7 @@ fun WonderFoodTheme(
     darkTheme ?: when (themeMode) {
       WonderFoodThemeMode.LIGHT -> false
       WonderFoodThemeMode.DARK -> true
-      WonderFoodThemeMode.SYSTEM -> false
+      WonderFoodThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
   val colorScheme =
     when {

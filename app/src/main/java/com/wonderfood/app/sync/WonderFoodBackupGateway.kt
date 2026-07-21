@@ -2,8 +2,8 @@ package com.wonderfood.app.sync
 
 import android.content.Context
 import android.os.Build
-import com.wonderfood.app.data.FoodChatStore
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.core.data.room.WonderFoodDatabaseFactory
+import com.wonderfood.core.model.household.HouseholdSnapshot
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -25,18 +25,18 @@ class WonderFoodBackupGateway(private val context: Context) {
     private val backupDir: File
         get() = File(context.filesDir, "sync-backups").apply { mkdirs() }
 
-    fun createEncryptedBackup(passphrase: String, memory: FoodMemory): BackupSnapshot {
+    fun createEncryptedBackup(passphrase: String, snapshot: HouseholdSnapshot): BackupSnapshot {
         require(passphrase.length >= MIN_PASSPHRASE_LENGTH) {
             "Use at least $MIN_PASSPHRASE_LENGTH characters for cloud-ready backup encryption."
         }
-        val databaseFile = context.getDatabasePath(DB_NAME)
-        require(databaseFile.exists()) { "WonderFood database was not found yet." }
+        val databaseFile = context.getDatabasePath(CANONICAL_DB_NAME)
+        require(databaseFile.exists()) { "WonderFood canonical household database was not found yet." }
         val createdAt = Instant.now()
-        val manifest = backupManifest(createdAt, memory, databaseFile)
+        val manifest = canonicalBackupManifest(createdAt, snapshot, databaseFile)
         val zipBytes = zipBytes(
             entries = mapOf(
                 MANIFEST_ENTRY to manifest.toString(2).toByteArray(Charsets.UTF_8),
-                DB_ENTRY to databaseFile.readBytes(),
+                CANONICAL_DB_ENTRY to databaseFile.readBytes(),
             ),
         )
         val encrypted = encrypt(zipBytes, passphrase)
@@ -48,22 +48,23 @@ class WonderFoodBackupGateway(private val context: Context) {
             fileName = file.name,
             sizeBytes = file.length(),
             createdAtMillis = createdAt.toEpochMilli(),
-            itemCount = memory.inventory.size + memory.groceries.size + memory.recipes.size + memory.mealLogs.size,
+            itemCount = snapshot.canonicalObjectCount(),
+            databaseName = CANONICAL_DB_ENTRY,
         )
     }
 
-    fun createGoogleDriveBackup(memory: FoodMemory): GoogleDriveBackupPayload {
-        val databaseFile = context.getDatabasePath(DB_NAME)
-        require(databaseFile.exists()) { "WonderFood database was not found yet." }
+    fun createGoogleDriveBackup(snapshot: HouseholdSnapshot): GoogleDriveBackupPayload {
+        val databaseFile = context.getDatabasePath(CANONICAL_DB_NAME)
+        require(databaseFile.exists()) { "WonderFood canonical household database was not found yet." }
         val createdAt = Instant.now()
-        val manifest = backupManifest(createdAt, memory, databaseFile)
-            .put("format", "wonderfood.cloud-backup.v1")
+        val manifest = canonicalBackupManifest(createdAt, snapshot, databaseFile)
+            .put("format", "wonderfood.household-cloud-backup.v105")
             .put("cloud_target", "google_drive_appDataFolder")
             .put("protection", "Google Account + Drive appDataFolder")
         val zipBytes = zipBytes(
             entries = mapOf(
                 MANIFEST_ENTRY to manifest.toString(2).toByteArray(Charsets.UTF_8),
-                DB_ENTRY to databaseFile.readBytes(),
+                CANONICAL_DB_ENTRY to databaseFile.readBytes(),
             ),
         )
         val fileName = "wonderfood-${backupTimestamp(createdAt)}.wfcloudbackup"
@@ -75,24 +76,25 @@ class WonderFoodBackupGateway(private val context: Context) {
                 fileName = fileName,
                 sizeBytes = zipBytes.size.toLong(),
                 createdAtMillis = createdAt.toEpochMilli(),
-                itemCount = memory.inventory.size + memory.groceries.size + memory.recipes.size + memory.mealLogs.size,
+                itemCount = snapshot.canonicalObjectCount(),
+                databaseName = CANONICAL_DB_ENTRY,
             ),
         )
     }
 
-    fun createRestoreSafetyBackup(memory: FoodMemory): BackupSnapshot {
-        val payload = createGoogleDriveBackup(memory)
+    fun createRestoreSafetyBackup(snapshot: HouseholdSnapshot): BackupSnapshot {
+        val payload = createGoogleDriveBackup(snapshot)
         val file = File(backupDir, "wonderfood-safety-before-restore-${backupTimestamp(Instant.now())}.wfcloudbackup")
         file.writeBytes(payload.bytes)
         return payload.snapshot.copy(fileName = file.name, sizeBytes = file.length())
     }
 
     fun createBackendSwitchSafetyBackup(
-        memory: FoodMemory,
+        snapshot: HouseholdSnapshot,
         fromLabel: String,
         toLabel: String,
     ): BackupSnapshot {
-        val payload = createGoogleDriveBackup(memory)
+        val payload = createGoogleDriveBackup(snapshot)
         val timestamp = backupTimestamp(Instant.now())
         val file = File(backupDir, "wonderfood-safety-before-backend-switch-$timestamp.wfcloudbackup")
         file.writeBytes(payload.bytes)
@@ -105,6 +107,7 @@ class WonderFoodBackupGateway(private val context: Context) {
                 .put("created_at_millis", payload.snapshot.createdAtMillis)
                 .put("size_bytes", file.length())
                 .put("item_count", payload.snapshot.itemCount)
+                .put("database", payload.snapshot.databaseName)
                 .toString(),
         )
         return payload.snapshot.copy(fileName = file.name, sizeBytes = file.length())
@@ -118,14 +121,18 @@ class WonderFoodBackupGateway(private val context: Context) {
         require(file.exists()) { "No local WonderFood backup found yet." }
         val zipBytes = decrypt(file.readBytes(), passphrase)
         val entries = unzipBytes(zipBytes)
-        val dbBytes = entries[DB_ENTRY] ?: error("Backup is missing $DB_ENTRY.")
         val manifest = entries[MANIFEST_ENTRY]
             ?.toString(Charsets.UTF_8)
             ?.let(::JSONObject)
             ?: JSONObject()
+        val databaseEntry = manifest.optString("database", DB_ENTRY)
+        require(databaseEntry in SUPPORTED_DB_ENTRIES) {
+            "Backup manifest points to an unsupported database file."
+        }
+        val dbBytes = entries[databaseEntry] ?: error("Backup is missing $databaseEntry.")
         val tempDb = File(context.cacheDir, "wonderfood-restore-${System.currentTimeMillis()}.db")
         tempDb.writeBytes(dbBytes)
-        val target = context.getDatabasePath(DB_NAME)
+        val target = context.getDatabasePath(databaseEntry)
         target.parentFile?.mkdirs()
         tempDb.copyTo(target, overwrite = true)
         tempDb.delete()
@@ -134,23 +141,25 @@ class WonderFoodBackupGateway(private val context: Context) {
             sizeBytes = file.length(),
             createdAtMillis = manifest.optLong("created_at_millis", 0L),
             itemCount = manifest.optJSONObject("counts")?.optInt("food_objects", 0) ?: 0,
+            databaseName = databaseEntry,
         )
     }
 
     fun restoreGoogleDriveBackup(bytes: ByteArray, sourceName: String = LATEST_CLOUD_BACKUP): BackupSnapshot {
         require(bytes.isNotEmpty()) { "Google Drive backup was empty." }
         val entries = unzipBytes(bytes)
-        val dbBytes = entries[DB_ENTRY] ?: error("Backup is missing $DB_ENTRY.")
         val manifest = entries[MANIFEST_ENTRY]
             ?.toString(Charsets.UTF_8)
             ?.let(::JSONObject)
             ?: JSONObject()
-        require(manifest.optString("database", DB_ENTRY) == DB_ENTRY) {
+        val databaseEntry = manifest.optString("database", DB_ENTRY)
+        require(databaseEntry in SUPPORTED_DB_ENTRIES) {
             "Backup manifest points to an unsupported database file."
         }
+        val dbBytes = entries[databaseEntry] ?: error("Backup is missing $databaseEntry.")
         val tempDb = File(context.cacheDir, "wonderfood-cloud-restore-${System.currentTimeMillis()}.db")
         tempDb.writeBytes(dbBytes)
-        val target = context.getDatabasePath(DB_NAME)
+        val target = context.getDatabasePath(databaseEntry)
         target.parentFile?.mkdirs()
         tempDb.copyTo(target, overwrite = true)
         tempDb.delete()
@@ -160,6 +169,7 @@ class WonderFoodBackupGateway(private val context: Context) {
             sizeBytes = bytes.size.toLong(),
             createdAtMillis = manifest.optLong("created_at_millis", 0L),
             itemCount = manifest.optJSONObject("counts")?.optInt("food_objects", 0) ?: 0,
+            databaseName = databaseEntry,
         )
     }
 
@@ -171,14 +181,15 @@ class WonderFoodBackupGateway(private val context: Context) {
     ): BackupManifestPreview {
         require(bytes.isNotEmpty()) { "Google Drive backup was empty." }
         val entries = unzipBytes(bytes)
-        require(entries[DB_ENTRY] != null) { "Backup is missing $DB_ENTRY." }
         val manifest = entries[MANIFEST_ENTRY]
             ?.toString(Charsets.UTF_8)
             ?.let(::JSONObject)
             ?: JSONObject()
-        require(manifest.optString("database", DB_ENTRY) == DB_ENTRY) {
+        val databaseEntry = manifest.optString("database", DB_ENTRY)
+        require(databaseEntry in SUPPORTED_DB_ENTRIES) {
             "Backup manifest points to an unsupported database file."
         }
+        require(entries[databaseEntry] != null) { "Backup is missing $databaseEntry." }
         val counts = manifest.optJSONObject("counts") ?: JSONObject()
         return BackupManifestPreview(
             fileName = sourceName,
@@ -225,29 +236,36 @@ class WonderFoodBackupGateway(private val context: Context) {
         backupDir.deleteRecursively()
     }
 
-    private fun backupManifest(createdAt: Instant, memory: FoodMemory, databaseFile: File): JSONObject =
+    private fun canonicalBackupManifest(createdAt: Instant, snapshot: HouseholdSnapshot, databaseFile: File): JSONObject =
         JSONObject()
-            .put("format", "wonderfood.backup.v1")
+            .put("format", "wonderfood.household-backup.v105")
             .put("created_at", createdAt.toString())
             .put("created_at_millis", createdAt.toEpochMilli())
-            .put("schema_version", FoodChatStore.SCHEMA_VERSION)
+            .put("schema_version", snapshot.household.schemaVersion)
+            .put("household_id", snapshot.household.id.value)
+            .put("active_data_home", snapshot.household.activeDataHome.name)
             .put("device_model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
             .put("android_sdk", Build.VERSION.SDK_INT)
-            .put("database", DB_ENTRY)
+            .put("database", CANONICAL_DB_ENTRY)
             .put("database_sha256", databaseFile.readBytes().sha256Hex())
             .put(
                 "counts",
                 JSONObject()
-                    .put("inventory", memory.inventory.size)
-                    .put("groceries", memory.groceries.size)
-                    .put("recipes", memory.recipes.size)
-                    .put("meal_logs", memory.mealLogs.size)
-                    .put("meal_plans", memory.mealPlans.size)
-                    .put("plan_entries", memory.mealPlanEntries.size)
-                    .put("messages", memory.messages.size)
-                    .put("food_objects", memory.inventory.size + memory.groceries.size + memory.recipes.size + memory.mealLogs.size),
+                    .put("items", snapshot.items.size)
+                    .put("food_items", snapshot.items.count { it.kind.name == "FOOD" })
+                    .put("non_food_items", snapshot.items.count { it.kind.name != "FOOD" })
+                    .put("inventory_lots", snapshot.inventoryLots.size)
+                    .put("shopping_lines", snapshot.shoppingLines.size)
+                    .put("recipes", snapshot.recipes.size)
+                    .put("meal_plans", snapshot.mealPlans.size)
+                    .put("meal_entries", snapshot.mealEntries.size)
+                    .put("purchases", snapshot.purchases.size)
+                    .put("purchase_lines", snapshot.purchaseLines.size)
+                    .put("proposals", snapshot.proposals.size)
+                    .put("command_records", snapshot.commandRecords.size)
+                    .put("food_objects", snapshot.canonicalObjectCount()),
             )
-            .put("secret_policy", "AI provider API keys are intentionally excluded from cross-device backup.")
+            .put("secret_policy", "AI provider API keys and provider credentials are intentionally excluded from backup.")
             .put("future_cloud_target", "Google Drive appDataFolder with drive.appdata scope")
 
     private fun zipBytes(entries: Map<String, ByteArray>): ByteArray =
@@ -267,7 +285,7 @@ class WonderFoodBackupGateway(private val context: Context) {
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
-                if (!entry.isDirectory && entry.name in setOf(MANIFEST_ENTRY, DB_ENTRY)) {
+                if (!entry.isDirectory && (entry.name == MANIFEST_ENTRY || entry.name in SUPPORTED_DB_ENTRIES)) {
                     result[entry.name] = zip.readBytes()
                 }
                 zip.closeEntry()
@@ -324,6 +342,8 @@ class WonderFoodBackupGateway(private val context: Context) {
     companion object {
         private const val DB_NAME = "wonderfood.db"
         private const val DB_ENTRY = "wonderfood.db"
+        private const val CANONICAL_DB_NAME = WonderFoodDatabaseFactory.DATABASE_NAME
+        private const val CANONICAL_DB_ENTRY = WonderFoodDatabaseFactory.DATABASE_NAME
         private const val MANIFEST_ENTRY = "manifest.json"
         private const val LATEST_BACKUP = "wonderfood-latest.wfbackup"
         private const val LATEST_CLOUD_BACKUP = "wonderfood-latest.wfcloudbackup"
@@ -338,15 +358,20 @@ class WonderFoodBackupGateway(private val context: Context) {
         private const val PBKDF2_ITERATIONS = 120_000
         private const val PBKDF2 = "PBKDF2WithHmacSHA256"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private val SUPPORTED_DB_ENTRIES = setOf(DB_ENTRY, CANONICAL_DB_ENTRY)
         private val MAGIC = byteArrayOf('W'.code.toByte(), 'F'.code.toByte(), 'B'.code.toByte(), '1'.code.toByte())
     }
 }
+
+private fun HouseholdSnapshot.canonicalObjectCount(): Int =
+    items.size + inventoryLots.size + shoppingLines.size + recipes.size + mealEntries.size + purchases.size + purchaseLines.size
 
 data class BackupSnapshot(
     val fileName: String,
     val sizeBytes: Long,
     val createdAtMillis: Long,
     val itemCount: Int,
+    val databaseName: String = "wonderfood.db",
 )
 
 data class BackupManifestPreview(

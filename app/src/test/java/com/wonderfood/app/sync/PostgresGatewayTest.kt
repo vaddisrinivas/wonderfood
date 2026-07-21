@@ -14,16 +14,6 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class PostgresGatewayTest {
     @Test
-    fun supabaseApiRootUsesRestV1() {
-        val gateway = PostgresGateway()
-
-        assertEquals(
-            "https://abc.supabase.co/rest/v1/",
-            gateway.apiRootFor(PostgresConnectionMode.SUPABASE, "https://abc.supabase.co/"),
-        )
-    }
-
-    @Test
     fun postgrestApiRootPreservesProvidedRoot() {
         val gateway = PostgresGateway()
 
@@ -48,16 +38,12 @@ class PostgresGatewayTest {
         val gateway = PostgresGateway()
 
         assertEquals(
-            "https://abc.supabase.co/rest/v1/wonderfood_snapshots",
-            gateway.snapshotExportUrl(PostgresConnectionMode.SUPABASE, "https://abc.supabase.co"),
-        )
-        assertEquals(
             "https://api.example.com/rest/v1/wonderfood_snapshots",
-            gateway.snapshotExportUrl(PostgresConnectionMode.POSTGREST, "https://api.example.com/rest/v1"),
+            gateway.snapshotExportUrl(PostgresConnectionMode.POSTGREST, "https://api.example.com/rest/v1", "home"),
         )
         assertEquals(
-            "https://api.example.com/snapshots",
-            gateway.snapshotExportUrl(PostgresConnectionMode.WONDERFOOD_SERVER, "https://api.example.com"),
+            "https://api.example.com/households/home/snapshot/current",
+            gateway.snapshotExportUrl(PostgresConnectionMode.WONDERFOOD_SERVER, "https://api.example.com", "home"),
         )
     }
 
@@ -66,17 +52,37 @@ class PostgresGatewayTest {
         val gateway = PostgresGateway()
 
         assertEquals(
-            "https://abc.supabase.co/rest/v1/wonderfood_snapshots?household_id=eq.home%20kitchen&snapshot_id=eq.current&select=snapshot_json,updated_at&order=updated_at.desc&limit=1",
-            gateway.snapshotReadUrl(PostgresConnectionMode.SUPABASE, "https://abc.supabase.co", "home kitchen"),
-        )
-        assertEquals(
             "https://api.example.com/rest/v1/wonderfood_snapshots?household_id=eq.home&snapshot_id=eq.current&select=snapshot_json,updated_at&order=updated_at.desc&limit=1",
             gateway.snapshotReadUrl(PostgresConnectionMode.POSTGREST, "https://api.example.com/rest/v1", "home"),
         )
         assertEquals(
-            "https://api.example.com/snapshots/home/current",
+            "https://api.example.com/households/home/snapshot/current",
             gateway.snapshotReadUrl(PostgresConnectionMode.WONDERFOOD_SERVER, "https://api.example.com", "home"),
         )
+    }
+
+    @Test
+    fun schemaCheckUrlsTargetVersionedCanonicalContract() {
+        val gateway = PostgresGateway()
+
+        assertEquals(
+            "https://api.example.com/rest/v1/wonderfood_schema_versions?schema_fingerprint=eq.wf-postgres-v1-canonical-household&select=schema_version,schema_fingerprint&limit=1",
+            gateway.schemaCheckUrl(PostgresConnectionMode.POSTGREST, "https://api.example.com/rest/v1"),
+        )
+        assertEquals(
+            "https://api.example.com/schema",
+            gateway.schemaCheckUrl(PostgresConnectionMode.WONDERFOOD_SERVER, "https://api.example.com"),
+        )
+    }
+
+    @Test
+    fun sessionHeadersCarryBearerAuthAndHouseholdScopeWithoutDbCredentials() {
+        val headers = PostgresGateway().sessionHeaders(token = "session-token", householdId = "home")
+
+        assertEquals("Bearer session-token", headers.getValue("Authorization"))
+        assertEquals("home", headers.getValue(PostgresSchemaContract.SESSION_HOUSEHOLD_HEADER))
+        assertTrue(headers.getValue("Accept").contains("application/json"))
+        assertTrue(headers.values.none { it.contains("postgres://") || it.contains("jdbc:postgresql") })
     }
 
     @Test
@@ -121,8 +127,8 @@ class PostgresGatewayTest {
     @Test
     fun parseSnapshotResponseHandlesEmptyRows() {
         val result = PostgresGateway().parseSnapshotResponse(
-            mode = PostgresConnectionMode.SUPABASE,
-            endpoint = "https://abc.supabase.co",
+            mode = PostgresConnectionMode.POSTGREST,
+            endpoint = "https://api.example.com/rest/v1",
             householdId = "home",
             response = "[]",
         )

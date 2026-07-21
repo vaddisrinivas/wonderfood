@@ -276,7 +276,7 @@ data class MealPrepRemixSuggestion(
 )
 
 object FoodPlanningToolkit {
-    fun pantryFirstPlan(memory: FoodMemory, todayEpochDay: Long = LocalDate.now().toEpochDay()): CompositeDraft {
+    fun pantryFirstPlan(memory: HouseholdUiMemory, todayEpochDay: Long = LocalDate.now().toEpochDay()): CompositeDraft {
         val profiles = HouseholdProfileParser.parse(memory.preferences)
         val hardBlocks = profiles.flatMap { it.allergies }.toSet()
         val rankedRecipes = memory.recipes
@@ -385,7 +385,7 @@ object FoodPlanningToolkit {
         return GroceryDraft(missing)
     }
 
-    fun remixSuggestions(memory: FoodMemory): List<MealPrepRemixSuggestion> {
+    fun remixSuggestions(memory: HouseholdUiMemory): List<MealPrepRemixSuggestion> {
         val inventoryNames = memory.inventory.map { it.name }
         val bases = inventoryNames.filter { name ->
             listOf("chicken", "rice", "beans", "lentil", "tofu", "veg", "potato").any { it in name.lowercase() }
@@ -414,7 +414,7 @@ object FoodPlanningToolkit {
         }.take(4)
     }
 
-    fun compatibilityExport(memory: FoodMemory): String =
+    fun compatibilityExport(memory: HouseholdUiMemory): String =
         buildString {
             appendLine("{")
             appendLine("  \"format\": \"wonderfood.compatibility.v1\",")

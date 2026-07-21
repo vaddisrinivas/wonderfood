@@ -2,7 +2,7 @@ package com.wonderfood.app.ai
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftNormalizer
 import com.wonderfood.app.data.GroceryDraft
@@ -58,7 +58,7 @@ class LiteLlmFoodInterpreterTest {
         )
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "Plan tomato peanut curry for tomorrow lunch and save the recipe with tomatoes and peanuts.",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(),
         )
 
@@ -75,7 +75,7 @@ class LiteLlmFoodInterpreterTest {
         )
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "What can I cook?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(),
         )
 
@@ -101,7 +101,7 @@ class LiteLlmFoodInterpreterTest {
         )
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "Add pantry stuff",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(),
         )
 
@@ -119,7 +119,7 @@ class LiteLlmFoodInterpreterTest {
         )
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "What can I cook?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(apiKey = apiKey),
         )
 
@@ -161,7 +161,7 @@ class LiteLlmFoodInterpreterTest {
 
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "What can I cook?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = config,
         )
 
@@ -195,7 +195,7 @@ class LiteLlmFoodInterpreterTest {
 
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "What can I cook?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = config,
         )
 
@@ -221,7 +221,7 @@ class LiteLlmFoodInterpreterTest {
 
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "What can I cook?",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = config,
         )
 
@@ -278,7 +278,7 @@ class LiteLlmFoodInterpreterTest {
 
         val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = "Review this receipt",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(),
         ) as LiteLlmInterpretation.Success
         val draft = result.turn.draft as ReceiptDraft
@@ -319,12 +319,12 @@ class LiteLlmFoodInterpreterTest {
         val text = "Need 2 oats"
         val aiResult = LiteLlmFoodInterpreter().interpretWithDiagnostics(
             text = text,
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             config = server.config(),
         )
         val localResult = FoodInterpreter().interpret(
             text = text,
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Shop.",
         )
 

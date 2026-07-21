@@ -1,0 +1,6 @@
+version_name=1.0.5
+version_code=5
+package=com.wonderfood.app
+signing_env=missing
+google_web_client_id=TODO_ADD_GOOGLE_WEB_CLIENT_ID
+release_apk_count=0

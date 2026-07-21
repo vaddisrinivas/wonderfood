@@ -37,5 +37,6 @@ HTTPS links, custom-scheme links, and explicit command intents. All input is unt
 
 - Local and instrumented parser tests: `WonderFoodDeepLinkTest`
 - Executor policy tests: `FoodDraftCommandExecutorTest`
-- Transaction rollback test: `FoodChatStoreTest`
+- Canonical transaction and rollback tests: `HouseholdCommandExecutorTest`,
+  `RoomHouseholdRepositoryTest`, and `WonderFoodMigrationsTest`
 - Manual/CI ADB suite: `scripts/adb-direct-actions.sh`

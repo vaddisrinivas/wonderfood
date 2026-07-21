@@ -11,7 +11,7 @@ import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraftNormalizer
 import com.wonderfood.app.data.FoodDraft
 import com.wonderfood.app.data.FoodDraftValidator
-import com.wonderfood.app.data.FoodMemory
+import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.GroceryDraft
 import com.wonderfood.app.data.MealLogDraft
@@ -37,7 +37,7 @@ class PantryCrossChannelGoldenTest {
         val manual = InventoryDraft(listOf(FoodCandidate(name = "eggs", quantity = "12", zone = StorageZone.FRIDGE)))
         val localParser = FoodInterpreter().interpret(
             text = "12 eggs",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Kitchen.",
         ).draft as InventoryDraft
         val googleAssistant = InventoryDraft(listOf(FoodCandidate(name = "eggs", quantity = "12", zone = StorageZone.FRIDGE)))
@@ -96,7 +96,7 @@ class PantryCrossChannelGoldenTest {
         val envelopeJson = TestFixtureResources.readText("fixtures/command-envelopes/shopping-add-generic.json")
         val manual = FoodInterpreter().interpret(
             text = "Need bread and olive oil from the store.",
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Shopping.",
         ).draft as GroceryDraft
         val googleAssistant = CommandEnvelopeDraftMapper.tryMap(envelopeJson)?.draft as GroceryDraft
@@ -141,7 +141,7 @@ class PantryCrossChannelGoldenTest {
 
         val fromManual = FoodInterpreter().interpret(
             text = text,
-            memory = FoodMemory(),
+            memory = HouseholdUiMemory(),
             promptContext = "Current WonderFood section: Shop.",
         ).draft as GroceryDraft
 
@@ -244,7 +244,7 @@ class PantryCrossChannelGoldenTest {
             WonderFoodVoiceAction.ADD_GROCERY -> source.toDirectGroceryDraft()
             WonderFoodVoiceAction.AI_REVIEW -> FoodInterpreter().interpret(
                 text = source.text.ifBlank { "Need groceries" },
-                memory = FoodMemory(),
+                memory = HouseholdUiMemory(),
                 promptContext = "Current WonderFood section: Shop.",
             ).draft as? GroceryDraft
             else -> null
