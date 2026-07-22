@@ -5332,22 +5332,113 @@ private fun LifeOsControlCenter(
                 }
             }
         }
-        SettingsControlGroup {
-            Text("Food workspace", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(
-                "What is native today, and what the data model can already describe.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                domain.bottomTabs.forEach { tab -> DraftReviewPill(tab) }
-                domain.schemaSurfaces.take(6).forEach { surface -> DraftReviewPill(surface) }
-                val hidden = (domain.schemaSurfaces.size - 6).coerceAtLeast(0)
-                if (hidden > 0) DraftReviewPill("+$hidden more")
+        LifeOsNativeWorkspaceCard(domain = domain)
+        LifeOsSourceConstellation(backendHome = backendHome)
+        LifeOsSkillStackCard(domain = domain, onOpenAi = onOpenAi, onOpenDataHome = onOpenDataHome)
+        TextButton(onClick = { showArchitecture = !showArchitecture }) {
+            Text(if (showArchitecture) "Hide architecture details" else "Show architecture details")
+        }
+        if (showArchitecture) {
+            LifeOsArchitectureDetails(domain = domain, aiStatus = aiStatus, backendHome = backendHome)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsNativeWorkspaceCard(domain: LifeOsDomain) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+        tonalElevation = 2.dp,
+    ) {
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
+                    ),
+                ),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = domain.lifeOsIcon(),
+                        modifier = Modifier.size(38.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("Native workspace", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Food stays fast on-phone; schema can grow into any domain.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    DraftReviewPill(domain.statusLabel)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    LifeOsMiniStat("Tabs", domain.bottomTabs.size.toString(), Modifier.weight(1f))
+                    LifeOsMiniStat("Surfaces", domain.schemaSurfaces.size.toString(), Modifier.weight(1f))
+                    LifeOsMiniStat("Review", "On", Modifier.weight(1f))
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    domain.bottomTabs.forEach { tab -> DraftReviewPill(tab) }
+                    domain.schemaSurfaces.take(4).forEach { surface -> DraftReviewPill(surface) }
+                    val hidden = (domain.schemaSurfaces.size - 4).coerceAtLeast(0)
+                    if (hidden > 0) DraftReviewPill("+$hidden schema")
+                }
             }
         }
-        SettingsControlGroup {
-            Text("Source pack", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun LifeOsMiniStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.heightIn(min = 68.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsSourceConstellation(backendHome: BackendHomeUiState) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+        tonalElevation = 2.dp,
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                LifeOsVectorBadge(
+                    icon = Icons.Rounded.Description,
+                    modifier = Modifier.size(38.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text("Source constellation", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Every answer can point back to a real surface.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DraftReviewPill(backendHome.chatSourceLabel())
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 LifeOsSourceCard(Icons.Rounded.RestaurantMenu, "App", "Local Food snapshot", "native", Modifier.weight(1f))
                 LifeOsSourceCard(Icons.Rounded.Description, "Notion", "Dashboard + rollups", "template", Modifier.weight(1f))
@@ -5357,31 +5448,69 @@ private fun LifeOsControlCenter(
                 LifeOsSourceCard(Icons.Rounded.Inventory2, "MCP", "Schemas + validators", "bridge", Modifier.weight(1f))
             }
         }
-        SettingsControlGroup {
-            Text("Skills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
-                item { LifeOsSourceCard(Icons.Rounded.RestaurantMenu, "Domain", "Food brain", "active", Modifier.width(148.dp)) }
-                item { LifeOsSourceCard(Icons.Rounded.Settings, "Workflow", "Playbooks", "ready", Modifier.width(148.dp)) }
-                item { LifeOsSourceCard(Icons.Rounded.Inventory2, "Schema", "Contracts", "guarded", Modifier.width(148.dp)) }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                domain.skills.take(5).forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
-                if (domain.skills.size > 5) DraftReviewPill("+${domain.skills.size - 5} more")
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenAi, shape = RoundedCornerShape(18.dp)) {
-                    Text("Model + skills")
+    }
+}
+
+@Composable
+private fun LifeOsSkillStackCard(
+    domain: LifeOsDomain,
+    onOpenAi: () -> Unit,
+    onOpenDataHome: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+        tonalElevation = 2.dp,
+    ) {
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
+                        MaterialTheme.colorScheme.surface,
+                    ),
+                ),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = Icons.Rounded.Settings,
+                        modifier = Modifier.size(38.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("Skill/runtime stack", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Domain brain + workflows + schema contracts.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    DraftReviewPill("${domain.skills.size} skills")
                 }
-                OutlinedButton(onClick = onOpenDataHome, shape = RoundedCornerShape(18.dp)) {
-                    Text("Data home")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
+                    item { LifeOsSourceCard(Icons.Rounded.RestaurantMenu, "Domain", "Food brain", "active", Modifier.width(148.dp)) }
+                    item { LifeOsSourceCard(Icons.Rounded.Settings, "Workflow", "Playbooks", "ready", Modifier.width(148.dp)) }
+                    item { LifeOsSourceCard(Icons.Rounded.Inventory2, "Schema", "Contracts", "guarded", Modifier.width(148.dp)) }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    domain.skills.take(5).forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
+                    if (domain.skills.size > 5) DraftReviewPill("+${domain.skills.size - 5} more")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onOpenAi, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                        Text("Model + skills")
+                    }
+                    OutlinedButton(onClick = onOpenDataHome, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                        Text("Data home")
+                    }
                 }
             }
-        }
-        TextButton(onClick = { showArchitecture = !showArchitecture }) {
-            Text(if (showArchitecture) "Hide architecture details" else "Show architecture details")
-        }
-        if (showArchitecture) {
-            LifeOsArchitectureDetails(domain = domain, aiStatus = aiStatus, backendHome = backendHome)
         }
     }
 }
