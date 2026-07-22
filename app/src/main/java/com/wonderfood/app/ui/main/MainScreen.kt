@@ -8880,6 +8880,7 @@ private fun AiConversationTimeline(
     }
 
     Box(modifier = modifier) {
+        val hasMessages = messages.isNotEmpty()
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
@@ -8916,23 +8917,25 @@ private fun AiConversationTimeline(
                     AiThreadMessageBubble(message)
                 }
             }
-            item(key = "suggestions") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(pageContext.suggestions) { suggestion ->
-                        SuggestionChip(
-                            onClick = { onSuggestion(suggestion) },
-                            label = { Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        )
+            if (!hasMessages) {
+                item(key = "suggestions") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(pageContext.suggestions) { suggestion ->
+                            SuggestionChip(
+                                onClick = { onSuggestion(suggestion) },
+                                label = { Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            )
+                        }
                     }
                 }
-            }
-            item(key = "context") {
-                AiContextCard(
-                    pageContext = pageContext,
-                    providerStatus = providerStatus,
-                    backendHome = backendHome,
-                    contextSummary = contextSummary,
-                )
+                item(key = "context") {
+                    AiContextCard(
+                        pageContext = pageContext,
+                        providerStatus = providerStatus,
+                        backendHome = backendHome,
+                        contextSummary = contextSummary,
+                    )
+                }
             }
             item(key = "day") {
                 AiThreadDivider("Today")
