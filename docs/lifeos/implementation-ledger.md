@@ -90,6 +90,7 @@ Current explicit phase-slice agents are defined in `docs/lifeos/implementation-s
 - `2026-07-22`: Health Connect now has authenticated `POST /health/connect/snapshot` and `GET /health/connect/snapshots` routes with bounded payloads, SHA-256 dedupe and local durable storage; `npm run test:server:health-snapshot` passes.
 - `2026-07-22`: added typed Expo client helpers in `src/providers/sync.ts` for live Notion and Sheets pulls, sharing the server's provider result/source-snapshot contract.
 - `2026-07-22`: refreshed the existing local Google OAuth cache without exposing token values; approved workbook metadata and `LifeOS Canonical` values read live; `server/src/agents/retrieval.ts` now merges Notion and Sheets provider snapshots so Chat source cards cite both surfaces.
+- `2026-07-22`: release bootstrap no longer skips bundled sample rows outside `__DEV__`; sample sources are explicitly `sqlite`/`wonderfood://sample` so a fresh APK is not an empty shell or a fake Notion citation. Rebuilt and installed release APK with `EXPO_PUBLIC_LIFEOS_SERVER_URL=http://10.0.0.173:8790`; bundle inspection confirms both the LAN chat endpoint and sample bootstrap are present.
 
 ## Required gates executed
 
