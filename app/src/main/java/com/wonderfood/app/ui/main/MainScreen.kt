@@ -527,6 +527,7 @@ fun MainScreen(
         state = state,
         onInputChange = viewModel::onInputChange,
         onSend = viewModel::send,
+        onSendText = viewModel::sendText,
         onNewChat = viewModel::startNewChat,
         onSectionSelected = viewModel::selectSection,
         onAcceptDraft = viewModel::acceptDraft,
@@ -1523,6 +1524,7 @@ private fun WonderFoodScreen(
     state: WonderFoodUiState,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onSendText: (String) -> Unit,
     onNewChat: () -> Unit,
     onSectionSelected: (FoodSection) -> Unit,
     onAcceptDraft: () -> Unit,
@@ -1614,6 +1616,7 @@ private fun WonderFoodScreen(
                     showInlineCalendar = !showCalendarPane,
                     onInputChange = onInputChange,
                     onSend = onSend,
+                    onSendText = onSendText,
                     onNewChat = onNewChat,
                     onSectionSelected = onSectionSelected,
                     onAcceptDraft = onAcceptDraft,
@@ -1700,6 +1703,7 @@ private fun WonderFoodScreen(
                 showInlineCalendar = true,
                 onInputChange = onInputChange,
                 onSend = onSend,
+                onSendText = onSendText,
                 onNewChat = onNewChat,
                 onSectionSelected = onSectionSelected,
                 onAcceptDraft = onAcceptDraft,
@@ -1804,6 +1808,7 @@ private fun MainWorkspace(
     showInlineCalendar: Boolean,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onSendText: (String) -> Unit,
     onNewChat: () -> Unit,
     onSectionSelected: (FoodSection) -> Unit,
     onAcceptDraft: () -> Unit,
@@ -2264,6 +2269,7 @@ private fun MainWorkspace(
                 },
                 onInputChange = onInputChange,
                 onSend = onSend,
+                onSendText = onSendText,
                 onNewChat = onNewChat,
                 onPickReceiptPhoto = onPickReceiptPhoto,
                 onRecordVoiceNote = onRecordVoiceNote,
@@ -8792,6 +8798,7 @@ private fun AiCaptureSheet(
     status: String,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onSendText: (String) -> Unit,
     onNewChat: () -> Unit,
     onPickReceiptPhoto: () -> Unit,
     onRecordVoiceNote: () -> Unit,
@@ -8863,6 +8870,10 @@ private fun AiCaptureSheet(
                     healthStatus = healthStatus,
                     contextSummary = contextSummary,
                     onSuggestion = onInputChange,
+                    onSubmitPrompt = { prompt ->
+                        focusManager.clearFocus(force = true)
+                        onSendText(prompt)
+                    },
                     onAcceptDraft = onAcceptDraft,
                     onRejectDraft = onRejectDraft,
                     onDraftChange = onDraftChange,
@@ -9063,6 +9074,7 @@ private fun AiConversationTimeline(
     healthStatus: String,
     contextSummary: String,
     onSuggestion: (String) -> Unit,
+    onSubmitPrompt: (String) -> Unit,
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
@@ -9111,6 +9123,7 @@ private fun AiConversationTimeline(
                         pageContext = pageContext,
                         backendHome = backendHome,
                         onSuggestion = onSuggestion,
+                        onSubmitPrompt = onSubmitPrompt,
                     )
                 }
             } else {
@@ -9154,6 +9167,7 @@ private fun AiWelcomeDeck(
     pageContext: AiPageContext,
     backendHome: BackendHomeUiState,
     onSuggestion: (String) -> Unit,
+    onSubmitPrompt: (String) -> Unit,
 ) {
     val prompts = listOf(
         Icons.Rounded.RestaurantMenu to "Plan dinner from my pantry",
@@ -9212,7 +9226,7 @@ private fun AiWelcomeDeck(
                         AiWelcomePromptRow(
                             icon = icon,
                             label = prompt,
-                            onClick = { onSuggestion(prompt) },
+                            onClick = { onSubmitPrompt(prompt) },
                         )
                     }
                     pageContext.suggestions.take(2).forEach { suggestion ->
@@ -10912,6 +10926,7 @@ private fun WonderFoodPreview() {
             ),
             onInputChange = {},
             onSend = {},
+            onSendText = {},
             onNewChat = {},
             onSectionSelected = {},
             onAcceptDraft = {},

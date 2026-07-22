@@ -1082,7 +1082,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun send() {
-        val text = _uiState.value.input.trim()
+        sendText(_uiState.value.input)
+    }
+
+    fun sendText(rawText: String) {
+        val text = rawText.trim()
         if (text.isEmpty()) return
         val target = _uiState.value.detailTarget
         val memory = _uiState.value.memory
