@@ -114,6 +114,16 @@ export async function getAction(db: SQLiteDatabase, id: string): Promise<ActionE
   return db.getFirstAsync<ActionEvent>('SELECT * FROM action_events WHERE id = ?', [id]);
 }
 
+export async function getActionByIdempotencyKey(
+  db: SQLiteDatabase,
+  idempotencyKey: string
+): Promise<ActionEvent | null> {
+  return db.getFirstAsync<ActionEvent>(
+    'SELECT * FROM action_events WHERE idempotency_key = ? ORDER BY created_at DESC LIMIT 1',
+    [idempotencyKey]
+  );
+}
+
 export async function getActionsForDomain(db: SQLiteDatabase, domain: string): Promise<ActionEvent[]> {
   return db.getAllAsync<ActionEvent>(
     'SELECT * FROM action_events WHERE domain = ? ORDER BY created_at DESC',

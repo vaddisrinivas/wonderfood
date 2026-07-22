@@ -11,7 +11,7 @@
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
 | 5 — Notion adapter | Agent C | BLOCKED | no provider package | wait for server runtime | Hold |
 | 6 — Google Sheets adapter | Agent D | BLOCKED | no provider package | wait for server runtime | Hold |
-| 7 — Commands, Undo, workflows | Agent E | BLOCKED | command/action schemas not yet added | await phase 0/1 and 3 foundations | Hold |
+| 7 — Commands, Undo, workflows | Agent E | IN PROGRESS | `packages/domain-config/schemas/{command.v1.schema.json,action-event.v1.schema.json,agent-handoff.v1.schema.json,undo.v1.schema.json}`, `src/actions/{policy.ts,engine.ts,undo.ts}` | Workflows/runner and MCP invocation are still absent; undo execution is not yet wired into app/server action dispatchers | Wire Workstream E modules into `server/src/executor.ts` and command workflow checkpoints before marking PASS |
 | 8 — Android completion | Agent G | BLOCKED | Android native runtime removed in rewrite baseline | phase 3+4 server runtime and permissions required | Hold |
 | 9 — Polish/perf/iOS | Agent G | BLOCKED | no production runtime yet | earlier phases incomplete | Hold |
 
@@ -27,6 +27,7 @@
 - `bddbf0e` checkpointed UI runtime write-path correctness and search render typing fix.
 - `1f8c0d8` removed fixture-backed fallbacks from domain query entrypoints and preserved empty-state behavior when DB is unavailable.
 - `696a91f` implemented chat/server baseline + phase-1 gates rerun.
+- `2026-07-22` added command/action/agent-handoff/undo JSON schemas and `src/actions/{policy.ts,engine.ts,undo.ts}` runtime skeleton.
 - `2026-07-22` executed `server-chat` hardening (chat retrieval/provenance/orchestrator/openai endpoint idempotency).
 - `2026-07-22`: `npm run config:validate` ✅ — Domain config valid (3 domains, 12 Food collections, 3 workflows).
 - `2026-07-22`: `npm run typecheck` ✅ after restoring `server/src/index.ts` run message typing.
