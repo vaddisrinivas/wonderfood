@@ -5418,10 +5418,10 @@ private fun LifeOsHeroCard(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = onOpenChat, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
-                        Text("Open chat brain")
+                        Text("Open chat")
                     }
                     OutlinedButton(onClick = onOpenDataHome, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
-                        Text("Data homes")
+                        Text("Data plane")
                     }
                 }
             }
@@ -5431,20 +5431,48 @@ private fun LifeOsHeroCard(
 
 @Composable
 private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiState, aiStatus: String, healthStatus: String) {
+    val notionState = if (backendHome.templateNotionUrl.isNotBlank()) "Linked" else "Ready"
+    val sheetsState = if (backendHome.templateSheetsUrl.isNotBlank()) "Linked" else "Ready"
+    val healthState = if (healthStatus.isBlank()) "Ready" else "Live"
+    val aiDetail = aiStatus.ifBlank { "Local fallback" }.take(28)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            LifeOsMetricCard("Surfaces", domain.schemaSurfaces.size.toString(), "App + templates", Modifier.weight(1f))
-            LifeOsMetricCard("Skills", domain.skills.size.toString(), "Food active", Modifier.weight(1f))
+            LifeOsMetricCard(
+                icon = "🍽️",
+                label = "Food brain",
+                value = "Live",
+                detail = "${domain.schemaSurfaces.size} surfaces · ${domain.skills.size} skills",
+                modifier = Modifier.weight(1f),
+            )
+            LifeOsMetricCard(
+                icon = "📝",
+                label = "Notion",
+                value = notionState,
+                detail = "Dashboard + rollups",
+                modifier = Modifier.weight(1f),
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            LifeOsMetricCard("Sources", "5", backendHome.chatSourceLabel(), Modifier.weight(1f))
-            LifeOsMetricCard("Health", if (healthStatus.isBlank()) "Ready" else "Live", aiStatus.ifBlank { "Local fallback" }.take(26), Modifier.weight(1f))
+            LifeOsMetricCard(
+                icon = "📊",
+                label = "Sheets",
+                value = sheetsState,
+                detail = backendHome.chatSourceLabel(),
+                modifier = Modifier.weight(1f),
+            )
+            LifeOsMetricCard(
+                icon = "🛡️",
+                label = "Review gate",
+                value = "On",
+                detail = "$healthState · $aiDetail",
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
 @Composable
-private fun LifeOsMetricCard(label: String, value: String, detail: String, modifier: Modifier = Modifier) {
+private fun LifeOsMetricCard(icon: String, label: String, value: String, detail: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(22.dp),
@@ -5452,9 +5480,12 @@ private fun LifeOsMetricCard(label: String, value: String, detail: String, modif
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 2.dp,
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(icon, style = MaterialTheme.typography.titleMedium)
+                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -8766,49 +8797,46 @@ private fun AiThreadMessageBubble(
         verticalAlignment = Alignment.Top,
     ) {
         if (!isUser) {
-            ObjectImage(image = "🧠", color = MaterialTheme.colorScheme.primaryContainer, size = 38.dp)
+            ObjectImage(image = "✦", color = MaterialTheme.colorScheme.primaryContainer, size = 30.dp)
             Spacer(Modifier.width(8.dp))
         }
         Column(
-            modifier = Modifier.widthIn(max = 620.dp),
+            modifier = Modifier.widthIn(max = 680.dp),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (isUser) "You" else "WonderFood",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     message.createdAtMillis.shortTime(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                 )
             }
             Surface(
                 shape = RoundedCornerShape(
-                    topStart = if (isUser) 18.dp else 4.dp,
-                    topEnd = if (isUser) 4.dp else 18.dp,
-                    bottomStart = 18.dp,
-                    bottomEnd = 18.dp,
+                    topStart = if (isUser) 20.dp else 6.dp,
+                    topEnd = if (isUser) 6.dp else 20.dp,
+                    bottomStart = 20.dp,
+                    bottomEnd = 20.dp,
                 ),
                 color = bubbleColor,
+                tonalElevation = if (isUser) 0.dp else 1.dp,
             ) {
                 AiRichMessageBody(
                     body = message.body,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
                     color = textColor,
                 )
             }
             if (!isUser && message.sources.isNotEmpty()) {
                 AiMessageSourceStrip(sources = message.sources)
             }
-        }
-        if (isUser) {
-            Spacer(Modifier.width(8.dp))
-            ObjectImage(image = "🙂", color = MaterialTheme.colorScheme.tertiaryContainer, size = 38.dp)
         }
     }
 }

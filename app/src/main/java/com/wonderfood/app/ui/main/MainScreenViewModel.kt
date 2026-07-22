@@ -4950,6 +4950,10 @@ private fun Throwable.safeMessage(): String =
 
 private fun String.looksLikeSourcePackRequest(): Boolean {
     val lower = lowercase()
+        .replace("%20", " ")
+        .replace("+", " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
     val asksAboutSourcePack = "source pack" in lower ||
         "source-pack" in lower ||
         ("sources" in lower && ("lifeos" in lower || "notion" in lower || "sheets" in lower || "mcp" in lower))
