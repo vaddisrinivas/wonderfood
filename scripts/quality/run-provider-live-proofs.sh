@@ -45,7 +45,6 @@ for provider in "${PROVIDERS[@]}"; do
   case "$provider" in
     notion)
       require_one_of notion-token NOTION_TOKEN NOTION_API_KEY
-      require_one_of notion-page NOTION_TEST_PAGE_ID
       ;;
     sheets|google-sheets)
       if [[ -z "${GOOGLE_SHEETS_ACCESS_TOKEN:-}" ]]; then
@@ -73,10 +72,10 @@ fi
 for provider in "${PROVIDERS[@]}"; do
   case "$provider" in
     notion)
-      scripts/quality/run-notion-live-proof.sh
+      scripts/quality/run-notion-scenario-proof.sh
       ;;
     sheets|google-sheets)
-      scripts/quality/run-google-sheets-live-proof.sh
+      scripts/quality/run-google-sheets-scenario-proof.sh
       ;;
     postgres)
       scripts/quality/run-postgres-live-proof.sh

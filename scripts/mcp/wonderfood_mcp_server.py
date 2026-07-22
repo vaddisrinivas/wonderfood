@@ -22,7 +22,7 @@ SERVER_NAME = "wonderfood-local-bridge"
 SERVER_VERSION = "1.0.0"
 
 RESOURCES = {
-    "wonderfood://skill/bundled-food": ROOT / "app/src/main/assets/ai/wonderfood_food_skill.md",
+    "wonderfood://skill/bundled-food": ROOT / "packages/domain-config/skills/food.md",
     "wonderfood://skill/catalog-v1": ROOT / "docs/ai/skill-catalog-v1.md",
     "wonderfood://schema/command-envelope-v1": ROOT / "docs/ai/command-envelope.schema.v1.json",
     "wonderfood://schema/proposal-package-v1": ROOT / "docs/ai/proposal-package.schema.v1.json",

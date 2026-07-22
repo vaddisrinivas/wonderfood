@@ -34,3 +34,29 @@ export function citationLabel(citation: ChatCitation): string {
 }
 
 export type Citation = ChatCitation;
+
+export function toCitationsFromSnapshots(raw: unknown): ChatCitation[] {
+  const values = Array.isArray(raw) ? raw : [];
+  const normalized = values
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const candidate = item as { label?: unknown; detail?: unknown; href?: unknown; tone?: unknown };
+      const label = typeof candidate.label === 'string' && candidate.label.length > 0 ? candidate.label : null;
+      const detail = typeof candidate.detail === 'string' && candidate.detail.length > 0 ? candidate.detail : null;
+      const href = typeof candidate.href === 'string' && candidate.href.length > 0 ? candidate.href : null;
+      const tone = typeof candidate.tone === 'string' ? candidate.tone : null;
+      if (!label || !detail || !href || !tone) {
+        return null;
+      }
+      return {
+        label,
+        detail,
+        href,
+        tone: tone as ChatCitation['tone'],
+      };
+    })
+    .filter((row): row is ChatCitation => row !== null);
+  return normalized;
+}

@@ -60,6 +60,8 @@ work/
 exports/
 backups/
 captures/
+server-data/
+server/server-data/
 docs/baseline/apk/
 docs/baseline/db/*.db
 docs/baseline/screenshots/

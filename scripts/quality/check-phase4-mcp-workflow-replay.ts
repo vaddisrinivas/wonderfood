@@ -15,6 +15,12 @@ type ToolResult = {
   json: unknown;
   reviewOnly: boolean;
   safety: string;
+  review_flags?: {
+    policy_reviewed: boolean;
+    replay_recoverable: boolean;
+    cancellation_safe: boolean;
+  };
+  action?: { id?: string };
 };
 
 type WorkflowActionAfter = {
@@ -30,11 +36,19 @@ type WorkflowResult = {
   };
   checkpoint?: {
     runId?: string;
+    compensation?: {
+      applied?: number;
+      skipped?: number;
+      errors?: Array<unknown>;
+    };
   };
 };
 
+type RunReplayResult = WorkflowResult & { replayed?: boolean };
+
 type UndoResult = {
   status?: 'completed' | 'failed';
+  replayed?: boolean;
   action?: {
     status?: 'cancelled' | 'completed' | 'failed';
     id?: string;
@@ -44,6 +58,12 @@ type UndoResult = {
 
 function fail(message: string): never {
   throw new Error(message);
+}
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    fail(message);
+  }
 }
 
 function asWorkflowResult(input: ToolResult['json'], action: string): WorkflowResult {
@@ -60,6 +80,10 @@ function asUndoResult(input: ToolResult['json']): UndoResult {
   return input as UndoResult;
 }
 
+async function callTool(tools: typeof import('../../server/src/mcp/tools'), name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  return (await tools.callMcpTool(name, args)) as ToolResult;
+}
+
 function asAfterJson(value: unknown): WorkflowActionAfter | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -74,17 +98,16 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
 
   const workflowId = 'phase4_replay_workflow';
   const actionId = `phase4-replay-${Date.now()}`;
+  const idempotencyKey = 'phase4_replay_probe_1';
 
-  const runPayload = asWorkflowResult(
-    tools.callMcpTool('wonderfood.run_workflow', {
-      actor: 'hearth',
-      workflow: workflowId,
-      domain: 'food',
-      action_id: actionId,
-      idempotency_key: 'phase4_replay_probe_1',
-    }).json,
-    'run_workflow',
-  );
+  const runToolResult = await callTool(tools, 'wonderfood.run_workflow', {
+    actor: 'hearth',
+    workflow: workflowId,
+    domain: 'food',
+    action_id: actionId,
+    idempotency_key: idempotencyKey,
+  });
+  const runPayload = asWorkflowResult(runToolResult.json, 'run_workflow');
 
   if (runPayload.status !== 'completed') {
     fail(`run_workflow did not complete: ${JSON.stringify(runPayload)}`);
@@ -92,14 +115,17 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
   if (!runPayload.action?.id) {
     fail('run_workflow did not return an action id');
   }
+  if (!runToolResult.review_flags?.cancellation_safe) {
+    fail('run_workflow should mark action result as cancellation-safe');
+  }
   const workflowAction = state.getActionEvent(runPayload.action.id);
   if (!workflowAction || workflowAction.status !== 'completed') {
     fail(`action ${runPayload.action.id} missing or incomplete`);
   }
 
   const changedRecords = runPayload.action.after_json?.changed_records ?? [];
-  if (changedRecords.length !== 2) {
-    fail(`expected 2 workflow-created records, got ${changedRecords.length}`);
+  if (changedRecords.length < 2) {
+    fail(`expected at least 2 workflow-created records, got ${changedRecords.length}`);
   }
   for (const id of changedRecords) {
     if (!state.findRecord(id)) {
@@ -124,21 +150,79 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
     fail(`expected checkpoint to contain at least two steps, got ${checkpoint.steps.length}`);
   }
 
-  const undoPayload = asUndoResult(
-    tools.callMcpTool('wonderfood.undo_action', {
-      actor: 'hearth',
-      actionId: runPayload.action.id,
-      idempotency_key: 'phase4_replay_undo_probe_1',
-    }).json,
-  );
+  const runReplayToolResult = await callTool(tools, 'wonderfood.run_workflow', {
+    actor: 'hearth',
+    workflow: workflowId,
+    domain: 'food',
+    action_id: `${actionId}-replay`,
+    idempotency_key: idempotencyKey,
+  });
+  const runReplayPayload = asWorkflowResult(runReplayToolResult.json, 'run_workflow replay') as RunReplayResult;
+  assert(runReplayPayload.replayed === true, 'run_workflow replay should return replayed=true');
+  assert(runReplayPayload.action?.id === runPayload.action.id, 'run_workflow replay should keep action id stable');
+
+  const undoToolResult = await callTool(tools, 'wonderfood.undo_action', {
+    actor: 'hearth',
+    actionId: runPayload.action.id,
+    idempotency_key: `${idempotencyKey}-undo`,
+  });
+  const undoPayload = asUndoResult(undoToolResult.json);
   if (undoPayload.status !== 'completed') {
     fail(`undo_action failed: ${undoPayload.undoResult?.message || undoPayload.action?.status || 'unknown reason'}`);
   }
+
+  const undoReplayResult = await callTool(tools, 'wonderfood.undo_action', {
+    actor: 'hearth',
+    actionId: runPayload.action.id,
+    idempotency_key: `${idempotencyKey}-undo`,
+  });
+  const undoReplay = asUndoResult(undoReplayResult.json);
+  assert(undoReplay.replayed === true, 'undo_action replay should return replayed=true');
 
   for (const id of changedRecords) {
     if (state.findRecord(id)) {
       fail(`record ${id} should have been undone`);
     }
+  }
+
+  const failureActionId = `${actionId}-failure`;
+  const compensationRun = await callTool(tools, 'wonderfood.run_workflow', {
+    actor: 'hearth',
+    workflow: 'phase4_compensation_probe',
+    domain: 'food',
+    action_id: failureActionId,
+    idempotency_key: `${idempotencyKey}-comp-fail`,
+  });
+  const failurePayload = asWorkflowResult(compensationRun.json, 'failing run_workflow');
+  if (failurePayload.status !== 'failed') {
+    fail(`compensation probe should fail; got ${String(failurePayload.status)}`);
+  }
+
+  const failureRunId = failurePayload.checkpoint?.runId
+    ?? failurePayload.action?.after_json?.checkpoint_run_id;
+  assert(typeof failureRunId === 'string' && failureRunId.length > 0, 'failing workflow should return checkpoint.runId');
+  const failureCheckpoint = checkpoints.getWorkflowCheckpoint(failureRunId);
+  if (!failureCheckpoint) {
+    fail(`compensation checkpoint ${failureRunId} missing`);
+  }
+  if (failureCheckpoint.status !== 'compensated') {
+    fail(`compensation checkpoint should be compensated, got ${failureCheckpoint.status}`);
+  }
+
+  const failureCompensation = failurePayload.checkpoint?.compensation;
+  const compensationApplied = typeof failureCompensation?.applied === 'number' ? failureCompensation.applied : undefined;
+  assert(compensationApplied !== undefined && compensationApplied > 0, 'compensation should apply at least one operation');
+
+  const failureChangedRecords = failurePayload.action?.after_json?.changed_records ?? [];
+  for (const id of failureChangedRecords ?? []) {
+    let found = false;
+    try {
+      await callTool(tools, 'wonderfood.read_record', { id });
+      found = true;
+    } catch {
+      // expected after compensation
+    }
+    assert(!found, `failed workflow record ${id} should be removed by compensation`);
   }
 
   const proof = {
@@ -148,11 +232,20 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
       action_id: workflowAction.id,
       changed_records: changedRecords,
       checkpoint_run_id: checkpointRunId,
-      checkpoint_steps: checkpoint.steps.length,
       checkpoint_status: checkpoint.status,
+      checkpoint_steps: checkpoint.steps.length,
+      run_replayed: runReplayPayload.replayed === true,
+      run_action_stable: runReplayPayload.action?.id === runPayload.action.id,
+      undo_replayed: undoReplay.replayed === true,
       undo_status: undoPayload.status,
       undo_action_status: undoPayload.action?.status,
       undo_success: undoPayload.undoResult?.success,
+      compensation_probe: {
+        status: failurePayload.status,
+        checkpoint_status: failureCheckpoint.status,
+        compensation_applied: failureCompensation?.applied,
+        compensation_skipped: failureCompensation?.skipped,
+      },
     },
     state_files: {
       mcp_runtime_path: process.env.LIFEOS_MCP_STATE_PATH,

@@ -89,7 +89,7 @@ export function buildWorkflowCompensation(input: {
 }): WorkflowCompensationPlan {
   const actions: CompensationAction[] = [];
   const detailsEntries = normalizeDetails(Array.isArray(input.details) ? input.details : []);
-  const visited = new Set<string>(normalizeUniqueIds(input.changedRecords));
+  const visited = new Set<string>();
 
   for (let index = detailsEntries.length - 1; index >= 0; index -= 1) {
     const step = detailsEntries[index];

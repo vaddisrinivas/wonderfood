@@ -1,0 +1,26 @@
+{
+  "$schema": "../schemas/domain.v1.schema.json",
+  "schema_version": "lifeos.domain.v1",
+  "id": "health",
+  "label": "Health",
+  "home_surface": "health.overview",
+  "surfaces": [
+    { "id": "health.overview", "label": "Overview", "views": ["today", "trends", "exceptions"], "collections": ["health_observation", "health_goal"] },
+    { "id": "health.journal", "label": "Journal", "views": ["timeline", "notes"], "collections": ["health_observation", "health_note"] },
+    { "id": "health.plans", "label": "Plans", "views": ["active", "review"], "collections": ["health_goal", "health_plan"] }
+  ],
+  "collections": ["health_observation", "health_measurement", "health_goal", "health_plan", "health_note", "source_record"],
+  "relations": [
+    { "from": "health_measurement", "to": "health_observation", "name": "measures" },
+    { "from": "health_observation", "to": "health_goal", "name": "supports" },
+    { "from": "health_plan", "to": "health_goal", "name": "advances" },
+    { "from": "source_record", "to": "*", "name": "supports" }
+  ],
+  "skills": ["health"],
+  "workflows": [],
+  "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
+  "mcp": {
+    "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],
+    "tools": ["search", "read_record", "create_record", "update_record", "archive_record"]
+  }
+}

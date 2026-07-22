@@ -14,11 +14,22 @@ export type ServerResponseMessage = {
   role: 'assistant' | 'user';
   text: string;
   answer?: ChatAnswer;
+  actionReceipt?: ChatMessage['actionReceipt'];
 };
 
 export type ServerChatResponse = {
   conversation_id: string;
   messages: ServerResponseMessage[];
+  action?: {
+    receipt: ChatMessage['actionReceipt'];
+    verification?: {
+      actionId: string;
+      expected: string;
+      status: 'verified' | 'denied';
+      checks: string[];
+      reason?: string;
+    } | null;
+  };
   agent_handoffs?: Array<{
     role: string;
     status: 'ok' | 'blocked';
@@ -44,6 +55,19 @@ export type ServerControlResponse = {
   status_name?: string;
 };
 
+export type ServerUndoResponse = {
+  status: 'completed' | 'failed';
+  action_id: string;
+  action?: Record<string, unknown>;
+  undo_result?: {
+    success: boolean;
+    message: string;
+    actor?: string;
+    idempotency_key?: string;
+    replayed?: boolean;
+  };
+};
+
 function nowId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
@@ -55,6 +79,10 @@ function dbMessageToChat(message: { id: string; role: 'assistant' | 'user'; body
     role: message.role,
     text: message.body,
     answer: parsed?.answer,
+    actionReceipt:
+      parsed && typeof parsed === 'object' && parsed !== null && 'actionReceipt' in parsed
+        ? parsed.actionReceipt
+        : undefined,
   } as ChatMessage;
 }
 
@@ -176,6 +204,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       text: offlineAnswer.intro,
       answer: offlineAnswer,
     };
+    const latestActionReceipt = serverResult.action?.receipt;
 
     return {
       mode: 'server',
@@ -194,9 +223,15 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
             role: latest.role,
             text: latest.text,
             answer: latest.answer,
+            actionReceipt: latestActionReceipt,
           },
         ],
       },
+      action: latestActionReceipt
+        ? {
+            receipt: latestActionReceipt,
+          }
+        : undefined,
     };
   }
 
@@ -328,6 +363,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     text: fallback.intro,
     answer: fallback,
   };
+  const latestActionReceipt = serverResult.action?.receipt;
 
   await appendMessage(db, {
     id: latest.id,
@@ -335,29 +371,44 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     role: latest.role,
     sort_index: nextSortIndex + 1,
     body: latest.text ?? fallback.intro,
-    answer_payload: latest.answer ? { answer: latest.answer, citations: latest.answer?.citations ?? [] } : undefined,
+    answer_payload: latest.answer
+      ? {
+          answer: latest.answer,
+          citations: latest.answer?.citations ?? [],
+          ...(latestActionReceipt ? { actionReceipt: latestActionReceipt } : {}),
+        }
+      : latestActionReceipt
+        ? { actionReceipt: latestActionReceipt }
+        : undefined,
   });
 
   const updated = await getConversation(db, conversationId);
+  const messagesForThread =
+    updated?.messages.map((message) => {
+      const parsed = dbMessageToChat(message);
+      return message.id === latest.id ? { ...parsed, actionReceipt: latestActionReceipt ?? parsed.actionReceipt } : parsed;
+    }) ?? [
+      ...messagesSoFar.map(dbMessageToChat),
+      {
+        id: latest.id,
+        role: latest.role,
+        text: latest.text,
+        answer: latest.answer,
+        actionReceipt: latestActionReceipt,
+      },
+    ];
   return {
     mode: 'server',
     conversationId,
     serverRunId: serverResult.run?.id,
     retryable: serverResult.run?.needs_retry ?? false,
     warnings: serverResult.warnings,
+    action: latestActionReceipt ? { receipt: latestActionReceipt } : undefined,
     thread: {
       id: conversationId,
       title: updated?.title || 'Conversation',
       detail: updated?.detail || 'Server-backed',
-      messages: updated?.messages ? updated.messages.map(dbMessageToChat) : [
-        ...messagesSoFar.map(dbMessageToChat),
-        {
-          id: latest.id,
-          role: latest.role,
-          text: latest.text,
-          answer: latest.answer,
-        },
-      ],
+      messages: messagesForThread,
     },
   };
 }
@@ -500,7 +551,7 @@ async function sendToServerStream(payload: {
             }
             if (event.type === 'cache' && !event.response) {
               result = {
-                conversation_id: event.conversation_id || conversationId,
+                conversation_id: event.conversation_id || payload.conversationId,
                 messages: event.messages || [],
                 thread: event.thread,
                 run: event.run,
@@ -552,7 +603,7 @@ async function sendToServerStream(payload: {
             }
             if (event.type === 'cache' && !event.response) {
               result = {
-                conversation_id: event.conversation_id || conversationId,
+                conversation_id: event.conversation_id || payload.conversationId,
                 messages: event.messages || [],
                 thread: event.thread,
                 run: event.run,
@@ -596,6 +647,47 @@ export async function stopServerRun(input: { runId: string; baseUrl: string; tok
       return null;
     }
     return (await response.json()) as ServerControlResponse;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function undoServerAction(input: {
+  actionId: string;
+  baseUrl: string;
+  token?: string;
+  idempotencyKey?: string;
+  actor?: string;
+}): Promise<ServerUndoResponse | null> {
+  if (!input.baseUrl) {
+    return null;
+  }
+
+  const endpoint = input.baseUrl.replace(/\/$/, '');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const response = await fetch(`${endpoint}/chat/undo`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        ...(input.token ? { authorization: `Bearer ${input.token}` } : {}),
+      },
+      body: JSON.stringify({
+        action_id: input.actionId,
+        actor: input.actor,
+        ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as ServerUndoResponse;
   } catch {
     return null;
   } finally {

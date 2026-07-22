@@ -4,8 +4,9 @@ import { applyDomainPolicy } from './domain';
 import { buildPlan } from './planner';
 import { executeCommand } from './executor';
 import { verifyResult } from './verifier';
-import { makeConversationProvenance, toCitationsFromSnapshots } from '../provenance';
+import { makeConversationProvenance } from '../provenance';
 import { callOpenAI, callOpenAIStream } from '../providers/openai';
+import { createHash } from 'node:crypto';
 
 type ExecutorResult = Awaited<ReturnType<typeof executeCommand>>;
 type RawRoleResult = { role: AgentRoleId; status: string; reason?: string };
@@ -28,6 +29,46 @@ type OrchestratorAction = {
   receipt: ExecutorResult['receipt'];
   verification: Awaited<ReturnType<typeof verifyResult>> | null;
 };
+
+function deterministicStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => deterministicStringify(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${deterministicStringify((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function deterministicHash(input: unknown): string {
+  return createHash('sha256').update(deterministicStringify(input)).digest('hex');
+}
+
+function deterministicRunId(input: {
+  actor: string;
+  conversationId: string;
+  domain: string;
+  tool: string;
+  message: string;
+}) {
+  return `orch:${input.actor}:${input.conversationId}:${deterministicHash(input).slice(0, 16)}`;
+}
+
+function deterministicActionId(input: {
+  actor: string;
+  conversationId: string;
+  domain: string;
+  tool: string;
+  message: string;
+}) {
+  return `orch-action:${deterministicHash(input).slice(0, 16)}`;
+}
 
 export type OrchestratedRun = {
   runId: string;
@@ -83,11 +124,13 @@ export async function runChatOrchestrator(input: {
   previousResponseId?: string;
   stream?: boolean;
   onModelToken?: (token: string) => void;
+  preview?: boolean;
 }): Promise<OrchestratedRun> {
   const query = input.message.trim();
   const commandText = input.commandHint ?? query;
+  const isPreview = input.preview === true;
   const hasMutatingIntent = /\b(add|create|archive|update|delete|remove|order|buy|purchase)\b/i.test(commandText);
-  const executionTool = hasMutatingIntent ? 'chat_execute_command' : 'chat_reply';
+  const executionTool = hasMutatingIntent && !isPreview ? 'chat_execute_command' : 'chat_reply';
 
   const retrievalRole = await executeAgentRole({
     role: 'retrieval',
@@ -106,6 +149,7 @@ export async function runChatOrchestrator(input: {
   });
 
   const retrieval = await runRetrieval({ query, domain: input.domain });
+  const sourceIds = [...new Set(retrieval.snapshots.map((snapshot) => snapshot.id).filter(Boolean))];
 
   const policy = await applyDomainPolicy({
     domain: input.domain,
@@ -138,11 +182,23 @@ export async function runChatOrchestrator(input: {
 
   const plan = await buildPlan({ command: commandText, domain: input.domain });
   const clarifyingQuestion = policy.requiresClarification ? policy.clarifyingQuestion : undefined;
+  const contextSourceText = retrieval.snapshots.length
+    ? retrieval.snapshots.map((snapshot) => `${snapshot.label}: ${snapshot.detail}${snapshot.excerpt ? `\nFacts: ${snapshot.excerpt}` : ''}\nSource: ${snapshot.url}`).join('\n')
+    : 'No canonical source snapshots available yet.';
 
-  const prompt = `Domain: ${input.domain}
+  const prompt = `You are Hearth, LifeOS Food planner.
+Rules:
+- Never invent facts. Ground every claim in provided sources when available.
+- When a source is present, answer from its Facts block; do not claim that no source exists.
+- Reply with concise, actionable guidance.
+- Prefer plain language; when useful, use rows with fields: meal, use, next.
+- Only include citations for items drawn from concrete sources.
+- If no sources exist, state that explicitly and ask a clarifying follow-up.
+
+Domain: ${input.domain}
 Message: ${query}
-Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))}`,
-  ;
+Context sources:
+${contextSourceText}`;
   const ai = input.stream
     ? await callOpenAIStream({
       prompt,
@@ -161,13 +217,20 @@ Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))
     : undefined;
   const actionRun = policy.allowed && commandPlan
     ? await executeCommand({
-        actionId: `${input.conversationId}:reply:${Date.now()}`,
+        actionId: deterministicActionId({
+          actor: input.actor,
+          conversationId: input.conversationId,
+          domain: input.domain,
+          tool: executionTool,
+          message: query,
+        }),
         actor: input.actor,
         domain: input.domain,
         tool: executionTool,
         commandText: query,
         record_ids: [],
         conversationId: input.conversationId,
+        sourceIds,
         step: commandPlan,
       })
     : undefined;
@@ -201,7 +264,15 @@ Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))
     : undefined;
 
   return {
-    runId: input.runId ?? `orchestrator:${Date.now()}`,
+    runId:
+      input.runId ??
+      deterministicRunId({
+        actor: input.actor,
+        conversationId: input.conversationId,
+        domain: input.domain,
+        tool: executionTool,
+        message: query,
+      }),
     domain: input.domain,
     query,
     roles,

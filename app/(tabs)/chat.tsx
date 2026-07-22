@@ -14,8 +14,8 @@ import {
 import { useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
-import { ChatMessage, ChatThread } from '@/src/chat/types';
-import { chatServerConfig, listChatThreads, sendChatMessage, stopServerRun } from '@/src/chat/client';
+import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
+import { chatServerConfig, listChatThreads, sendChatMessage, stopServerRun, undoServerAction } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -129,7 +129,12 @@ export default function ChatScreen() {
       const thread = copy[target];
       const messageIndex = thread.messages.findIndex((message) => message.id === messageId);
       if (messageIndex < 0) {
-        const nextMessages = [...thread.messages, { id: messageId, role: 'assistant', text: token, answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] } }];
+        const nextMessages = [...thread.messages, {
+          id: messageId,
+          role: 'assistant' as ChatRole,
+          text: token,
+          answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] },
+        }];
         copy[target] = { ...thread, messages: nextMessages };
         return copy;
       }
@@ -138,10 +143,17 @@ export default function ChatScreen() {
           ? {
               ...message,
               text: `${message.text}${token}`,
-              answer: {
-                ...message.answer,
-                intro: message.answer?.intro ?? '',
-              },
+              answer: message.answer
+                ? {
+                    ...message.answer,
+                    intro: message.answer.intro ?? '',
+                  }
+                : {
+                    title: 'LifeOS model response',
+                    intro: token,
+                    rows: [],
+                    citations: [],
+                  },
             }
           : message,
       );
@@ -162,9 +174,16 @@ export default function ChatScreen() {
     const streamRunId = `stream-${Date.now()}`;
     const streamMessageId = `asst-${streamRunId}`;
 
-    const withPlaceholder = {
+    const placeholder: ChatMessage = {
+      id: streamMessageId,
+      role: 'assistant' as ChatRole,
+      text: '',
+      answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] },
+    };
+
+    const withPlaceholder: ChatThread = {
       ...activeThread,
-      messages: [...activeThread.messages, { id: streamMessageId, role: 'assistant', text: '', answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] } }],
+      messages: [...activeThread.messages, placeholder],
     };
     appendOrReplaceThread(withPlaceholder);
 
@@ -240,6 +259,54 @@ export default function ChatScreen() {
     }
   };
 
+  const setMessageReceipt = (threadId: string, messageId: string, updater: (message: ChatMessage) => ChatMessage) => {
+    setThreads((current) =>
+      current.map((thread) =>
+        thread.id !== threadId
+          ? thread
+          : {
+              ...thread,
+              messages: thread.messages.map((message) =>
+                message.id === messageId ? updater(message) : message
+              ),
+            },
+      ),
+    );
+  };
+
+  const undoMessageAction = async (threadId: string, message: MessageRow) => {
+    if (!chatServerConfig.url) {
+      setWarnings(['Undo is unavailable until live runtime is configured.']);
+      return;
+    }
+    if (message.role !== 'assistant' || message.actionReceipt?.status !== 'completed' || !message.actionReceipt.record_ids?.length) {
+      setWarnings(['No reversible action for this message.']);
+      return;
+    }
+
+    const response = await undoServerAction({
+      actionId: message.actionReceipt.id,
+      baseUrl: chatServerConfig.url,
+      token: chatServerConfig.token,
+      actor: message.actionReceipt.actor,
+      idempotencyKey: message.actionReceipt.idempotency_key,
+    });
+    if (!response?.undo_result) {
+      setWarnings(['Undo request failed.']);
+      return;
+    }
+
+    if (response.undo_result.success) {
+      setMessageReceipt(threadId, message.id, (existing) => ({
+        ...existing,
+        actionReceipt: existing.actionReceipt ? { ...existing.actionReceipt, status: 'cancelled' } : undefined,
+      }));
+      setWarnings([response.undo_result.message]);
+    } else {
+      setWarnings([response.undo_result.message || 'Undo request returned failed status.']);
+    }
+  };
+
   return (
     <Page>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
@@ -282,7 +349,9 @@ export default function ChatScreen() {
 
                 <View style={styles.divider} />
                 <View style={styles.messages}>
-                  {activeThread.messages.map((message: MessageRow) => <MessageBubble key={message.id} message={message} />)}
+                  {activeThread.messages.map((message: MessageRow) => (
+                    <MessageBubble key={message.id} message={message} onUndo={() => void undoMessageAction(activeThread.id, message)} />
+                  ))}
                 </View>
 
                 <View style={styles.composerWrap}>
@@ -321,10 +390,11 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message }: { message: MessageRow }) {
+function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () => void }) {
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
   const citations = answerRows?.citations?.length ? ensureCitations(answerRows.citations) : [];
+  const hasUndo = assistant && message.actionReceipt?.status === 'completed' && (message.actionReceipt.record_ids?.length ?? 0) > 0;
 
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
@@ -334,6 +404,7 @@ function MessageBubble({ message }: { message: MessageRow }) {
         <View style={[styles.bubble, !assistant && styles.userBubble]}><Text style={[styles.bubbleText, !assistant && styles.userBubbleText]}>{message.text}</Text></View>
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
         {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
+        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" onPress={onUndo} style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}><Text style={styles.undoButtonText}>Undo</Text></Pressable>}
       </View>
     </View>
   );
@@ -434,6 +505,8 @@ const styles = StyleSheet.create({
   composerFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 7 },
   composerHint: { color: colors.muted, fontSize: 10, lineHeight: 14, flex: 1 },
   shortcut: { color: colors.muted, fontSize: 10, fontWeight: '700' },
+  undoButton: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#FFF', borderWidth: 1, borderColor: colors.moss, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  undoButtonText: { color: colors.ink, fontSize: 11, fontWeight: '800' },
   contextCard: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' },
   contextIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#C7D8DF', alignItems: 'center', justifyContent: 'center' },
   contextCopy: { flex: 1, minWidth: 180 },

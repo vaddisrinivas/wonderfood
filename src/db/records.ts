@@ -107,7 +107,7 @@ export async function upsertRecord(
         INSERT INTO records (
           id, domain, collection, title, properties, source_provider, source_external_id, source_url,
           source_observed_at, source_content_hash, archived_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           domain = excluded.domain,
           collection = excluded.collection,

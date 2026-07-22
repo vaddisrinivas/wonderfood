@@ -1,6 +1,7 @@
-import { basename, dirname, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
+import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
 
 type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
 
@@ -62,6 +63,10 @@ type PersistedStore = {
   updated_at: string;
   records: Record<string, McpRecord>;
   actions: Record<string, ActionEvent>;
+};
+
+type PersistOptions = {
+  persist?: boolean;
 };
 
 export type WorkflowStep = {
@@ -278,7 +283,7 @@ function normalizeRecord(
   };
 }
 
-function upsertRecord(record: McpRecord) {
+function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
   const next = normalizeRecord(record);
   const exists = store.records[next.id];
 
@@ -301,17 +306,39 @@ function upsertRecord(record: McpRecord) {
     };
   }
 
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
   return { ...store.records[next.id] };
 }
 
-function removeRecord(id: string): boolean {
+export function deleteRecord(id: string, options: PersistOptions = {}) {
   if (!store.records[id]) {
     return false;
   }
   delete store.records[id];
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
   return true;
+}
+
+export function restoreRecord(record: McpRecord) {
+  const normalized = normalizeRecord({
+    ...record,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  });
+  const existing = store.records[normalized.id];
+  store.records[normalized.id] = {
+    ...normalized,
+    id: normalized.id,
+    title: normalized.title || (existing ? existing.title : normalized.id),
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
+  persistStore();
+  return { ...store.records[normalized.id] };
 }
 
 function isWorkflowFileName(value: string) {
@@ -365,6 +392,9 @@ function parseWorkflowDocument(raw: unknown, fallbackDomain: string): WorkflowDo
       }
       if (typeof (step as { action?: unknown }).action === 'string') {
         parsed.action = String((step as { action: string }).action);
+      }
+      if (typeof (step as { input?: unknown }).input === 'object' && (step as { input: unknown }).input !== null) {
+        parsed.input = (step as { input: Record<string, unknown> }).input;
       }
       if (typeof (step as { required?: unknown }).required === 'boolean') {
         parsed.required = (step as { required: boolean }).required;
@@ -492,7 +522,62 @@ export function findRecord(id: string) {
   return record ? { ...record } : null;
 }
 
-export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'> & { now?: string }) {
+export type ProviderCanonicalRecordInput = {
+  provider: Extract<RecordProvider, 'notion' | 'google_sheets'>;
+  id: string;
+  domain: string;
+  collection: string;
+  title: string;
+  properties: Record<string, unknown>;
+  relations?: CanonicalRelation[];
+  archived?: boolean;
+  externalId?: string | null;
+  url?: string | null;
+  observedAt?: string | null;
+  contentHash?: string | null;
+};
+
+export type ProviderCanonicalApplyResult = {
+  applied: boolean;
+  record: McpRecord | null;
+  reason?: string;
+};
+
+/** Apply a provider pull only after the provider adapter has passed its authority checks. */
+export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
+  const authority = process.env.LIFEOS_AUTHORITY_PROVIDER?.trim() || 'notion';
+  if (authority !== input.provider) {
+    return {
+      applied: false,
+      record: null,
+      reason: `${input.provider} is a projection; configured authority is ${authority}.`,
+    };
+  }
+
+  const now = nowIso();
+  const existing = store.records[input.id];
+  const record = upsertRecord({
+    id: input.id,
+    domain: input.domain,
+    collection: input.collection,
+    title: input.title,
+    properties: input.properties,
+    relations: input.relations ?? [],
+    source: {
+      provider: input.provider,
+      external_id: input.externalId?.trim() || input.id,
+      url: input.url ?? null,
+      observed_at: input.observedAt?.trim() || now,
+      content_hash: input.contentHash ?? null,
+    },
+    archived_at: input.archived ? now : null,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  });
+  return { applied: true, record };
+}
+
+export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'> & { now?: string }, options: PersistOptions = {}) {
   const now = input.now ?? nowIso();
   const base = normalizeRecord(input as Omit<McpRecord, 'created_at' | 'updated_at'> & Partial<McpRecord>);
   const next = {
@@ -500,10 +585,10 @@ export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'>
     created_at: now,
     updated_at: now,
   };
-  return upsertRecord(next);
+  return upsertRecord(next, options);
 }
 
-export function updateRecord(id: string, patch: Partial<McpRecord>) {
+export function updateRecord(id: string, patch: Partial<McpRecord>, options: PersistOptions = {}) {
   const existing = store.records[id];
   if (!existing) {
     return null;
@@ -517,14 +602,14 @@ export function updateRecord(id: string, patch: Partial<McpRecord>) {
     updated_at: nowIso(),
   };
   const before = { ...existing };
-  const record = upsertRecord(merged);
+  const record = upsertRecord(merged, options);
   return {
     before,
     after: record,
   };
 }
 
-export function archiveRecord(id: string) {
+export function archiveRecord(id: string, options: PersistOptions = {}) {
   const existing = store.records[id];
   if (!existing) {
     return null;
@@ -544,11 +629,301 @@ export function archiveRecord(id: string) {
     archived_at: archivedAt,
     updated_at: archivedAt,
   };
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
 
   return {
     before,
     after: { ...store.records[id] },
+  };
+}
+
+export type ActionWriteResult = {
+  action: ActionEvent;
+  record?: McpRecord;
+  replayed: boolean;
+};
+
+function resolveIdempotencyKey(input?: string) {
+  return typeof input === 'string' ? input.trim() : '';
+}
+
+export function createRecordWithAction(input: {
+  actionId: string;
+  actor: string;
+  domain: string;
+  tool: string;
+  risk: ActionRisk;
+  command: string;
+  record: Omit<McpRecord, 'created_at' | 'updated_at'>;
+  idempotencyKey?: string;
+  sourceIds?: string[];
+  conversationId?: string | null;
+  before?: unknown;
+  undoPayload?: unknown;
+}): ActionWriteResult {
+  const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
+  const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+  if (existing && existing.status === 'completed') {
+    const replayedRecordId = existing.record_ids[0];
+    return {
+      action: existing,
+      record: replayedRecordId ? findRecord(replayedRecordId) ?? undefined : undefined,
+      replayed: true,
+    };
+  }
+
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
+  const record = createRecord({
+    ...input.record,
+  }, { persist: false });
+  const actionSeed = createActionEvent(
+    {
+      id: input.actionId,
+      actor: input.actor,
+      domain: input.domain,
+      tool: input.tool,
+      risk: input.risk,
+      recordIds: [record.id],
+      idempotencyKey: effectiveIdempotencyKey,
+      command: input.command,
+      before: input.before,
+      after: record,
+      undoPayload: input.undoPayload ?? { operation: 'delete_record', record_id: record.id, record },
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId ?? null,
+    },
+    { persist: false },
+  );
+  const action = markActionCompleted(actionSeed.id, actionSeed.command, { record }, { persist: false }) ?? actionSeed;
+  persistStore();
+  return {
+    action,
+    record,
+    replayed: false,
+  };
+}
+
+export function updateRecordWithAction(input: {
+  actionId: string;
+  actor: string;
+  domain: string;
+  tool: string;
+  risk: ActionRisk;
+  command: string;
+  id: string;
+  patch: Partial<McpRecord>;
+  idempotencyKey?: string;
+  sourceIds?: string[];
+  conversationId?: string | null;
+  source?: McpRecord['source'];
+  undoPayload?: {
+    operation: string;
+    before?: unknown;
+    record_id?: string;
+  };
+}): ActionWriteResult {
+  const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
+  const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+  if (existing && existing.status === 'completed') {
+    const replayedRecordId = existing.record_ids[0];
+    return {
+      action: existing,
+      record: replayedRecordId ? findRecord(replayedRecordId) ?? undefined : undefined,
+      replayed: true,
+    };
+  }
+
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
+  const previous = findRecord(input.id);
+  if (!previous) {
+    return {
+      action: markActionFailed(input.actionId, 'record not found', { persist: false }) ??
+        createActionEvent(
+          {
+            id: input.actionId,
+            actor: input.actor,
+            domain: input.domain,
+            tool: input.tool,
+            risk: input.risk,
+            recordIds: [input.id],
+            idempotencyKey: effectiveIdempotencyKey,
+            command: input.command,
+            before: null,
+            after: null,
+            undoPayload: null,
+            sourceIds: input.sourceIds,
+            conversationId: input.conversationId ?? null,
+          },
+          { persist: false },
+        ),
+      replayed: false,
+    };
+  }
+
+  const updated = updateRecord(
+    input.id,
+    {
+      ...input.patch,
+      ...(input.source ? { source: input.source } : {}),
+    },
+    { persist: false },
+  );
+  if (!updated) {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+      },
+      { persist: false },
+    );
+    const failure = markActionFailed(action.id, 'record could not be updated', { persist: false }) ?? action;
+    persistStore();
+    return { action: failure, replayed: false };
+  }
+
+  const undoPayload = input.undoPayload ?? {
+    operation: 'restore_after_update',
+    before: updated.before,
+    record_id: updated.after.id,
+  };
+
+  const actionSeed = createActionEvent(
+    {
+      id: input.actionId,
+      actor: input.actor,
+      domain: input.domain,
+      tool: input.tool,
+      risk: input.risk,
+      recordIds: [updated.after.id],
+      idempotencyKey: effectiveIdempotencyKey,
+      command: input.command,
+      before: updated.before,
+      after: updated.after,
+      undoPayload,
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId ?? null,
+    },
+    { persist: false },
+  );
+  const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: updated.after }, { persist: false }) ?? actionSeed;
+  persistStore();
+  return {
+    action,
+    record: updated.after,
+    replayed: false,
+  };
+}
+
+export function archiveRecordWithAction(input: {
+  actionId: string;
+  actor: string;
+  domain: string;
+  tool: string;
+  risk: ActionRisk;
+  command: string;
+  id: string;
+  idempotencyKey?: string;
+  sourceIds?: string[];
+  conversationId?: string | null;
+  source?: McpRecord['source'];
+  undoPayload?: {
+    operation: string;
+    before?: unknown;
+    record_id?: string;
+  };
+}): ActionWriteResult {
+  const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
+  const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+  if (existing && existing.status === 'completed') {
+    const replayedRecordId = existing.record_ids[0];
+    return {
+      action: existing,
+      record: replayedRecordId ? findRecord(replayedRecordId) ?? undefined : undefined,
+      replayed: true,
+    };
+  }
+
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
+  const archived = archiveRecord(input.id, { persist: false });
+  if (!archived) {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: null,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+      },
+      { persist: false },
+    );
+    const failure = markActionFailed(action.id, 'record not found', { persist: false }) ?? action;
+    persistStore();
+    return { action: failure, replayed: false };
+  }
+
+  const payload = input.undoPayload ?? {
+    operation: 'restore_after_archive',
+    before: archived.before,
+    record_id: archived.after.id,
+  };
+  const resolvedAfter = input.source
+    ? { ...archived.after, source: input.source }
+    : archived.after;
+  if (resolvedAfter !== archived.after) {
+    const restored = restoreRecord(resolvedAfter);
+    store.records[resolvedAfter.id] = restored;
+  }
+
+  const actionSeed = createActionEvent(
+    {
+      id: input.actionId,
+      actor: input.actor,
+      domain: input.domain,
+      tool: input.tool,
+      risk: input.risk,
+      recordIds: [resolvedAfter.id],
+      idempotencyKey: effectiveIdempotencyKey,
+      command: input.command,
+      before: archived.before,
+      after: resolvedAfter,
+      undoPayload: payload,
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId ?? null,
+    },
+    { persist: false },
+  );
+
+  const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: resolvedAfter }, { persist: false }) ?? actionSeed;
+  if (resolvedAfter !== archived.after) {
+    store.records[resolvedAfter.id] = resolvedAfter;
+  }
+  persistStore();
+
+  return {
+    action,
+    record: resolvedAfter,
+    replayed: false,
   };
 }
 
@@ -581,7 +956,7 @@ export function createActionEvent(input: {
   status?: ActionState['status'];
   sourceIds?: string[];
   conversationId?: string | null;
-}): ActionEvent {
+}, options: PersistOptions = {}): ActionEvent {
   const now = nowIso();
   const idempotencyKey = input.idempotencyKey?.trim() || null;
 
@@ -614,11 +989,13 @@ export function createActionEvent(input: {
   };
 
   store.actions[event.id] = event;
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
   return cloneActionEvent(event);
 }
 
-export function markActionCompleted(id: string, command?: string, after?: unknown) {
+export function markActionCompleted(id: string, command?: string, after?: unknown, options: PersistOptions = {}) {
   const existing = store.actions[id];
   if (!existing) {
     return null;
@@ -631,11 +1008,13 @@ export function markActionCompleted(id: string, command?: string, after?: unknow
     after_json: after ?? existing.after_json,
     updated_at: nowIso(),
   };
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
   return cloneActionEvent(store.actions[id]);
 }
 
-export function markActionFailed(id: string, reason?: string) {
+export function markActionFailed(id: string, reason?: string, options: PersistOptions = {}) {
   const existing = store.actions[id];
   if (!existing) {
     return null;
@@ -646,7 +1025,9 @@ export function markActionFailed(id: string, reason?: string) {
     status: 'failed',
     updated_at: nowIso(),
   };
-  persistStore();
+  if (options.persist !== false) {
+    persistStore();
+  }
   return { ...cloneActionEvent(store.actions[id]), reason };
 }
 
@@ -655,6 +1036,138 @@ function isUndoWindowOpen(deadlineAt: string | null) {
     return false;
   }
   return Date.parse(deadlineAt) > Date.now();
+}
+
+type WorkflowCheckpointUndoResult = {
+  applied: number;
+  skipped: number;
+  errors: string[];
+};
+
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toWorkflowUndoRecordId(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') {
+    return '';
+  }
+  return asText((raw as { id?: unknown }).id);
+}
+
+function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): WorkflowCheckpointUndoResult {
+  const result: WorkflowCheckpointUndoResult = {
+    applied: 0,
+    skipped: 0,
+    errors: [],
+  };
+  const visited = new Set<string>();
+
+  for (const step of [...checkpoint.steps].reverse()) {
+    const stepResult = step.result && typeof step.result === 'object' ? (step.result as Record<string, unknown>) : null;
+    const tool = asText(step.tool);
+    if (tool === 'create_record') {
+      const recordId = asText(stepResult?.id) || asText(stepResult?.after && (stepResult.after as { id?: unknown }).id) || asText(step.changed_records[0]);
+      if (!recordId) {
+        result.skipped += 1;
+        continue;
+      }
+      if (visited.has(recordId)) {
+        result.skipped += 1;
+        continue;
+      }
+      visited.add(recordId);
+      const deleted = deleteRecord(recordId);
+      if (deleted) {
+        result.applied += 1;
+      } else {
+        result.skipped += 1;
+      }
+      continue;
+    }
+
+    if (tool === 'update_record' || tool === 'archive_record') {
+      const before = stepResult?.before;
+      if (!before || typeof before !== 'object') {
+        result.skipped += 1;
+        continue;
+      }
+      const record = before as McpRecord;
+      const recordId = asText(record.id);
+      if (!recordId || visited.has(recordId)) {
+        result.skipped += 1;
+        continue;
+      }
+      visited.add(recordId);
+      try {
+        restoreRecord(record);
+        result.applied += 1;
+      } catch {
+        result.errors.push(`failed to restore ${recordId}`);
+      }
+      continue;
+    }
+
+    if (tool === 'run_workflow') {
+      // Nested workflows should already have emitted concrete child steps into the same checkpoint stream.
+      if (Array.isArray(stepResult?.details)) {
+        for (const nestedStep of (stepResult.details as unknown[]).slice().reverse()) {
+          if (!nestedStep || typeof nestedStep !== 'object') {
+            continue;
+          }
+          const entry = nestedStep as {
+            tool?: unknown;
+            result?: unknown;
+          };
+          const nestedTool = asText(entry.tool);
+          const nestedResult = entry.result && typeof entry.result === 'object' ? (entry.result as Record<string, unknown>) : null;
+          if (nestedTool === 'create_record') {
+            const recordId = asText(nestedResult?.id) || toWorkflowUndoRecordId(nestedResult?.after);
+            if (!recordId || visited.has(recordId)) {
+              result.skipped += 1;
+              continue;
+            }
+            visited.add(recordId);
+            const nestedDeleted = deleteRecord(recordId);
+            if (nestedDeleted) {
+              result.applied += 1;
+            } else {
+              result.skipped += 1;
+            }
+            continue;
+          }
+          if (nestedTool === 'update_record' || nestedTool === 'archive_record') {
+            const nestedBefore = nestedResult?.before;
+            if (!nestedBefore || typeof nestedBefore !== 'object') {
+              result.skipped += 1;
+              continue;
+            }
+            const nestedRecord = nestedBefore as McpRecord;
+            const nestedRecordId = asText(nestedRecord.id);
+            if (!nestedRecordId || visited.has(nestedRecordId)) {
+              result.skipped += 1;
+              continue;
+            }
+            visited.add(nestedRecordId);
+            try {
+              restoreRecord(nestedRecord);
+              result.applied += 1;
+            } catch {
+              result.errors.push(`failed to restore nested ${nestedRecordId}`);
+            }
+            continue;
+          }
+        }
+      }
+      continue;
+    }
+
+    if (tool !== 'search_records' && tool !== 'read_record' && tool !== '') {
+      result.skipped += 1;
+    }
+  }
+
+  return result;
 }
 
 export function listActionIds() {
@@ -689,6 +1202,7 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     record_id?: string;
     record?: McpRecord | null;
     target_id?: string;
+    checkpoint_run_id?: unknown;
   } | null;
   if (!payload || typeof payload !== 'object') {
     return { success: false, action: cloneActionEvent(action), message: 'No reversible payload stored.' };
@@ -702,7 +1216,7 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     if (!recordId) {
       return { success: false, action: cloneActionEvent(action), message: 'Undo payload missing created record id.' };
     }
-    const deleted = removeRecord(recordId);
+    const deleted = deleteRecord(recordId);
     if (!deleted) {
       return { success: false, action: cloneActionEvent(action), message: 'Created record was already missing.' };
     }
@@ -712,6 +1226,49 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     }
     store.records[record.id] = record as McpRecord;
     persistStore();
+  } else if (operation === 'undo_workflow_checkpoint') {
+    const after = action.after_json && typeof action.after_json === 'object' ? (action.after_json as { checkpoint_run_id?: unknown }) : null;
+    const checkpointRunId =
+      asText(payload.checkpoint_run_id) ||
+      asText((action.before_json as { checkpoint_run_id?: unknown })?.checkpoint_run_id) ||
+      asText(after?.checkpoint_run_id);
+    if (!checkpointRunId) {
+      return { success: false, action: cloneActionEvent(action), message: 'Undo workflow payload missing checkpoint id.' };
+    }
+
+    const checkpoint = getWorkflowCheckpoint(checkpointRunId);
+    if (!checkpoint) {
+      return { success: false, action: cloneActionEvent(action), message: `Workflow checkpoint ${checkpointRunId} not found.` };
+    }
+
+    const undoResult = applyWorkflowCheckpointUndo(checkpoint);
+    if (undoResult.errors.length > 0) {
+      return {
+        success: false,
+        action: cloneActionEvent(action),
+        message: `Undo workflow checkpoint failed: ${undoResult.errors.join('; ')}`,
+      };
+    }
+
+    store.actions[actionId] = {
+      ...action,
+      status: 'cancelled',
+      updated_at: nowIso(),
+      after_json: {
+        ...(typeof action.after_json === 'object' && action.after_json !== null ? (action.after_json as Record<string, unknown>) : {}),
+        workflow_undo: {
+          applied: undoResult.applied,
+          skipped: undoResult.skipped,
+          errors: undoResult.errors,
+        },
+      },
+    };
+    persistStore();
+    return {
+      success: true,
+      action: cloneActionEvent(store.actions[actionId]),
+      message: `Undo applied.${undoResult.applied > 0 ? ` ${undoResult.applied} step(s) reverted.` : ''}${undoResult.skipped > 0 ? ` ${undoResult.skipped} step(s) skipped.` : ''}`.trim(),
+    };
   } else {
     return { success: false, action: cloneActionEvent(action), message: 'Unsupported undo payload.' };
   }
@@ -756,4 +1313,3 @@ export function listActionEvents(): ActionEvent[] {
 export function touch() {
   persistStore();
 }
-

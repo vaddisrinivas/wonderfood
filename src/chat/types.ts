@@ -29,6 +29,18 @@ export type ChatMessage = {
   role: ChatRole;
   text: string;
   answer?: ChatAnswer;
+  actionReceipt?: {
+    id: string;
+    actor?: string;
+    domain?: string;
+    tool?: string;
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    record_ids: string[];
+    created_at: string;
+    updated_at: string;
+    undo_deadline_at?: string;
+    idempotency_key?: string;
+  };
 };
 
 export type ChatThread = {
@@ -56,6 +68,9 @@ export type ChatSendResult = {
   thread: ChatThread;
   conversationId: string;
   mode: 'offline' | 'server';
+  action?: {
+    receipt?: ChatMessage['actionReceipt'];
+  };
   warnings?: string[];
   serverError?: string;
   serverRunId?: string;

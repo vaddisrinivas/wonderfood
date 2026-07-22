@@ -32,6 +32,27 @@ const STATIC_RESOURCES: Record<string, McpResourceRecord> = {
     path: resolvePath('packages/domain-config/skills/food.md'),
     mode: 'file',
   },
+  'wonderfood://skill/bundled-health': {
+    uri: 'wonderfood://skill/bundled-health',
+    name: 'bundled-health',
+    mimeType: 'text/markdown',
+    path: resolvePath('packages/domain-config/skills/health.md'),
+    mode: 'file',
+  },
+  'wonderfood://skill/bundled-plants': {
+    uri: 'wonderfood://skill/bundled-plants',
+    name: 'bundled-plants',
+    mimeType: 'text/markdown',
+    path: resolvePath('packages/domain-config/skills/plants.md'),
+    mode: 'file',
+  },
+  'wonderfood://agent-registry-v1': {
+    uri: 'wonderfood://agent-registry-v1',
+    name: 'agent-registry-v1',
+    mimeType: 'application/json',
+    path: resolvePath('packages/domain-config/agents/registry.v1.json'),
+    mode: 'file',
+  },
   'wonderfood://lifeos/domain-catalog-v1': {
     uri: 'wonderfood://lifeos/domain-catalog-v1',
     name: 'domain-catalog-v1',
@@ -116,6 +137,20 @@ const STATIC_RESOURCES: Record<string, McpResourceRecord> = {
     path: resolvePath('packages/domain-config/domains/food.v1.json'),
     mode: 'file',
   },
+  'wonderfood://manifest/health': {
+    uri: 'wonderfood://manifest/health',
+    name: 'manifest-health',
+    mimeType: 'application/json',
+    path: resolvePath('packages/domain-config/domains/health.v1.json'),
+    mode: 'file',
+  },
+  'wonderfood://manifest/plants': {
+    uri: 'wonderfood://manifest/plants',
+    name: 'manifest-plants',
+    mimeType: 'application/json',
+    path: resolvePath('packages/domain-config/domains/plants.v1.json'),
+    mode: 'file',
+  },
 };
 
 function resolveMimeType(path: string, fallback: string) {
@@ -161,7 +196,7 @@ export function getMcpResourceUris(): string[] {
 }
 
 export function listMcpResources(): McpResource[] {
-  const static = Object.values(STATIC_RESOURCES).map((resource) => ({
+  const staticResources = Object.values(STATIC_RESOURCES).map((resource) => ({
     uri: resource.uri,
     name: resource.name,
     mimeType: resource.mimeType,
@@ -192,7 +227,7 @@ export function listMcpResources(): McpResource[] {
   };
 
   return [
-    ...static,
+    ...staticResources,
     catalog,
     { uri: 'wonderfood://actions', name: 'actions-index', mimeType: 'application/json' },
     { uri: 'wonderfood://workflows', name: 'workflows-index', mimeType: 'application/json' },

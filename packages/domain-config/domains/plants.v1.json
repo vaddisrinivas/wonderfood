@@ -1,0 +1,26 @@
+{
+  "$schema": "../schemas/domain.v1.schema.json",
+  "schema_version": "lifeos.domain.v1",
+  "id": "plants",
+  "label": "Plants",
+  "home_surface": "plants.overview",
+  "surfaces": [
+    { "id": "plants.overview", "label": "Overview", "views": ["needs_attention", "watering", "growth"], "collections": ["plant", "care_task"] },
+    { "id": "plants.journal", "label": "Journal", "views": ["timeline", "observations"], "collections": ["plant_observation", "plant_journal"] },
+    { "id": "plants.supplies", "label": "Supplies", "views": ["inventory", "to_buy"], "collections": ["plant_supply"] }
+  ],
+  "collections": ["plant", "care_task", "plant_observation", "plant_journal", "plant_supply", "source_record"],
+  "relations": [
+    { "from": "care_task", "to": "plant", "name": "cares_for" },
+    { "from": "plant_observation", "to": "plant", "name": "observes" },
+    { "from": "plant_supply", "to": "plant", "name": "supports" },
+    { "from": "source_record", "to": "*", "name": "supports" }
+  ],
+  "skills": ["plants"],
+  "workflows": [],
+  "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
+  "mcp": {
+    "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],
+    "tools": ["search", "read_record", "create_record", "update_record", "archive_record"]
+  }
+}

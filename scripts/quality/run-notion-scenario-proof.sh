@@ -245,7 +245,27 @@ def get_child_databases():
 
 def read_database_properties(database_id):
     database = request("GET", "/databases/" + urllib.parse.quote(database_id, safe=""), retry=False)
-    return database.get("properties", {})
+    properties = database.get("properties", {})
+    if properties:
+        return properties
+    sources = database.get("data_sources", [])
+    for source in sources:
+        source_id = source.get("id") if isinstance(source, dict) else None
+        if not source_id:
+            continue
+        data_source = request("GET", "/data_sources/" + urllib.parse.quote(source_id, safe=""), retry=False)
+        if data_source.get("properties"):
+            return data_source.get("properties", {})
+    return {}
+
+def database_data_source_id(database_id):
+    database = request("GET", "/databases/" + urllib.parse.quote(database_id, safe=""), retry=False)
+    sources = database.get("data_sources", [])
+    for source in sources:
+        source_id = source.get("id") if isinstance(source, dict) else None
+        if source_id:
+            return source_id
+    return None
 
 def ensure_database_schema(database_id, required_properties, attempts=3):
     for _ in range(attempts):
@@ -253,7 +273,10 @@ def ensure_database_schema(database_id, required_properties, attempts=3):
         missing = {name: schema for name, schema in required_properties.items() if name not in current}
         if not missing:
             return current, True
-        request("PATCH", "/databases/" + urllib.parse.quote(database_id, safe=""), {"properties": missing})
+        data_source_id = database_data_source_id(database_id)
+        if not data_source_id:
+            return current, False
+        request("PATCH", "/data_sources/" + urllib.parse.quote(data_source_id, safe=""), {"properties": missing})
         time.sleep(0.5)
     return read_database_properties(database_id), False
 
@@ -264,7 +287,7 @@ def create_database(page_id, title_text, properties):
         {
             "parent": {"type": "page_id", "page_id": page_id},
             "title": [{"type": "text", "text": {"content": title_text}}],
-            "properties": properties,
+            "initial_data_source": {"properties": properties},
         },
     )
     database_id = created.get("id", "")
@@ -327,8 +350,9 @@ SHOPPING_PROPERTIES = {
     "Archived": {"checkbox": {}},
 }
 
-kitchen_db, kitchen_properties, repaired_kitchen = ensure_or_repair_database(page_id, "WonderFood Kitchen", KITCHEN_PROPERTIES)
-shopping_db, shopping_properties, repaired_shopping = ensure_or_repair_database(page_id, "WonderFood Shopping", SHOPPING_PROPERTIES)
+fixture_stamp = str(int(time.time()))
+kitchen_db, kitchen_properties, repaired_kitchen = ensure_or_repair_database(page_id, "WonderFood Kitchen Proof " + fixture_stamp, KITCHEN_PROPERTIES)
+shopping_db, shopping_properties, repaired_shopping = ensure_or_repair_database(page_id, "WonderFood Shopping Proof " + fixture_stamp, SHOPPING_PROPERTIES)
 
 kitchen_source = query_source_id(kitchen_db)
 shopping_source = query_source_id(shopping_db)
@@ -403,7 +427,17 @@ live_app_edit_read_back = (
     else True
 )
 
-archive_read_back = True
+request(
+    "PATCH",
+    "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
+    {"in_trash": True},
+)
+archived_shopping = request(
+    "GET",
+    "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
+    retry=False,
+)
+archive_read_back = bool(archived_shopping.get("in_trash"))
 
 repair_path = "/databases/" + urllib.parse.quote(shopping_db, safe="")
 database_before_repair = request("GET", repair_path, retry=False)
@@ -427,6 +461,8 @@ payload = {
     "notion_edit_pull_read_back": notion_edit_pull_read_back,
     "kitchen_schema_ok": all(name in kitchen_properties for name in KITCHEN_PROPERTIES),
     "shopping_schema_ok": all(name in shopping_properties for name in SHOPPING_PROPERTIES),
+    "kitchen_properties_seen": sorted(kitchen_properties.keys()),
+    "shopping_properties_seen": sorted(shopping_properties.keys()),
     "live_create_row": live_create_row,
     "app_edit_read_back": live_app_edit_read_back,
     "conflict_input_read_back": notion_edit_pull_read_back,
@@ -440,6 +476,8 @@ payload = {
 required_checks = [
     "app_create_exported_seed",
     "notion_edit_pull_read_back",
+    "kitchen_schema_ok",
+    "shopping_schema_ok",
     "live_create_row",
     "app_edit_read_back",
     "conflict_input_read_back",

@@ -26,6 +26,31 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - AI responses must cite app/data-plane sources when available.
 - User edits records in normal editors and never edits AI answers. Exact reversible actions apply directly and return Undo.
 
+## Phase 3 state (2026-07-22)
+
+- Chat server now uses OpenAI Responses + durable conversation state and publishes `/chat/send`, `/chat/send/stream`, and `/chat/undo` with action receipts.
+- Streaming responses emit `run.start`, `token`, and `run.end`; action receipts include canonical fields and `source_ids`.
+- `/chat/send` idempotency and `/chat/undo` idempotent replay are covered by evidence in:
+  - `app/build/evidence/phase3-chat-send/phase3-chat-send-proof.json`
+  - `app/build/evidence/phase3-chat-undo/phase3-chat-undo-proof.json`
+  - `app/build/evidence/phase3-chat-rollback-idempotency/phase3-chat-rollback-idempotency-proof.json`
+
+## Phase 4 state (2026-07-22)
+
+- MCP parity for write/read tools is in place with deterministic action envelopes:
+  - `safety`, `reviewOnly`, `json`, `source_snapshot`, `undo_token`, `review_flags`, and `receipts` on write paths.
+  - `policy`/`requiredConfig` blocking for restricted writes and unconfigured providers.
+  - replay stability via `action_id` + `idempotency_key`.
+- Streamable-HTTP MCP is required and verified for `/mcp` using JSON and SSE transport.
+- Workflow execution now includes checkpointed runs, replay, and compensation rollback.
+- Evidence paths:
+  - `app/build/evidence/phase4-mcp-tool-contract/phase4-mcp-tool-contract-proof.json`
+  - `app/build/evidence/phase4-mcp-workflow-replay/phase4-mcp-workflow-replay-proof.json`
+  - `app/build/evidence/phase4-mcp-workflow-replay-http/phase4-mcp-workflow-replay-http-proof.json`
+  - `docs/lifeos/contracts/mcp-contracts.md`
+- Remaining phase-4 gap:
+  - Notion and Google Sheets writes remain provider-blocked unless credentials are configured in env; this is represented as deterministic review-only provider-mismatch receipts.
+
 ## Notion benchmark inputs
 
 - LifeOS 2026 remains the canonical WonderFood/LifeOS page.

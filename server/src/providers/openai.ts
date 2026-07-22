@@ -24,19 +24,34 @@ type OpenAIStreamInput = OpenAIInput & {
   maxTokens?: number;
 };
 
+const DEFAULT_MODEL = 'gpt-4.1-mini';
+
+function configuredModel(inputModel?: string): string {
+  return inputModel?.trim() || process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+function configuredTimeout(inputTimeout: number | undefined, stream: boolean): number {
+  if (typeof inputTimeout === 'number' && Number.isFinite(inputTimeout) && inputTimeout > 0) {
+    return inputTimeout;
+  }
+  const configured = Number(process.env.OPENAI_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : stream ? 8000 : 4500;
+}
+
 export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
   const key = process.env.OPENAI_API_KEY;
+  const model = configuredModel(input.model);
   if (!key) {
     return {
       status: 'disabled',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'offline-fallback',
-      text: 'OpenAI key missing in server environment. Configure OPENAI_API_KEY for live responses.',
+      text: 'Live model unavailable: OPENAI_API_KEY is not configured.',
     };
   }
 
   const controller = new AbortController();
-  const timeoutTimer = setTimeout(() => controller.abort(), input.timeoutMs ?? 4500);
+  const timeoutTimer = setTimeout(() => controller.abort(), configuredTimeout(input.timeoutMs, false));
   const signal = input.signal ? mergeAbortSignals(controller.signal, input.signal) : controller.signal;
 
   try {
@@ -48,7 +63,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         input: input.prompt,
         ...(input.previousResponseId
           ? { previous_response_id: input.previousResponseId }
@@ -62,7 +77,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
       const body = await response.text().catch(() => '');
       return {
         status: 'error',
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         source: 'openai-http-error',
         text: `OpenAI responses API returned ${response.status}: ${body.slice(0, 140)}`,
       };
@@ -71,13 +86,48 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
     const payload = (await response.json()) as {
       id?: string;
       output_text?: string;
+      output?: Array<{ text?: string; content?: unknown[] }>;
       conversation?: { id?: string };
       status?: string;
     } & Record<string, unknown>;
-    const answer = typeof payload.output_text === 'string' ? payload.output_text : 'I can use the current Food context once a model stream is available.';
+    const fallbackFromOutput = Array.isArray(payload.output)
+      ? payload.output
+          .map((entry) => {
+            if (typeof entry?.text === 'string') {
+              return entry.text;
+            }
+            if (Array.isArray(entry?.content)) {
+              return entry.content
+                .map((chunk: unknown) =>
+                  typeof chunk === 'object' &&
+                  chunk !== null &&
+                  typeof (chunk as { text?: unknown }).text === 'string'
+                    ? String((chunk as { text: unknown }).text)
+                    : '',
+                )
+                .join('');
+            }
+            return '';
+          })
+          .join('')
+      : '';
+    const answer = typeof payload.output_text === 'string' && payload.output_text.length > 0
+      ? payload.output_text
+      : fallbackFromOutput;
+    if (!answer) {
+      return {
+        status: 'error',
+        model,
+        source: 'openai-output-empty',
+        text: `OpenAI responses API returned no text for request.`,
+        responseId: payload.id,
+        conversationId: payload.conversation?.id ?? undefined,
+        raw: payload,
+      };
+    }
     return {
       status: 'ok',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'openai',
       responseId: payload.id,
       conversationId: payload.conversation?.id ?? undefined,
@@ -89,7 +139,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return {
         status: 'error',
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         source: 'openai-fetch-aborted',
         aborted: true,
         text: 'Request was cancelled.',
@@ -97,7 +147,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
     }
     return {
       status: 'error',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'openai-fetch-failed',
       text: error instanceof Error ? error.message : 'OpenAI request failed.',
     };
@@ -106,17 +156,18 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
 
 export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAIResponse> {
   const key = process.env.OPENAI_API_KEY;
+  const model = configuredModel(input.model);
   if (!key) {
     return {
       status: 'disabled',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'offline-fallback',
-      text: 'Live model unavailable: OPENAI_API_KEY missing in server environment.',
+      text: 'Live model unavailable: OPENAI_API_KEY is not configured.',
     };
   }
 
   const controller = new AbortController();
-  const timeoutTimer = setTimeout(() => controller.abort(), input.timeoutMs ?? 8000);
+  const timeoutTimer = setTimeout(() => controller.abort(), configuredTimeout(input.timeoutMs, true));
   const signal = input.signal ? mergeAbortSignals(controller.signal, input.signal) : controller.signal;
   const chunks: string[] = [];
   let responseId: string | undefined;
@@ -131,7 +182,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         input: input.prompt,
         ...(input.previousResponseId
           ? { previous_response_id: input.previousResponseId }
@@ -148,7 +199,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
       const body = await response.text().catch(() => '');
       return {
         status: 'error',
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         source: 'openai-http-error',
         text: `OpenAI responses API returned ${response.status}: ${body.slice(0, 140)}`,
       };
@@ -157,7 +208,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
     if (!response.body) {
       return {
         status: 'error',
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         source: 'openai-stream-body-missing',
         text: 'OpenAI stream response had no body.',
       };
@@ -251,11 +302,21 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
         }
       }
     }
-    const answerText = chunks.join('').trim() || 'Streaming model returned no text.';
+    const answerText = chunks.join('').trim();
+    if (!answerText) {
+      return {
+        status: 'error',
+        model,
+        source: 'openai-stream-no-text',
+        text: 'OpenAI stream returned no text.',
+        responseId,
+        conversationId,
+      };
+    }
 
     return {
       status: 'ok',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'openai-stream',
       text: answerText,
       responseId,
@@ -267,7 +328,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
     if (error instanceof DOMException && error.name === 'AbortError') {
       return {
         status: 'error',
-        model: input.model ?? 'gpt-4.1-mini',
+        model,
         source: 'openai-fetch-aborted',
         aborted: true,
         text: 'Request was cancelled.',
@@ -275,7 +336,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
     }
     return {
       status: 'error',
-      model: input.model ?? 'gpt-4.1-mini',
+      model,
       source: 'openai-fetch-failed',
       text: error instanceof Error ? error.message : 'OpenAI streaming request failed.',
     };

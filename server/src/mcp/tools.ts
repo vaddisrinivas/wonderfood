@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { evaluateMcpPolicy } from './policy';
 import { readMcpResource } from './resources';
 import {
@@ -15,8 +16,35 @@ import {
   updateRecord,
   archiveRecord,
   listWorkflows,
+  ActionEvent,
   McpRecord,
 } from './state';
+import { buildWorkflowCompensation, runWorkflowCompensation, WorkflowCompensationResult } from '../workflows/compensation';
+import {
+  completeWorkflowCheckpoint,
+  finalizeWorkflowCompensated,
+  markWorkflowStep,
+  startWorkflowCheckpoint,
+} from '../workflows/checkpoint';
+import {
+  buildNotionArchiveSource,
+  buildNotionCreateSource,
+  buildNotionUpdateSource,
+  writeNotionRecord,
+} from '../providers/notion/push';
+import {
+  buildSheetsArchiveSource,
+  buildSheetsCreateSource,
+  buildSheetsUpdateSource,
+  writeSheetsRecord,
+} from '../providers/sheets/push';
+import {
+  MCP_PROVIDER_DATA_HOMES,
+  MutableProvider,
+  ProviderWriteResult,
+  resolveCanonicalProvider,
+  toMutableProviderOrDefault,
+} from '../providers/contracts';
 
 export type McpToolDefinition = {
   name: string;
@@ -25,9 +53,37 @@ export type McpToolDefinition = {
 };
 
 export type ToolResult = {
-  json: unknown;
+  json: {
+    action?: { id?: string; [key: string]: unknown };
+    replayed?: boolean;
+    record?: { id?: string; [key: string]: unknown };
+    allowed?: boolean;
+    message?: string;
+    status?: string;
+    checkpoint?: { runId?: string };
+    changed_records?: string[];
+    action_id?: string;
+    reviewOnly?: boolean;
+    source_snapshot?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
   reviewOnly: boolean;
   safety: string;
+  source_snapshot?: Record<string, unknown> | null;
+  undo_token?: string;
+  review_flags?: {
+    policy_reviewed: boolean;
+    replay_recoverable: boolean;
+    cancellation_safe: boolean;
+  };
+  receipts?: Array<{
+    action_id: string;
+    status: ActionEvent['status'];
+    tool: string;
+    record_ids: string[];
+    undo_token: string;
+    source_snapshot?: Record<string, unknown>;
+  }>;
 };
 
 export type ValidationResult = {
@@ -56,12 +112,66 @@ const RECORD_TOOLS = {
 };
 
 const MAX_ACTIONS_PER_REQUEST = 12;
-const DATA_HOME = ['local_sqlite', 'notion', 'google_sheets', 'postgres'];
+const DATA_HOME = MCP_PROVIDER_DATA_HOMES;
+const WRITE_DATA_HOME = ['local_sqlite', 'notion', 'google_sheets'] as const;
 const SCHEME_HTTPS = 'https';
 const SCHEME_WONDERFOOD = 'wonderfood';
 const MAX_RECORD_SEARCH_RESULTS = 200;
 const WORKFLOW_MAX_STEPS = 30;
 const PROTOCOL_VERSION = '2026-03-11';
+
+type CandidateAction = Record<string, unknown>;
+
+export type WorkflowExecutionResult = {
+  status: 'ok' | 'failed' | 'skipped' | 'cancelled';
+  tool: string;
+  stepResult: {
+    status: 'ok' | 'failed' | 'skipped' | 'cancelled';
+    details?: {
+      id: string;
+      tool: string;
+      status: 'ok' | 'failed' | 'skipped' | 'cancelled';
+      result: unknown;
+    }[];
+    changedRecords?: string[];
+    error?: string;
+    source_snapshot?: Record<string, unknown>;
+  };
+  details?: {
+    id: string;
+    tool: string;
+    status: 'ok' | 'failed' | 'skipped' | 'cancelled';
+    result: unknown;
+  }[];
+  changedRecords: string[];
+  checkpointRunId?: string;
+  compensation?: WorkflowCompensationResult;
+  error?: string;
+};
+
+type ParsedWorkflowStepInput = {
+  id: string;
+  tool: string;
+  required: boolean;
+  input: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+function getActionIdFromToolResult(result: ToolResult): string | null {
+  if (!isObject(result.json)) {
+    return null;
+  }
+  const action = (result.json as Record<string, unknown>).action;
+  if (!isObject(action)) {
+    return null;
+  }
+  const actionId = (action as Record<string, unknown>).id;
+  return typeof actionId === 'string' && actionId.length > 0 ? actionId : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isObject(value) ? (value as Record<string, unknown>) : {};
+}
 
 function makeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -70,14 +180,6 @@ function makeText(value: unknown) {
 function ensureDomain(raw: unknown): string {
   const value = makeText(raw);
   return value.length > 0 ? value : 'food';
-}
-
-function ensureId(raw: unknown): string {
-  const value = makeText(raw);
-  if (!value) {
-    return `mcp-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-  }
-  return value;
 }
 
 function ensureActor(raw: unknown): string {
@@ -98,17 +200,209 @@ function ensureCollection(raw: unknown): string {
   return value;
 }
 
-function ensureTool(raw: unknown) {
-  return makeText(raw);
+function ensureDataHome(raw: unknown): MutableProvider {
+  return toMutableProviderOrDefault(makeText(raw));
 }
 
-function normalizeList(raw: unknown): string[] {
-  if (!Array.isArray(raw)) {
-    return [];
+function stringifyForHash(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
   }
-  return raw
-    .map((value) => makeText(value))
-    .filter((value): value is string => value.length > 0);
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stringifyForHash(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stringifyForHash((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function deterministicHash(value: unknown): string {
+  return createHash('sha256').update(stringifyForHash(value)).digest('hex');
+}
+
+function ensureId(raw: unknown, fallbackSeed?: unknown): string {
+  const value = makeText(raw);
+  if (value) {
+    return value;
+  }
+
+  if (fallbackSeed !== undefined) {
+    return `lifeos-${deterministicHash(fallbackSeed).slice(0, 18)}`;
+  }
+
+  return `lifeos-random-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function deterministicRecordId(input: {
+  operation: string;
+  domain: string;
+  collection: string;
+  title: string;
+  sourceHome: MutableProvider;
+  payload?: unknown;
+}) {
+  return `lifeos-${input.operation}-${deterministicHash({
+    operation: input.operation,
+    domain: input.domain,
+    collection: input.collection,
+    title: input.title,
+    sourceHome: input.sourceHome,
+    payload: input.payload,
+  }).slice(0, 18)}`;
+}
+
+function makeActionId(prefix: string, seed: unknown) {
+  const hashInput = seed === undefined
+    ? `${prefix}-missing-seed`
+    : seed;
+  return `${prefix}:${deterministicHash(hashInput).slice(0, 20)}`;
+}
+
+function providerSourceFromWrite(input: {
+  dataHome: MutableProvider;
+  operation: 'create_record' | 'update_record' | 'archive_record';
+  recordId: string;
+  domain: string;
+  collection: string;
+  title?: string;
+  externalId?: string;
+}): ProviderWriteResult {
+  if (input.dataHome === 'notion') {
+    if (input.operation === 'create_record') {
+      return buildNotionCreateSource({
+        recordId: input.recordId,
+        domain: input.domain,
+        collection: input.collection,
+        title: input.title,
+        externalId: input.externalId,
+      });
+    }
+    if (input.operation === 'update_record') {
+      return buildNotionUpdateSource({
+        recordId: input.recordId,
+        domain: input.domain,
+        collection: input.collection,
+      });
+    }
+    return buildNotionArchiveSource({
+      recordId: input.recordId,
+      domain: input.domain,
+      collection: input.collection,
+    });
+  }
+
+  if (input.dataHome === 'google_sheets') {
+    if (input.operation === 'create_record') {
+      return buildSheetsCreateSource({
+        recordId: input.recordId,
+        domain: input.domain,
+        collection: input.collection,
+        title: input.title,
+        externalId: input.externalId,
+      });
+    }
+    if (input.operation === 'update_record') {
+      return buildSheetsUpdateSource({
+        recordId: input.recordId,
+        domain: input.domain,
+        collection: input.collection,
+      });
+    }
+    return buildSheetsArchiveSource({
+      recordId: input.recordId,
+      domain: input.domain,
+      collection: input.collection,
+    });
+  }
+
+  return {
+    ok: true,
+    source: {
+      provider: resolveCanonicalProvider('local_sqlite'),
+      external_id: input.externalId || input.recordId,
+      url: null,
+      observed_at: new Date().toISOString(),
+      content_hash: null,
+    },
+    source_snapshot: {
+      provider: resolveCanonicalProvider('local_sqlite'),
+      mode: 'authoritative_local',
+      operation: input.operation,
+      domain: input.domain,
+      collection: input.collection,
+      timestamp: new Date().toISOString(),
+    },
+    operation: input.operation,
+  };
+}
+
+function notionSourceFromResponse(input: {
+  ok: boolean;
+  source: Record<string, unknown> | undefined;
+  source_snapshot: Record<string, unknown> | undefined;
+  operation: 'create_record' | 'update_record' | 'archive_record';
+}): ProviderWriteResult | null {
+  if (!input.ok || !input.source || !input.source_snapshot) {
+    return null;
+  }
+
+  const source = input.source;
+  const sourceProvider = typeof source.provider === 'string' ? source.provider : 'notion';
+  if (sourceProvider !== 'notion') {
+    return null;
+  }
+  return {
+    ok: true,
+    source: {
+      provider: 'notion',
+      external_id: typeof source.external_id === 'string' ? source.external_id : '',
+      url: typeof source.url === 'string' ? source.url : null,
+      observed_at: typeof source.observed_at === 'string' ? source.observed_at : new Date().toISOString(),
+      content_hash: typeof source.content_hash === 'string' ? source.content_hash : null,
+    },
+    source_snapshot: input.source_snapshot,
+    operation: input.operation,
+  };
+}
+
+function sheetsSourceFromResponse(input: {
+  ok: boolean;
+  source: Record<string, unknown> | undefined;
+  source_snapshot: Record<string, unknown> | undefined;
+}): ProviderWriteResult | null {
+  if (!input.ok || !input.source || !input.source_snapshot) {
+    return null;
+  }
+
+  return {
+    ok: true,
+    source: {
+      provider: 'google_sheets',
+      external_id: typeof input.source.external_id === 'string' ? input.source.external_id : '',
+      url: typeof input.source.url === 'string' ? input.source.url : null,
+      observed_at: typeof input.source.observed_at === 'string' ? input.source.observed_at : new Date().toISOString(),
+      content_hash: typeof input.source.content_hash === 'string' ? input.source.content_hash : null,
+    },
+    source_snapshot: input.source_snapshot,
+    operation: (input.source_snapshot.operation as ProviderWriteResult['operation']) || 'update_record',
+  };
+}
+
+function notionPropertiesForWrite(existing: McpRecord, patch: Partial<McpRecord>) {
+  const existingProperties = isObject(existing.properties) ? existing.properties : {};
+  const patchProperties = isObject(patch.properties) ? (patch.properties as Record<string, unknown>) : {};
+  return {
+    ...existingProperties,
+    ...patchProperties,
+  };
+}
+
+function ensureTool(raw: unknown) {
+  return makeText(raw);
 }
 
 function normalizeQuery(raw: unknown): string {
@@ -126,8 +420,23 @@ function actionToolPolicy(input: { tool: string; domain: string; command: string
   return evaluateMcpPolicy(input);
 }
 
-function makeActionId(prefix: string) {
-  return `${prefix}:${Date.now()}:${Math.random().toString(16).slice(2, 9)}`;
+function buildDeterministicIdempotencyKey(input: {
+  operation: string;
+  dataHome: MutableProvider;
+  recordId: string;
+  domain: string;
+  collection: string;
+  payload?: unknown;
+}) {
+  const seed = stringifyForHash({
+    operation: input.operation,
+    dataHome: input.dataHome,
+    recordId: input.recordId,
+    domain: input.domain,
+    collection: input.collection,
+    payload: input.payload,
+  });
+  return `lifeos:${deterministicHash(seed).slice(0, 24)}`;
 }
 
 function makeActionEvent(input: {
@@ -143,8 +452,18 @@ function makeActionEvent(input: {
   before?: unknown;
   after?: unknown;
   undoPayload?: unknown;
+  actionId?: string;
 }) {
-  const actionId = makeActionId(input.tool);
+  const actionId = input.actionId || makeActionId(input.tool, {
+    actor: input.actor,
+    tool: input.tool,
+    domain: input.domain,
+    command: input.command,
+    recordIds: input.recordIds,
+    before: input.before,
+    after: input.after,
+    undoPayload: input.undoPayload,
+  });
   return {
     id: actionId,
     event: createActionEvent({
@@ -165,6 +484,37 @@ function makeActionEvent(input: {
   };
 }
 
+function makeReviewFlags(input: {
+  policyReviewRequired: boolean;
+  action?: ActionEvent;
+  cancellationSafe: boolean;
+  idempotencyAware: boolean;
+}) {
+  const actionStatus = input.action?.status;
+  const replayRecoverable = actionStatus === 'completed' && !input.policyReviewRequired && input.idempotencyAware;
+  return {
+    policy_reviewed: true,
+    replay_recoverable: replayRecoverable,
+    cancellation_safe: input.cancellationSafe,
+  };
+}
+
+function makeReceipt(action: ActionEvent | undefined, sourceSnapshot?: Record<string, unknown>) {
+  if (!action) {
+    return [];
+  }
+  return [
+    {
+      action_id: action.id,
+      status: action.status,
+      tool: action.tool,
+      record_ids: action.record_ids,
+      undo_token: action.id,
+      ...(sourceSnapshot ? { source_snapshot: sourceSnapshot } : {}),
+    },
+  ];
+}
+
 function getOrCreateActionFromPolicy(input: {
   tool: string;
   domain: string;
@@ -173,6 +523,7 @@ function getOrCreateActionFromPolicy(input: {
   conversationId?: string | null;
   policy: ReturnType<typeof evaluateMcpPolicy>;
   idempotencyKey?: string;
+  actionId?: string;
   recordIds: string[];
   after?: unknown;
   before?: unknown;
@@ -207,6 +558,7 @@ function getOrCreateActionFromPolicy(input: {
     actor: input.actor,
     risk: input.policy.risk,
     recordIds: input.recordIds,
+    actionId: input.actionId,
     command: input.command,
     idempotencyKey: input.idempotencyKey,
     before: input.before,
@@ -217,30 +569,259 @@ function getOrCreateActionFromPolicy(input: {
   return {
     reviewOnly: false,
     safety: input.policy.safety,
+    review_flags: makeReviewFlags({
+      policyReviewRequired: false,
+      action: event,
+      cancellationSafe: true,
+      idempotencyAware: Boolean(input.idempotencyKey),
+    }),
+    undo_token: event.id,
+    receipts: makeReceipt(event),
     json: {
       action: event,
     },
   };
 }
 
-function resolveToolResult(result: unknown, reviewOnly = false, safety = 'read-only'): ToolResult {
-  return {
+function resolveToolResult(
+  result: unknown,
+  reviewOnly = false,
+  safety = 'read-only',
+  options?: {
+    action?: ActionEvent;
+    sourceSnapshot?: Record<string, unknown>;
+    reviewFlags?: ToolResult['review_flags'];
+    cancellationSafe?: boolean;
+    policyReviewRequired?: boolean;
+    idempotencyAware?: boolean;
+  },
+): ToolResult {
+  const safeResult = isObject(result) ? (result as Record<string, unknown>) : { value: result };
+  const sourceSnapshot = safeResult.source_snapshot;
+  const action = options?.action;
+  const source = options?.sourceSnapshot ?? (isObject(sourceSnapshot) ? sourceSnapshot : undefined);
+  const reviewFlags = options?.reviewFlags
+    ? options.reviewFlags
+    : action
+      ? makeReviewFlags({
+        policyReviewRequired: Boolean(options?.policyReviewRequired),
+        action,
+        cancellationSafe: options?.cancellationSafe ?? true,
+        idempotencyAware: options?.idempotencyAware ?? Boolean(action.idempotency_key),
+      })
+      : undefined;
+
+  const payload: ToolResult = {
     reviewOnly,
     safety,
-    json: result,
+    source_snapshot: source ?? undefined,
+    json: safeResult,
+  };
+  if (action) {
+    payload.undo_token = action.id;
+    payload.receipts = makeReceipt(action, source);
+  }
+  if (reviewFlags) {
+    payload.review_flags = reviewFlags;
+  }
+  return payload;
+}
+
+function withUndoEnvelope(payload: Record<string, unknown>, action?: ActionEvent) {
+  if (!action) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    inverse_action: action.undo_payload_json,
+    undo_state: {
+      action_id: action.id,
+      action_status: action.status,
+      undo_deadline_at: action.undo_deadline_at,
+    },
   };
 }
 
-function parseWorkflowStepInput(step: Record<string, unknown>): Record<string, unknown> {
+function resolveWriteResult(payload: Record<string, unknown>, action: ActionEvent | undefined) {
+  return resolveToolResult(withUndoEnvelope(payload, action), false, 'write', {
+    action,
+    policyReviewRequired: false,
+    cancellationSafe: true,
+    idempotencyAware: Boolean(action?.idempotency_key),
+    sourceSnapshot: isObject(payload.source_snapshot)
+      ? (payload.source_snapshot as Record<string, unknown>)
+      : undefined,
+  });
+}
+
+function parseWorkflowStepInput(step: Record<string, unknown>, contextSeed: string): ParsedWorkflowStepInput {
   const tool = ensureTool(step.tool);
   const action = ensureTool(step.action);
   const normalizedTool = tool || action;
+  const explicitStepId = makeText(step.id);
+
+  const input = isObject(step.input) ? (step.input as Record<string, unknown>) : {};
   return {
+    ...step,
+    id: explicitStepId || makeActionId(`step`, {
+      tool: normalizedTool,
+      contextSeed,
+      command: safeJsonText(input),
+    }),
     tool: normalizedTool,
     required: typeof step.required === 'boolean' ? step.required : true,
-    input: isObject(step.input) ? (step.input as Record<string, unknown>) : {},
-    ...step,
+    input,
   };
+}
+
+function getContextSourceSnapshot(context: WorkflowExecutionContext): Record<string, unknown> {
+  return {
+    workflow_run_id: context.workflowRunId,
+    visited_records: Array.from(context.visitedRecords),
+  };
+}
+
+function buildWorkflowStepSeed(input: {
+  workflowId: string;
+  stepIndex: number;
+  tool: string;
+  checkpointRunId?: string;
+  contextSeed?: string;
+}) {
+  return deterministicHash({
+    workflowId: input.workflowId,
+    stepIndex: input.stepIndex,
+    tool: input.tool,
+    checkpointRunId: input.checkpointRunId,
+    contextSeed: input.contextSeed,
+  });
+}
+
+function buildWorkflowExecutionSeed(input: {
+  workflowId: string;
+  actor: string;
+  actionId?: string;
+  checkpointRunId?: string;
+  nested?: boolean;
+}) {
+  return deterministicHash({
+    workflowId: input.workflowId,
+    actor: input.actor,
+    actionId: input.actionId,
+    checkpointRunId: input.checkpointRunId,
+    nested: Boolean(input.nested),
+  });
+}
+
+function buildWorkflowIdempotencyKey(input: {
+  workflowId: string;
+  actor: string;
+  domain: string;
+  actionId?: string;
+}) {
+  return `lifeos:${deterministicHash({
+    operation: 'run_workflow',
+    workflowId: input.workflowId,
+    actor: input.actor,
+    domain: input.domain,
+    actionId: input.actionId,
+  }).slice(0, 24)}`;
+}
+
+function buildWorkflowRunSourceSnapshot(input: {
+  workflowRunId?: string;
+  changedRecords: string[];
+}) {
+  return {
+    workflow_run_id: input.workflowRunId,
+    visited_records: input.changedRecords,
+  };
+}
+
+function getActionSourceSnapshot(action?: ActionEvent): Record<string, unknown> | undefined {
+  if (!action) {
+    return undefined;
+  }
+  const after = asRecord(action.after_json);
+  const before = asRecord(action.before_json);
+  const direct = asRecord(after.source_snapshot);
+  if (Object.keys(direct).length > 0) {
+    return direct;
+  }
+  const afterSource = asRecord(after.source);
+  const afterProvider = typeof afterSource.provider === 'string' ? afterSource.provider : undefined;
+  if (afterProvider) {
+    const source = {
+      ...(typeof afterSource.source_snapshot === 'object' && afterSource.source_snapshot !== null
+        ? asRecord(afterSource.source_snapshot)
+        : {}),
+      provider: afterProvider,
+      external_id: afterSource.external_id,
+      url: afterSource.url,
+      observed_at: afterSource.observed_at,
+      content_hash: afterSource.content_hash,
+      mode: (afterSource.mode as string) || 'provider_record',
+    };
+    if (Object.keys(source).length > 0) {
+      return source;
+    }
+  }
+
+  const beforeSourceSnapshot = asRecord(before.source_snapshot);
+  if (Object.keys(beforeSourceSnapshot).length > 0) {
+    return beforeSourceSnapshot;
+  }
+  const beforeSource = asRecord(before.source);
+  const beforeProvider = typeof beforeSource.provider === 'string' ? beforeSource.provider : undefined;
+  if (beforeProvider) {
+    return {
+      ...(typeof beforeSource.source_snapshot === 'object' && beforeSource.source_snapshot !== null ? asRecord(beforeSource.source_snapshot) : {}),
+      provider: beforeProvider,
+      external_id: beforeSource.external_id,
+      url: beforeSource.url,
+      observed_at: beforeSource.observed_at,
+      content_hash: beforeSource.content_hash,
+      mode: (beforeSource.mode as string) || 'provider_record',
+    };
+  }
+
+  const beforeAfter = asRecord(before.after_json);
+  const beforeAfterSource = asRecord(beforeAfter.source);
+  const beforeAfterProvider = typeof beforeAfterSource.provider === 'string' ? beforeAfterSource.provider : undefined;
+  if (beforeAfterProvider) {
+    return {
+      ...(typeof beforeAfterSource.source_snapshot === 'object' && beforeAfterSource.source_snapshot !== null ? asRecord(beforeAfterSource.source_snapshot) : {}),
+      provider: beforeAfterProvider,
+      external_id: beforeAfterSource.external_id,
+      url: beforeAfterSource.url,
+      observed_at: beforeAfterSource.observed_at,
+      content_hash: beforeAfterSource.content_hash,
+      mode: (beforeAfterSource.mode as string) || 'provider_record',
+    };
+  }
+
+  const beforeAfterSnapshot = asRecord(beforeAfter.source_snapshot);
+  if (Object.keys(beforeAfterSnapshot).length > 0) {
+    return beforeAfterSnapshot;
+  }
+
+  const changedRecords = Array.isArray(after.changed_records)
+    ? (after.changed_records as string[])
+    : [];
+  const workflowRunId = typeof after.checkpoint_run_id === 'string'
+    ? after.checkpoint_run_id
+    : typeof after.workflow_run_id === 'string'
+      ? after.workflow_run_id
+      : undefined;
+  if (workflowRunId || changedRecords.length > 0) {
+    return buildWorkflowRunSourceSnapshot({
+      workflowRunId,
+      changedRecords,
+    });
+  }
+
+  return undefined;
 }
 
 function normalizeWorkflowToolName(raw: string): string {
@@ -253,19 +834,65 @@ function normalizeWorkflowToolName(raw: string): string {
   return raw;
 }
 
+function getWorkflowStepError(tool: string, stepResult: unknown) {
+  if (!isObject(stepResult)) {
+    return `workflow step ${tool} failed`;
+  }
+  const input = stepResult as { error?: unknown };
+  if (typeof input.error === 'string') {
+    return input.error;
+  }
+  if (input.error && typeof input.error === 'object' && 'error' in input.error) {
+    const nested = (input.error as { error: unknown }).error;
+    if (typeof nested === 'string') {
+      return nested;
+    }
+  }
+  return `workflow step ${tool} failed`;
+}
+
+function dedupeIds(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    if (!value || seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+    return true;
+  });
+}
+
+type WorkflowExecutionContext = {
+  seenWorkflows: Set<string>;
+  visitedRecords: Set<string>;
+  workflowRunId?: string;
+};
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function runWorkflowStep(
+async function runWorkflowStep(
   toolInput: Record<string, unknown>,
   actor: string,
   workflow: WorkflowDocument,
-  context: {
-    seenWorkflows: Set<string>;
-    visitedRecords: Set<string>;
+  context: WorkflowExecutionContext,
+  options?: {
+    checkpointRunId?: string;
+    isNested?: boolean;
+    signal?: AbortSignal | null;
+    seed?: string;
   },
-): { status: 'ok' | 'failed' | 'skipped'; tool: string; stepResult: unknown; changedRecords: string[] } {
+): Promise<{ status: 'ok' | 'failed' | 'skipped' | 'cancelled'; tool: string; stepResult: unknown; changedRecords: string[] }> {
+  if (options?.signal?.aborted) {
+    return {
+      status: 'cancelled',
+      tool: 'run_workflow',
+      stepResult: { error: 'workflow cancelled' },
+      changedRecords: [],
+    };
+  }
+
   const tool = normalizeWorkflowToolName(ensureTool(toolInput.tool));
   if (!tool) {
     return {
@@ -316,7 +943,7 @@ function runWorkflowStep(
   }
 
   if (tool === 'read_record') {
-    const id = ensureId((input as { id?: unknown }).id);
+    const id = ensureId((input as { id?: unknown }).id, { tool: 'read_record', workflow: workflow.id, input });
     const record = findRecord(id);
     return {
       status: record ? 'ok' : 'failed',
@@ -341,61 +968,482 @@ function runWorkflowStep(
           changedRecords: [],
         };
       }
-      return runWorkflow(nextWorkflow, actor, context);
+      const nestedActionId = buildWorkflowExecutionSeed({
+        workflowId: workflowId,
+        actor,
+        actionId: `${workflow.id}->${workflowId}:${context.workflowRunId ?? options?.checkpointRunId ?? ''}`,
+        checkpointRunId: options?.checkpointRunId,
+        nested: true,
+      });
+      const nestedSeed = buildWorkflowExecutionSeed({
+        workflowId: workflowId,
+        actor,
+        actionId: `${workflow.id}->${workflowId}:${context.workflowRunId || options?.checkpointRunId || ''}`,
+        checkpointRunId: options?.checkpointRunId,
+        nested: true,
+      });
+      return runWorkflow(nextWorkflow, actor, context, {
+        isNested: true,
+        checkpointRunId: options?.checkpointRunId,
+        signal: options?.signal,
+        actionId: nestedActionId,
+        seed: nestedSeed,
+      });
     }
 
     const recInput = input.record ?? input;
     const collection = ensureCollection((recInput as { collection?: unknown }).collection);
     const title = makeText((recInput as { title?: unknown }).title);
+    const dataHome = ensureDataHome(makeText((recInput as { data_home?: unknown }).data_home || (recInput as { dataHome?: unknown }).dataHome || 'local_sqlite'));
+    const recordId = ensureId((recInput as { id?: unknown }).id, {
+      sourceHome: dataHome,
+      operation: 'workflow-create-record',
+      workflowId: workflow.id,
+      collection,
+      domain,
+      title,
+      properties: isObject((recInput as { properties?: unknown }).properties)
+        ? ((recInput as { properties: Record<string, unknown> }).properties)
+        : {},
+    });
     const properties = isObject((recInput as { properties?: unknown }).properties)
       ? ((recInput as { properties: Record<string, unknown> }).properties)
       : {};
     const relations = Array.isArray((recInput as { relations?: unknown }).relations)
       ? (recInput as { relations: unknown[] }).relations
       : [];
+    const externalId = makeText((recInput as { external_id?: unknown }).external_id);
+    let source = providerSourceFromWrite({
+      dataHome,
+      operation: 'create_record',
+      recordId,
+      domain,
+      collection,
+      title,
+      externalId,
+    });
+
+    if (dataHome === 'notion') {
+      const notionWrite = await writeNotionRecord({
+        operation: 'create_record',
+        recordId,
+        domain,
+        collection,
+        title,
+        properties,
+        externalId,
+      });
+      const notionSource = notionSourceFromResponse({
+        ok: notionWrite.ok,
+        source: notionWrite.source,
+        source_snapshot: notionWrite.source_snapshot,
+        operation: 'create_record',
+      });
+      if (!notionSource) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: notionWrite.error || 'notion write failed', source_snapshot: notionWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      source = notionSource;
+      source.source_snapshot = notionWrite.source_snapshot || source.source_snapshot;
+    }
+
+    if (dataHome === 'google_sheets') {
+      const sheetWrite = await writeSheetsRecord({
+        operation: 'create_record',
+        record: {
+          id: recordId,
+          domain,
+          collection,
+          title,
+          properties,
+          archived: false,
+          externalId,
+        },
+      });
+      if (!sheetWrite.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets write failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      const mapped = sheetsSourceFromResponse({
+        ok: sheetWrite.ok,
+        source: sheetWrite.source,
+        source_snapshot: sheetWrite.source_snapshot,
+      }) || source;
+      if (!mapped.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets source mapping failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      source = mapped;
+      source.source_snapshot = sheetWrite.source_snapshot || source.source_snapshot;
+    }
+
+    if (!source.ok) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: source.reason || 'provider write failed', source_snapshot: source.source_snapshot },
+        changedRecords: [],
+      };
+    }
+
     const record = createRecord({
-      id: makeText((recInput as { id?: unknown }).id),
+      id: recordId,
       domain,
       collection,
       title,
       properties,
       relations: isObject(relations[0] as object) ? (relations as McpRecord['relations']) : [],
       source: {
-        provider: 'sqlite',
-        external_id: makeText((recInput as { external_id?: unknown }).external_id),
-        url: null,
-        observed_at: new Date().toISOString(),
-        content_hash: null,
+        provider: source.source.provider,
+        external_id: source.source.external_id,
+        url: source.source.url,
+        observed_at: source.source.observed_at,
+        content_hash: source.source.content_hash,
       },
       archived_at: null,
     } as Omit<McpRecord, 'created_at' | 'updated_at'>);
     return {
       status: 'ok',
       tool,
-      stepResult: { id: record.id },
+      stepResult: { id: record.id, after: record, source_snapshot: source.source_snapshot },
       changedRecords: [record.id],
     };
   }
 
   if (tool === 'update_record') {
     const id = makeText((input as { id?: unknown }).id);
+    if (!id) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: 'record id required for workflow update_record' },
+        changedRecords: [],
+      };
+    }
+    const existing = findRecord(id);
+    if (!existing) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: 'record_not_found', id },
+        changedRecords: [],
+      };
+    }
+
+    const dataHome = ensureDataHome(
+      makeText((input as { data_home?: unknown }).data_home || (input as { dataHome?: unknown }).dataHome || existing.source.provider),
+    );
+    const externalId = makeText((existing.source as { external_id?: unknown })?.external_id);
+
+    if (dataHome !== 'local_sqlite' && existing.source.provider !== dataHome) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: `record ${id} is stored on ${existing.source.provider}; route writes using matching data_home.` },
+        changedRecords: [],
+      };
+    }
+
+    if (dataHome !== 'local_sqlite' && !externalId) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: `record ${id} is missing external_id for ${dataHome} mutation.` },
+        changedRecords: [],
+      };
+    }
+
     const patch = isObject((input as { patch?: unknown }).patch)
       ? ((input as { patch: Record<string, unknown> }).patch)
       : {};
-    const updated = updateRecord(id, patch as Partial<McpRecord>);
+    const updatedTitle = isObject(patch.title)
+      ? makeText(patch.title)
+      : makeText((patch as { title?: unknown }).title) || existing.title;
+    const properties = notionPropertiesForWrite(existing, patch as Partial<McpRecord>);
+    const relations = Array.isArray((patch as { relations?: unknown }).relations)
+      ? ((patch as { relations: unknown[] }).relations as McpRecord['relations'])
+      : existing.relations;
+
+    const source = providerSourceFromWrite({
+      dataHome,
+      operation: 'update_record',
+      recordId: id,
+      domain,
+      collection: existing.collection,
+      title: updatedTitle,
+      externalId,
+    });
+
+    if (dataHome === 'notion') {
+      const notionWrite = await writeNotionRecord({
+        operation: 'update_record',
+        recordId: id,
+        pageId: externalId,
+        domain,
+        collection: existing.collection,
+        title: updatedTitle || existing.title,
+        properties,
+      });
+      const notionSource = notionSourceFromResponse({
+        ok: notionWrite.ok,
+        source: notionWrite.source,
+        source_snapshot: notionWrite.source_snapshot,
+        operation: 'update_record',
+      });
+      if (!notionSource) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: notionWrite.error || 'notion write failed', source_snapshot: notionWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      if (notionSource.source_snapshot) {
+        source.source_snapshot = notionSource.source_snapshot;
+      }
+    }
+
+    if (dataHome === 'google_sheets') {
+      const sheetWrite = await writeSheetsRecord({
+        operation: 'update_record',
+        record: {
+          id,
+          title: updatedTitle || existing.title,
+          domain,
+          collection: existing.collection,
+          properties,
+          archived: Boolean(existing.archived_at),
+          externalId,
+        },
+      });
+      if (!sheetWrite.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets write failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      if (sheetWrite.noChange) {
+        return {
+          status: 'ok',
+          tool,
+          stepResult: { message: 'No changes detected; local record is already up to date.', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      const sheetSource = sheetsSourceFromResponse({
+        ok: sheetWrite.ok,
+        source: sheetWrite.source,
+        source_snapshot: sheetWrite.source_snapshot,
+      }) || source;
+      if (!sheetSource.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets source mapping failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      if (sheetSource.source_snapshot) {
+        source.source_snapshot = sheetSource.source_snapshot;
+      }
+      source.source = {
+        provider: sheetSource.source.provider,
+        external_id: sheetSource.source.external_id,
+        url: sheetSource.source.url,
+        observed_at: sheetSource.source.observed_at,
+        content_hash: sheetSource.source.content_hash,
+      };
+    }
+
+    if (!source.ok) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: source.reason || 'provider write failed', source_snapshot: source.source_snapshot },
+        changedRecords: [],
+      };
+    }
+
+    const updated = updateRecord(id, {
+      ...patch,
+      title: updatedTitle || existing.title,
+      properties,
+      relations,
+      ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
+    } as Partial<McpRecord>);
     if (!updated) {
       return { status: 'failed', tool, stepResult: { error: 'record_not_found', id }, changedRecords: [] };
     }
-    return { status: 'ok', tool, stepResult: updated.after, changedRecords: [updated.after.id] };
+
+    return {
+      status: 'ok',
+      tool,
+      stepResult: {
+        before: updated.before,
+        after: updated.after,
+        source_snapshot: source.source_snapshot,
+      },
+      changedRecords: [updated.after.id],
+    };
   }
 
   if (tool === 'archive_record') {
     const id = makeText((input as { id?: unknown }).id);
+    if (!id) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: 'record id required for workflow archive_record' },
+        changedRecords: [],
+      };
+    }
+    const existing = findRecord(id);
+    if (!existing) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: 'record_not_found', id },
+        changedRecords: [],
+      };
+    }
+
+    const dataHome = ensureDataHome(makeText((input as { data_home?: unknown }).data_home || (input as { dataHome?: unknown }).dataHome || existing.source.provider));
+    const externalId = makeText((existing.source as { external_id?: unknown })?.external_id);
+
+    if (dataHome !== 'local_sqlite' && existing.source.provider !== dataHome) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: `record ${id} is stored on ${existing.source.provider}; route writes using matching data_home.` },
+        changedRecords: [],
+      };
+    }
+
+    if (dataHome !== 'local_sqlite' && !externalId) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: `record ${id} is missing external_id for ${dataHome} archive mutation.` },
+        changedRecords: [],
+      };
+    }
+
+    const source = providerSourceFromWrite({
+      dataHome,
+      operation: 'archive_record',
+      recordId: id,
+      domain,
+      collection: existing.collection,
+      title: existing.title,
+      externalId,
+    });
+
+    if (dataHome === 'notion') {
+      const notionWrite = await writeNotionRecord({
+        operation: 'archive_record',
+        recordId: id,
+        pageId: externalId,
+        domain,
+        collection: existing.collection,
+        title: existing.title,
+        archived: true,
+      });
+      const notionSource = notionSourceFromResponse({
+        ok: notionWrite.ok,
+        source: notionWrite.source,
+        source_snapshot: notionWrite.source_snapshot,
+        operation: 'archive_record',
+      });
+      if (!notionSource) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: notionWrite.error || 'notion write failed', source_snapshot: notionWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      source.source_snapshot = notionSource.source_snapshot || source.source_snapshot;
+    }
+
+    if (dataHome === 'google_sheets') {
+      const sheetWrite = await writeSheetsRecord({
+        operation: 'archive_record',
+        record: {
+          id,
+          title: existing.title,
+          domain,
+          collection: existing.collection,
+          properties: existing.properties,
+          archived: true,
+          externalId,
+        },
+      });
+      if (!sheetWrite.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets write failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      const sheetSource = sheetsSourceFromResponse({
+        ok: sheetWrite.ok,
+        source: sheetWrite.source,
+        source_snapshot: sheetWrite.source_snapshot,
+      }) || source;
+      if (!sheetSource.ok) {
+        return {
+          status: 'failed',
+          tool,
+          stepResult: { error: sheetWrite.error || 'sheets source mapping failed', source_snapshot: sheetWrite.source_snapshot },
+          changedRecords: [],
+        };
+      }
+      if (sheetSource.source_snapshot) {
+        source.source_snapshot = sheetSource.source_snapshot;
+      }
+    }
+
+    if (!source.ok) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: source.reason || 'provider write failed', source_snapshot: source.source_snapshot },
+        changedRecords: [],
+      };
+    }
+
     const result = archiveRecord(id);
     if (!result) {
       return { status: 'failed', tool, stepResult: { error: 'record_not_found', id }, changedRecords: [] };
     }
-    return { status: 'ok', tool, stepResult: result.after, changedRecords: [result.after.id] };
+    return {
+      status: 'ok',
+      tool,
+      stepResult: {
+        before: result.before,
+        after: {
+          ...result.after,
+          source: dataHome === 'local_sqlite' ? result.after.source : source.source,
+        },
+        source_snapshot: source.source_snapshot,
+      },
+      changedRecords: [result.after.id],
+    };
   }
 
   return {
@@ -406,39 +1454,233 @@ function runWorkflowStep(
   };
 }
 
-function runWorkflow(workflow: WorkflowDocument, actor: string, context: { seenWorkflows: Set<string>; visitedRecords: Set<string> }) {
+export async function runWorkflow(
+  workflow: WorkflowDocument,
+  actor: string,
+  context: WorkflowExecutionContext,
+  options?: {
+    isNested?: boolean;
+    checkpointRunId?: string;
+    signal?: AbortSignal | null;
+    seed?: string;
+    actionId?: string;
+  },
+): Promise<WorkflowExecutionResult> {
   context.seenWorkflows.add(workflow.id);
   const stepReports: Array<{
     id: string;
     tool: string;
-    status: 'ok' | 'failed' | 'skipped';
+    status: 'ok' | 'failed' | 'skipped' | 'cancelled';
     result: unknown;
   }> = [];
   const changed: string[] = [];
+  const isNested = options?.isNested === true;
+  const executionSeed = options?.seed
+    || buildWorkflowExecutionSeed({
+      workflowId: workflow.id,
+      actor,
+      actionId: options?.actionId,
+      checkpointRunId: options?.checkpointRunId,
+      nested: isNested,
+    });
+  const checkpointRunId = isNested
+    ? options?.checkpointRunId ??
+      context.workflowRunId ??
+      startWorkflowCheckpoint({
+        workflowId: workflow.id,
+        domain: workflow.domain || 'food',
+        actor,
+        seed: executionSeed,
+        changedRecords: Array.from(context.visitedRecords),
+      })
+    : options?.checkpointRunId ??
+      startWorkflowCheckpoint({
+        workflowId: workflow.id,
+        domain: workflow.domain || 'food',
+        actor,
+        seed: executionSeed,
+        changedRecords: Array.from(context.visitedRecords),
+      });
+  context.workflowRunId = checkpointRunId;
 
   const steps = workflow.steps.slice(0, WORKFLOW_MAX_STEPS);
-  for (const step of steps) {
-    const parsed = parseWorkflowStepInput(step as Record<string, unknown>);
-    const resolved = runWorkflowStep(parsed, actor, workflow, context);
+  for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
+    const step = steps[stepIndex] as Record<string, unknown>;
+    const normalizedTool = ensureTool((step as { tool?: unknown }).tool || (step as { action?: unknown }).action);
+    const parsed = parseWorkflowStepInput(
+      step,
+      buildWorkflowStepSeed({
+        workflowId: workflow.id,
+        stepIndex,
+        tool: normalizedTool,
+        checkpointRunId,
+        contextSeed: executionSeed,
+      }),
+    );
+    const startedAt = new Date().toISOString();
+    const stepSeed = buildWorkflowStepSeed({
+      workflowId: workflow.id,
+      stepIndex,
+      tool: normalizedTool,
+      checkpointRunId,
+      contextSeed: executionSeed,
+    });
+    const resolved = await runWorkflowStep(parsed, actor, workflow, context, {
+      checkpointRunId,
+      isNested: true,
+      signal: options?.signal,
+      seed: stepSeed,
+    });
+    const finishedAt = new Date().toISOString();
+    markWorkflowStep({
+      runId: checkpointRunId,
+      id: parsed.id,
+      tool: parsed.tool,
+      status: resolved.status,
+      changedRecords: resolved.changedRecords,
+      result: resolved.stepResult,
+      error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+      startedAt,
+      finishedAt,
+    });
+
     stepReports.push({ id: parsed.id, tool: parsed.tool, status: resolved.status, result: resolved.stepResult });
     for (const id of resolved.changedRecords) {
       changed.push(id);
       context.visitedRecords.add(id);
     }
 
-    if (resolved.status === 'failed' && parsed.required !== false) {
+    if (resolved.status === 'cancelled') {
+      if (!isNested) {
+        completeWorkflowCheckpoint(checkpointRunId, {
+          status: 'cancelled',
+          error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+          changedRecords: dedupeIds(changed),
+        });
+      }
+      return {
+        status: 'cancelled',
+        tool: 'run_workflow',
+        stepResult: {
+          status: 'cancelled',
+          details: stepReports,
+          changedRecords: dedupeIds(changed),
+          error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+          source_snapshot: buildWorkflowRunSourceSnapshot({
+            workflowRunId: checkpointRunId,
+            changedRecords: dedupeIds(changed),
+          }),
+        },
+        details: stepReports,
+        changedRecords: dedupeIds(changed),
+        checkpointRunId,
+        error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+      };
+    }
+
+    if (resolved.status !== 'ok' && resolved.status !== 'skipped' && parsed.required !== false) {
+      completeWorkflowCheckpoint(checkpointRunId, {
+        status: 'failed',
+        error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+        changedRecords: dedupeIds(changed),
+      });
+
+      if (!isNested) {
+        const compensation = runWorkflowCompensation(
+          buildWorkflowCompensation({
+            workflowRunId: checkpointRunId,
+            workflowId: workflow.id,
+            changedRecords: dedupeIds(changed),
+            details: stepReports,
+          }),
+        );
+        finalizeWorkflowCompensated(checkpointRunId, compensation.errors.length > 0 ? compensation.errors[0].error : undefined);
+        return {
+          status: 'failed',
+          tool: 'run_workflow',
+          stepResult: {
+            status: 'failed',
+            details: stepReports,
+            changedRecords: dedupeIds(changed),
+            error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+            source_snapshot: buildWorkflowRunSourceSnapshot({
+              workflowRunId: checkpointRunId,
+              changedRecords: dedupeIds(changed),
+            }),
+          },
+          details: stepReports,
+          changedRecords: dedupeIds(changed),
+          checkpointRunId,
+          compensation,
+          error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+        };
+      }
+
       return {
         status: 'failed',
+        tool: 'run_workflow',
+        stepResult: {
+          status: 'failed',
+          details: stepReports,
+          changedRecords: changed,
+          error: getWorkflowStepError(parsed.tool, resolved.stepResult),
+          source_snapshot: buildWorkflowRunSourceSnapshot({
+            workflowRunId: checkpointRunId,
+            changedRecords: dedupeIds(changed),
+          }),
+        },
         details: stepReports,
         changedRecords: changed,
+        checkpointRunId,
+        error: getWorkflowStepError(parsed.tool, resolved.stepResult),
       };
     }
   }
 
+  if (options?.signal?.aborted) {
+    if (!isNested) {
+      completeWorkflowCheckpoint(checkpointRunId, {
+        status: 'cancelled',
+        changedRecords: dedupeIds(changed),
+      });
+    }
+    return {
+      status: 'cancelled',
+      tool: 'run_workflow',
+      stepResult: {
+        status: 'cancelled',
+        error: 'workflow cancelled',
+        source_snapshot: buildWorkflowRunSourceSnapshot({
+          workflowRunId: checkpointRunId,
+          changedRecords: dedupeIds(changed),
+        }),
+      },
+      changedRecords: dedupeIds(changed),
+    };
+  }
+
+  if (!isNested) {
+    completeWorkflowCheckpoint(checkpointRunId, {
+      status: 'completed',
+      changedRecords: dedupeIds(changed),
+    });
+  }
+
   return {
     status: 'ok',
+    tool: 'run_workflow',
+    stepResult: {
+      status: 'ok',
+      details: stepReports,
+      changedRecords: dedupeIds(changed),
+      source_snapshot: buildWorkflowRunSourceSnapshot({
+        workflowRunId: checkpointRunId,
+        changedRecords: dedupeIds(changed),
+      }),
+    },
     details: stepReports,
-    changedRecords: changed,
+    changedRecords: dedupeIds(changed),
+    checkpointRunId,
   };
 }
 
@@ -463,7 +1705,13 @@ function createRunWorkflowAction({
   }
 
   const action = createActionEvent({
-    id: makeActionId(`workflow:${workflow.id}`),
+    id: makeActionId(`workflow:${workflow.id}`, {
+      operation: 'run_workflow',
+      workflowId: workflow.id,
+      actor,
+      domain,
+      idempotencyKey,
+    }),
     actor,
     domain,
     tool: RECORD_TOOLS.runWorkflow,
@@ -474,6 +1722,10 @@ function createRunWorkflowAction({
     before: {
       workflow: workflow.id,
       steps: workflow.steps.length,
+    },
+    undoPayload: {
+      operation: 'undo_workflow_checkpoint',
+      workflow_id: workflow.id,
     },
     conversationId,
   });
@@ -592,6 +1844,7 @@ export function listMcpTools(): McpToolDefinition[] {
           actor: { type: 'string' },
           domain: { type: 'string', minLength: 1 },
           collection: { type: 'string', minLength: 1 },
+          data_home: { type: 'string', enum: WRITE_DATA_HOME },
           id: { type: 'string' },
           title: { type: 'string' },
           properties: { type: 'object' },
@@ -613,6 +1866,7 @@ export function listMcpTools(): McpToolDefinition[] {
         properties: {
           actor: { type: 'string' },
           id: { type: 'string', minLength: 1 },
+          data_home: { type: 'string', enum: WRITE_DATA_HOME },
           patch: { type: 'object', additionalProperties: true },
           domain: { type: 'string', minLength: 1 },
           idempotency_key: { type: 'string' },
@@ -631,6 +1885,7 @@ export function listMcpTools(): McpToolDefinition[] {
         properties: {
           actor: { type: 'string' },
           id: { type: 'string', minLength: 1 },
+          data_home: { type: 'string', enum: WRITE_DATA_HOME },
           domain: { type: 'string', minLength: 1 },
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
@@ -675,7 +1930,7 @@ export function listMcpTools(): McpToolDefinition[] {
   return toolSet;
 }
 
-export function callMcpTool(name: string, args: Record<string, unknown>): ToolResult {
+export async function callMcpTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
   const typedArgs = args;
 
   if (name === ACTION_TOOLS.status) {
@@ -711,11 +1966,11 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
   if (name === ACTION_TOOLS.proposeAppLink) {
     const requestId = makeText(typedArgs.requestId);
     const actor = ensureActor(typedArgs.actor);
-    const actionsRaw = isObject(typedArgs.actions) || Array.isArray((typedArgs as { actions?: unknown }).actions)
-      ? (typedArgs.actions as unknown[])
+    const actionsRaw = Array.isArray((typedArgs as { actions?: unknown }).actions)
+      ? ((typedArgs as { actions: unknown[] }).actions)
       : [];
+    const actions = [...actionsRaw];
     const scheme = makeText(typedArgs.scheme) || SCHEME_HTTPS;
-    const actions = normalizeList(actionsRaw);
     if (!requestId) {
       throw new Error('requestId is required');
     }
@@ -726,18 +1981,16 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       throw new Error(`At most ${MAX_ACTIONS_PER_REQUEST} actions are supported per request`);
     }
     const cleanActions = actions.map((entry) => {
-      if (!entry || typeof entry !== 'object') {
+      if (!isObject(entry)) {
         throw new Error('each action must be an object');
       }
-      const candidate = { ...entry } as Record<string, unknown>;
+      const candidate: CandidateAction = { ...entry };
       const type = makeText(candidate.type);
       if (!type) {
         throw new Error('each action must include type');
       }
-      candidate.type = type;
-      if (!candidate.type.includes('.')) {
-        candidate.type = `inventory.${candidate.type}`;
-      }
+      const normalizedType = type.includes('.') ? type : `inventory.${type}`;
+      candidate.type = normalizedType;
       return candidate;
     });
 
@@ -839,17 +2092,29 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     const actor = ensureActor(typedArgs.actor);
     const domain = ensureDomain(typedArgs.domain);
     const collection = ensureCollection(typedArgs.collection);
+    const dataHome = ensureDataHome(makeText((typedArgs as Record<string, unknown>).data_home || (typedArgs as { dataHome?: unknown }).dataHome));
     const idempotencyKey = makeText(typedArgs.idempotency_key) || undefined;
-    const actionId = makeText(typedArgs.action_id) || makeActionId('create_record');
+    const actionId = makeText(typedArgs.action_id)
+      || makeActionId('create_record', {
+        operation: 'create_record',
+        actor,
+        domain,
+        collection,
+        dataHome,
+        idempotencyKey,
+      });
     const conversationId = ensureConversationId(typedArgs.conversation_id);
 
-    const recordInput = typedArgs.record ?? typedArgs;
+    const recordInput = {
+      ...asRecord(typedArgs),
+      ...asRecord(typedArgs.record),
+    };
     const title = makeText(recordInput.title);
-    const properties = isObject((recordInput as { properties?: unknown }).properties)
-      ? ((recordInput as { properties: Record<string, unknown> }).properties)
+    const properties = isObject(recordInput.properties)
+      ? (recordInput.properties as Record<string, unknown>)
       : {};
-    const relations = Array.isArray((recordInput as { relations?: unknown }).relations)
-      ? ((recordInput as { relations: unknown[] }).relations as McpRecord['relations'])
+    const relations = Array.isArray(recordInput.relations)
+      ? (recordInput.relations as unknown[])
       : [];
 
     const policy = actionToolPolicy({
@@ -862,30 +2127,142 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       return resolveToolResult({ allowed: false, policy }, true, policy.safety);
     }
 
-    const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    const recordId = ensureId(recordInput.id || actionId);
+    const resolvedIdempotencyKey = idempotencyKey
+      || buildDeterministicIdempotencyKey({
+        operation: 'create_record',
+        dataHome,
+        recordId,
+        domain,
+        collection,
+        payload: {
+          title,
+          properties,
+          externalId: makeText((recordInput as { external_id?: unknown }).external_id),
+          relations,
+          dataHome,
+        },
+      });
+    const existing = resolvedIdempotencyKey ? findActionByIdempotencyKey(resolvedIdempotencyKey) : null;
     if (existing && existing.status === 'completed') {
       const replayRecord = existing.record_ids[0] ? findRecord(existing.record_ids[0]) : null;
       return resolveToolResult({
         action: existing,
         replayed: true,
         record: replayRecord,
-      }, false, existing.status === 'failed' ? 'review-only' : 'write');
+      }, false, 'write', {
+        action: existing,
+        sourceSnapshot: getActionSourceSnapshot(existing),
+      });
+    }
+
+    const idempotencyKeyWithDefault = resolvedIdempotencyKey;
+    let notionWriteResult: {
+      success?: boolean;
+      provider_record_id?: string | null;
+      action_receipt?: unknown;
+      source_snapshot?: Record<string, unknown>;
+    } | null = null;
+    let source = providerSourceFromWrite({
+      dataHome,
+      operation: 'create_record',
+      recordId,
+      domain,
+      collection,
+      title,
+      externalId: makeText((recordInput as { external_id?: unknown }).external_id),
+    });
+
+    if (!source.ok) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: source.reason,
+        requiredConfig: source.requiredConfig,
+        source_snapshot: source.source_snapshot,
+      }, true, policy.safety);
+    }
+
+    if (dataHome === 'notion') {
+      const notionWrite = await writeNotionRecord({
+        operation: 'create_record',
+        recordId,
+        domain,
+        collection,
+        title,
+        properties: properties,
+        externalId: makeText((recordInput as { external_id?: unknown }).external_id),
+      });
+      notionWriteResult = notionWrite;
+      const notionSource = notionSourceFromResponse({
+        ok: notionWrite.ok,
+        source: notionWrite.source,
+        source_snapshot: notionWrite.source_snapshot,
+        operation: 'create_record',
+      });
+      if (!notionSource) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: notionWrite.error || 'Notion write failed.',
+          source_snapshot: notionWrite.source_snapshot,
+          requiredConfig: source.requiredConfig,
+        }, true, policy.safety);
+      }
+      source = notionSource;
+      source.source_snapshot = notionWrite.source_snapshot || source.source_snapshot;
+    }
+
+    if (dataHome === 'google_sheets') {
+      const sheetWrite = await writeSheetsRecord({
+        operation: 'create_record',
+        record: {
+          id: recordId,
+          domain,
+          collection,
+          title,
+          properties,
+          archived: false,
+          externalId: makeText((recordInput as { external_id?: unknown }).external_id),
+        },
+      });
+      if (!sheetWrite.ok) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: sheetWrite.error || 'Sheets write failed.',
+          requiredConfig: source.requiredConfig,
+          source_snapshot: sheetWrite.source_snapshot,
+        }, true, policy.safety);
+      }
+      source = sheetsSourceFromResponse({
+        ok: sheetWrite.ok,
+        source: sheetWrite.source,
+        source_snapshot: sheetWrite.source_snapshot,
+      }) || source;
+      if (!source.ok) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: sheetWrite.error || 'Sheets write failed.',
+          source_snapshot: sheetWrite.source_snapshot,
+          requiredConfig: source.requiredConfig,
+        }, true, policy.safety);
+      }
     }
 
     const created = createRecord({
-      id: ensureId(recordInput.id || actionId),
+      id: recordId,
       domain,
       collection,
       title,
       properties,
       relations,
-      source: {
-        provider: 'sqlite',
-        external_id: makeText((recordInput as { external_id?: unknown }).external_id),
-        url: null,
-        observed_at: new Date().toISOString(),
-        content_hash: null,
-      },
+      source: source.source,
       archived_at: null,
     } as Omit<McpRecord, 'created_at' | 'updated_at'>);
     const action = createActionEvent({
@@ -895,22 +2272,35 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       tool: name,
       risk: policy.risk,
       recordIds: [created.id],
-      idempotencyKey,
+      idempotencyKey: idempotencyKeyWithDefault,
       command: `create_record:${collection}`,
       after: created,
-      undoPayload: { operation: 'delete_record', record_id: created.id },
+      undoPayload: { operation: 'delete_record', record_id: created.id, provider_snapshot: source.source_snapshot },
       sourceIds: existing ? existing.source_ids : [],
       conversationId,
     });
     const completed = markActionCompleted(action.id, action.command, {
       record: created,
+      source_snapshot: source.source_snapshot,
     });
-    return resolveToolResult({ action: completed || action, record: created }, false, 'write');
+    return resolveWriteResult({
+      action: completed || action,
+      record: created,
+      source_snapshot: source.source_snapshot,
+      ...(notionWriteResult
+        ? {
+            success: notionWriteResult.success,
+            provider_record_id: notionWriteResult.provider_record_id,
+            action_receipt: notionWriteResult.action_receipt,
+          }
+        : {}),
+    }, completed || action);
   }
 
   if (name === RECORD_TOOLS.updateRecord) {
     const actor = ensureActor(typedArgs.actor);
-    const id = makeText(typedArgs.id);
+  const id = makeText(typedArgs.id);
+    const dataHome = ensureDataHome(makeText((typedArgs as Record<string, unknown>).data_home || (typedArgs as { dataHome?: unknown }).dataHome));
     const patch = isObject(typedArgs.patch) ? (typedArgs.patch as Record<string, unknown>) : null;
     if (!id || !patch) {
       throw new Error('id and patch are required');
@@ -921,7 +2311,13 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     }
     const domain = ensureDomain(typedArgs.domain || existing.domain);
     const idempotencyKey = makeText(typedArgs.idempotency_key) || undefined;
-    const actionId = makeText(typedArgs.action_id) || makeActionId(`update:${id}`);
+    const actionId = makeText(typedArgs.action_id)
+      || makeActionId(`update:${id}`, {
+        operation: 'update_record',
+        actor,
+        id,
+        domain,
+      });
     const conversationId = ensureConversationId(typedArgs.conversation_id);
     const policy = actionToolPolicy({
       tool: name,
@@ -929,13 +2325,62 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       command: `update ${existing.collection} ${id}`,
       actor,
     });
-    const preCheck = getOrCreateActionFromPolicy({
+    const externalId = makeText((existing.source as { external_id?: unknown })?.external_id);
+    if (dataHome !== 'local_sqlite' && existing.source?.provider !== dataHome) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: `record ${id} is stored on ${existing.source?.provider}; route writes using matching data_home.`,
+      }, true, 'review-only');
+    }
+
+    if (dataHome !== 'local_sqlite' && !externalId) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: `record ${id} is missing external_id for ${dataHome} mutation.`,
+      }, true, 'review-only');
+    }
+
+  const updatedTitle = typeof patch.title === 'string' && patch.title.trim().length > 0
+    ? patch.title.trim()
+    : existing.title;
+  const updatedDomain = makeText((patch as { domain?: unknown }).domain) || existing.domain;
+  const updatedCollection = makeText((patch as { collection?: unknown }).collection) || existing.collection;
+  const updatedProperties = notionPropertiesForWrite(existing, patch as Partial<McpRecord>);
+  const updatedArchivedAt = (patch as { archived_at?: unknown }).archived_at;
+    const normalizedArchived = updatedArchivedAt === null
+      ? false
+      : typeof updatedArchivedAt === 'string'
+        ? true
+        : Boolean(existing.archived_at);
+    const resolvedIdempotencyKey = idempotencyKey
+      || buildDeterministicIdempotencyKey({
+        operation: 'update_record',
+        dataHome,
+        recordId: id,
+        domain,
+        collection: updatedCollection,
+        payload: {
+          title: updatedTitle,
+          domain: updatedDomain,
+          collection: updatedCollection,
+          archived: normalizedArchived,
+          properties: updatedProperties,
+          patch,
+          dataHome,
+        },
+      });
+  const preCheck = getOrCreateActionFromPolicy({
       tool: name,
       domain,
       actor,
       command: `update_record:${id}`,
       policy,
-      idempotencyKey,
+      idempotencyKey: resolvedIdempotencyKey,
+      actionId,
       recordIds: [id],
       before: existing,
       conversationId,
@@ -943,17 +2388,146 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     if (preCheck.reviewOnly) {
       return preCheck;
     }
-    const repeated = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    const repeated = resolvedIdempotencyKey ? findActionByIdempotencyKey(resolvedIdempotencyKey) : null;
     if (repeated && repeated.status === 'completed') {
-      const replay = findRecord(id);
-      return resolveToolResult({ action: repeated, replayed: true, record: replay }, false, 'write');
+      return resolveWriteResult({
+        action: repeated,
+        replayed: true,
+        record: findRecord(id),
+        source_snapshot: getActionSourceSnapshot(repeated),
+      }, repeated);
     }
 
-    const updated = updateRecord(id, patch as Partial<McpRecord>);
-    if (!updated) {
-      markActionFailed(preCheck.json?.action?.id || actionId);
-      throw new Error(`record ${id} not found`);
+  let notionWriteResult: {
+    success?: boolean;
+    provider_record_id?: string | null;
+    action_receipt?: unknown;
+    source_snapshot?: Record<string, unknown>;
+  } | null = null;
+  let source = providerSourceFromWrite({
+    dataHome,
+    operation: 'update_record',
+    recordId: id,
+    domain: updatedDomain,
+    collection: updatedCollection,
+    title: updatedTitle,
+    externalId: makeText((existing.source as { external_id?: unknown })?.external_id),
+  });
+
+  if (dataHome === 'notion' && existing.source?.provider === 'notion') {
+    const notionWrite = await writeNotionRecord({
+      operation: 'update_record',
+      recordId: id,
+      pageId: externalId,
+      domain: updatedDomain,
+      collection: updatedCollection,
+      title: updatedTitle,
+      properties: updatedProperties,
+    });
+    const notionSource = notionSourceFromResponse({
+      ok: notionWrite.ok,
+      source: notionWrite.source,
+      source_snapshot: notionWrite.source_snapshot,
+      operation: 'update_record',
+    });
+    if (!notionSource) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: notionWrite.error || 'Notion write failed.',
+        source_snapshot: notionWrite.source_snapshot,
+      }, true, policy.safety);
     }
+    notionWriteResult = {
+      success: notionWrite.success,
+      provider_record_id: notionWrite.provider_record_id,
+      action_receipt: notionWrite.action_receipt,
+      source_snapshot: notionWrite.source_snapshot,
+    };
+    source = notionSource;
+  }
+
+  if (dataHome === 'google_sheets') {
+    const sheetWrite = await writeSheetsRecord({
+      operation: 'update_record',
+      record: {
+        id,
+        title: updatedTitle,
+        domain: updatedDomain,
+        collection: updatedCollection,
+        properties: updatedProperties,
+        archived: normalizedArchived,
+        externalId: makeText((existing.source as { external_id?: unknown })?.external_id),
+      },
+    });
+    if (!sheetWrite.ok) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: sheetWrite.error || 'Google Sheets write failed.',
+        source_snapshot: sheetWrite.source_snapshot,
+      }, true, policy.safety);
+    }
+    if (sheetWrite.noChange) {
+      return resolveWriteResult({
+        message: 'No changes detected; local record is already up to date.',
+        record: existing,
+        source_snapshot: sheetWrite.source_snapshot,
+      }, undefined);
+    }
+    source = sheetsSourceFromResponse({
+      ok: sheetWrite.ok,
+      source: sheetWrite.source,
+      source_snapshot: sheetWrite.source_snapshot,
+    }) || source;
+    if (!source.ok) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: sheetWrite.error || 'Google Sheets write failed.',
+        source_snapshot: sheetWrite.source_snapshot,
+        requiredConfig: source.requiredConfig,
+      }, true, policy.safety);
+    }
+  }
+
+  if (dataHome === 'notion' && !source.ok) {
+    return resolveToolResult({
+      allowed: false,
+      policy,
+      provider: dataHome,
+      message: source.reason ?? 'Notion mutation returned invalid source snapshot.',
+      source_snapshot: source.source_snapshot,
+    }, true, policy.safety);
+  }
+
+  if (dataHome !== 'notion' && !source.ok) {
+    return resolveToolResult({
+      allowed: false,
+      policy,
+      provider: dataHome,
+      message: source.reason,
+      requiredConfig: source.requiredConfig,
+      source_snapshot: source.source_snapshot,
+    }, true, policy.safety);
+  }
+
+  const updated = updateRecord(id, {
+    ...patch,
+    title: updatedTitle,
+    domain: updatedDomain,
+    collection: updatedCollection,
+    properties: updatedProperties,
+    ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
+    ...(updatedArchivedAt === null ? { archived_at: null } : {}),
+  });
+  if (!updated) {
+    throw new Error(`record ${id} not found`);
+  }
+
     const action = repeated ?? createActionEvent({
       id: actionId,
       actor,
@@ -961,20 +2535,39 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       tool: name,
       risk: policy.risk,
       recordIds: [updated.after.id],
-      idempotencyKey,
+      idempotencyKey: resolvedIdempotencyKey,
       command: `update_record:${id}`,
       before: updated.before,
       after: updated.after,
-      undoPayload: { operation: 'restore_after_update', before: updated.before },
+      undoPayload: { operation: 'restore_after_update', before: updated.before, provider_snapshot: source.source_snapshot },
       conversationId,
-    });
-    const completed = markActionCompleted((repeated ?? action).id, action.command, { record: updated.after });
-    return resolveToolResult({ action: completed || action, record: updated.after }, false, 'write');
-  }
+  });
+  const completed = markActionCompleted((repeated ?? action).id, action.command, {
+    record: updated.after,
+    source_snapshot: source.source_snapshot,
+  });
+  return resolveWriteResult(
+    {
+      action: completed || action,
+      record: updated.after,
+      source_snapshot: source.source_snapshot,
+      ...(notionWriteResult
+        ? {
+            success: notionWriteResult.success,
+            provider_record_id: notionWriteResult.provider_record_id,
+            action_receipt: notionWriteResult.action_receipt,
+          }
+        : {}),
+    },
+    completed || action,
+  );
+}
+
 
   if (name === RECORD_TOOLS.archiveRecord) {
     const actor = ensureActor(typedArgs.actor);
     const id = makeText(typedArgs.id);
+    const dataHome = ensureDataHome(makeText((typedArgs as Record<string, unknown>).data_home || (typedArgs as { dataHome?: unknown }).dataHome));
     if (!id) {
       throw new Error('id is required');
     }
@@ -984,7 +2577,12 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     }
     const domain = ensureDomain(typedArgs.domain || existing.domain);
     const idempotencyKey = makeText(typedArgs.idempotency_key) || undefined;
-    const actionId = makeText(typedArgs.action_id) || makeActionId(`archive:${id}`);
+    const actionId = makeText(typedArgs.action_id)
+      || makeActionId(`archive:${id}`, {
+        operation: 'archive_record',
+        actor,
+        id,
+      });
     const conversationId = ensureConversationId(typedArgs.conversation_id);
     const policy = actionToolPolicy({
       tool: name,
@@ -999,22 +2597,180 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
         actor,
         command: `archive_record:${id}`,
         policy,
-        idempotencyKey,
+        idempotencyKey: idempotencyKey || buildDeterministicIdempotencyKey({
+          operation: 'archive_record',
+          dataHome,
+          recordId: id,
+          domain,
+          collection: existing.collection,
+          payload: {
+            title: existing.title,
+            collection: existing.collection,
+            archived: true,
+            dataHome,
+          },
+        }),
         recordIds: [id],
         before: existing,
         conversationId,
       });
     }
 
-    const repeated = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    const resolvedIdempotencyKey = idempotencyKey
+      || buildDeterministicIdempotencyKey({
+        operation: 'archive_record',
+        dataHome,
+        recordId: id,
+        domain,
+        collection: existing.collection,
+        payload: {
+          title: existing.title,
+          collection: existing.collection,
+          archived: true,
+          dataHome,
+        },
+      });
+    const repeated = resolvedIdempotencyKey ? findActionByIdempotencyKey(resolvedIdempotencyKey) : null;
     if (repeated && repeated.status === 'completed') {
-      return resolveToolResult({ action: repeated, replayed: true, record: findRecord(id) }, false, 'write');
+      return resolveWriteResult({
+        action: repeated,
+        replayed: true,
+        record: findRecord(id),
+        source_snapshot: getActionSourceSnapshot(repeated),
+      }, repeated);
+    }
+
+    if (dataHome !== 'local_sqlite' && existing.source?.provider !== dataHome) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: `record ${id} is stored on ${existing.source?.provider}; route writes using matching data_home.`,
+      }, true, 'review-only');
+    }
+
+  const notionId = makeText((existing.source as { external_id?: unknown })?.external_id);
+    if (dataHome !== 'local_sqlite' && !notionId) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: `record ${id} is missing external_id for ${dataHome} archive mutation.`,
+      }, true, 'review-only');
+    }
+
+  let source = providerSourceFromWrite({
+      dataHome,
+      operation: 'archive_record',
+      recordId: existing.id,
+      domain,
+      collection: existing.collection,
+      title: existing.title,
+      externalId: existing.source?.external_id,
+    });
+
+  let notionWriteResult: {
+        success?: boolean;
+        provider_record_id?: string | null;
+        action_receipt?: unknown;
+        source_snapshot?: Record<string, unknown>;
+      } | null = null;
+  if (dataHome === 'notion' && existing.source?.provider === 'notion') {
+      const notionWrite = await writeNotionRecord({
+        operation: 'archive_record',
+        recordId: id,
+        pageId: notionId,
+        domain: existing.domain,
+        collection: existing.collection,
+        title: existing.title,
+        archived: true,
+      });
+      const notionSource = notionSourceFromResponse({
+        ok: notionWrite.ok,
+        source: notionWrite.source,
+        source_snapshot: notionWrite.source_snapshot,
+        operation: 'archive_record',
+      });
+      if (!notionSource) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: notionWrite.error || 'Notion write failed.',
+          source_snapshot: notionWrite.source_snapshot,
+        }, true, policy.safety);
+      }
+      notionWriteResult = {
+        success: notionWrite.success,
+        provider_record_id: notionWrite.provider_record_id,
+        action_receipt: notionWrite.action_receipt,
+        source_snapshot: notionWrite.source_snapshot,
+      };
+      source = notionSource;
+    }
+
+    if (dataHome === 'google_sheets') {
+      const sheetWrite = await writeSheetsRecord({
+        operation: 'archive_record',
+        record: {
+          id,
+          title: existing.title,
+          domain: existing.domain,
+          collection: existing.collection,
+          properties: existing.properties,
+          archived: true,
+          externalId: makeText((existing.source as { external_id?: unknown })?.external_id),
+        },
+      });
+      if (!sheetWrite.ok) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: sheetWrite.error || 'Google Sheets write failed.',
+          source_snapshot: sheetWrite.source_snapshot,
+        }, true, 'review-only');
+      }
+      source = sheetsSourceFromResponse({
+        ok: sheetWrite.ok,
+        source: sheetWrite.source,
+        source_snapshot: sheetWrite.source_snapshot,
+      }) || source;
+      if (!source.ok) {
+        return resolveToolResult({
+          allowed: false,
+          policy,
+          provider: dataHome,
+          message: sheetWrite.error || 'Google Sheets write failed.',
+          source_snapshot: sheetWrite.source_snapshot,
+          requiredConfig: source.requiredConfig,
+        }, true, policy.safety);
+      }
+    }
+
+    if (!source.ok) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        provider: dataHome,
+        message: source.reason,
+        requiredConfig: source.requiredConfig,
+        source_snapshot: source.source_snapshot,
+      }, true, policy.safety);
     }
 
     const archived = archiveRecord(id);
     if (!archived) {
       throw new Error(`record ${id} not found`);
     }
+
+    if (dataHome !== 'local_sqlite') {
+      archived.after = {
+        ...archived.after,
+        source: source.source,
+      };
+    }
+
     const action = repeated ?? createActionEvent({
       id: actionId,
       actor,
@@ -1026,11 +2782,28 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       command: `archive_record:${id}`,
       before: archived.before,
       after: archived.after,
-      undoPayload: { operation: 'restore_after_archive', record: archived.before },
+      undoPayload: { operation: 'restore_after_archive', record: archived.before, provider_snapshot: source.source_snapshot },
       conversationId,
     });
-    const completed = markActionCompleted(action.id, action.command, { record: archived.after });
-    return resolveToolResult({ action: completed || action, record: archived.after }, false, 'write');
+    const completed = markActionCompleted(action.id, action.command, {
+      record: archived.after,
+      source_snapshot: source.source_snapshot,
+    });
+  return resolveWriteResult(
+      {
+        action: completed || action,
+        record: archived.after,
+        source_snapshot: source.source_snapshot,
+        ...(notionWriteResult
+          ? {
+              success: notionWriteResult.success,
+              provider_record_id: notionWriteResult.provider_record_id,
+              action_receipt: notionWriteResult.action_receipt,
+            }
+          : {}),
+      },
+      completed || action,
+    );
   }
 
   if (name === RECORD_TOOLS.runWorkflow) {
@@ -1041,7 +2814,13 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     }
     const domain = ensureDomain(typedArgs.domain);
     const idempotencyKey = makeText(typedArgs.idempotency_key) || undefined;
-    const actionId = makeText(typedArgs.action_id) || makeActionId(`workflow:${workflowId}`);
+    const actionId = makeText(typedArgs.action_id)
+      || makeActionId(`workflow:${workflowId}`, {
+        workflowId,
+        actor,
+        domain,
+        operation: 'run_workflow',
+      });
     const conversationId = ensureConversationId(typedArgs.conversation_id);
     const policy = actionToolPolicy({
       tool: name,
@@ -1049,12 +2828,21 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
       command: `run_workflow ${workflowId}`,
       actor,
     });
-    const preexisting = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    const resolvedIdempotencyKey = idempotencyKey || buildWorkflowIdempotencyKey({
+      workflowId,
+      actor,
+      domain,
+      actionId,
+    });
+    const preexisting = resolvedIdempotencyKey ? findActionByIdempotencyKey(resolvedIdempotencyKey) : null;
     if (preexisting && preexisting.status === 'completed') {
       return resolveToolResult({
         action: preexisting,
         replayed: true,
-      }, false, 'write');
+      }, false, 'write', {
+        action: preexisting,
+        sourceSnapshot: getActionSourceSnapshot(preexisting),
+      });
     }
     if (!policy.allowed || policy.requiresClarification) {
       return resolveToolResult({
@@ -1081,35 +2869,81 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
         domain,
         actor,
         command: `run_workflow:${workflowId}`,
-        idempotencyKey,
+        idempotencyKey: resolvedIdempotencyKey,
         conversationId,
       });
     if (action.status === 'completed') {
-      return resolveToolResult({ action, replayed: true }, false, 'write');
+      return resolveToolResult(
+        { action, replayed: true },
+        false,
+        'write',
+        {
+          action,
+          sourceSnapshot: getActionSourceSnapshot(action),
+        },
+      );
     }
 
-    const execution = runWorkflow(workflow, actor, { seenWorkflows: new Set([workflowId]), visitedRecords: new Set() });
+    const execution = await runWorkflow(
+      workflow,
+      actor,
+      { seenWorkflows: new Set([workflowId]), visitedRecords: new Set() },
+      {
+        actionId,
+        seed: buildWorkflowExecutionSeed({
+          workflowId,
+          actor,
+          actionId,
+          checkpointRunId: asRecord(preexisting?.after_json).checkpoint_run_id as string | undefined,
+        }),
+      },
+    );
     const recordIds = execution.changedRecords;
     if (execution.status !== 'ok') {
-      const failed = markActionFailed(action.id, 'workflow failed');
+      const failureReason = execution.error ? execution.error : `workflow ${workflowId} failed`;
+      const failedAction = markActionFailed(action.id, failureReason) ?? action;
+      if (execution.compensation) {
+        (failedAction as ActionEvent & { compensation?: unknown }).compensation = execution.compensation;
+      }
       return resolveToolResult({
         status: 'failed',
-        message: `workflow ${workflowId} failed`,
-        action: failed,
+        message: failureReason,
+        action: failedAction,
         details: execution.details,
-      }, false, 'review-only');
+        checkpoint: {
+          runId: execution.checkpointRunId,
+          changed_records: recordIds,
+          compensation: execution.compensation,
+        },
+      }, false, 'review-only', {
+        action: failedAction,
+        sourceSnapshot: buildWorkflowRunSourceSnapshot({
+          workflowRunId: execution.checkpointRunId,
+          changedRecords: recordIds,
+        }),
+      });
     }
     const completed = markActionCompleted(action.id, action.command, {
       workflow: workflowId,
       steps: execution.details,
       changed_records: recordIds,
+      checkpoint_run_id: execution.checkpointRunId,
     });
     return resolveToolResult({
       status: 'completed',
       action: completed || action,
       workflow: workflowId,
+      checkpoint: {
+        runId: execution.checkpointRunId,
+      },
       changed_records: recordIds,
-    }, false, 'write');
+    }, false, 'write', {
+      action: completed || action,
+      sourceSnapshot: buildWorkflowRunSourceSnapshot({
+        workflowRunId: execution.checkpointRunId,
+        changedRecords: recordIds,
+      }),
+    });
   }
 
   if (name === RECORD_TOOLS.undoAction) {
@@ -1135,12 +2969,20 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
 
     const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
     if (existing) {
-      return resolveToolResult({ action: existing, replayed: true }, false, 'write');
+      const snapshot = getActionSourceSnapshot(existing) ?? getActionSourceSnapshot(action);
+      return resolveToolResult({ action: existing, replayed: true }, false, 'write', {
+        action: existing,
+        sourceSnapshot: snapshot,
+      });
     }
 
     const undoPayload = { actionId, actor };
     const undoAction = createActionEvent({
-      id: makeActionId(`undo:${actionId}`),
+      id: makeActionId('undo', {
+        operation: 'undo_action',
+        actor,
+        actionId,
+      }),
       actor,
       domain: action.domain,
       tool: name,
@@ -1156,11 +2998,21 @@ export function callMcpTool(name: string, args: Record<string, unknown>): ToolRe
     const undoResult = runUndo(actionId);
     if (!undoResult.success) {
       markActionFailed(undoAction.id, undoResult.message);
-      return resolveToolResult({ status: 'failed', action: action, undoResult }, false, 'review-only');
+      return resolveToolResult({ status: 'failed', action: action, undoResult }, false, 'review-only', {
+        action,
+        sourceSnapshot: getActionSourceSnapshot(action),
+      });
     }
 
     const completed = markActionCompleted(undoAction.id, undoAction.command, { undoResult });
-    return resolveToolResult({ status: 'completed', action: completed || undoAction, undoResult }, false, 'write');
+    return resolveToolResult({
+      status: 'completed',
+      action: completed || undoAction,
+      undoResult,
+    }, false, 'write', {
+      action: completed || undoAction,
+      sourceSnapshot: getActionSourceSnapshot(completed || undoAction) ?? getActionSourceSnapshot(action),
+    });
   }
 
   throw new Error(`Unknown tool: ${name}`);

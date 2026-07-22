@@ -97,7 +97,7 @@ checks = {
         "wonderfood://contract/app-command",
     ]),
     "status_review_only": "review-only" in status["safety"],
-    "skill_contract_visible": "WonderFood Food Skill" in skill_text and "Return JSON only" in skill_text,
+    "skill_contract_visible": "LifeOS Food Skill" in skill_text and "Response contract" in skill_text,
     "link_review_only": link["reviewOnly"] and "wonderfood.app/action" in link["url"] and "inventory.add" in link["url"],
     "envelope_valid": validation["valid"] and validation["reviewOnly"],
     "package_valid": package["valid"] and package["package"]["schema_version"] == "wf.proposal-package.v1",

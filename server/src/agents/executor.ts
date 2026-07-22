@@ -1,5 +1,6 @@
 import { loadCatalog } from '@/src/domain/catalog';
 import { ActionRisk, evaluateCommandPolicy, PolicyDecision } from '@/src/actions/policy';
+import { createHash } from 'node:crypto';
 import {
   ActionEvent,
   archiveRecord,
@@ -26,8 +27,12 @@ export type ActionReceipt = {
   actor: string;
   domain: string;
   tool: string;
+  schema_version: 'lifeos.action-event.v1';
+  risk: ActionRisk;
   status: ActionStatus;
   record_ids: string[];
+  source_ids: string[];
+  conversation_id: string;
   created_at: string;
   updated_at: string;
   idempotency_key?: string;
@@ -66,14 +71,38 @@ const ACTION_TOOL_BY_INTENT: Record<ParsedIntent['type'], string> = {
   noop: 'chat_reply',
 };
 
+function stringifyForHash(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stringifyForHash(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stringifyForHash((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function hashSeed(input: unknown): string {
+  return createHash('sha256').update(stringifyForHash(input)).digest('hex');
+}
+
 function toReceipt(action: ActionEvent): ActionReceipt {
   return {
     id: action.id,
     actor: action.actor,
     domain: action.domain,
     tool: action.tool,
+    schema_version: action.schema_version,
+    risk: action.risk,
     status: action.status,
     record_ids: action.record_ids,
+    conversation_id: action.conversation_id || '',
+    source_ids: action.source_ids,
     created_at: action.created_at,
     updated_at: action.updated_at,
     idempotency_key: action.idempotency_key ?? undefined,
@@ -91,6 +120,7 @@ function buildFailureReceipt(input: {
   command: string;
   reason?: string;
   records?: string[];
+  sourceIds?: string[];
 }): ActionReceipt {
   const event = createActionEvent({
     id: input.actionId,
@@ -101,6 +131,7 @@ function buildFailureReceipt(input: {
     recordIds: input.records ?? [],
     idempotencyKey: input.idempotencyKey,
     command: input.command,
+    sourceIds: input.sourceIds,
     before: null,
     after: null,
     undoPayload: null,
@@ -111,7 +142,8 @@ function buildFailureReceipt(input: {
 
 function normalizeCollectionFromCatalog(input: string) {
   const lower = input.toLowerCase().trim();
-  const knownCatalog = loadCatalog().catalog.domains.find((entry) => entry.id === 'food')?.collections ?? [];
+  const { activeManifest } = loadCatalog();
+  const knownCatalog = activeManifest.collections;
 
   for (const entry of ACTIONS_BY_ALIAS) {
     for (const alias of entry.aliases) {
@@ -121,7 +153,7 @@ function normalizeCollectionFromCatalog(input: string) {
     }
   }
 
-  return knownCatalog.find((collection) => lower === collection || lower.startsWith(`${collection} `));
+  return knownCatalog.find((collection: string) => lower === collection || lower.startsWith(`${collection} `));
 }
 
 function parseCollectionHint(input: string): { collection?: string; rest: string } {
@@ -326,6 +358,7 @@ function createBaseAction(input: {
   before?: unknown;
   after?: unknown;
   conversationId?: string | null;
+  sourceIds?: string[];
 }) {
   return createActionEvent({
     id: input.actionId,
@@ -336,6 +369,7 @@ function createBaseAction(input: {
     recordIds: input.recordIds,
     idempotencyKey: input.idempotencyKey,
     command: input.command,
+    sourceIds: input.sourceIds,
     before: input.before ?? null,
     after: input.after ?? null,
     undoPayload: input.undoPayload ?? null,
@@ -353,6 +387,7 @@ export async function executeCommand(input: {
   conversationId?: string | null;
   step?: AgentStep;
   idempotencyKey?: string;
+  sourceIds?: string[];
 }): Promise<{
   state: ActionStatus;
   receipt: ActionReceipt;
@@ -370,7 +405,7 @@ export async function executeCommand(input: {
     };
   }
 
-  const policy = evaluateCommandPolicy({
+  const policy: PolicyDecision = evaluateCommandPolicy({
     domain: input.domain,
     tool: input.tool,
     command,
@@ -388,11 +423,13 @@ export async function executeCommand(input: {
       command,
       reason: policy.reason,
       records: input.record_ids,
+      sourceIds: input.sourceIds,
     });
     return { state: receipt.status, receipt, step: input.step };
   }
 
   if (policy.requiresClarification) {
+    const clarifyingQuestion = policy.clarifyingQuestion;
     const receipt = buildFailureReceipt({
       actionId: input.actionId,
       actor: input.actor,
@@ -401,8 +438,9 @@ export async function executeCommand(input: {
       now,
       idempotencyKey: input.idempotencyKey,
       command,
-      reason: policy.clarifyingQuestion || policy.reason,
+      reason: clarifyingQuestion ?? policy.reason,
       records: input.record_ids,
+      sourceIds: input.sourceIds,
     });
     return { state: receipt.status, receipt, step: input.step };
   }
@@ -419,6 +457,7 @@ export async function executeCommand(input: {
       command,
       reason: intent.reason,
       records: input.record_ids,
+      sourceIds: input.sourceIds,
     });
     return { state: receipt.status, receipt, step: input.step };
   }
@@ -439,12 +478,13 @@ export async function executeCommand(input: {
         idempotencyKey: input.idempotencyKey,
         command,
         reason: `I can create a ${collection}, but I need a title.`,
+        sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
 
     const created = createRecord({
-      id: `${domain}-${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      id: `lifeos-${hashSeed({ actionId: input.actionId, domain, collection, title }).slice(0, 20)}`,
       domain,
       collection,
       title,
@@ -468,6 +508,7 @@ export async function executeCommand(input: {
       policy,
       idempotencyKey: input.idempotencyKey,
       command,
+      sourceIds: input.sourceIds,
       recordIds: [created.id],
       before: null,
       after: created,
@@ -495,6 +536,7 @@ export async function executeCommand(input: {
         idempotencyKey: input.idempotencyKey,
         command,
         reason: `Record ${intent.recordId} was not found before apply.`,
+        sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
@@ -510,6 +552,7 @@ export async function executeCommand(input: {
         idempotencyKey: input.idempotencyKey,
         command,
         reason: `Unable to update ${intent.recordId}.`,
+        sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
@@ -520,11 +563,12 @@ export async function executeCommand(input: {
       domain,
       tool: actionTool,
       policy,
-      idempotencyKey: input.idempotencyKey,
-      command,
-      recordIds: [updated.after.id],
-      before: updated.before,
-      after: updated.after,
+        idempotencyKey: input.idempotencyKey,
+        command,
+        sourceIds: input.sourceIds,
+        recordIds: [updated.after.id],
+        before: updated.before,
+        after: updated.after,
       undoPayload: {
         operation: 'restore_after_update',
         before: updated.before,
@@ -549,6 +593,7 @@ export async function executeCommand(input: {
         idempotencyKey: input.idempotencyKey,
         command,
         reason: `Could not archive ${intent.recordId}.`,
+        sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
@@ -560,10 +605,11 @@ export async function executeCommand(input: {
       tool: actionTool,
       policy,
       idempotencyKey: input.idempotencyKey,
-      command,
-      recordIds: [archived.after.id],
-      before: archived.before,
-      after: archived.after,
+        command,
+        sourceIds: input.sourceIds,
+        recordIds: [archived.after.id],
+        before: archived.before,
+        after: archived.after,
       undoPayload: {
         operation: 'restore_after_archive',
         before: archived.before,
@@ -586,6 +632,7 @@ export async function executeCommand(input: {
     command,
     reason: 'No supported mutating intent resolved.',
     records: input.record_ids,
+    sourceIds: input.sourceIds,
   });
   return { state: receipt.status, receipt, step: input.step };
 }

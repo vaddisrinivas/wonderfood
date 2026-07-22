@@ -15,17 +15,39 @@ const catalog = read(join(root, 'domain-catalog.v1.json'));
 const active = catalog.domains.find((domain) => domain.id === catalog.active_domain_id);
 if (!active?.manifest || !active?.skill) throw new Error('Active domain must reference a manifest and skill.');
 
-const manifestPath = resolve(root, active.manifest);
-const skillPath = resolve(root, active.skill);
-if (!existsSync(manifestPath) || !existsSync(skillPath)) throw new Error('Active domain package is incomplete.');
+const workflowIds = new Set(walk(join(root, 'workflows')).map((path) => read(path).id));
+const manifests = new Map();
+for (const domain of catalog.domains) {
+  if (!domain.manifest || !domain.skill) throw new Error(`Domain ${domain.id} must reference a manifest and skill.`);
+  const manifestPath = resolve(root, domain.manifest);
+  const skillPath = resolve(root, domain.skill);
+  if (!existsSync(manifestPath) || !existsSync(skillPath)) throw new Error(`Domain package is incomplete: ${domain.id}`);
 
-const manifest = read(manifestPath);
-const collections = new Set(manifest.collections);
-for (const relation of manifest.relations) {
-  if (!collections.has(relation.from) || (relation.to !== '*' && !collections.has(relation.to))) throw new Error(`Unknown relation collection: ${relation.from} -> ${relation.to}`);
+  const manifest = read(manifestPath);
+  if (manifest.id !== domain.id) throw new Error(`Manifest id mismatch for ${domain.id}: ${manifest.id}`);
+  const collections = new Set(manifest.collections);
+  for (const relation of manifest.relations) {
+    if (!collections.has(relation.from) || (relation.to !== '*' && !collections.has(relation.to))) {
+      throw new Error(`Unknown relation collection in ${domain.id}: ${relation.from} -> ${relation.to}`);
+    }
+  }
+  for (const id of manifest.workflows) {
+    if (!workflowIds.has(id)) throw new Error(`Missing workflow for ${domain.id}: ${id}`);
+  }
+  manifests.set(domain.id, manifest);
 }
 
-const workflowIds = new Set(walk(join(root, 'workflows')).map((path) => read(path).id));
-for (const id of manifest.workflows) if (!workflowIds.has(id)) throw new Error(`Missing workflow: ${id}`);
+const activeManifest = manifests.get(active.id);
+if (!activeManifest) throw new Error(`Active domain manifest missing: ${active.id}`);
 
-console.log(`Domain config valid: ${catalog.domains.length} domains, ${manifest.collections.length} Food collections, ${manifest.workflows.length} workflows.`);
+const registry = read(join(root, 'agents/registry.v1.json'));
+const agentIds = new Set();
+for (const agent of registry.agents) {
+  if (agentIds.has(agent.id)) throw new Error(`Duplicate agent id: ${agent.id}`);
+  agentIds.add(agent.id);
+  for (const schemaRef of [agent.input_schema, agent.output_schema]) {
+    if (!existsSync(resolve(root, 'agents', schemaRef))) throw new Error(`Missing agent schema: ${agent.id} -> ${schemaRef}`);
+  }
+}
+
+console.log(`Domain config valid: ${catalog.domains.length} domains, active=${active.id}, ${activeManifest.collections.length} active collections, ${activeManifest.workflows.length} active workflows, ${registry.agents.length} agents.`);

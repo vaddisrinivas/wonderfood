@@ -36,6 +36,7 @@
     },
     "plugins": [
       "expo-router",
+      "react-native-health-connect",
       [
         "expo-splash-screen",
         {

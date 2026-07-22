@@ -1,5 +1,7 @@
 import catalogJson from '@/packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '@/packages/domain-config/domains/food.v1.json';
+import healthManifestJson from '@/packages/domain-config/domains/health.v1.json';
+import plantsManifestJson from '@/packages/domain-config/domains/plants.v1.json';
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
 export type DomainSchemaVersion = 'lifeos.domain.v1';
@@ -67,6 +69,8 @@ export interface ParsedCatalog {
   activeManifest: DomainManifest;
   domainsById: Record<DomainId, DomainCatalogEntry>;
 }
+
+let parsedCatalogCache: ParsedCatalog | null = null;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -224,6 +228,8 @@ export function getActiveManifestPath(): string {
 function loadManifestByPath(manifestPath: string): unknown {
   const manifestMap: Record<string, unknown> = {
     './domains/food.v1.json': foodManifestJson,
+    './domains/health.v1.json': healthManifestJson,
+    './domains/plants.v1.json': plantsManifestJson,
   };
   const manifest = manifestMap[manifestPath];
   if (manifest) {
@@ -234,6 +240,10 @@ function loadManifestByPath(manifestPath: string): unknown {
 }
 
 export function loadCatalog(): ParsedCatalog {
+  if (parsedCatalogCache) {
+    return parsedCatalogCache;
+  }
+
   const catalog = parseCatalog(catalogJson);
   const domainsById = Object.fromEntries(catalog.domains.map((domain) => [domain.id, domain])) as Record<string, DomainCatalogEntry>;
   const activeDomain = domainsById[catalog.active_domain_id];
@@ -251,5 +261,6 @@ export function loadCatalog(): ParsedCatalog {
     throw new Error(`[domain-catalog] Manifest id mismatch: ${activeManifest.id}`);
   }
 
-  return { catalog, activeDomainId: catalog.active_domain_id, activeDomain, activeManifest, domainsById };
+  parsedCatalogCache = { catalog, activeDomainId: catalog.active_domain_id, activeDomain, activeManifest, domainsById };
+  return parsedCatalogCache;
 }

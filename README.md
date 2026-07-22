@@ -17,9 +17,9 @@ Both native targets use the application identifier `com.wonderfood.app`.
 
 ## Current implementation
 
-Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn local chat with structured answers and source links, system/source screens, Expo packaging, and a validated Food domain package with canonical schemas and three workflows.
+Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn server chat with streaming, tables, source citations, action receipts and idempotent Undo; SQLite persistence; MCP Streamable HTTP; Notion data-source pull/push/webhooks; Google Sheets adapter; Health Connect read bridge; and self-contained Android release packaging. Food is active; Health and Plants are real config packages available for later selection.
 
-Runtime adapters are the next phase: SQLite persistence, live Notion/Sheets sync, server-side model/MCP execution, real action receipts/Undo, and native Android capture/Health Connect. The UI labels demo data honestly until those adapters pass live gates.
+Provider secrets stay outside the repo. Local live Notion/OpenAI proof is available when the private environment is loaded; Sheets remains deterministic adapter/proof mode until a Google Sheets access token and workbook are supplied.
 
 - [LifeOS 2026 Notion](https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1)
 - [LifeOS Google Sheets](https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit)
@@ -34,11 +34,15 @@ npm install
 npm run start
 ```
 
+Copy `.env.example` to `.env.local`, set the Mac LAN address, and start the server with the private environment loaded. Never commit tokens.
+
 Launch a target:
 
 ```bash
 npm run web
 npm run android
+# optional Metro-backed development shell
+npm run android:dev
 npm run ios
 ```
 

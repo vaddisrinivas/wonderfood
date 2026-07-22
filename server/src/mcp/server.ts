@@ -7,6 +7,25 @@ const MCP_PROTOCOL_VERSION = '2026-03-11';
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
 const MCP_SERVER_VERSION = '1.0.0';
 
+type JsonSchema = {
+  type?: string;
+  additionalProperties?: boolean;
+  required?: string[];
+  properties?: Record<string, JsonSchema>;
+  enum?: unknown[];
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+  items?: JsonSchema;
+};
+
+type McpToolDefinition = {
+  name: string;
+  description: string;
+  inputSchema: JsonSchema;
+};
+
 export type JsonRpcRequest = {
   jsonrpc?: string;
   id?: string | number | null;
@@ -25,6 +44,10 @@ type McpResponse = {
 };
 
 type HeaderMap = Record<string, string | string[] | undefined>;
+
+type ToolCallErrors = string[];
+
+type ToolArgs = Record<string, unknown>;
 
 function writeJson(res: any, payload: unknown, status = 200) {
   res.writeHead(status, {
@@ -75,10 +98,135 @@ async function readJsonRequest(req: any): Promise<JsonRpcRequest | JsonRpcReques
   throw new Error('Invalid JSON-RPC payload');
 }
 
-function responseFor(request: JsonRpcRequest, headers: HeaderMap): McpResponse {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeToolDefinitionList(): Map<string, McpToolDefinition> {
+  const tools = listMcpTools();
+  const byName = new Map<string, McpToolDefinition>();
+  for (const tool of tools) {
+    byName.set(tool.name, tool);
+  }
+  return byName;
+}
+
+function asPath(path: string, key: string) {
+  return path ? `${path}.${key}` : key;
+}
+
+function validateToolArguments(
+  input: unknown,
+  schema: JsonSchema,
+  path = '',
+  errors: ToolCallErrors,
+): void {
+  const currentType = schema.type;
+  if (currentType === 'object') {
+    if (!isRecord(input)) {
+      errors.push(`${path || 'arguments'} must be an object`);
+      return;
+    }
+
+    const value = input as ToolArgs;
+    const properties = schema.properties ?? {};
+    const required = schema.required ?? [];
+
+    for (const key of required) {
+      if (!(key in value)) {
+        errors.push(`${asPath(path, key)} is required`);
+      }
+    }
+
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(value)) {
+        if (!(key in properties)) {
+          errors.push(`unexpected property ${path ? `${path}.` : ''}${key}`);
+        }
+      }
+    }
+
+    for (const [key, childSchema] of Object.entries(properties)) {
+      if (!(key in value)) {
+        continue;
+      }
+      validateToolArguments((value as ToolArgs)[key], childSchema, asPath(path, key), errors);
+    }
+    return;
+  }
+
+  if (currentType === 'string') {
+    if (typeof input !== 'string') {
+      errors.push(`${path || 'arguments'} must be a string`);
+      return;
+    }
+    if (typeof schema.minLength === 'number' && input.length < schema.minLength) {
+      errors.push(`${path || 'arguments'} must be at least ${schema.minLength} chars`);
+    }
+    if (typeof schema.maxLength === 'number' && input.length > schema.maxLength) {
+      errors.push(`${path || 'arguments'} must be at most ${schema.maxLength} chars`);
+    }
+    return;
+  }
+
+  if (currentType === 'number') {
+    if (typeof input !== 'number' || Number.isNaN(input)) {
+      errors.push(`${path || 'arguments'} must be a number`);
+    }
+    return;
+  }
+
+  if (currentType === 'boolean') {
+    if (typeof input !== 'boolean') {
+      errors.push(`${path || 'arguments'} must be a boolean`);
+    }
+    return;
+  }
+
+  if (currentType === 'array') {
+    if (!Array.isArray(input)) {
+      errors.push(`${path || 'arguments'} must be an array`);
+      return;
+    }
+    if (typeof schema.minItems === 'number' && input.length < schema.minItems) {
+      errors.push(`${path || 'arguments'} must include at least ${schema.minItems} items`);
+    }
+    if (typeof schema.maxItems === 'number' && input.length > schema.maxItems) {
+      errors.push(`${path || 'arguments'} must include at most ${schema.maxItems} items`);
+    }
+    if (schema.items) {
+      input.forEach((entry, index) => {
+        validateToolArguments(entry, schema.items!, asPath(`${path || 'arguments'}`, String(index)), errors);
+      });
+    }
+    return;
+  }
+
+  if (schema.enum && Array.isArray(schema.enum) && input !== undefined) {
+    if (!schema.enum.includes(input)) {
+      errors.push(`${path || 'arguments'} must be one of ${schema.enum.join(', ')}`);
+    }
+  }
+}
+
+function validateArgsForTool(toolName: string, args: unknown): ToolCallErrors {
+  const tools = normalizeToolDefinitionList();
+  const tool = tools.get(toolName);
+  if (!tool) {
+    return ['tool definition not found'];
+  }
+
+  const errors: ToolCallErrors = [];
+  validateToolArguments(args, tool.inputSchema, '', errors);
+  return errors;
+}
+
+async function responseFor(request: JsonRpcRequest, headers: HeaderMap): Promise<McpResponse> {
   const requestId = request.id ?? null;
   const method = request.method;
-  const params = request.params ?? {};
+  const params = request.params && typeof request.params === 'object' && !Array.isArray(request.params)
+    ? request.params
+    : {};
 
   if (typeof method !== 'string' || !method) {
     return { jsonrpc: '2.0', id: requestId, error: { code: -32600, message: 'Invalid request' } };
@@ -153,20 +301,33 @@ function responseFor(request: JsonRpcRequest, headers: HeaderMap): McpResponse {
     if (!isMcpToolAllowed(toolName)) {
       return { jsonrpc: '2.0', id: requestId, error: { code: -32601, message: `Unknown tool: ${toolName}` } };
     }
+
+    const args = params.arguments ?? {};
+    const validationErrors = validateArgsForTool(toolName, args);
+    if (validationErrors.length > 0) {
+      return {
+        jsonrpc: '2.0',
+        id: requestId,
+        error: {
+          code: -32602,
+          message: `Invalid arguments: ${validationErrors.join('; ')}`,
+        },
+      };
+    }
+
     if (!isMcpToolReadOnly(toolName) && !isMcpToolAuthorized(headers)) {
       return { jsonrpc: '2.0', id: requestId, error: { code: -32001, message: 'Unauthorized' } };
     }
 
     try {
-      const args = (params.arguments as Record<string, unknown>) ?? {};
-      const result = callMcpTool(toolName, args);
+      const result = await callMcpTool(toolName, isRecord(args) ? args : {});
       return {
         jsonrpc: '2.0',
         id: requestId,
         result: wrapToolResult(result.json),
       };
     } catch (error) {
-      return { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: (error as Error).message } };
+      return { jsonrpc: '2.0', id: requestId, error: { code: -32603, message: (error as Error).message } };
     }
   }
 
@@ -192,7 +353,7 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
     const acceptsStream = String(req.headers?.accept || '').includes('text/event-stream');
 
     if (Array.isArray(body)) {
-      const responses = body.map((entry) => responseFor(entry, req.headers)).filter((response) => response !== null);
+      const responses = await Promise.all(body.map((entry) => responseFor(entry, req.headers)));
       if (acceptsStream) {
         writeSse(res, responses);
       } else {
@@ -201,7 +362,7 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
       return true;
     }
 
-    const response = responseFor(body, req.headers);
+    const response = await responseFor(body, req.headers);
     if (!response.result && response.error === undefined) {
       return writeJson(res, {}, 202), true;
     }

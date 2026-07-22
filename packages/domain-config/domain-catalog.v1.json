@@ -23,6 +23,8 @@
       "label": "Health",
       "icon": "favorite",
       "status": "preview",
+      "manifest": "./domains/health.v1.json",
+      "skill": "./skills/health.md",
       "summary": "Health Connect observations, goals, trends, plans and source-safe summaries."
     },
     {
@@ -30,6 +32,8 @@
       "label": "Plants",
       "icon": "potted_plant",
       "status": "preview",
+      "manifest": "./domains/plants.v1.json",
+      "skill": "./skills/plants.md",
       "summary": "Plant profiles, care schedules, observations, supplies and journals."
     }
   ]

@@ -5,10 +5,30 @@
   "label": "Food",
   "home_surface": "food.overview",
   "surfaces": [
-    { "id": "food.overview", "label": "Overview", "views": ["next_meal", "use_soon", "shopping_summary", "food_graph"] },
-    { "id": "food.meals", "label": "Meals", "collections": ["meal_plan", "meal_log", "recipe"] },
-    { "id": "food.kitchen", "label": "Kitchen", "collections": ["inventory", "ingredient", "purchase_line"] },
-    { "id": "food.shopping", "label": "Shopping", "collections": ["shopping_item", "purchase", "store"] }
+    {
+      "id": "food.overview",
+      "label": "Overview",
+      "views": ["next_meal", "use_soon", "shopping_summary", "food_graph"],
+      "collections": []
+    },
+    {
+      "id": "food.meals",
+      "label": "Meals",
+      "views": ["planner", "week_view", "nutrition_summary"],
+      "collections": ["meal_plan", "meal_log", "recipe"]
+    },
+    {
+      "id": "food.kitchen",
+      "label": "Kitchen",
+      "views": ["pantry", "pantry_stats", "inventory_trends"],
+      "collections": ["inventory", "ingredient", "purchase_line"]
+    },
+    {
+      "id": "food.shopping",
+      "label": "Shopping",
+      "views": ["list", "stores", "budget", "status_board"],
+      "collections": ["shopping_item", "purchase", "store"]
+    }
   ],
   "collections": [
     "inventory",
@@ -36,7 +56,7 @@
     { "from": "source_record", "to": "*", "name": "supports" }
   ],
   "skills": ["food"],
-  "workflows": ["weekly_food_reset", "receipt_to_kitchen", "meal_plan_to_shopping"],
+  "workflows": ["weekly_food_reset", "receipt_to_kitchen", "meal_plan_to_shopping", "phase4_replay_workflow", "phase4_compensation_probe"],
   "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
   "mcp": {
     "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],

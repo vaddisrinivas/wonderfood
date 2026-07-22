@@ -26,21 +26,19 @@ Implemented in the Expo replacement:
 - Expo SDK 57, React Native 0.86, Expo Router.
 - Static web and Android bundle exports.
 - Today, Food, Chat, Search, Capture, Record, Sources, and System screens.
-- Local multi-turn chat interaction with threads, tables, citations, and structured replies. This is UI behavior, not a live model connection.
-- Food catalog, manifest, canonical record schema, domain skill, MCP surface, and three workflow configs.
+- Server-backed multi-turn chat with streaming, durable turns, retrieval, tables, source citations, action receipts, idempotency and Undo.
+- SQLite canonical runtime plus Notion data-source and Google Sheets adapters, webhook replay, authority-gated sync and MCP Streamable HTTP.
+- Food, Health and Plants manifests/skills; declarative seven-role agent registry; canonical schemas and five Food workflows.
+- Android release APK with bundled JavaScript, Health Connect read-only bridge, permission delegate and phone-safe LAN server configuration.
 - Config validator, TypeScript, Expo Doctor, web export, and Android export gates.
 - Native identifiers remain com.wonderfood.app.
-- Emulator-only browser QA passed Today to Food to Chat navigation, chat typing, send, and response rendering.
+- Web runtime and wireless S23U release install verified; S23U permission/read walkthrough remains pending until the secure device is unlocked.
 
-Not implemented:
+Open release work:
 
-- Persistent SQLite runtime.
-- Live model, retrieval, tools, or immutable citations.
-- Live Notion and Sheets adapters.
-- Server-side MCP.
-- Real action receipts and Undo.
-- Native Android capture, Health Connect, background sync, APK, or AAB.
-- Health and Plants domain packages.
+- Hosted deployment for the server/webhooks and a real Google Sheets OAuth workbook configuration.
+- Unlocked-device Health Connect grant/read/export/delete verification and background sync.
+- Remaining phase-2 UI empty/loading polish and the final iOS build/release pass.
 
 ## 3. Non-negotiable product contracts
 
@@ -354,6 +352,13 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - No unsupported source fabricated by the model.
 - No uncontrolled recursive agents.
 - No second chat history owned by Agents Session.
+
+#### Phase 3 completion note (2026-07-22)
+
+- `/chat/send` and `/chat/send/stream` now use the shared `chat-send-request.v1` envelope.
+- Streaming always emits `run.start`, optional `token` frames, and terminal `run.end`.
+- `/chat/send` and `/chat/undo` expose canonical action receipts and source references (`source_ids`) from MCP/agent execution.
+- Idempotency replay and deterministic error/cancel handling are in place with evidence scripts in `app/build/evidence/phase3-chat-*`.
 
 ## 9. Phase 4: MCP and external-client parity
 

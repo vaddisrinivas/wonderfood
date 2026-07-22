@@ -16,6 +16,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-health-connect": "^3.5.3",
     "react-native-reanimated": "4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -23,21 +24,50 @@
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
     "@types/node": "^24.0.0",
+    "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android --variant release",
+    "android:dev": "expo run:android",
+    "android:release": "expo run:android --variant release",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "config:validate": "node scripts/validate-domain-config.mjs",
     "doctor": "npx --yes expo-doctor",
     "export:web": "expo export --platform web --output-dir dist/web",
     "export:android": "expo export --platform android --output-dir dist/android",
-    "quality": "npm run config:validate && npm run typecheck && npm run doctor && npm run export:web && npm run export:android"
+    "quality": "npm run config:validate && npm run typecheck && npm run doctor && npm run export:web && npm run export:android",
+    "phase4:check:mcp-workflow-replay": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay.ts",
+    "phase4:check:mcp-workflow-replay:http": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay-http.ts",
+    "phase4:check:mcp-tool-contract": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-tool-contract.ts",
+    "phase4:check:mcp": "npm run phase4:check:mcp-tool-contract && npm run phase4:check:mcp-workflow-replay && npm run phase4:check:mcp-workflow-replay:http",
+    "phase3:check:chat-undo": "./server/node_modules/.bin/tsx scripts/quality/check-phase3-chat-undo.ts",
+    "phase3:check:chat-send": "./server/node_modules/.bin/tsx scripts/quality/check-phase3-chat-send.ts",
+    "phase3:check:chat-rollback-idempotency": "./server/node_modules/.bin/tsx scripts/quality/check-phase3-chat-rollback-idempotency.ts",
+    "phase7:check:chat-client-cross-surface": "./server/node_modules/.bin/tsx scripts/quality/check-phase7-chat-client-cross-surface.ts",
+    "phase8:check:health-connect": "./scripts/quality/check-health-connect-android.sh",
+    "test:server:notion": "./server/node_modules/.bin/tsx server/test/notion/unit-notion-adapter.ts",
+    "test:contract:notion": "./server/node_modules/.bin/tsx server/test/notion/contract-notion-webhook.ts",
+    "test:server:webhook-ingress": "./server/node_modules/.bin/tsx server/test/provider-webhook-ingress.ts",
+    "test:server:webhook-retry": "./server/node_modules/.bin/tsx server/test/provider-webhook-retry.ts",
+    "test:server:health-snapshot": "./server/node_modules/.bin/tsx server/test/health-snapshot-sync.ts",
+    "phase5:check:notion-adapter": "./server/node_modules/.bin/tsx scripts/quality/check-phase5-notion-adapter.ts",
+    "phase5:check": "npm run test:server:notion && npm run test:contract:notion && npm run phase5:check:notion-adapter && npm run test:server:webhook-ingress",
+    "phase6:check:sheets-adapter": "./server/node_modules/.bin/tsx scripts/quality/check-phase6-sheets-adapter.ts",
+    "test:server:sheets": "./server/node_modules/.bin/tsx server/test/sheets-adapter-contract.ts",
+    "contract:provider:sheets": "./server/node_modules/.bin/tsx server/test/provider-sync-sheets.ts",
+    "phase6:check": "npm run test:server:sheets && npm run contract:provider:sheets && npm run phase6:check:sheets-adapter && npm run test:server:webhook-ingress"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
+    }
+  }
 }

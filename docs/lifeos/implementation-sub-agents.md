@@ -1,0 +1,302 @@
+# LifeOS sub-agent manifests (phase-slice execution)
+
+Use this file as the hard source for isolation and handoff contracts.
+
+## Spawn status (2026-07-22)
+
+- S3, S4, S5, S6, and S7 are currently active and allowed to edit only the files listed in their manifests.
+- S1 and S2 remain active read-only for this slice; any change to their domains needs explicit lead direction.
+- New edits must target exactly one agent manifest region at a time.
+- Handoff acceptance requires `npm run config:validate` and phase-specific gates before phase transition.
+- Runtime spawn manifest: `docs/lifeos/implementation-sub-agents-live-slice-manifest.md`
+- Explicit runtime bindings are active now in `docs/lifeos/implementation-sub-agents-live-slice-manifest.md`:
+  - `S3` → `Rawls` (`019f8b54-bdb3-78c3-a633-364a4872e6ba`)
+  - `S4` → `Bacon` (`019f8b54-c49b-74a3-93ca-dd9e199e49f9`)
+  - `S5` → `Bernoulli` (`019f8b54-ccf9-7760-89a3-d64335fa2514`)
+  - `S6` → `Kierkegaard` (`019f8b54-d45c-7063-b4f9-c80ef4d06c02`)
+  - `S7` → `Dewey` (`019f8b59-3924-7113-aee3-00d13ce1d1e0`)
+  - `S2` → `Heisenberg` (`019f8b59-4024-7040-a63f-e0f853719981`)
+- Lead keeps final merge authority and cross-slice conflict arbitration.
+
+## Agent S1 — Canonical schemas, SQLite runtime, domain package contracts (Phases 0–1)
+
+- Status: ACTIVE
+- File ownership:
+  - `packages/domain-config/**`
+  - `src/domain/catalog.ts`
+  - `src/domain/runtime.ts`
+  - `src/domain/surface.ts`
+  - `src/domain/queries.ts`
+  - `src/domain/renderer.tsx`
+  - `src/db/migrations.ts`
+  - `src/db/provider.tsx`
+  - `src/db/provider.native.tsx`
+  - `src/db/provider.web.tsx`
+  - `src/db/records.ts`
+  - `src/db/conversations.ts`
+  - `src/db/sources.ts`
+  - `src/db/actions.ts`
+  - `src/db/undo.ts`
+  - `src/db/outbox.ts`
+  - `src/db/seed.ts`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/adr-0001-architecture.md`
+- Input contract:
+  - `packages/domain-config/*.v1.schema.json`
+  - `packages/domain-config/domain-catalog-v1.schema.json`
+  - migration rollback and recovery requirements
+- Output contract:
+  - typed canonical records and queries
+  - SQLite schema with migration/rollback safety
+  - stable provider-source snapshots
+- Tests and gates:
+  - phase-1 migration forward/replay
+  - rollback and process-death recovery
+  - schema validation and config/typecheck
+  - relation/atomicity regression tests
+- Forbidden files/patterns:
+  - no edits to `server/**`, `app/**`, `android/**`
+  - no raw SQL interpolation
+  - no dropping provider-owned fields
+- Mandatory report:
+  - `sources` (paths + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S2 — Chat, Responses, Conversations, and internal multi-agent runtime (Phase 3)
+
+- Status: ACTIVE
+- File ownership:
+  - `src/chat/client.ts`
+  - `src/chat/types.ts`
+  - `src/chat/citations.ts`
+  - `server/src/chat.ts`
+  - `server/src/conversations.ts`
+  - `server/src/provenance.ts`
+  - `server/src/providers/openai.ts`
+  - `server/src/agents/{registry,orchestrator,retrieval,domain,planner,executor,verifier}.ts`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - OpenAI Responses + Conversations requirements
+  - typed command/action schemas in `packages/domain-config/schemas/*`
+  - source snapshots from S1/S5
+- Output contract:
+  - linear, resumable multi-turn chat
+  - streaming token blocks + tool progress
+  - typed receipts and ambiguous-write clarification prompts
+- Tests and gates:
+  - 10-turn correction-heavy recovery
+  - retry/cancel/idempotency behavior
+  - citation exactness + provenance checks
+- Forbidden files/patterns:
+  - no fake deterministic answer generation
+  - no hidden reasoning persistence
+  - no direct provider API calls from UI
+- Mandatory report:
+  - `sources` (traces + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S3 — Notion adapter and webhooks (Phase 5)
+
+- Status: ACTIVE
+- File ownership:
+  - `server/src/providers/notion/client.ts`
+  - `server/src/providers/notion/discovery.ts`
+  - `server/src/providers/notion/projection.ts`
+  - `server/src/providers/notion/pull.ts`
+  - `server/src/providers/notion/push.ts`
+  - `server/src/providers/notion/webhook.ts`
+  - `server/src/providers/notion/citations.ts`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - `NOTION_API_VERSION=2026-03-11`
+  - `data_source_id` query model
+  - canonical record schema and citations schema
+- Output contract:
+  - stable pull/push mapping for `domain-collection` records
+  - deduped webhook handling with canonical refresh
+  - exact citation handle generation and unsupported block preservation
+- Tests and gates:
+  - disposable Notion template round trip
+  - webhook duplicate/reorder/idempotence checks
+  - app/Notion/adapter permission matrix
+- Forbidden files/patterns:
+  - no DB-id fallback for data-source workflows
+  - no secret material in Expo/shared bundle
+  - no canonical overwrite from webhook payload
+- Mandatory report:
+  - `sources` (API fixtures + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S4 — Google Sheets adapter (Phase 6)
+
+- Status: ACTIVE
+- File ownership:
+  - `server/src/providers/sheets/client.ts`
+  - `server/src/providers/sheets/workbook.ts`
+  - `server/src/providers/sheets/projection.ts`
+  - `server/src/providers/sheets/pull.ts`
+  - `server/src/providers/sheets/push.ts`
+  - `server/src/providers/sheets/health.ts`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - Sheets v4 value semantics
+  - `data_home=google_sheets` command path contracts
+  - canonical field map and receipt schema
+- Output contract:
+  - deterministic batch read/write/append
+  - formula preservation and prior-range snapshots
+  - undo-capable cell restore metadata
+- Tests and gates:
+  - disposable workbook round trip
+  - idempotent sync convergence
+  - formula/user column preservation
+- Forbidden files/patterns:
+  - no v3 feed endpoint usage
+  - no append without captured updated range
+  - no broad Drive scope
+- Mandatory report:
+  - `sources` (workbook fixtures + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S5 — MCP parity, action engine, Undo, and workflows (Phases 4,7)
+
+- Status: ACTIVE
+- File ownership:
+  - `server/src/mcp/server.ts`
+  - `server/src/mcp/resources.ts`
+  - `server/src/mcp/tools.ts`
+  - `server/src/mcp/auth.ts`
+  - `server/src/mcp/policy.ts`
+  - `server/src/mcp/state.ts`
+  - `server/src/workflows/checkpoint.ts`
+  - `server/src/workflows/compensation.ts`
+  - `server/src/workflows/runner.ts`
+  - `src/actions/{engine,policy,undo}.ts`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - action/command/undo/agent-handoff schemas
+  - chat command receipts and domain tool registry
+  - MCP Streamable HTTP protocol
+- Output contract:
+  - app + MCP command and receipt parity
+  - permission-scoped tools with deny behavior
+  - checkpointed workflow runs, cancellation, and compensation
+- Tests and gates:
+  - MCP conformance, auth, and audit tests
+  - workflow replay and compensation proofs
+  - cross-client action shape equivalence
+- Forbidden files/patterns:
+  - schema drift between channels
+  - free-form action payloads
+  - exposing irreversible actions
+- Mandatory report:
+  - `sources` (protocol traces + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S6 — Expo UI, accessibility, and responsive QA (Phases 2,9)
+
+- Status: ACTIVE
+- File ownership:
+  - `app/**/*`
+  - `src/components/**/*`
+  - `src/styles/**/*`
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - canonical query and record projection APIs
+  - action receipt and source link payloads
+- Output contract:
+  - no hardcoded Food-specific behavior in shared screens
+  - responsive breakpoints 320/390/768/1280
+  - accessibility baseline and copy for null/empty/offline/stale states
+- Tests and gates:
+  - width matrix visual pass
+  - accessibility sanity checks
+  - renderer stability under DB unavailable/error
+- Forbidden files/patterns:
+  - direct network/provider mutations from UI
+  - hardcoded domain branching in generic screens
+- Mandatory report:
+  - `sources` (screenshots + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Agent S7 — Android completion, Health Connect, and EAS (Phase 8)
+
+- Status: ACTIVE
+- File ownership:
+  - `android/**`
+  - `app.json`
+  - `eas.json`
+  - `scripts/**` for Android/EAS checks
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+- Input contract:
+  - emulator matrix artifacts
+  - permission and health policy
+- Output contract:
+  - native capture + sync-ready Android path
+  - Health Connect permission flow and data handling
+  - release APK/AAB workflow
+- Tests and gates:
+  - emulator matrix (no physical device before explicit gate)
+  - permission-denied/revoked behavior checks
+  - APK/AAB install and upgrade checks
+- Forbidden files/patterns:
+  - destructive health operations on physical hardware before gate
+  - secret storage in JS layer
+- Mandatory report:
+  - `sources` (device/build logs + evidence IDs)
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence` 0–100
+  - `gaps`
+
+## Shared mandatory handoff format
+
+- Typed interfaces and fixture-backed contracts only.
+- No overlapping file ownership without explicit lead approval.
+- Every handoff must include:
+  - `sources`
+  - `files changed`
+  - `checks run`
+  - `blockers`
+  - `confidence`
+  - `gaps`
+- Lead review required before phase transitions and production gate claims.
