@@ -16,7 +16,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -8646,8 +8645,8 @@ private fun AiCaptureSheet(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AiChatTopCard(
                 pageTitle = pageContext.title,
@@ -8733,56 +8732,58 @@ private fun AiChatTopCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
     ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                LifeOsVectorBadge(
-                    icon = Icons.AutoMirrored.Rounded.Chat,
-                    modifier = Modifier.size(36.dp),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LifeOsVectorBadge(
+                icon = Icons.AutoMirrored.Rounded.Chat,
+                modifier = Modifier.size(34.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    "WonderFood",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(
-                        "WonderFood Chat",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        pageTitle,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
-                }
+                Text(
+                    pageTitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                AssistChip(
-                    onClick = onHistory,
-                    enabled = messageCount > 0,
-                    label = { Text("History") },
-                    leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
+            ) {
+                Text(
+                    text = if (messageCount > 0) "$messageCount msgs" else "sources",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
-                AssistChip(
-                    onClick = onNewChat,
-                    enabled = !isWorking,
-                    label = { Text("New") },
-                    leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                )
-                DraftReviewPill("Sources on")
+            }
+            IconButton(onClick = onHistory, enabled = messageCount > 0, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Description, contentDescription = "Open chat history", modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onNewChat, enabled = !isWorking, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Add, contentDescription = "Start new chat", modifier = Modifier.size(22.dp))
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Close, contentDescription = "Close AI capture", modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -9078,27 +9079,21 @@ private fun AiRichList(block: AiRichBlock.ListBlock, color: Color) {
 
 @Composable
 private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Surface(
-            modifier = Modifier.widthIn(min = 520.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                AiRichTableRow(cells = block.header, color = color, header = true)
-                block.rows.forEach { row ->
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-                    AiRichTableRow(
-                        cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
-                        color = color,
-                        header = false,
-                    )
-                }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AiRichTableRow(cells = block.header, color = color, header = true)
+            block.rows.forEach { row ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                AiRichTableRow(
+                    cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
+                    color = color,
+                    header = false,
+                )
             }
         }
     }
@@ -9106,16 +9101,16 @@ private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
 
 @Composable
 private fun AiRichTableRow(cells: List<String>, color: Color, header: Boolean) {
-    val cellWidth = if (cells.size <= 2) 240.dp else 180.dp
     Row(
         modifier = Modifier
+            .fillMaxWidth()
             .background(if (header) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f) else Color.Transparent),
     ) {
         cells.forEach { cell ->
             Text(
                 text = cell,
                 modifier = Modifier
-                    .width(cellWidth)
+                    .weight(1f)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
                 color = color,
@@ -9375,22 +9370,22 @@ private fun AiChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
         tonalElevation = 4.dp,
-        shadowElevation = 10.dp,
+        shadowElevation = 8.dp,
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
                 value = input,
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 62.dp)
+                    .heightIn(min = 54.dp)
                     .semantics { contentDescription = "AI capture text" },
                 placeholder = { Text(placeholder) },
                 minLines = 1,
@@ -9434,9 +9429,9 @@ private fun AiChatComposer(
                     onClick = onSend,
                     enabled = input.isNotBlank() && !isWorking,
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(48.dp)
                         .semantics { contentDescription = "Send AI capture" },
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(18.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -9454,7 +9449,7 @@ private fun AiComposerActionButton(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.size(48.dp),
+        modifier = Modifier.size(44.dp),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (enabled) 0.72f else 0.28f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
@@ -9477,40 +9472,67 @@ private fun AiContextCard(
     contextSummary: String,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val dataLabel = backendHome.chatSourceLabel()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        tonalElevation = 1.dp,
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(pageContext.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(providerStatus, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        DraftReviewPill("Data: ${backendHome.label}")
-                        DraftReviewPill("Skills: food")
-                        DraftReviewPill("Tools: receipt, voice, Health")
-                        DraftReviewPill("Review before save")
-                    }
+                LifeOsVectorBadge(
+                    icon = Icons.Rounded.Inventory2,
+                    modifier = Modifier.size(34.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.44f),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text("Source tray", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "$dataLabel · food skill · review-gated",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
+                AssistChip(
+                    onClick = { expanded = !expanded },
+                    label = { Text(if (expanded) "Less" else "Details") },
+                )
             }
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "Hide AI context" else "What AI can see")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                DraftReviewPill("Notion")
+                DraftReviewPill("Sheets")
+                DraftReviewPill("MCP")
+                DraftReviewPill("Health")
             }
             if (expanded) {
+                Text(providerStatus, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    pageContext.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     contextSummary,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 6,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { expanded = false }, shape = RoundedCornerShape(18.dp)) {
+                        Text("Collapse")
+                    }
+                }
             }
         }
     }
