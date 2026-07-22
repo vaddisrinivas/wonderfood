@@ -9084,22 +9084,24 @@ private fun String.trimInlineMarkdown(): String =
 @Composable
 private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
     Column(
-        modifier = Modifier.widthIn(max = 620.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.widthIn(max = 680.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(Icons.Rounded.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Text(
-                "Sources",
+                "Cited sources",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
             )
+            Spacer(Modifier.weight(1f))
             Text(
-                "${sources.size.coerceAtMost(6)} handles · swipe",
+                "${sources.size.coerceAtMost(6)} handles",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -9119,8 +9121,10 @@ private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
 private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
     val important = index == 1 || source.title.contains("source pack", ignoreCase = true)
     Surface(
-        modifier = Modifier.width(264.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .width(312.dp)
+            .heightIn(min = 152.dp),
+        shape = RoundedCornerShape(22.dp),
         color = if (important) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f) else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
@@ -9129,52 +9133,73 @@ private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
         tonalElevation = if (important) 2.dp else 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "[$index]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                LifeOsVectorBadge(
+                    icon = source.sourceIcon(),
+                    modifier = Modifier.size(34.dp),
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (important) 0.58f else 1f),
                 )
-                Text(
-                    source.title,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        "[$index] ${source.title}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        source.detail,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Text(
-                source.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
             if (source.quote.isNotBlank()) {
-                Text(
-                    source.quote,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (important) 3 else 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = if (important) 0.56f else 0.82f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
+                ) {
+                    Text(
+                        source.quote,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (important) 4 else 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             if (source.uri.isNotBlank()) {
-                Text(
-                    source.uri.sourceUriLabel(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Text(
+                        source.uri.sourceUriLabel(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
+
+private fun ChatSourceRef.sourceIcon(): ImageVector =
+    when {
+        uri.contains("sheet", ignoreCase = true) || title.contains("sheet", ignoreCase = true) -> Icons.Rounded.TableChart
+        uri.contains("health", ignoreCase = true) || title.contains("health", ignoreCase = true) -> Icons.Rounded.HealthAndSafety
+        uri.contains("mcp", ignoreCase = true) || title.contains("schema", ignoreCase = true) -> Icons.Rounded.Inventory2
+        uri.contains("notion", ignoreCase = true) || title.contains("notion", ignoreCase = true) -> Icons.Rounded.Description
+        else -> Icons.Rounded.Description
+    }
 
 @Composable
 private fun AiTypingBubble() {
@@ -9183,7 +9208,11 @@ private fun AiTypingBubble() {
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ObjectImage(image = "🧠", color = MaterialTheme.colorScheme.primaryContainer, size = 38.dp)
+        LifeOsVectorBadge(
+            icon = Icons.AutoMirrored.Rounded.Chat,
+            modifier = Modifier.size(30.dp),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        )
         Spacer(Modifier.width(8.dp))
         Surface(
             shape = RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp),
@@ -9213,61 +9242,96 @@ private fun AiChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        tonalElevation = 4.dp,
+        shadowElevation = 10.dp,
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             OutlinedTextField(
                 value = input,
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 56.dp)
+                    .heightIn(min = 62.dp)
                     .semantics { contentDescription = "AI capture text" },
                 placeholder = { Text(placeholder) },
                 minLines = 1,
                 maxLines = 5,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(24.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onPickReceiptPhoto, enabled = !isWorking) {
-                    Icon(Icons.Rounded.AddAPhoto, contentDescription = "Attach receipt photo")
-                }
-                IconButton(onClick = onRecordVoiceNote, enabled = !isWorking) {
-                    Icon(Icons.Rounded.Mic, contentDescription = "Record voice note")
-                }
-                Text(
-                    text = status,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                AiComposerActionButton(
+                    icon = Icons.Rounded.AddAPhoto,
+                    contentDescription = "Attach receipt photo",
+                    enabled = !isWorking,
+                    onClick = onPickReceiptPhoto,
                 )
+                AiComposerActionButton(
+                    icon = Icons.Rounded.Mic,
+                    contentDescription = "Record voice note",
+                    enabled = !isWorking,
+                    onClick = onRecordVoiceNote,
+                )
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                ) {
+                    Text(
+                        text = status.ifBlank { "Ready" },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Button(
                     onClick = onSend,
                     enabled = input.isNotBlank() && !isWorking,
                     modifier = Modifier
-                        .height(56.dp)
+                        .size(56.dp)
                         .semantics { contentDescription = "Send AI capture" },
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    contentPadding = PaddingValues(0.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isWorking) "..." else "Send")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AiComposerActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.size(48.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (enabled) 0.72f else 0.28f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+    ) {
+        IconButton(onClick = onClick, enabled = enabled) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
+            )
         }
     }
 }
