@@ -12,11 +12,25 @@ export type ChatStructuredAnswer = {
   citations: Array<{ label: string; detail: string; href: string; tone: ChatCitationTone }>;
 };
 
+type ChatActionReceipt = {
+  id: string;
+  actor: string;
+  domain: string;
+  tool: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  record_ids: string[];
+  created_at: string;
+  updated_at: string;
+  undo_deadline_at?: string;
+  idempotency_key?: string;
+};
+
 export type ServerChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   answer?: ChatStructuredAnswer;
+  actionReceipt?: ChatActionReceipt;
 };
 
 export type ServerChatResponse = {
@@ -33,17 +47,7 @@ export type ServerChatResponse = {
     previous_response_id?: string;
   };
   action?: {
-    receipt: {
-      id: string;
-      actor: string;
-      domain: string;
-      tool: string;
-      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-      record_ids: string[];
-      created_at: string;
-      updated_at: string;
-      undo_deadline_at?: string;
-    };
+    receipt: ChatActionReceipt;
     verification: {
       actionId: string;
       expected: string;
@@ -62,7 +66,7 @@ function makeTextAnswer(inputText: string, modelText?: string): ChatStructuredAn
   const safeInput = inputText.trim() || 'your request';
   const detail = modelText?.trim();
   const intro = detail
-    ? `${detail.slice(0, 180)} for "${safeInput.slice(0, 120)}".`
+    ? `${detail.slice(0, 260)} for "${safeInput.slice(0, 120)}".`
     : `Live model response is not available for "${safeInput.slice(0, 120)}".`;
 
   return {
@@ -74,13 +78,18 @@ function makeTextAnswer(inputText: string, modelText?: string): ChatStructuredAn
 }
 
 function normalizeAnswerFromModel(input: { inputText: string; modelText: string }): ChatStructuredAnswer {
-  const hasStructuredHint = /\{\s*"title"\s*:/m.test(input.modelText);
+  const modelText = input.modelText.trim();
+  if (!modelText) {
+    return makeTextAnswer(input.inputText);
+  }
+
+  const hasStructuredHint = /\{\s*"title"\s*:/m.test(modelText);
   if (!hasStructuredHint) {
-    return makeTextAnswer(input.inputText, input.modelText);
+    return makeTextAnswer(input.inputText, modelText);
   }
 
   try {
-    const parsed = JSON.parse(input.modelText);
+    const parsed = JSON.parse(modelText);
     if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) {
       return {
         title: String(parsed.title ?? 'LifeOS response'),
@@ -93,9 +102,7 @@ function normalizeAnswerFromModel(input: { inputText: string; modelText: string 
     // fall back to heuristics
   }
 
-  return {
-    ...makeTextAnswer(input.inputText, input.modelText),
-  };
+  return makeTextAnswer(input.inputText, modelText);
 }
 
 export async function handleServerChat(input: {
@@ -139,9 +146,9 @@ export async function handleServerChat(input: {
   const inputText = threadContext ? `${input.message}\n${threadContext}` : input.message;
   const modelAnswer = orchestrated.ai.text
     ? normalizeAnswerFromModel({
-    inputText,
-    modelText: orchestrated.ai.text,
-  })
+        inputText,
+        modelText: orchestrated.ai.text,
+      })
     : makeTextAnswer(inputText);
 
   const provenance = orchestrated.provenance;
@@ -149,19 +156,6 @@ export async function handleServerChat(input: {
   if (citations.length > 0) {
     modelAnswer.citations = citations;
   }
-
-  const assistantMessage: ServerChatMessage = {
-    id: `server-${Date.now()}-asst`,
-    role: 'assistant',
-    text: orchestrated.status === 'clarification'
-      ? orchestrated.clarifyingQuestion || 'I need one short clarification before I can write.'
-      : orchestrated.ai.text
-      ? orchestrated.ai.text.length > 220
-        ? `${orchestrated.ai.text.slice(0, 217)}…`
-        : orchestrated.ai.text
-      : modelAnswer.intro,
-    answer: modelAnswer,
-  };
 
   const warnings: string[] = [];
   if (!orchestrated.policy.allowed) {
@@ -177,9 +171,49 @@ export async function handleServerChat(input: {
     warnings.push(`Retried from user message: ${input.retryOfMessageId}`);
   }
 
+  const clarificationText =
+    orchestrated.clarifyingQuestion || 'I need one short clarification before I can write.';
+  const policyBlockedText = orchestrated.policy.reason || 'Action is not allowed in this mode.';
+  const finalText =
+    orchestrated.status === 'clarification'
+      ? clarificationText
+      : orchestrated.policy.allowed
+        ? orchestrated.ai.text || modelAnswer.intro
+        : policyBlockedText;
+
+  const finalAnswer = orchestrated.ai.status === 'ok' && orchestrated.policy.allowed ? modelAnswer : undefined;
+  const actionReceipt = orchestrated.action
+    ? {
+        id: orchestrated.action.receipt.id,
+        actor: orchestrated.action.receipt.actor,
+        domain: orchestrated.action.receipt.domain,
+        tool: orchestrated.action.receipt.tool,
+        status: orchestrated.action.receipt.status,
+        record_ids: orchestrated.action.receipt.record_ids,
+        created_at: orchestrated.action.receipt.created_at,
+        updated_at: orchestrated.action.receipt.updated_at,
+        undo_deadline_at: orchestrated.action.receipt.undo_deadline_at,
+        idempotency_key: orchestrated.action.receipt.idempotency_key,
+      }
+    : undefined;
+  const responseMessage: ServerChatMessage = {
+    id: `server-${Date.now()}-asst`,
+    role: 'assistant',
+    text: finalText,
+    answer: orchestrated.status === 'clarification'
+      ? {
+          title: modelAnswer.title,
+          intro: clarificationText,
+          rows: [],
+          citations,
+        }
+      : finalAnswer,
+    actionReceipt,
+  };
+
   return {
     conversation_id: input.conversationId,
-    messages: [assistantMessage],
+    messages: [responseMessage],
     thread: {
       id: input.conversationId,
       title: input.threadTitle || 'Food context',
@@ -194,20 +228,10 @@ export async function handleServerChat(input: {
       aborted: isCanceled,
       previous_response_id: orchestrated.ai.responseId,
     },
-    action: orchestrated.action
+    action: actionReceipt
       ? {
-          receipt: {
-            id: orchestrated.action.receipt.id,
-            actor: orchestrated.action.receipt.actor,
-            domain: orchestrated.action.receipt.domain,
-            tool: orchestrated.action.receipt.tool,
-            status: orchestrated.action.receipt.status,
-            record_ids: orchestrated.action.receipt.record_ids,
-            created_at: orchestrated.action.receipt.created_at,
-            updated_at: orchestrated.action.receipt.updated_at,
-            undo_deadline_at: orchestrated.action.receipt.undo_deadline_at,
-          },
-          verification: orchestrated.action.verification,
+          receipt: actionReceipt,
+          verification: orchestrated.action?.verification ?? null,
         }
       : undefined,
     provenance: {
