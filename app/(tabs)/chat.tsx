@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatThread } from '@/src/chat/types';
-import { chatServerConfig, listChatThreads, sendChatMessage } from '@/src/chat/client';
+import { chatServerConfig, listChatThreads, sendChatMessage, stopServerRun } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -68,6 +68,7 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<MessageSourceMode>('offline');
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +134,7 @@ export default function ChatScreen() {
     }
 
     setSending(true);
+    setActiveRunId(null);
     setWarnings([]);
 
     const result = await sendChatMessage({
@@ -147,13 +149,61 @@ export default function ChatScreen() {
     appendOrReplaceThread(result.thread);
     setActiveThreadId(result.conversationId);
     setMode(result.mode);
+    setActiveRunId(result.serverRunId ?? null);
     if (result.serverError) {
       setWarnings([result.serverError, ...(result.warnings ?? [])]);
     } else if (result.warnings?.length) {
       setWarnings(result.warnings);
+    } else if (!result.retryable) {
+      setWarnings([]);
     }
     setDraft('');
     setSending(false);
+  };
+
+  const stopRun = async () => {
+    if (!activeRunId || sending === false) {
+      return;
+    }
+    const response = await stopServerRun({
+      runId: activeRunId,
+      baseUrl: chatServerConfig.url,
+      token: chatServerConfig.token,
+    });
+    setSending(false);
+    setActiveRunId(null);
+    if (response?.status) {
+      setWarnings([`Run ${response.run_id || activeRunId} ${response.status}`]);
+    }
+  };
+
+  const retryLatest = async () => {
+    if (sending) {
+      return;
+    }
+    const lastUser = [...activeThread.messages].reverse().find((message) => message.role === 'user');
+    if (!lastUser) {
+      return;
+    }
+    setSending(true);
+    setWarnings([]);
+    const result = await sendChatMessage({
+      db,
+      text: lastUser.text,
+      conversationId: activeThread.id,
+      domainId: activeDomainId,
+      serverUrl: chatServerConfig.url,
+      serverToken: chatServerConfig.token,
+      retryOfMessageId: lastUser.id,
+    });
+    appendOrReplaceThread(result.thread);
+    setActiveThreadId(result.conversationId);
+    setMode(result.mode);
+    setActiveRunId(result.serverRunId ?? null);
+    setSending(false);
+    if (result.warnings?.length) {
+      setWarnings(result.warnings);
+    }
   };
 
   return (
@@ -217,6 +267,8 @@ export default function ChatScreen() {
                     <Pressable accessibilityRole="button" disabled={!draft.trim() || sending} onPress={sendMessage} style={({ pressed }) => [styles.send, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
                       <Text style={styles.sendText}>{sending ? 'Working…' : 'Send ↑'}</Text>
                     </Pressable>
+                    {sending && activeRunId ? <Pressable accessibilityRole="button" onPress={stopRun} style={({ pressed }) => [styles.send, styles.sendDisabled, pressed && styles.pressed]}><Text style={styles.sendText}>Stop</Text></Pressable> : null}
+                    {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><Text style={styles.sendText}>Retry</Text></Pressable> : null}
                   </View>
                   <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses Kitchen, Meals, Recipes, Shopping, and their sources.</Text><Text style={styles.shortcut}>⌘ ↵</Text></View>
                 </View>

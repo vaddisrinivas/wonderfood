@@ -1,4 +1,34 @@
 import { AGENTS, AgentRoleId } from './registry';
+import { runRetrieval } from './retrieval';
+import { applyDomainPolicy } from './domain';
+import { buildPlan } from './planner';
+import { executeCommand } from './executor';
+import { verifyResult } from './verifier';
+import { makeConversationProvenance, toCitationsFromSnapshots } from '../provenance';
+import { callOpenAI } from '../providers/openai';
+
+type ExecutorResult = Awaited<ReturnType<typeof executeCommand>>;
+type OrchestratorAction = {
+  state: ExecutorResult['state'];
+  step: ExecutorResult['step'];
+  receipt: ExecutorResult['receipt'];
+  verification: Awaited<ReturnType<typeof verifyResult>> | null;
+};
+
+export type OrchestratedRun = {
+  runId: string;
+  domain: string;
+  query: string;
+  policy: Awaited<ReturnType<typeof applyDomainPolicy>>;
+  retrieval: Awaited<ReturnType<typeof runRetrieval>>;
+  plan: Awaited<ReturnType<typeof buildPlan>>;
+  status: 'ok' | 'clarification' | 'blocked';
+  requiresClarification: boolean;
+  clarifyingQuestion?: string;
+  ai: Awaited<ReturnType<typeof callOpenAI>>;
+  action?: OrchestratorAction;
+  provenance: ReturnType<typeof makeConversationProvenance>;
+};
 
 export async function executeAgentRole(input: {
   role: AgentRoleId;
@@ -20,5 +50,86 @@ export async function executeAgentRole(input: {
     payload: input.payload,
     concurrency: manifest.concurrency,
     timeoutMs: manifest.timeoutMs,
+  };
+}
+
+export async function runChatOrchestrator(input: {
+  conversationId: string;
+  domain: string;
+  message: string;
+  actor: string;
+  commandHint?: string;
+  runId?: string;
+  signal?: AbortSignal;
+  previousResponseId?: string;
+}): Promise<OrchestratedRun> {
+  const query = input.message.trim();
+  const retrieval = await runRetrieval({ query, domain: input.domain });
+
+  const policy = await applyDomainPolicy({
+    domain: input.domain,
+    command: input.commandHint ?? query,
+  });
+
+  const plan = await buildPlan({ command: input.commandHint ?? query, domain: input.domain });
+  const clarifyingQuestion = policy.requiresClarification ? policy.clarifyingQuestion : undefined;
+
+  const ai = await callOpenAI({
+    prompt: `Domain: ${input.domain}
+Message: ${query}
+Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))}`,
+    signal: input.signal,
+    previousResponseId: input.previousResponseId,
+  });
+
+  const commandPlan = plan.steps.find((step) => step.action === 'execute_command');
+  const actionRun = policy.allowed && commandPlan
+    ? await executeCommand({
+        actionId: `${input.conversationId}:reply:${Date.now()}`,
+        actor: input.actor,
+        domain: input.domain,
+        tool: 'chat_reply',
+        record_ids: [],
+        step: commandPlan,
+      })
+    : undefined;
+
+  const verification = actionRun
+    ? await verifyResult({
+        actionId: actionRun.receipt.id,
+        expected: actionRun.receipt.tool,
+        sourceBound: retrieval.snapshots.length > 0,
+      })
+    : null;
+
+  const provenance = makeConversationProvenance({
+    conversationId: input.conversationId,
+    query,
+    sources: retrieval.snapshots,
+    answerText: ai.text,
+  });
+
+  const action = actionRun
+    ? {
+        state: actionRun.state,
+        step: actionRun.step,
+        receipt: actionRun.receipt,
+        verification,
+      }
+    : undefined;
+
+  return {
+    runId: input.runId ?? `orchestrator:${Date.now()}`,
+    domain: input.domain,
+    query,
+    status: policy.requiresClarification ? 'clarification' : 'ok',
+    requiresClarification: policy.requiresClarification ?? false,
+    clarifyingQuestion,
+    policy,
+    retrieval,
+    plan,
+    ai,
+    action,
+    provenance,
   };
 }

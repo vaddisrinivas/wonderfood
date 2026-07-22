@@ -1,4 +1,12 @@
-import { createActionReceipt } from '../actions';
+import { createActionReceipt, ActionReceipt } from '../actions';
+
+export type AgentStep = {
+  id: string;
+  action: string;
+  required: boolean;
+};
+
+export type ActionStatus = ActionReceipt['status'];
 
 export async function executeCommand(input: {
   actionId: string;
@@ -6,7 +14,12 @@ export async function executeCommand(input: {
   domain: string;
   tool: string;
   record_ids: string[];
-}) {
+  step?: AgentStep;
+}): Promise<{
+  state: ActionStatus;
+  receipt: ReturnType<typeof createActionReceipt>;
+  step: AgentStep | undefined;
+}> {
   const receipt = createActionReceipt({
     id: input.actionId,
     actor: input.actor,
@@ -17,6 +30,7 @@ export async function executeCommand(input: {
 
   return {
     receipt,
-    state: 'accepted',
+    state: 'queued',
+    step: input.step,
   };
 }

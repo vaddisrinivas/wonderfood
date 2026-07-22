@@ -47,6 +47,8 @@ export type ChatSendInput = {
   serverUrl?: string;
   serverToken?: string;
   sortIndex?: number;
+  serverRunId?: string;
+  retryOfMessageId?: string;
 };
 
 export type ChatSendResult = {
@@ -55,6 +57,8 @@ export type ChatSendResult = {
   mode: 'offline' | 'server';
   warnings?: string[];
   serverError?: string;
+  serverRunId?: string;
+  retryable?: boolean;
 };
 
 export type ChatListInput = {

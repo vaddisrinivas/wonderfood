@@ -1,4 +1,16 @@
-export async function buildPlan(input: { command: string; domain: string }) {
+export type AgentStep = {
+  id: string;
+  action: 'validate_schema' | 'execute_command' | 'write_receipt';
+  required: boolean;
+};
+
+export type ActionPlan = {
+  command: string;
+  domain: string;
+  steps: AgentStep[];
+};
+
+export async function buildPlan(input: { command: string; domain: string }): Promise<ActionPlan> {
   return {
     command: input.command,
     domain: input.domain,

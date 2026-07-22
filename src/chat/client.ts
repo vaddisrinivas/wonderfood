@@ -24,6 +24,19 @@ export type ServerChatResponse = {
     detail: string;
   };
   warnings?: string[];
+  run?: {
+    id: string;
+    status: 'running' | 'completed' | 'canceled' | 'failed';
+    needs_retry: boolean;
+    aborted: boolean;
+    previous_response_id?: string;
+  };
+};
+
+export type ServerControlResponse = {
+  run_id?: string;
+  status?: 'running' | 'completed' | 'cancelled' | 'failed';
+  status_name?: string;
 };
 
 function nowId(prefix: string) {
@@ -79,6 +92,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   const userId = nowId('msg');
   const text = input.text.trim();
   const db = input.db;
+  const retryOf = input.retryOfMessageId?.trim();
 
   const offlineAnswer = makeOfflineAnswer(text);
   const offlineWarnings: string[] = [];
@@ -114,6 +128,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       limit: 4,
       token: chatServerConfig.token,
       baseUrl: chatServerConfig.url,
+      retryOf,
     });
 
     if (!serverResult) {
@@ -148,6 +163,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     return {
       mode: 'server',
       conversationId: serverResult.conversation_id,
+      serverRunId: serverResult.run?.id,
+      retryable: serverResult.run?.needs_retry ?? false,
       warnings: serverResult.warnings,
       thread: {
         id: conversationId,
@@ -166,7 +183,6 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     };
   }
 
-  const now = new Date().toISOString();
   const existing = await getConversation(db, conversationId);
   if (!existing) {
     const title = text.slice(0, 40) || 'New conversation';
@@ -241,6 +257,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     limit: 1,
     token: input.serverToken ?? chatServerConfig.token,
     baseUrl: input.serverUrl ?? chatServerConfig.url,
+    retryOf,
   });
 
   if (!serverResult) {
@@ -265,31 +282,31 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
         detail: threadAfterUser?.detail || 'Fallback',
         messages: [
           ...messagesSoFar.map(dbMessageToChat),
-            {
-              id: fallbackId,
-              role: 'assistant',
-              text: fallback.intro,
-              answer: fallback,
-            },
+          {
+            id: fallbackId,
+            role: 'assistant',
+            text: fallback.intro,
+            answer: fallback,
+          },
         ],
       },
     };
   }
 
   const fallback = makeOfflineAnswer(text);
-    const latest = serverResult.messages.at(-1) ?? {
-      id: nowId('asst'),
-      role: 'assistant',
-      text: fallback.intro,
-      answer: fallback,
-    };
+  const latest = serverResult.messages.at(-1) ?? {
+    id: nowId('asst'),
+    role: 'assistant',
+    text: fallback.intro,
+    answer: fallback,
+  };
 
-    await appendMessage(db, {
-      id: latest.id,
-      conversation_id: conversationId,
-      role: latest.role,
-      sort_index: nextSortIndex + 1,
-      body: latest.text ?? fallback.intro,
+  await appendMessage(db, {
+    id: latest.id,
+    conversation_id: conversationId,
+    role: latest.role,
+    sort_index: nextSortIndex + 1,
+    body: latest.text ?? fallback.intro,
     answer_payload: latest.answer ? { answer: latest.answer, citations: ensureCitations(latest.answer?.citations) } : undefined,
   });
 
@@ -297,6 +314,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   return {
     mode: 'server',
     conversationId,
+    serverRunId: serverResult.run?.id,
+    retryable: serverResult.run?.needs_retry ?? false,
     warnings: serverResult.warnings,
     thread: {
       id: conversationId,
@@ -323,7 +342,8 @@ async function sendToServer(payload: {
   limit: number;
   baseUrl: string;
   token?: string;
-}) {
+  retryOf?: string;
+}): Promise<ServerChatResponse | null> {
   if (!payload.baseUrl) {
     return null;
   }
@@ -345,6 +365,7 @@ async function sendToServer(payload: {
         domain_id: payload.domainId,
         message: { id: payload.userId, role: 'user', text: payload.text },
         idempotency_key: `${payload.conversationId}:${payload.userId}`,
+        ...(payload.retryOf ? { retry_of: payload.retryOf } : {}),
       }),
     });
 
@@ -354,6 +375,36 @@ async function sendToServer(payload: {
 
     const json = await response.json() as ServerChatResponse;
     return json;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function stopServerRun(input: { runId: string; baseUrl: string; token?: string; }) {
+  if (!input.baseUrl) {
+    return null;
+  }
+  const endpoint = input.baseUrl.replace(/\/$/, '');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const response = await fetch(`${endpoint}/chat/stop`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        ...(input.token ? { authorization: `Bearer ${input.token}` } : {}),
+      },
+      body: JSON.stringify({ run_id: input.runId }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as ServerControlResponse;
   } catch {
     return null;
   } finally {
