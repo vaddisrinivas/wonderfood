@@ -4,7 +4,6 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
 import { getRecord, listRecordsByCollections, listRecordsForDomain } from '@/src/db/records';
 import { getAllProviderLinks } from '@/src/db/sources';
-import { foodRecords, sourceRows } from '@/src/data/sample';
 import { toRecordView, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 
@@ -29,28 +28,6 @@ function mapSourceRowFromLink(link: Awaited<ReturnType<typeof getAllProviderLink
   };
 }
 
-function fallbackFoodCards() {
-  return foodRecords.map((record) => ({
-    id: record.id,
-    collection: 'sample',
-    title: record.title,
-    body: record.body,
-    status: record.status,
-    tone: record.tone,
-    source: record.source,
-    meta: record.meta,
-  }));
-}
-
-function fallbackSourceRows(): SourceRow[] {
-  return sourceRows.map(([name, status, freshness, workspace]) => ({
-    name,
-    status,
-    freshness,
-    workspace,
-  }));
-}
-
 export function getActiveDomainFeed() {
   const catalog = loadCatalog();
   return {
@@ -65,7 +42,7 @@ export async function queryDomainCollections(
   collections: string[]
 ): Promise<DomainRecordViewModel[]> {
   if (!db) {
-    return fallbackFoodCards();
+    return [];
   }
 
   const { domainId, manifest } = getActiveDomainFeed();
@@ -85,7 +62,7 @@ export async function queryDomainRecords(
 ): Promise<DomainRecordViewModel[]> {
   const { domainId } = getActiveDomainFeed();
   if (!db) {
-    return fallbackFoodCards();
+    return [];
   }
 
   const records = await listRecordsForDomain(db, domainId);
@@ -111,8 +88,7 @@ export function getSurfaceCollectionsForLabel(label: string): string[] {
 
 export async function getDomainRecord(db: SQLiteDatabase | null, id: string): Promise<DomainRecordViewModel | null> {
   if (!db) {
-    const fallback = fallbackFoodCards().find((record) => record.id === id);
-    return fallback ?? null;
+    return null;
   }
 
   const { domainId } = getActiveDomainFeed();
@@ -140,7 +116,7 @@ export async function getDomainRecordCanonical(
 
 export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceRow[]> {
   if (!db) {
-    return fallbackSourceRows();
+    return [];
   }
 
   const links = await getAllProviderLinks(db);
@@ -149,6 +125,6 @@ export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceR
     return mapped;
   }
 
-  return fallbackSourceRows();
+  return [];
 }
 export type { DomainRecordViewModel };
