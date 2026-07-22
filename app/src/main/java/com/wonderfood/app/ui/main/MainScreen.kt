@@ -5292,120 +5292,130 @@ private fun LifeOsControlCenter(
     onOpenAi: () -> Unit,
 ) {
     val active = domains.firstOrNull { it.id == selectedDomainId } ?: domains.firstOrNull()
+    var showArchitecture by rememberSaveable(active?.id ?: "lifeos") { mutableStateOf(false) }
     SettingsStatusBlock(
         icon = Icons.Rounded.Description,
-        title = active?.let { "${it.emoji} ${it.label} system" } ?: "LifeOS runtime",
-        body = active?.summary ?: "Each domain brings app screens, skills, data surfaces, and source links.",
+        title = active?.let { "${it.emoji} ${it.label} is live" } ?: "LifeOS",
+        body = "Food is the Android workspace. Notion and Sheets are source surfaces. GPT/MCP uses the same catalog and review rules.",
     )
-    SettingsControlGroup {
-        Text("Domains", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        domains.forEach { domain ->
-            LifeOsDomainRow(
-                domain = domain,
-                selected = domain.id == selectedDomainId,
-                onSelect = { onSelectDomain(domain.id) },
-            )
-        }
-    }
     active?.let { domain ->
         SettingsControlGroup {
-            Text("App surfaces", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Overview", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            LifeOsStatusLine("Workspace", "${domain.label}: ${domain.summary}")
+            LifeOsStatusLine("Sources", "App snapshot + Notion + Sheets + MCP + Template QA")
+            LifeOsStatusLine("Data home", backendHome.lifeOsDataHomeDetail())
+            LifeOsStatusLine("Health", healthStatus)
+        }
+        SettingsControlGroup {
+            Text("Domains", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            domains.forEach { option ->
+                LifeOsCompactDomainRow(
+                    domain = option,
+                    selected = option.id == selectedDomainId,
+                    onSelect = { onSelectDomain(option.id) },
+                )
+            }
+        }
+        SettingsControlGroup {
+            Text("Food workspace", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Food is live in the Android app. Other domains can be selected as templates until their screens are enabled.",
+                "What is native today, and what the data model can already describe.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 domain.bottomTabs.forEach { tab -> DraftReviewPill(tab) }
+                domain.schemaSurfaces.take(6).forEach { surface -> DraftReviewPill(surface) }
+                val hidden = (domain.schemaSurfaces.size - 6).coerceAtLeast(0)
+                if (hidden > 0) DraftReviewPill("+$hidden more")
             }
         }
         SettingsControlGroup {
-            Text("Data model", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                domain.schemaSurfaces.forEach { surface -> DraftReviewPill(surface) }
-            }
+            Text("Source pack", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            LifeOsStatusLine("App", "Local Food snapshot and review queue")
+            LifeOsStatusLine("Notion", "Dashboard, relations, rollups, template QA")
+            LifeOsStatusLine("Sheets", "Auditable workbook mirror and skill map")
+            LifeOsStatusLine("MCP", "Domain catalog, schemas, validators, proposals")
         }
         SettingsControlGroup {
-            Text("Skills, workflows, MCP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Skills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            DetailSection(
+                "How to think about it",
+                "One domain skill per domain. Workflow skills for repeatable playbooks. Schemas are shared contracts unless they have behavior.",
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                domain.skills.forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
+                domain.skills.take(5).forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
+                if (domain.skills.size > 5) DraftReviewPill("+${domain.skills.size - 5} more")
             }
-            DetailSection(
-                "Skill map",
-                "Domain skill = Food. Workflow skills = repeatable playbooks. Schemas stay versioned contracts shared by app, Notion, Sheets, and GPT/MCP.",
-            )
-            DetailSection(
-                "MCP bridge",
-                "GPT/plugin clients can read the same domain catalog, validators, proposal packages, and review-only app links.",
-            )
-            OutlinedButton(onClick = onOpenAi, shape = RoundedCornerShape(18.dp)) {
-                Text("Open model + skills")
-            }
-        }
-        if (domain.operatingLoops.isNotEmpty()) {
-            SettingsControlGroup {
-                Text("Operating playbooks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(
-                    "Borrowed from strong LifeOS/RPG templates, rewritten as practical Food routines.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                domain.operatingLoops.forEach { loop ->
-                    LifeOsStatusLine("Loop", loop)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpenAi, shape = RoundedCornerShape(18.dp)) {
+                    Text("Model + skills")
+                }
+                OutlinedButton(onClick = onOpenDataHome, shape = RoundedCornerShape(18.dp)) {
+                    Text("Data home")
                 }
             }
         }
-        if (domain.syncLoop.isNotEmpty()) {
-            SettingsControlGroup {
-                Text("Source loop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(
-                    "The same Food system should be readable from Notion, Sheets, Android, and GPT/MCP.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                domain.syncLoop.forEach { hop ->
-                    LifeOsStatusLine("Hop", hop)
-                }
-            }
+        TextButton(onClick = { showArchitecture = !showArchitecture }) {
+            Text(if (showArchitecture) "Hide architecture details" else "Show architecture details")
         }
-        if (domain.templateHealth.isNotEmpty()) {
-            SettingsControlGroup {
-                Text("Template QA", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                domain.templateHealth.forEach { check ->
-                    LifeOsStatusLine("Check", check)
-                }
-            }
-        }
-        if (domain.benchmarks.isNotEmpty()) {
-            SettingsControlGroup {
-                Text("Borrowed patterns", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    domain.benchmarks.forEach { benchmark -> DraftReviewPill(benchmark) }
-                }
-            }
+        if (showArchitecture) {
+            LifeOsArchitectureDetails(domain = domain, aiStatus = aiStatus, backendHome = backendHome)
         }
     }
+}
+
+@Composable
+private fun LifeOsArchitectureDetails(domain: LifeOsDomain, aiStatus: String, backendHome: BackendHomeUiState) {
     SettingsControlGroup {
-        Text("Data homes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text(
-            backendHome.lifeOsDataHomeDetail(),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            active?.dataPlanes.orEmpty().forEach { plane -> DraftReviewPill(plane) }
-        }
-        OutlinedButton(onClick = onOpenDataHome, shape = RoundedCornerShape(18.dp)) {
-            Text("Choose data home")
-        }
+        Text("Operating playbooks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        domain.operatingLoops.forEach { loop -> LifeOsStatusLine("Loop", loop) }
+    }
+    SettingsControlGroup {
+        Text("Source loop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        domain.syncLoop.forEach { hop -> LifeOsStatusLine("Hop", hop) }
+    }
+    SettingsControlGroup {
+        Text("Template QA", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        domain.templateHealth.forEach { check -> LifeOsStatusLine("Check", check) }
     }
     SettingsControlGroup {
         Text("Live status", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         LifeOsStatusLine("AI/model", aiStatus)
-        LifeOsStatusLine("Source pack", "${active?.label ?: "Active"} cites app snapshot, Notion, Sheets, MCP, and template health")
         LifeOsStatusLine("Data home", backendHome.settingsSummary())
-        LifeOsStatusLine("Health", healthStatus)
-        LifeOsStatusLine("Config source", "assets/lifeos/domain-catalog.v1.json")
+        LifeOsStatusLine("Config", "assets/lifeos/domain-catalog.v1.json")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            domain.benchmarks.forEach { benchmark -> DraftReviewPill(benchmark) }
+        }
+    }
+}
+
+@Composable
+private fun LifeOsCompactDomainRow(
+    domain: LifeOsDomain,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onSelect)
+            .semantics { this.selected = selected },
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(domain.emoji, style = MaterialTheme.typography.titleMedium)
+            Text(domain.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(domain.statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            if (selected) Text("✓", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
@@ -10006,7 +10016,12 @@ private fun BackendHomeUiState.lifeOsDataHomeDetail(): String =
                 if (templateNotionUrl.isNotBlank()) add("Notion")
                 if (templateSheetsUrl.isNotBlank()) add("Sheets")
             }.joinToString(" + ")
-            "${label.ifBlank { "Local phone store" }} is active. $surfaces are linked as LifeOS source surfaces."
+            val homeLabel = label
+                .takeUnless { it.equals("Choose data home", ignoreCase = true) }
+                ?.takeIf { it.isNotBlank() }
+                ?.let { if (it.equals("On this phone", ignoreCase = true)) "Phone store" else it }
+                ?: "Local phone store"
+            "$homeLabel is active. $surfaces are linked as LifeOS source surfaces."
         }
         activeType != null && !requiresOnboarding -> "${label.ifBlank { "Data home" }} is active for this phone."
         else -> "Choose Notion, Google Sheets, local SQLite, or Postgres when you want a primary LifeOS data home."
