@@ -1,0 +1,63 @@
+import { SQLiteDatabase } from 'expo-sqlite';
+
+export type ChatRole = 'assistant' | 'user';
+
+export type CitationTone = 'moss' | 'blue' | 'amber';
+
+export type ChatCitation = {
+  label: string;
+  detail: string;
+  href: string;
+  tone: CitationTone;
+};
+
+export type ChatAnswerRow = {
+  meal: string;
+  use: string;
+  next: string;
+};
+
+export type ChatAnswer = {
+  title: string;
+  intro: string;
+  rows: ChatAnswerRow[];
+  citations: ChatCitation[];
+};
+
+export type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  text: string;
+  answer?: ChatAnswer;
+};
+
+export type ChatThread = {
+  id: string;
+  title: string;
+  detail: string;
+  messages: ChatMessage[];
+};
+
+export type ChatSendInput = {
+  db: SQLiteDatabase | null;
+  text: string;
+  conversationId?: string;
+  domainId: string;
+  actor?: string;
+  serverUrl?: string;
+  serverToken?: string;
+  sortIndex?: number;
+};
+
+export type ChatSendResult = {
+  thread: ChatThread;
+  conversationId: string;
+  mode: 'offline' | 'server';
+  warnings?: string[];
+  serverError?: string;
+};
+
+export type ChatListInput = {
+  db: SQLiteDatabase | null;
+  domainId: string;
+};

@@ -14,116 +14,146 @@ import {
 import { useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
+import { ChatMessage, ChatThread } from '@/src/chat/types';
+import { chatServerConfig, listChatThreads, sendChatMessage } from '@/src/chat/client';
+import { Citation } from '@/src/chat/citations';
+import { ensureCitations } from '@/src/chat/citations';
+import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius } from '@/src/theme';
+import { loadCatalog } from '@/src/domain/catalog';
 
-type Citation = { label: string; detail: string; href: string; tone: 'moss' | 'blue' | 'amber' };
-type Answer = { title: string; intro: string; rows: Array<{ meal: string; use: string; next: string }>; citations: Citation[] };
-type Message = { id: string; role: 'assistant' | 'user'; text: string; answer?: Answer };
-type Thread = { id: string; title: string; detail: string; messages: Message[] };
+type MessageSourceMode = 'server' | 'offline';
 
-const citations: Citation[] = [
-  { label: 'Notion', detail: 'LifeOS 2026', href: 'https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1', tone: 'moss' },
-  { label: 'Sheets', detail: 'LifeOS workbook', href: 'https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit', tone: 'blue' },
-  { label: 'Web', detail: 'Recipe source', href: 'https://www.themediterraneandish.com', tone: 'amber' },
+type MessageRow = ChatMessage;
+
+const seedThreads: ChatThread[] = [
+  {
+    id: 'seed',
+    title: 'Tonight’s dinner',
+    detail: 'Kernel mode active',
+    messages: [
+      {
+        id: 'seed-a1',
+        role: 'assistant',
+        text: 'I can see your Food workspace: three planned meals, two use-soon items, and the current grocery run. What would make tonight easier?',
+      },
+    ],
+  },
+  {
+    id: 'seed-kitchen',
+    title: 'Kitchen questions',
+    detail: 'Use-soon & inventory',
+    messages: [
+      { id: 'seed-a2', role: 'assistant', text: 'Greek yogurt is the item to use first; it expires Friday and connects to two meals.' },
+    ],
+  },
 ];
 
-const dinnerAnswer: Answer = {
-  title: 'A low-friction dinner plan',
-  intro: 'Your kitchen already covers the main meal. One small grocery stop makes the rest of the week easier.',
-  rows: [
-    { meal: 'Tonight · Tandoori chicken', use: 'Chicken, yogurt, rice', next: 'Start the marinade at 6:45 PM' },
-    { meal: 'Tomorrow · Green dal', use: 'Leftover dal, spinach', next: 'Add naan if you want a side' },
-    { meal: 'Thursday · Yogurt bowl', use: 'Greek yogurt, berries', next: 'Use yogurt before Friday' },
-  ],
-  citations,
+const seedModeNotice = {
+  title: 'Offline mode',
+  detail: 'No server endpoint configured. Answers are fallback summaries from local UI schema.',
 };
-
-const initialThreads: Thread[] = [
-  {
-    id: 'dinner', title: 'Tonight’s dinner', detail: 'Kitchen-aware plan', messages: [
-      { id: 'a1', role: 'assistant', text: 'I can see your Food workspace: three planned meals, two use-soon items, and the current grocery run. What would make tonight easier?' },
-      { id: 'u1', role: 'user', text: 'Plan dinner around what I already have, and keep the rest of the week simple.' },
-      { id: 'a2', role: 'assistant', text: 'Here is the shortest path through the week, grounded in your kitchen, groceries, and recipe notes.', answer: dinnerAnswer },
-    ],
-  },
-  {
-    id: 'kitchen', title: 'Kitchen questions', detail: 'Use-soon & inventory', messages: [
-      { id: 'a3', role: 'assistant', text: 'Greek yogurt is the item to use first; it expires Friday and connects to tonight’s marinade plus breakfast.' },
-    ],
-  },
-  {
-    id: 'capture', title: 'Recipe capture', detail: 'Saved from the web', messages: [
-      { id: 'a4', role: 'assistant', text: 'I saved the recipe source and mapped its ingredients to your Food workspace. Ask me to scale it, substitute, or add its missing items.' },
-    ],
-  },
-];
-
-function makeAnswer(input: string): Answer {
-  const lower = input.toLowerCase();
-  const focus = lower.includes('shop') || lower.includes('buy')
-    ? 'A focused grocery pass'
-    : lower.includes('yogurt') || lower.includes('expire')
-      ? 'Use the yogurt first'
-      : 'A sensible next step';
-  return {
-    title: focus,
-    intro: 'I used the active Food context to keep this practical: your kitchen inventory, planned meals, and linked sources all point to the same next actions.',
-    rows: lower.includes('shop') || lower.includes('buy')
-      ? [
-        { meal: 'Produce', use: 'Coriander, lemons', next: 'Supports tonight and green dal' },
-        { meal: 'Dairy', use: 'Greek yogurt', next: 'Skip — 3 cups are already home' },
-        { meal: 'Pantry', use: 'Naan', next: 'Optional side for two dinners' },
-      ]
-      : [
-        { meal: 'Tonight', use: 'Tandoori chicken', next: 'Use yogurt in the marinade' },
-        { meal: 'Tomorrow', use: 'Green dal', next: 'Pair with remaining spinach' },
-        { meal: 'Breakfast', use: 'Yogurt bowl', next: 'Finish before Friday' },
-      ],
-    citations,
-  };
-}
 
 export default function ChatScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
   const router = useRouter();
+  const db = useLifeOSDatabase();
+  const { activeDomainId } = loadCatalog();
   const scrollRef = useRef<ScrollView>(null);
-  const [threads, setThreads] = useState<Thread[]>(initialThreads);
-  const [activeThreadId, setActiveThreadId] = useState(initialThreads[0].id);
+
+  const [threads, setThreads] = useState<ChatThread[]>(seedThreads);
+  const [activeThreadId, setActiveThreadId] = useState(seedThreads[0].id);
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [mode, setMode] = useState<MessageSourceMode>('offline');
+  const [warnings, setWarnings] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      const dbThreads = await listChatThreads(db);
+      if (cancelled) return;
+
+      if (dbThreads.length) {
+        setThreads(dbThreads);
+        setActiveThreadId(dbThreads[0].id);
+        setMode('offline');
+      } else {
+        setThreads(seedThreads);
+        setActiveThreadId(seedThreads[0].id);
+        setMode(chatServerConfig.url ? 'server' : 'offline');
+      }
+    };
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     return () => clearTimeout(timer);
-  }, [activeThreadId, activeThread?.messages.length]);
+  }, [activeThread?.messages.length]);
 
   const createThread = () => {
     const id = `thread-${Date.now()}`;
-    const thread: Thread = {
+    const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: 'Food context on',
-      messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'Food context is on. I can help with your kitchen, recipes, meals, shopping, and the source records behind them.' }],
+      detail: `Food context on · ${seedModeNotice.title.toLowerCase()}`,
+      messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'Food context is on. I can help with meals, recipes, shopping, and source-backed actions.' }],
     };
+
     setThreads((current) => [thread, ...current]);
     setActiveThreadId(id);
     setDraft('');
   };
 
-  const sendMessage = () => {
+  const appendOrReplaceThread = (nextThread: ChatThread) => {
+    setThreads((current) => {
+      const exists = current.findIndex((thread) => thread.id === nextThread.id);
+      if (exists >= 0) {
+        const copy = [...current];
+        copy[exists] = nextThread;
+        return copy;
+      }
+      return [nextThread, ...current];
+    });
+  };
+
+  const sendMessage = async () => {
     const text = draft.trim();
-    if (!text) return;
-    const now = Date.now();
-    const user: Message = { id: `u-${now}`, role: 'user', text };
-    const assistant: Message = {
-      id: `a-${now}`,
-      role: 'assistant',
-      text: 'I found the useful connections and kept the answer tied to the records you already maintain.',
-      answer: makeAnswer(text),
-    };
-    setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, messages: [...thread.messages, user, assistant] } : thread));
+    if (!text || sending) {
+      return;
+    }
+
+    setSending(true);
+    setWarnings([]);
+
+    const result = await sendChatMessage({
+      db,
+      text,
+      conversationId: activeThread.id,
+      domainId: activeDomainId,
+      serverUrl: chatServerConfig.url,
+      serverToken: chatServerConfig.token,
+    });
+
+    appendOrReplaceThread(result.thread);
+    setActiveThreadId(result.conversationId);
+    setMode(result.mode);
+    if (result.serverError) {
+      setWarnings([result.serverError, ...(result.warnings ?? [])]);
+    } else if (result.warnings?.length) {
+      setWarnings(result.warnings);
+    }
     setDraft('');
+    setSending(false);
   };
 
   return (
@@ -132,12 +162,17 @@ export default function ChatScreen() {
         <ScrollView ref={scrollRef} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
             <View style={styles.topbar}>
-              <View><Text style={styles.brand}>LIFEOS / CHAT</Text><Text style={styles.date}>Food context · local demo</Text></View>
+              <View>
+                <Text style={styles.brand}>LIFEOS / CHAT</Text>
+                <Text style={styles.date}>Food context · {mode === 'server' ? 'live runtime' : 'offline runtime'}</Text>
+              </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, pressed && styles.pressed]}>
                 <Text style={styles.newThreadText}>＋ New thread</Text>
               </Pressable>
             </View>
-            <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle="Hearth reasons over your connected Food records and keeps the sources close to the answer." />
+            <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle="Hearth reasons over your Food records and keeps source cards close to the answer." />
+
+            {warnings.length ? <Card style={styles.modeNote}>{warnings.map((item) => <Text key={item} style={styles.modeText}>{item}</Text>)}</Card> : null}
 
             <View style={[styles.workspace, isWide && styles.workspaceWide]}>
               <Card style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
@@ -151,19 +186,19 @@ export default function ChatScreen() {
                     </Pressable>;
                   })}
                 </ScrollView>
-                {isWide ? <View style={styles.threadFoot}><Pill tone="moss">Food context on</Pill><Text style={styles.threadFootText}>Chat cites the records it uses.</Text></View> : null}
+                {isWide ? <View style={styles.threadFoot}><Pill tone="moss">Food context on</Pill><Text style={styles.threadFootText}>Chat cites sources it reads.</Text></View> : null}
               </Card>
 
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
                   <View style={styles.assistantMark}><Text style={styles.assistantMarkText}>✦</Text></View>
                   <View style={styles.chatHeaderCopy}><Text style={styles.chatTitle}>{activeThread.title}</Text><Text style={styles.chatDetail}>Hearth · Food workspace available</Text></View>
-                  <Pill tone="moss">Grounded</Pill>
+                  <Pill tone={mode === 'server' ? 'moss' : 'blue'}>{mode === 'server' ? 'Live' : 'Offline'}</Pill>
                 </View>
 
                 <View style={styles.divider} />
                 <View style={styles.messages}>
-                  {activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />)}
+                  {activeThread.messages.map((message: MessageRow) => <MessageBubble key={message.id} message={message} />)}
                 </View>
 
                 <View style={styles.composerWrap}>
@@ -179,8 +214,8 @@ export default function ChatScreen() {
                       onSubmitEditing={sendMessage}
                       blurOnSubmit={false}
                     />
-                    <Pressable accessibilityRole="button" disabled={!draft.trim()} onPress={sendMessage} style={({ pressed }) => [styles.send, !draft.trim() && styles.sendDisabled, pressed && styles.pressed]}>
-                      <Text style={styles.sendText}>Send ↑</Text>
+                    <Pressable accessibilityRole="button" disabled={!draft.trim() || sending} onPress={sendMessage} style={({ pressed }) => [styles.send, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
+                      <Text style={styles.sendText}>{sending ? 'Working…' : 'Send ↑'}</Text>
                     </Pressable>
                   </View>
                   <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses Kitchen, Meals, Recipes, Shopping, and their sources.</Text><Text style={styles.shortcut}>⌘ ↵</Text></View>
@@ -190,7 +225,7 @@ export default function ChatScreen() {
 
             <Card tone="blue" style={styles.contextCard}>
               <View style={styles.contextIcon}><Text>⌁</Text></View>
-              <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>3 kitchen items · 3 meals · 8 shopping items · 3 linked sources. Chat uses this connected context when it is relevant, then names the records it relied on.</Text></View>
+              <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · open conversation resume in order · citations inline when available.</Text></View>
               <ActionButton label="Open Food" quiet onPress={() => router.push('/food')} />
             </Card>
           </View>
@@ -200,31 +235,33 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message }: { message: MessageRow }) {
   const assistant = message.role === 'assistant';
+  const answerRows = message.answer;
+  const citations = ensureCitations(answerRows?.citations);
+
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
       {assistant ? <View style={styles.smallMark}><Text style={styles.smallMarkText}>✦</Text></View> : null}
       <View style={[styles.messageBlock, !assistant && styles.userMessageBlock]}>
         <Text style={styles.messageByline}>{assistant ? 'Hearth' : 'You'}</Text>
         <View style={[styles.bubble, !assistant && styles.userBubble]}><Text style={[styles.bubbleText, !assistant && styles.userBubbleText]}>{message.text}</Text></View>
-        {message.answer ? <StructuredAnswer answer={message.answer} /> : null}
+        {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
+        {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
       </View>
     </View>
   );
 }
 
-function StructuredAnswer({ answer }: { answer: Answer }) {
+function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']> }) {
   return (
     <View style={styles.answer}>
       <Text style={styles.answerTitle}>{answer.title}</Text>
       <Text style={styles.answerIntro}>{answer.intro}</Text>
       <View style={styles.table} accessibilityLabel="Structured meal plan">
         <View style={[styles.tableRow, styles.tableHeader]}><Text style={[styles.tableCell, styles.tableMeal, styles.tableHeaderText]}>WHEN</Text><Text style={[styles.tableCell, styles.tableUse, styles.tableHeaderText]}>USE</Text><Text style={[styles.tableCell, styles.tableNext, styles.tableHeaderText]}>NEXT</Text></View>
-        {answer.rows.map((row) => <View key={row.meal} style={styles.tableRow}><Text style={[styles.tableCell, styles.tableMeal]}>{row.meal}</Text><Text style={[styles.tableCell, styles.tableUse]}>{row.use}</Text><Text style={[styles.tableCell, styles.tableNext]}>{row.next}</Text></View>)}
+        {answer.rows.map((row) => <View key={`${row.meal}-${row.use}`} style={styles.tableRow}><Text style={[styles.tableCell, styles.tableMeal]}>{row.meal}</Text><Text style={[styles.tableCell, styles.tableUse]}>{row.use}</Text><Text style={[styles.tableCell, styles.tableNext]}>{row.next}</Text></View>)}
       </View>
-      <Text style={styles.sourceLabel}>Sources used</Text>
-      <View style={styles.citations}>{answer.citations.map((citation) => <CitationChip key={citation.label} citation={citation} />)}</View>
     </View>
   );
 }
@@ -295,8 +332,7 @@ const styles = StyleSheet.create({
   tableUse: { flex: 1 },
   tableNext: { flex: 1.2 },
   tableHeaderText: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
-  sourceLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, textTransform: 'uppercase', marginTop: 13, marginBottom: 7 },
-  citations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  citationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   citation: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6, maxWidth: 166 },
   citationMoss: { backgroundColor: colors.mossSoft },
   citationBlue: { backgroundColor: colors.blueSoft },
@@ -312,8 +348,10 @@ const styles = StyleSheet.create({
   composerFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 7 },
   composerHint: { color: colors.muted, fontSize: 10, lineHeight: 14, flex: 1 },
   shortcut: { color: colors.muted, fontSize: 10, fontWeight: '700' },
-  contextCard: { marginTop: 14, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 },
+  contextCard: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' },
   contextIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#C7D8DF', alignItems: 'center', justifyContent: 'center' },
   contextCopy: { flex: 1, minWidth: 180 },
   contextTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 4 },
+  modeNote: { padding: 12, borderColor: colors.line, borderWidth: 1, backgroundColor: '#F7F7F0' },
+  modeText: { color: colors.muted, fontSize: 12, lineHeight: 17 },
 });

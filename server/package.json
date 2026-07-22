@@ -1,0 +1,11 @@
+{
+  "name": "wonderfood-lifeos-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LifeOS server runtimes and AI/action APIs (placeholder scaffold).",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "start:dev": "node src/index.ts"
+  }
+}

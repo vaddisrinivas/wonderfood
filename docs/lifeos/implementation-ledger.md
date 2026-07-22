@@ -5,7 +5,7 @@
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
 | 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE (PASS) | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package host still pending for final ADR closure | Decide final server host in Phase 3 before closing ADR |
-| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md`, `bddbf0e`, `1f8c0d8` | `src/db/provider.web.tsx` returns null DB in web; fixtures removed from domain queries, so web paths are empty-state until canonical persistence route is active | Complete web persistence/replica initialization and replace null-provider with stable canonical DB bridge |
+| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md`, `bddbf0e`, `1f8c0d8`, `2026-07-22: npm run config:validate`, `2026-07-22: npm run typecheck`, `2026-07-22: NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor`, `2026-07-22: npm run export:web`, `2026-07-22: npm run export:android` | `src/db/provider.web.tsx` still returns null DB in web; canonical persistence verification remains a stub and migration rollback/recovery path is not yet automated | Complete web persistence/replica initialization and add scripted migration-rollback/recovery tests before marking web-closure |
 | 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx`, `app/search.tsx`, `app/record/[id].tsx`, `app/sources.tsx` | Empty/permission states still need stronger domain-agnostic copy and actions in `search`, `record`, and `sources` when DB is null or empty | Finish domain-agnostic renderer integration for remaining phase-2 screens and empty/loading states |
 | 3 — Server and real chat | Agent B (Chat/Responses/Conversations) | BLOCKED | no `server/` package yet | Phase 1 + Phase 2 required first | Start only after Phase 2 evidence |
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
@@ -29,8 +29,8 @@
 
 ## Required gates executed
 
-- `npm run config:validate` ✅ (re-run 2026-07-22)
-- `npm run typecheck` ✅ (re-run 2026-07-22)
+- `npm run config:validate` ✅ (re-run 2026-07-22; no regressions)
+- `npm run typecheck` ✅ (re-run 2026-07-22; fixed chat/server type-contract blockers)
 - `npm run doctor` ✅ (`NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor`, re-run 2026-07-22)
 - `npm run export:web` ✅ (re-run 2026-07-22)
 - `npm run export:android` ✅ (re-run 2026-07-22)
