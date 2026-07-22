@@ -5,7 +5,7 @@ import { CanonicalRecord } from '@/src/domain/runtime';
 import { getRecord, listRecordsByCollections, listRecordsForDomain } from '@/src/db/records';
 import { getAllProviderLinks } from '@/src/db/sources';
 import { foodRecords, sourceRows } from '@/src/data/sample';
-import { toRecordView, matchRecordText, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';
+import { toRecordView, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 
 export type DomainRecordFeed = {
@@ -98,7 +98,8 @@ export async function searchDomainRecords(db: SQLiteDatabase | null, query: stri
   }
 
   const records = await queryDomainRecords(db);
-  return records.filter((item) => [item.title, item.meta, item.body].join(' ').toLowerCase().includes(query.toLowerCase())) ;
+  const normalized = query.toLowerCase();
+  return records.filter((item) => [item.title, item.collection, item.body, item.meta].join(' ').toLowerCase().includes(normalized));
 }
 
 export function getSurfaceCollectionsForLabel(label: string): string[] {
@@ -120,6 +121,23 @@ export async function getDomainRecord(db: SQLiteDatabase | null, id: string): Pr
   return toRecordView(record);
 }
 
+export async function getDomainRecordCanonical(
+  db: SQLiteDatabase | null,
+  id: string
+): Promise<CanonicalRecord | null> {
+  if (!db) {
+    return null;
+  }
+
+  const { domainId } = getActiveDomainFeed();
+  const record = await getRecord(db, id);
+  if (!record || record.domain !== domainId) {
+    return null;
+  }
+
+  return record;
+}
+
 export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceRow[]> {
   if (!db) {
     return fallbackSourceRows();
@@ -133,6 +151,4 @@ export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceR
 
   return fallbackSourceRows();
 }
-
-export { matchRecordText };
 export type { DomainRecordViewModel };

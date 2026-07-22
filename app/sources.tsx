@@ -1,14 +1,23 @@
 import { Link } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { sourceRows } from '@/src/data/sample';
+import { listSourceRows } from '@/src/domain/queries';
+import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius } from '@/src/theme';
+
+type SourceRow = {
+  name: string;
+  status: string;
+  freshness: string;
+  workspace: string | null;
+};
 
 type Tone = 'moss' | 'amber' | 'plum' | 'blue';
 
-const sourceMeta = {
-  Notion: {
+const sourceMeta: Record<string, { icon: string; tone: Tone; role: string; summary: string; scope: string; action: string; href: string | null; }> = {
+  notion: {
     icon: 'N',
     tone: 'moss' as Tone,
     role: 'Configured home',
@@ -17,7 +26,7 @@ const sourceMeta = {
     action: 'Open workspace',
     href: 'https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1',
   },
-  'Google Sheets': {
+  'google_sheets': {
     icon: '▦',
     tone: 'blue' as Tone,
     role: 'Configured surface',
@@ -26,7 +35,7 @@ const sourceMeta = {
     action: 'Open workbook',
     href: 'https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit',
   },
-  SQLite: {
+  sqlite: {
     icon: '▣',
     tone: 'plum' as Tone,
     role: 'Planned device replica',
@@ -35,7 +44,7 @@ const sourceMeta = {
     action: 'Adapter implementation next',
     href: null,
   },
-  Postgres: {
+  postgres: {
     icon: 'P',
     tone: 'amber' as Tone,
     role: 'Ready',
@@ -45,6 +54,12 @@ const sourceMeta = {
     href: null,
   },
 } as const;
+
+function normalizeSourceName(name: string): keyof typeof sourceMeta | 'other' {
+  const normalized = name.toLowerCase().replace(/\s+/g, '_');
+  if (normalized in sourceMeta) return normalized as keyof typeof sourceMeta;
+  return 'other';
+}
 
 const citationSources = [
   ['[LifeOS Notion]', 'Pages, properties, relations and exact block quotes', 'Configured'],
@@ -71,6 +86,25 @@ function toneColor(tone: Tone) {
 export default function SourcesScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 720;
+  const db = useLifeOSDatabase();
+  const [sourceRows, setSourceRows] = useState<SourceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const rows = await listSourceRows(db);
+      if (!cancelled) {
+        setSourceRows(rows);
+        setLoading(false);
+      }
+    };
+    setLoading(true);
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
 
   return (
     <Page>
@@ -111,28 +145,31 @@ export default function SourcesScreen() {
           </Card>
 
           <View style={styles.metrics}>
-            <Card style={styles.metric}><Text style={styles.metricValue}>4</Text><Text style={styles.metricLabel}>sources known</Text><Text style={styles.metricFoot}>2 configured · 2 planned</Text></Card>
+            <Card style={styles.metric}><Text style={styles.metricValue}>{loading ? '…' : `${sourceRows.length}`}</Text><Text style={styles.metricLabel}>sources known</Text><Text style={styles.metricFoot}>Configured homes · adapters</Text></Card>
             <Card style={styles.metric}><Text style={styles.metricValue}>4</Text><Text style={styles.metricLabel}>adapter contracts</Text><Text style={styles.metricFoot}>Runtime wiring follows</Text></Card>
             <Card style={styles.metric}><Text style={styles.metricValue}>Demo</Text><Text style={styles.metricLabel}>current data</Text><Text style={styles.metricFoot}>No false live-sync claim</Text></Card>
           </View>
 
           <SectionTitle title="Data homes & surfaces" />
           <View style={styles.sourceGrid}>
-            {sourceRows.map(([name, status, freshness, workspace]) => {
-              const meta = sourceMeta[name];
-              const isReady = name === 'Postgres';
+            {sourceRows.map((sourceRow) => {
+              const normalized = normalizeSourceName(sourceRow.name);
+              const meta = normalized === 'other'
+                ? { icon: '◉', tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source discovered at runtime.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
+                : sourceMeta[normalized];
+              const isReady = normalized === 'postgres';
               return (
-                <View key={name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
+                <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
                     <View style={styles.sourceTop}>
                       <View style={[styles.sourceIcon, { backgroundColor: toneColor(meta.tone) }]}><Text style={styles.sourceIconText}>{meta.icon}</Text></View>
-                      <Pill tone={isReady ? 'amber' : meta.tone}>{status.toUpperCase()}</Pill>
+                      <Pill tone={isReady ? 'amber' : meta.tone}>{sourceRow.status.toUpperCase()}</Pill>
                     </View>
-                    <Text style={styles.sourceName}>{name}</Text>
-                    <Text style={styles.sourceRole}>{meta.role} · {workspace}</Text>
+                    <Text style={styles.sourceName}>{sourceRow.name}</Text>
+                    <Text style={styles.sourceRole}>{meta.role} · {sourceRow.workspace}</Text>
                     <Text style={styles.sourceSummary}>{meta.summary}</Text>
                     <View style={styles.sourceFacts}>
-                      <View><Text style={styles.factLabel}>FRESHNESS</Text><Text style={styles.factValue}>{freshness}</Text></View>
+                      <View><Text style={styles.factLabel}>FRESHNESS</Text><Text style={styles.factValue}>{sourceRow.freshness}</Text></View>
                       <View><Text style={styles.factLabel}>SCOPE</Text><Text style={styles.factValue}>{meta.scope}</Text></View>
                     </View>
                     <Pressable accessibilityRole={meta.href ? 'link' : 'button'} onPress={() => { if (meta.href) void Linking.openURL(meta.href); }} style={styles.sourceActionRow}>
