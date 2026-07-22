@@ -35,6 +35,12 @@
         "Template Health"
       ],
       "data_planes": ["Notion", "Google Sheets", "SQLite", "Postgres", "MCP"],
+      "sync_loop": [
+        "Notion: human dashboard, relations, rollups, template health",
+        "Google Sheets: auditable table/workbook mirror",
+        "Android: native Food surface, review queue, local canonical store",
+        "MCP/GPT: skills, schemas, source cards, review-only command envelopes"
+      ],
       "operating_loops": [
         "Food quests: weekly cook/shop/clean/eat objectives",
         "Good habits: water, protein, home-cooked meals, prep blocks",
@@ -65,6 +71,7 @@
       "skills": ["health_observation", "goal_review", "nutrition_export", "trend_summary"],
       "schema_surfaces": ["Observations", "Goals", "Meals", "Metrics", "Sources", "Needs Review"],
       "data_planes": ["Health Connect", "Notion", "Google Sheets", "SQLite", "MCP"],
+      "sync_loop": ["Health Connect -> Android", "Android -> Notion/Sheets summaries", "MCP/GPT source cards"],
       "operating_loops": ["Health quests", "Recovery habits", "Trend reviews", "Daily journal"],
       "template_health": ["Health Connect permission check", "timezone-safe daily rollups", "source labels on every metric"],
       "benchmarks": ["LiFE RPG habits/boss fights", "LifeOS 2026 source graph"]
@@ -79,6 +86,7 @@
       "skills": ["plant_care", "schedule_generation", "observation_logging", "supply_tracking"],
       "schema_surfaces": ["Plants", "Care Schedule", "Care Logs", "Observations", "Supplies", "Needs Review"],
       "data_planes": ["Notion", "Google Sheets", "SQLite", "MCP"],
+      "sync_loop": ["Notion/Sheets template rows", "Android config package", "MCP/GPT source cards"],
       "operating_loops": ["Care quests", "Watering habits", "Plant journal", "Supply review"],
       "template_health": ["Recurring care dates stay dynamic", "sample/empty template parity", "plant-to-log relations intact"],
       "benchmarks": ["LiFE RPG daily journal", "LifeOS package runtime"]

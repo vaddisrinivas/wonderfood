@@ -29,4 +29,4 @@ adb -s "$DEVICE_SERIAL" install -r "$APK_PATH"
 adb -s "$DEVICE_SERIAL" shell \
   "am start -a android.intent.action.VIEW -d '$proof_uri' com.wonderfood.app/.MainActivity"
 
-echo "Installed playDebug and seeded proof pack on $DEVICE_SERIAL"
+echo "Installed playDebug and seeded LifeOS template links on $DEVICE_SERIAL"

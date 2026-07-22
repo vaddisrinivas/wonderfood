@@ -25,6 +25,7 @@ SPREADSHEET_ID = os.getenv("LIFEOS_SHEETS_ID", "1WpEwm07ApcnuiLDVhzl8vy4D5kU8Kjm
 TOKEN_FILE = pathlib.Path(os.getenv("GOOGLE_SHEETS_TOKEN_FILE", str(ROOT / "build/evidence/live-workspace/google-sheets-token.json")))
 MARKER = "LifeOS product surface installed by WonderFood Android"
 LIFERPG_MARKER = "LiFE RPG benchmark folded into WonderFood LifeOS"
+SYNC_LOOP_MARKER = "LifeOS source sync loop installed by WonderFood"
 NOTION_VERSION = "2026-03-11"
 
 
@@ -177,6 +178,69 @@ def append_liferpg_benchmark_section() -> dict:
     return {"status": "appended", "page_id": NOTION_PAGE_ID}
 
 
+def append_sync_loop_section() -> dict:
+    headers = notion_headers()
+    children = request_json(
+        "GET",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=100",
+        headers,
+    ).get("results", [])
+    existing_text = json.dumps(children)
+    if SYNC_LOOP_MARKER in existing_text:
+        return {"status": "already_present", "page_id": NOTION_PAGE_ID}
+
+    blocks = [
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "🔁 Source sync loop"}}]},
+        },
+        {
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "icon": {"emoji": "🔁"},
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f"{SYNC_LOOP_MARKER}. Notion, Google Sheets, Android, and MCP/GPT now expose the same domain catalog, source cards, template health checks, and review-only command loop."
+                        },
+                    }
+                ],
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Notion: human dashboard, relations, rollups, template health, and presentation layer."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Google Sheets: auditable workbook mirror with LifeOS Runtime and LifeOS Sync Loop tabs."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Android + MCP/GPT: native Food surface, source-quoting chat, schema/catalog resource, and review-only proposals."}}]
+            },
+        },
+    ]
+    request_json(
+        "PATCH",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+        headers,
+        {"children": blocks},
+    )
+    return {"status": "appended", "page_id": NOTION_PAGE_ID}
+
+
 def google_access_token() -> str:
     direct = os.getenv("GOOGLE_SHEETS_ACCESS_TOKEN", "")
     if direct:
@@ -232,6 +296,7 @@ def update_lifeos_sheet() -> dict:
         {"updateSpreadsheetProperties": {"properties": {"title": "LifeOS 2026 — WonderFood Product Runtime"}, "fields": "title"}}
     ]
     runtime_sheet_id = existing.get("LifeOS Runtime")
+    sync_loop_sheet_id = existing.get("LifeOS Sync Loop")
     if runtime_sheet_id is None:
         requests.append(
             {
@@ -240,6 +305,18 @@ def update_lifeos_sheet() -> dict:
                         "title": "LifeOS Runtime",
                         "gridProperties": {"rowCount": 80, "columnCount": 10},
                         "tabColor": {"red": 0.18, "green": 0.38, "blue": 0.27},
+                    }
+                }
+            }
+        )
+    if sync_loop_sheet_id is None:
+        requests.append(
+            {
+                "addSheet": {
+                    "properties": {
+                        "title": "LifeOS Sync Loop",
+                        "gridProperties": {"rowCount": 80, "columnCount": 8},
+                        "tabColor": {"red": 0.37, "green": 0.24, "blue": 0.70},
                     }
                 }
             }
@@ -253,6 +330,7 @@ def update_lifeos_sheet() -> dict:
     metadata = request_json("GET", f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}", headers)
     existing = {sheet["properties"]["title"]: sheet["properties"]["sheetId"] for sheet in metadata.get("sheets", [])}
     runtime_sheet_id = existing["LifeOS Runtime"]
+    sync_loop_sheet_id = existing["LifeOS Sync Loop"]
 
     values = [
         ["LifeOS 2026 — Product Runtime", "", "", ""],
@@ -275,6 +353,18 @@ def update_lifeos_sheet() -> dict:
     ]
     value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Runtime!A1:D40')}"
     request_json("PUT", value_url + "?valueInputOption=RAW", headers, {"values": values})
+    sync_values = [
+        ["LifeOS 2026 — Source Sync Loop", "", "", "", ""],
+        ["Hop", "Surface", "Role", "Current evidence", "Next product bar"],
+        ["1", "Notion", "Human data plane: dashboards, relations, rollups, template health", "LifeOS 2026 page updated", "Bidirectional schema diff + source snippets for chat"],
+        ["2", "Google Sheets", "Spreadsheet-primary mirror: auditable rows, formulas, imports/exports", "LifeOS Runtime + Sync Loop tabs updated", "Formula-backed schema health + conflict inbox"],
+        ["3", "Android", "Native Food app: review queue, local canonical store, Health Connect context", "S23U installed and screenshots captured", "Background sync jobs + source cards from active data home"],
+        ["4", "MCP/GPT", "Skills, schemas, validation, review-only command envelopes", "domain-catalog resource exposed", "GPT/plugin parity with Android chat behavior"],
+        ["Template health", "@now risk", "Avoid frozen duplication timestamps", "LiFE RPG benchmark added", "Visible checks in every domain template"],
+        ["Source quoting", "Chat", "Answers cite app/local, Notion, Sheets, MCP, web/file sources", "S23U source-card screenshot captured", "Live Notion/Sheets snippet retrieval"],
+    ]
+    sync_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Sync Loop!A1:E40')}"
+    request_json("PUT", sync_value_url + "?valueInputOption=RAW", headers, {"values": sync_values})
     request_json(
         "POST",
         f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}:batchUpdate",
@@ -293,10 +383,22 @@ def update_lifeos_sheet() -> dict:
                         "dimensions": {"sheetId": runtime_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 4}
                     }
                 },
+                {
+                    "repeatCell": {
+                        "range": {"sheetId": sync_loop_sheet_id, "startRowIndex": 0, "endRowIndex": 2},
+                        "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                        "fields": "userEnteredFormat.textFormat",
+                    }
+                },
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {"sheetId": sync_loop_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 5}
+                    }
+                },
             ]
         },
     )
-    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheet": "LifeOS Runtime"}
+    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheets": ["LifeOS Runtime", "LifeOS Sync Loop"]}
 
 
 def main() -> int:
@@ -310,6 +412,10 @@ def main() -> int:
         result["notion_liferpg"] = append_liferpg_benchmark_section()
     except Exception as error:  # noqa: BLE001
         errors.append(f"notion_liferpg: {error}")
+    try:
+        result["notion_sync_loop"] = append_sync_loop_section()
+    except Exception as error:  # noqa: BLE001
+        errors.append(f"notion_sync_loop: {error}")
     try:
         result["google_sheets"] = update_lifeos_sheet()
     except Exception as error:  # noqa: BLE001

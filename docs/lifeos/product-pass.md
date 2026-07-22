@@ -45,3 +45,11 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - Financial vault → food spending and grocery budget surface.
 - RPGenie Tavern → GPT-like assistant posture: conversational, contextual, source-quoting, review-only writes.
 - Sample/empty template split → every domain template needs both beautiful sample data and a clean operational empty state.
+
+## Source sync loop
+
+- Notion → human data plane: dashboards, relations, rollups, template health, and presentation.
+- Google Sheets → spreadsheet-primary mirror: auditable rows, formulas, import/export, schema-health checks.
+- Android → native surface: Food now, local canonical store, review queue, Health Connect context, source cards.
+- MCP/GPT → headless client: same domain catalog, skills, schemas, validation, and review-only command envelopes.
+- Chat answers should cite source handles, not vibes: app snapshot, LifeOS Notion, LifeOS Sheets, MCP schema, template health, and provider web/file citations when available.

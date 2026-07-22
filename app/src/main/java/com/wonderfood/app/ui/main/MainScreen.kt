@@ -5351,6 +5351,19 @@ private fun LifeOsControlCenter(
                 }
             }
         }
+        if (domain.syncLoop.isNotEmpty()) {
+            SettingsControlGroup {
+                Text("Source sync loop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Same schema story across Notion, Sheets, Android, and MCP/GPT.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                domain.syncLoop.forEach { hop ->
+                    LifeOsStatusLine("Hop", hop)
+                }
+            }
+        }
         if (domain.templateHealth.isNotEmpty()) {
             SettingsControlGroup {
                 Text("Template health", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -9977,9 +9990,9 @@ private fun BackendHomeUiState.dataPlaneProofState(dataHomeLive: Boolean): Strin
 private fun BackendHomeUiState.dataPlaneProofDetail(): String =
     if (activeType == null || requiresOnboarding) {
         if (templateNotionUrl.isNotBlank() || templateSheetsUrl.isNotBlank()) {
-            "Verified template proof pack is visible below. Pick one active data home when ready."
+            "LifeOS Notion and Sheets template links are visible below. Pick one active data home when ready."
         } else {
-            "No live data-plane link saved yet. Configure Notion or Sheets in Settings → Data home, then Chat will show the proof here."
+            "No live data-plane link saved yet. Configure Notion or Sheets in Settings → Data home, then Chat will cite it here."
         }
     } else {
         buildList {

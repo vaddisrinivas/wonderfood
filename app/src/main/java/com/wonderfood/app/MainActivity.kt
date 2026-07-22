@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
     getSharedPreferences(SHELL_PREFS_NAME, MODE_PRIVATE).edit {
       if (isTrustedNotionUrl(notionUrl)) putString(KEY_TEMPLATE_NOTION_URL, notionUrl)
       if (isTrustedSheetsUrl(sheetsUrl)) putString(KEY_TEMPLATE_SHEETS_URL, sheetsUrl)
-      putString(KEY_BACKEND_SYNC_STATUS, "Verified template proof pack saved on this device.")
+      putString(KEY_BACKEND_SYNC_STATUS, "LifeOS Notion and Sheets template links saved on this device.")
     }
   }
 

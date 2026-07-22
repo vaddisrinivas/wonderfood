@@ -732,16 +732,16 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     val notionUrl = command.templateNotionUrl.takeIf(::isTrustedNotionUrl).orEmpty()
                     val sheetsUrl = command.templateSheetsUrl.takeIf(::isTrustedSheetsUrl).orEmpty()
                     if (notionUrl.isBlank() && sheetsUrl.isBlank()) {
-                        "Proof pack link was ignored: expected HTTPS Notion and/or Google Sheets URLs."
+                        "Template link was ignored: expected HTTPS Notion and/or Google Sheets URLs."
                     } else {
                         shellPrefs.edit {
                             if (notionUrl.isNotBlank()) putString(KEY_TEMPLATE_NOTION_URL, notionUrl)
                             if (sheetsUrl.isNotBlank()) putString(KEY_TEMPLATE_SHEETS_URL, sheetsUrl)
-                            putString(KEY_BACKEND_SYNC_STATUS, "Verified template proof pack saved on this device.")
+                            putString(KEY_BACKEND_SYNC_STATUS, "LifeOS Notion and Sheets template links saved on this device.")
                         }
                         setSection(FoodSection.TODAY)
                         refreshBackendHome()
-                        "Template proof pack saved. Open Settings → Data home to see Notion and Sheets links."
+                        "LifeOS template links saved. Open Settings → Data home to see Notion and Sheets links."
                     }
                 }
                 WonderFoodVoiceAction.LOG_WATER -> {
