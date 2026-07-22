@@ -7,7 +7,7 @@
       "label": "Food",
       "emoji": "🍽️",
       "status": "active",
-      "summary": "Kitchen, shopping, recipes, meal planning, receipts, nutrition, Health Connect context.",
+      "summary": "Your kitchen brain: inventory, groceries, meals, recipes, receipts, nutrition, and Health Connect context.",
       "bottom_tabs": ["Now", "Food", "Week", "Saved", "Cart"],
       "skills": [
         "inventory",
@@ -36,24 +36,24 @@
       ],
       "data_planes": ["Notion", "Google Sheets", "SQLite", "Postgres", "MCP"],
       "sync_loop": [
-        "Notion: human dashboard, relations, rollups, template health",
-        "Google Sheets: auditable table/workbook mirror",
-        "Android: native Food surface, review queue, local canonical store",
-        "MCP/GPT: skills, schemas, source cards, review-only command envelopes"
+        "Notion: dashboard, relations, rollups, template QA",
+        "Google Sheets: auditable workbook mirror",
+        "Android: Food workspace, local store, review queue",
+        "GPT/MCP: same skills, schemas, citations, review-only proposals"
       ],
       "operating_loops": [
-        "Food quests: weekly cook/shop/clean/eat objectives",
+        "Quests: cook, shop, clean, eat well this week",
         "Good habits: water, protein, home-cooked meals, prep blocks",
-        "Bad habits: waste, missed meals, overspend, duplicate buying",
+        "Review loops: waste, missed meals, overspend, duplicate buys",
         "Boss fights: pantry reset, budget week, nutrition sprint",
         "Daily journal: meals, mood, energy, Health Connect context",
-        "P.A.R.A.: projects, areas, resources, archive for food life"
+        "P.A.R.A.: projects, areas, resources, archive"
       ],
       "template_health": [
-        "No frozen @now values; use explicit dynamic date buttons/checks",
-        "Sample-data reset and empty-template parity",
-        "Relations and rollups must match Sheets/app schema surfaces",
-        "Every AI answer should show at least app/local, Notion, Sheets, or web source cards when available"
+        "No frozen @now; use dynamic date buttons/checks",
+        "Sample and empty templates stay equivalent",
+        "Relations and rollups match Sheets/app surfaces",
+        "AI answers cite app, Notion, Sheets, MCP, or web sources when available"
       ],
       "benchmarks": [
         "LifeOS 2026 canonical data plane",

@@ -4842,9 +4842,9 @@ private fun PreferencesContent(
         )
         SettingsDestination.LIFEOS_CONTROL -> SettingsDetailPage(
             image = "🧬",
-            title = "LifeOS control center",
-            subtitle = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }?.let { "${it.label} package · ${it.statusLabel}" }
-                ?: "Domain packages, schema, skills, and data planes",
+            title = "LifeOS",
+            subtitle = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }?.let { "${it.label} live · Notion, Sheets, app sources" }
+                ?: "Domains, skills, sources, and data homes",
             onBack = { destination = SettingsDestination.HOME },
         ) {
             LifeOsControlCenter(
@@ -4883,7 +4883,7 @@ private fun PreferencesContent(
         }
         SettingsDestination.AI_ASSISTANT -> SettingsDetailPage(
             image = "✨",
-            title = "AI assistant",
+            title = "Model + skills",
             subtitle = aiStatus,
             onBack = { destination = SettingsDestination.HOME },
         ) {
@@ -5014,9 +5014,9 @@ private fun SettingsHomeContent(
             val selectedDomain = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }
             SettingsHomeRow(
                 icon = Icons.Rounded.Description,
-                title = "LifeOS control center",
-                subtitle = selectedDomain?.let { "${it.emoji} ${it.label} · ${it.statusLabel} · ${it.schemaSurfaces.size} schema surfaces" }
-                    ?: "Domain packages, schema, skills, MCP, and data planes",
+                title = "LifeOS",
+                subtitle = selectedDomain?.let { "${it.emoji} ${it.label} · ${it.statusLabel} · ${it.schemaSurfaces.size} surfaces" }
+                    ?: "Domains, skills, sources, MCP, and data homes",
                 onClick = { onOpen(SettingsDestination.LIFEOS_CONTROL) },
             )
         }
@@ -5040,7 +5040,7 @@ private fun SettingsHomeContent(
         item {
             SettingsHomeRow(
                 icon = Icons.AutoMirrored.Rounded.Chat,
-                title = "AI assistant",
+                title = "Model + skills",
                 subtitle = aiStatus.ifBlank { "Local fallback" },
                 onClick = { onOpen(SettingsDestination.AI_ASSISTANT) },
             )
@@ -5294,11 +5294,11 @@ private fun LifeOsControlCenter(
     val active = domains.firstOrNull { it.id == selectedDomainId } ?: domains.firstOrNull()
     SettingsStatusBlock(
         icon = Icons.Rounded.Description,
-        title = active?.let { "${it.emoji} ${it.label} package" } ?: "LifeOS package runtime",
-        body = active?.summary ?: "Packaged domains define tabs, skills, schema surfaces, and data-plane bindings.",
+        title = active?.let { "${it.emoji} ${it.label} system" } ?: "LifeOS runtime",
+        body = active?.summary ?: "Each domain brings app screens, skills, data surfaces, and source links.",
     )
     SettingsControlGroup {
-        Text("Domain packages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Domains", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         domains.forEach { domain ->
             LifeOsDomainRow(
                 domain = domain,
@@ -5309,9 +5309,9 @@ private fun LifeOsControlCenter(
     }
     active?.let { domain ->
         SettingsControlGroup {
-            Text("Native surface map", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("App surfaces", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Food is the Day 0 native app surface. Other packages can be selected now, but they become full native domains only after their tab map is implemented from config.",
+                "Food is live in the Android app. Other domains can be selected as templates until their screens are enabled.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -5320,29 +5320,33 @@ private fun LifeOsControlCenter(
             }
         }
         SettingsControlGroup {
-            Text("Schema surfaces", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Data model", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 domain.schemaSurfaces.forEach { surface -> DraftReviewPill(surface) }
             }
         }
         SettingsControlGroup {
-            Text("Skills & MCP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Skills, workflows, MCP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 domain.skills.forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
             }
             DetailSection(
+                "Skill map",
+                "Domain skill = Food. Workflow skills = repeatable playbooks. Schemas stay versioned contracts shared by app, Notion, Sheets, and GPT/MCP.",
+            )
+            DetailSection(
                 "MCP bridge",
-                "Local bridge exposes bundled skills, command schemas, validation, proposal packages, and review-only app links for GPT/plugin clients.",
+                "GPT/plugin clients can read the same domain catalog, validators, proposal packages, and review-only app links.",
             )
             OutlinedButton(onClick = onOpenAi, shape = RoundedCornerShape(18.dp)) {
-                Text("Open model, skills & MCP settings")
+                Text("Open model + skills")
             }
         }
         if (domain.operatingLoops.isNotEmpty()) {
             SettingsControlGroup {
-                Text("Operating loops", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Operating playbooks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Borrowed from strong LifeOS/RPG templates, but mapped to practical food workflows.",
+                    "Borrowed from strong LifeOS/RPG templates, rewritten as practical Food routines.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -5353,9 +5357,9 @@ private fun LifeOsControlCenter(
         }
         if (domain.syncLoop.isNotEmpty()) {
             SettingsControlGroup {
-                Text("Source sync loop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Source loop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Same schema story across Notion, Sheets, Android, and MCP/GPT.",
+                    "The same Food system should be readable from Notion, Sheets, Android, and GPT/MCP.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -5366,7 +5370,7 @@ private fun LifeOsControlCenter(
         }
         if (domain.templateHealth.isNotEmpty()) {
             SettingsControlGroup {
-                Text("Template health", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Template QA", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 domain.templateHealth.forEach { check ->
                     LifeOsStatusLine("Check", check)
                 }
@@ -5374,7 +5378,7 @@ private fun LifeOsControlCenter(
         }
         if (domain.benchmarks.isNotEmpty()) {
             SettingsControlGroup {
-                Text("Benchmark inputs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Borrowed patterns", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     domain.benchmarks.forEach { benchmark -> DraftReviewPill(benchmark) }
                 }
@@ -5382,9 +5386,9 @@ private fun LifeOsControlCenter(
         }
     }
     SettingsControlGroup {
-        Text("Data planes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Data homes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Text(
-            backendHome.dataPlaneDetail(),
+            backendHome.lifeOsDataHomeDetail(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -5392,11 +5396,11 @@ private fun LifeOsControlCenter(
             active?.dataPlanes.orEmpty().forEach { plane -> DraftReviewPill(plane) }
         }
         OutlinedButton(onClick = onOpenDataHome, shape = RoundedCornerShape(18.dp)) {
-            Text("Open data home")
+            Text("Choose data home")
         }
     }
     SettingsControlGroup {
-        Text("Runtime status", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Live status", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         LifeOsStatusLine("AI/model", aiStatus)
         LifeOsStatusLine("Source pack", "${active?.label ?: "Active"} cites app snapshot, Notion, Sheets, MCP, and template health")
         LifeOsStatusLine("Data home", backendHome.settingsSummary())
@@ -5627,15 +5631,15 @@ private fun AiAssistantSettings(
         AiProviderRouteLine("1  Primary", aiConfig)
         AiProviderRouteLine("2  Fallback", aiFallbackConfig)
         Text(
-            "403 means the provider received the request but rejected auth, model, project, deployment, or route access.",
+            "If a route fails, Chat falls back safely and keeps the answer review-only.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     SettingsControlGroup {
-        Text("Control plane", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Chat runtime", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Text(
-            "Configure the same pieces Chat advertises: provider route, assistant instructions, core Food skill, schemas, and MCP/agent bridge readiness.",
+            "These are the exact pieces Chat uses: model route, your instructions, Food skill, source pack, schemas, and MCP handoff.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -5646,7 +5650,7 @@ private fun AiAssistantSettings(
             AiCapabilityPill("🕸️", "MCP bridge-ready")
         }
         Text(
-            "Local GPT/plugin/MCP bridge is available as a review-only handoff; this screen owns the phone route and skill behavior.",
+            "Phone Chat and GPT/plugin clients should behave the same: cite sources, draft changes, and wait for review before saving.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -5663,10 +5667,10 @@ private fun AiAssistantSettings(
         onValue = { onChange(preferences.copy(customAiInstructions = it)) },
     )
     SettingsControlGroup {
-        Text("Prompt & skill", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Core skill", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Text(
             if (preferences.aiSkillOverride.isBlank()) {
-                "Bundled skill is active. Your Assistant instructions are appended separately."
+                "Bundled Food skill is active. Your personal instructions stay separate."
             } else {
                 "Custom core skill is active."
             },
@@ -5674,7 +5678,7 @@ private fun AiAssistantSettings(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TextButton(onClick = { showSkillEditor = !showSkillEditor }) {
-            Text(if (showSkillEditor) "Hide core skill" else "View or edit core skill")
+            Text(if (showSkillEditor) "Hide skill text" else "View skill text")
         }
         if (showSkillEditor) {
             PreferenceTextField(
@@ -5871,27 +5875,27 @@ private fun AiStackMap(modelConfigured: Boolean, customSkill: Boolean) {
         ),
         AiStackMapRow(
             icon = "🧠",
-            title = "Skills",
+            title = "Domain skill",
             state = if (customSkill) "custom override" else "bundled Food skill",
-            detail = "Inventory, shopping, recipes, meals, planning, preferences, receipts, nutrition, navigation.",
+            detail = "Food owns vocabulary, defaults, safety, and user-facing behavior.",
         ),
         AiStackMapRow(
             icon = "🧬",
-            title = "Schemas",
+            title = "Schema contracts",
             state = "packaged",
-            detail = "Command envelope, proposal package, Room, Notion/Sheets V4 graph, App Functions contracts.",
+            detail = "Command envelope, proposal package, Room, Notion/Sheets graph, App Functions contracts.",
         ),
         AiStackMapRow(
             icon = "🕸️",
             title = "MCP + agents",
             state = "local bridge ready",
-            detail = "scripts/mcp/wonderfood_mcp_server.py exposes skills, schemas, validation, packages, and review-only app links.",
+            detail = "Local bridge exposes catalog, validators, workflows, and review-only app links.",
         ),
         AiStackMapRow(
             icon = "🗂️",
             title = "Data bindings",
             state = "selectable",
-            detail = "Local SQLite, Notion, Google Sheets, and Postgres all share canonical IDs and safe import review.",
+            detail = "SQLite, Notion, Sheets, and Postgres share IDs and safe import review.",
         ),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -8833,20 +8837,31 @@ private fun String.trimInlineMarkdown(): String =
 private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
     Column(
         modifier = Modifier.widthIn(max = 620.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            "Sources",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
-        FlowRow(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            sources.take(6).forEachIndexed { index, source ->
-                AiMessageSourceCard(index = index + 1, source = source)
+            Text(
+                "Sources",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "${sources.size.coerceAtMost(6)} handles · swipe",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 4.dp),
+        ) {
+            items(sources.take(6).withIndex().toList()) { indexed ->
+                AiMessageSourceCard(index = indexed.index + 1, source = indexed.value)
             }
         }
     }
@@ -8854,15 +8869,19 @@ private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
 
 @Composable
 private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
+    val important = index == 1 || source.title.contains("source pack", ignoreCase = true)
     Surface(
-        modifier = Modifier.widthIn(min = 220.dp, max = 300.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        tonalElevation = 1.dp,
+        modifier = Modifier.width(264.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = if (important) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (important) MaterialTheme.colorScheme.primary.copy(alpha = 0.32f) else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        tonalElevation = if (important) 2.dp else 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -8892,7 +8911,7 @@ private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
                     source.quote,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    maxLines = if (important) 3 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -9081,9 +9100,9 @@ private fun AiCapabilityCenter(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 ObjectImage("🧩", MaterialTheme.colorScheme.secondaryContainer, 42.dp)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Capability center", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Chat context", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "What Chat can use, cite, draft, and hand off right now.",
+                        "What this answer can read, cite, draft, and hand off.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -9105,9 +9124,9 @@ private fun AiCapabilityCenter(
                     label = "Data: ${backendHome.label}",
                     onClick = onOpenDataHome,
                 )
-                AiCapabilityPill("📚", "Sources shown")
+                AiCapabilityPill("📚", "Citations on")
                 AiCapabilityPill("🧠", "Food skill")
-                AiCapabilityPill("🧾", "Receipt/voice tools")
+                AiCapabilityPill("🧾", "Camera + voice")
                 AiCapabilityPill(if (healthLive) "🟢" else "⚪", "Health Connect")
             }
             if (expanded) {
@@ -9171,7 +9190,7 @@ private fun AiCapabilityRows(
             detail = providerStatus,
         )
         OutlinedButton(onClick = onOpenAiControl) {
-            Text("Configure model, skills & MCP")
+            Text("Configure model + skills")
         }
         AiCapabilityRow(
             icon = "🗂️",
@@ -9194,25 +9213,25 @@ private fun AiCapabilityRows(
             icon = "📚",
             title = "Citations",
             state = "Visible",
-            detail = "Assistant messages can show app memory, active data home, provider URL/file citations, and OpenAI web-search sources.",
+            detail = "Answers can cite app memory, LifeOS Notion, LifeOS Sheets, MCP schema, template health, and provider web/file sources.",
         )
         AiCapabilityRow(
             icon = "🧠",
             title = "Skills",
             state = "Food active",
-            detail = "Bundled WonderFood skill plus your assistant instructions. Custom core skill can be edited in Settings.",
+            detail = "Domain skill is Food. Workflow skills are playbooks. Schemas are contracts, not separate top-level skills unless they have behavior.",
         )
         AiCapabilityRow(
             icon = "🧬",
             title = "Schemas",
             state = "Bridge-ready",
-            detail = "Command envelope, proposal package, App Functions, Room schema, Notion/Sheets workspace graph, and sync contracts are in the app package/codebase.",
+            detail = "Command envelope, Room schema, Notion/Sheets graph, MCP resources, and sync contracts ship as versioned resources.",
         )
         AiCapabilityRow(
             icon = "🕸️",
             title = "MCP / agents",
             state = "Local bridge ready",
-            detail = "MCP stdio bridge exposes skills, schemas, validation, proposal packages, and review-only app links for GPT/plugin clients.",
+            detail = "GPT/plugin clients get the same catalog, validators, proposal packages, and review-only app links.",
         )
         AiCapabilityRow(
             icon = "❤️",
@@ -9979,6 +9998,19 @@ private fun BackendHomeUiState.dataPlaneDetail(): String =
         .filterNotNull()
         .joinToString(" • ")
         .ifBlank { "Choose Notion, Google Sheets, local SQLite, or Postgres as the data home." }
+
+private fun BackendHomeUiState.lifeOsDataHomeDetail(): String =
+    when {
+        templateNotionUrl.isNotBlank() || templateSheetsUrl.isNotBlank() -> {
+            val surfaces = buildList {
+                if (templateNotionUrl.isNotBlank()) add("Notion")
+                if (templateSheetsUrl.isNotBlank()) add("Sheets")
+            }.joinToString(" + ")
+            "${label.ifBlank { "Local phone store" }} is active. $surfaces are linked as LifeOS source surfaces."
+        }
+        activeType != null && !requiresOnboarding -> "${label.ifBlank { "Data home" }} is active for this phone."
+        else -> "Choose Notion, Google Sheets, local SQLite, or Postgres when you want a primary LifeOS data home."
+    }
 
 private fun BackendHomeUiState.dataPlaneProofState(dataHomeLive: Boolean): String =
     when {

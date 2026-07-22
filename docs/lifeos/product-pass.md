@@ -61,3 +61,19 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - `[LifeOS Sheets]`: workbook mirror for schema rows, import/export checks, formulas, conflicts, and source handles.
 - `[MCP schema]`: `wonderfood://lifeos/domain-catalog-v1` for GPT/plugin parity.
 - `[Template health]`: `@now` duplication guard, sample/empty parity, relation/rollup checks, and source visibility.
+- Chat injects this source-pack context into provider prompts and local fallback answers, then renders compact source cards in the thread.
+
+## Skill architecture
+
+- Domain skill = user-facing operating brain for a package: Food, Health, Plants, Finance, etc.
+- Workflow skill = repeatable playbook inside/across domains: weekly reset, grocery rescue, pantry boss fight, health export, template-health audit.
+- Schema = contract/resource, not usually a top-level skill: command envelope, Notion/Sheets graph, Room tables, validation rules.
+- MCP exposes all three: domain catalog, schema resources/validators, and workflow actions.
+- Default rule: one domain skill per domain, workflow skills only when the workflow has its own steps/state/gates, schemas as versioned files shared by app, Notion, Sheets, and GPT/MCP.
+
+## Notion UI automation stance
+
+- API creates durable anchors first: `WF_ANCHOR:*` headings/callouts, named data sources, source-pack blocks, and `WF_UI_TODO:*` slots.
+- Chrome/Playwright UI automation should target anchors, not raw coordinates.
+- UI automation is reserved for Notion-only gaps: buttons, page templates, database layout polish, property pinning/order, and native automations.
+- Notion buttons are not treated as API-triggerable runtime primitives. Runtime actions should use Worker/MCP/webhook/property triggers; UI automation may click native buttons only for setup/QA.

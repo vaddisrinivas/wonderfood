@@ -86,7 +86,12 @@ class LiteLlmFoodInterpreter(
         return (interpretWithDiagnostics(text, memory, config) as? LiteLlmInterpretation.Success)?.turn
     }
 
-    fun interpretWithDiagnostics(text: String, memory: HouseholdUiMemory, config: LiteLlmConfig): LiteLlmInterpretation {
+    fun interpretWithDiagnostics(
+        text: String,
+        memory: HouseholdUiMemory,
+        config: LiteLlmConfig,
+        sourceContext: String = "",
+    ): LiteLlmInterpretation {
         if (!config.isUsable) return LiteLlmInterpretation.Failure("Provider is not configured.")
         val body = JSONObject()
             .put("model", config.model)
@@ -96,7 +101,7 @@ class LiteLlmFoodInterpreter(
                 "messages",
                 JSONArray()
                     .put(JSONObject().put("role", "system").put("content", effectiveSystemPrompt(memory)))
-                    .put(JSONObject().put("role", "user").put("content", buildUserPrompt(text, memory))),
+                    .put(JSONObject().put("role", "user").put("content", buildUserPrompt(text, memory, sourceContext))),
             )
 
         val response = postJsonWithDiagnostics(config, body)
@@ -811,7 +816,7 @@ class LiteLlmFoodInterpreter(
     private fun parseMealSlot(value: String): MealSlot =
         runCatching { MealSlot.valueOf(value.trim().uppercase()) }.getOrDefault(MealSlot.FLEX)
 
-    private fun buildUserPrompt(text: String, memory: HouseholdUiMemory): String {
+    private fun buildUserPrompt(text: String, memory: HouseholdUiMemory, sourceContext: String = ""): String {
         val inventory = memory.inventory.take(32).joinToString("\n") { item ->
             "id=${item.id} name=${item.name} quantity=${item.quantity.ifBlank { "unknown" }} zone=${item.zone.name} " +
                 "category=${item.category.ifBlank { "unknown" }} nutrition=${item.calories?.let { "$it kcal/${item.servingText.ifBlank { "serving unknown" }}" } ?: "unknown"} " +
@@ -852,6 +857,8 @@ class LiteLlmFoodInterpreter(
             Current database snapshot read immediately before this AI turn:
             Snapshot values are authoritative. Say when a requested field is absent; do not silently fill it from memory or guess.
             Source handles available in the Android UI after this turn: [App snapshot], [LifeOS Notion], [LifeOS Sheets], [MCP schema], [Template health], and any provider web/file citations.
+            LifeOS source pack context:
+            ${sourceContext.ifBlank { "No external LifeOS source-pack details were injected for this turn; use the local app snapshot and visible source cards only." }}
             When answering questions, tables, comparisons, or recommendations, mention the source handle(s) you used in the reply. If no source supports a claim, say it is an estimate or ask to connect/refresh the missing source.
             counts: inventory=${memory.inventory.size}, groceries=${memory.groceries.size}, recipes=${memory.recipes.size}, meal_logs=${memory.mealLogs.size}, meal_plans=${memory.mealPlans.size}, plan_entries=${memory.mealPlanEntries.size}, receipts=${memory.receipts.size}, actions=${memory.actions.size}, events=${memory.events.size}
             inventory: ${inventory.ifBlank { "empty" }}

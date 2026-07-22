@@ -27,8 +27,9 @@ MARKER = "LifeOS product surface installed by WonderFood Android"
 LIFERPG_MARKER = "LiFE RPG benchmark folded into WonderFood LifeOS"
 SYNC_LOOP_MARKER = "LifeOS source sync loop installed by WonderFood"
 SOURCE_PACK_MARKER = "LifeOS chat source pack installed by WonderFood"
+SKILL_ARCH_MARKER = "LifeOS skill architecture installed by WonderFood"
 NOTION_VERSION = "2026-03-11"
-OWNED_NOTION_MARKERS = [MARKER, LIFERPG_MARKER, SYNC_LOOP_MARKER, SOURCE_PACK_MARKER]
+OWNED_NOTION_MARKERS = [MARKER, LIFERPG_MARKER, SYNC_LOOP_MARKER, SOURCE_PACK_MARKER, SKILL_ARCH_MARKER]
 
 
 def request_json(method: str, url: str, headers: dict[str, str], body: object | None = None) -> dict:
@@ -315,6 +316,72 @@ def append_source_pack_section() -> dict:
     return {"status": "appended", "page_id": NOTION_PAGE_ID}
 
 
+def append_skill_architecture_section() -> dict:
+    headers = notion_headers()
+    children = fetch_notion_children(headers)
+    existing_text = json.dumps(children)
+    if SKILL_ARCH_MARKER in existing_text:
+        return {"status": "already_present", "page_id": NOTION_PAGE_ID}
+
+    blocks = [
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "🧠 Skill architecture + Notion UI installer"}}]},
+        },
+        {
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "icon": {"emoji": "🧠"},
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f"{SKILL_ARCH_MARKER}. Use one domain skill per domain, workflow skills for reusable operating loops, and schemas as shared versioned contracts. Notion UI automation should target anchors, not screen coordinates."
+                        },
+                    }
+                ],
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Domain skill: Food, Health, Plants, Finance. Owns tone, user goals, defaults, and domain vocabulary."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Workflow skill: weekly reset, grocery rescue, pantry boss fight, health export, template-health audit. Owns steps, gates, and review rules."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Schema: command envelope, Notion/Sheets graph, Room tables, MCP resources. Validate and expose; do not create one top-level skill per table unless the table has behavior."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "UI installer stance: API creates WF_ANCHOR and WF_UI_TODO blocks; Chrome/Playwright can finish native buttons, page templates, property order, and layout polish near those anchors."}}]
+            },
+        },
+    ]
+    request_json(
+        "PATCH",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+        headers,
+        {"children": blocks},
+    )
+    return {"status": "appended", "page_id": NOTION_PAGE_ID}
+
+
 def cleanup_duplicate_owned_notion_sections() -> dict:
     headers = notion_headers()
     children = fetch_notion_children(headers)
@@ -395,6 +462,7 @@ def update_lifeos_sheet() -> dict:
     runtime_sheet_id = existing.get("LifeOS Runtime")
     sync_loop_sheet_id = existing.get("LifeOS Sync Loop")
     source_pack_sheet_id = existing.get("LifeOS Source Pack")
+    skill_map_sheet_id = existing.get("LifeOS Skill Map")
     if runtime_sheet_id is None:
         requests.append(
             {
@@ -431,6 +499,18 @@ def update_lifeos_sheet() -> dict:
                 }
             }
         )
+    if skill_map_sheet_id is None:
+        requests.append(
+            {
+                "addSheet": {
+                    "properties": {
+                        "title": "LifeOS Skill Map",
+                        "gridProperties": {"rowCount": 80, "columnCount": 8},
+                        "tabColor": {"red": 0.62, "green": 0.34, "blue": 0.12},
+                    }
+                }
+            }
+        )
     request_json(
         "POST",
         f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}:batchUpdate",
@@ -442,6 +522,7 @@ def update_lifeos_sheet() -> dict:
     runtime_sheet_id = existing["LifeOS Runtime"]
     sync_loop_sheet_id = existing["LifeOS Sync Loop"]
     source_pack_sheet_id = existing["LifeOS Source Pack"]
+    skill_map_sheet_id = existing["LifeOS Skill Map"]
 
     values = [
         ["LifeOS 2026 — Product Runtime", "", "", ""],
@@ -472,7 +553,7 @@ def update_lifeos_sheet() -> dict:
         ["3", "Android", "Native Food app: review queue, local canonical store, Health Connect context", "S23U installed and screenshots captured", "Background sync jobs + source cards from active data home"],
         ["4", "MCP/GPT", "Skills, schemas, validation, review-only command envelopes", "domain-catalog resource exposed", "GPT/plugin parity with Android chat behavior"],
         ["Template health", "@now risk", "Avoid frozen duplication timestamps", "LiFE RPG benchmark added", "Visible checks in every domain template"],
-        ["Source quoting", "Chat", "Answers cite app/local, Notion, Sheets, MCP, web/file sources", "S23U source-card screenshot captured", "Live Notion/Sheets snippet retrieval"],
+        ["Source quoting", "Chat", "Answers receive source-pack prompt context and show app/local, Notion, Sheets, MCP, web/file source cards", "S23U source-card screenshot captured", "Live Notion/Sheets snippet retrieval"],
     ]
     sync_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Sync Loop!A1:E40')}"
     request_json("PUT", sync_value_url + "?valueInputOption=RAW", headers, {"values": sync_values})
@@ -480,15 +561,28 @@ def update_lifeos_sheet() -> dict:
         ["LifeOS 2026 — Chat Source Pack", "", "", "", ""],
         ["Marker", SOURCE_PACK_MARKER, "", "", ""],
         ["Citation handle", "Surface", "What Chat can quote", "Pointer", "Borrowed benchmark idea"],
-        ["[App snapshot]", "Android", "Kitchen, shopping, recipes, meal logs/plans, receipts, preferences, Health Connect context", "On-device canonical store", "Native first, not toy page"],
+        ["[App snapshot]", "Android", "Kitchen, shopping, recipes, meal logs/plans, receipts, preferences, Health Connect context injected into Chat prompt", "On-device canonical store", "Native first, not toy page"],
         ["[LifeOS Notion]", "Notion", "Dashboards, relations, rollups, quests, habits, journal, vaults, template health", f"https://app.notion.com/p/manasa-srinivas/LifeOS-2026-{NOTION_PAGE_ID}", "Pretty + interconnected dashboard"],
         ["[LifeOS Sheets]", "Google Sheets", "Schema rows, imports/exports, formula checks, conflict inbox, source handles", f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit", "Spreadsheet-primary operating mode"],
         ["[MCP schema]", "MCP/GPT", "Domain catalog, skills, command schemas, validation, review-only links", "wonderfood://lifeos/domain-catalog-v1", "GPT/plugin parity"],
         ["[Template health]", "Notion + Sheets + App", "@now duplication risk, sample/empty parity, relation/rollup checks, source visibility", "LifeOS Runtime + Sync Loop tabs", "LiFE RPG quality gate"],
         ["[Food domain]", "Day 0 package", "Food quests, good/bad habits, boss fights, meal plans, inventory, grocery spend", "assets/lifeos/domain-catalog.v1.json", "Food-centered LifeOS"],
+        ["[Skill map]", "App + Notion + Sheets + MCP", "Domain skill + workflow skill + schema contract rule", "LifeOS Skill Map", "GPT/plugin parity"],
     ]
     source_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Source Pack!A1:E40')}"
     request_json("PUT", source_value_url + "?valueInputOption=RAW", headers, {"values": source_values})
+    skill_values = [
+        ["LifeOS 2026 — Skill Architecture", "", "", "", ""],
+        ["Marker", SKILL_ARCH_MARKER, "", "", ""],
+        ["Layer", "Granularity", "Examples", "Owns", "Why"],
+        ["Domain skill", "One per domain package", "Food, Health, Plants, Finance", "Tone, goals, vocabulary, defaults, safety", "User-facing brain for a LifeOS area"],
+        ["Workflow skill", "One per repeated operating loop", "Weekly reset, Grocery rescue, Pantry boss fight, Health export, Template audit", "Steps, gates, review rules, acceptance criteria", "Reusable playbook across app, Notion, Sheets, GPT/MCP"],
+        ["Schema contract", "Versioned file/resource, not usually a skill", "Command envelope, Room tables, Notion/Sheets graph, MCP resources", "Fields, validation, migrations, sync parity", "Shared contract clients can execute against"],
+        ["UI installer anchor", "One stable anchor per Notion UI-only task", "WF_ANCHOR: Grocery Button Slot, WF_UI_TODO: create native button", "Browser automation target and QA proof", "Avoid brittle raw coordinates"],
+        ["Runtime rule", "Compose layers", "Food domain skill + grocery rescue workflow + command envelope schema", "GPT-like answer, review-only write, source cards", "Same behavior in Android and GPT/plugin/MCP"],
+    ]
+    skill_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Skill Map!A1:E40')}"
+    request_json("PUT", skill_value_url + "?valueInputOption=RAW", headers, {"values": skill_values})
     request_json(
         "POST",
         f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}:batchUpdate",
@@ -531,10 +625,22 @@ def update_lifeos_sheet() -> dict:
                         "dimensions": {"sheetId": source_pack_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 5}
                     }
                 },
+                {
+                    "repeatCell": {
+                        "range": {"sheetId": skill_map_sheet_id, "startRowIndex": 0, "endRowIndex": 3},
+                        "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                        "fields": "userEnteredFormat.textFormat",
+                    }
+                },
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {"sheetId": skill_map_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 5}
+                    }
+                },
             ]
         },
     )
-    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheets": ["LifeOS Runtime", "LifeOS Sync Loop", "LifeOS Source Pack"]}
+    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheets": ["LifeOS Runtime", "LifeOS Sync Loop", "LifeOS Source Pack", "LifeOS Skill Map"]}
 
 
 def main() -> int:
@@ -556,6 +662,10 @@ def main() -> int:
         result["notion_source_pack"] = append_source_pack_section()
     except Exception as error:  # noqa: BLE001
         errors.append(f"notion_source_pack: {error}")
+    try:
+        result["notion_skill_architecture"] = append_skill_architecture_section()
+    except Exception as error:  # noqa: BLE001
+        errors.append(f"notion_skill_architecture: {error}")
     try:
         result["notion_duplicate_cleanup"] = cleanup_duplicate_owned_notion_sections()
     except Exception as error:  # noqa: BLE001

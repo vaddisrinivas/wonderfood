@@ -404,8 +404,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             add(
                 ChatSourceRef(
                     title = "LifeOS Notion",
-                    detail = "Canonical human data plane and presentation dashboard",
-                    quote = "Use this for relations, rollups, dashboards, template health, and source-of-truth pages.",
+                    detail = "Human dashboard",
+                    quote = "Relations, rollups, dashboards, quests, journals, and template QA.",
                     uri = backendHome.templateNotionUrl,
                 ),
             )
@@ -414,8 +414,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             add(
                 ChatSourceRef(
                     title = "LifeOS Sheets",
-                    detail = "Spreadsheet-primary schema and sync surface",
-                    quote = "Use this for auditable tables, formulas, imports, exports, and app/schema parity checks.",
+                    detail = "Workbook mirror",
+                    quote = "Auditable rows, formulas, imports, exports, conflicts, and schema parity.",
                     uri = backendHome.templateSheetsUrl,
                 ),
             )
@@ -423,16 +423,16 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         add(
             ChatSourceRef(
                 title = "LifeOS package runtime",
-                detail = "Bundled domain catalog, schema surfaces, skills, MCP, and data planes",
-                quote = "Food is active Day 0. Health is companion. Plants is template-ready. New domains should come from config first.",
+                detail = "Bundled domain catalog",
+                quote = "Food is live. Health is companion. Plants is template-ready. New domains start as config.",
                 uri = "asset://lifeos/domain-catalog.v1.json",
             ),
         )
         add(
             ChatSourceRef(
                 title = "Template health",
-                detail = "LiFE RPG benchmark risk folded into LifeOS checks",
-                quote = "Avoid frozen @now duplication bugs; prefer explicit dynamic date buttons/checks and visible sample/empty parity.",
+                detail = "Template QA",
+                quote = "Guard @now, sample/empty parity, relations, rollups, and source visibility.",
                 uri = "notion://template-health",
             ),
         )
@@ -543,7 +543,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         return listOf(
             ChatSourceRef(
                 title = "LifeOS source pack",
-                detail = "$domainLabel cited across app, Notion, Sheets, and MCP",
+                detail = "$domainLabel across app, Notion, Sheets, MCP",
                 quote = "Handles: $handles. Local snapshot: $localCounts.",
                 uri = backendHome.templateNotionUrl.ifBlank {
                     backendHome.templateSheetsUrl.ifBlank { "asset://lifeos/domain-catalog.v1.json" }
@@ -557,6 +557,61 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             ),
         )
     }
+
+    private fun lifeOsSourcePackPromptContext(
+        memory: HouseholdUiMemory,
+        backendHome: BackendHomeUiState,
+        activeDomain: LifeOsDomain?,
+    ): String {
+        val domainLabel = activeDomain?.label.orEmpty().ifBlank { "Food" }
+        val counts = listOf(
+            "inventory=${memory.inventory.size}",
+            "groceries=${memory.groceries.size}",
+            "recipes=${memory.recipes.size}",
+            "meal_logs=${memory.mealLogs.size}",
+            "meal_plans=${memory.mealPlans.size}",
+            "plan_entries=${memory.mealPlanEntries.size}",
+            "receipts=${memory.receipts.size}",
+        ).joinToString(", ")
+        val handles = buildList {
+            add("[App snapshot]: on-device canonical state; $counts")
+            backendHome.templateNotionUrl.takeIf { it.isNotBlank() }?.let { url ->
+                add("[LifeOS Notion]: $url")
+            }
+            backendHome.templateSheetsUrl.takeIf { it.isNotBlank() }?.let { url ->
+                add("[LifeOS Sheets]: $url")
+            }
+            add("[MCP schema]: wonderfood://lifeos/domain-catalog-v1")
+            add("[Template health]: ${activeDomain?.templateHealth.orEmpty().take(4).joinToString("; ").ifBlank { "@now guard, sample/empty parity, relation/rollup checks, visible source cards" }}")
+        }
+        val syncLoop = activeDomain?.syncLoop.orEmpty().take(4).joinToString(" -> ").ifBlank {
+            "Notion -> Sheets -> Android -> MCP/GPT"
+        }
+        val operatingLoops = activeDomain?.operatingLoops.orEmpty().take(6).joinToString("; ").ifBlank {
+            "Food quests, good habits, bad-habit reviews, boss fights, daily journal, P.A.R.A."
+        }
+        return buildString {
+            appendLine("Active LifeOS package: $domainLabel.")
+            appendLine("Source handles:")
+            handles.forEach { appendLine("- $it") }
+            appendLine("Sync loop: $syncLoop.")
+            appendLine("Borrowed template loops: $operatingLoops.")
+            append("Instruction: when a user asks about LifeOS, sources, Notion, Sheets, MCP, schema, or sync, answer from these handles explicitly.")
+        }
+    }
+
+    private fun sourcePackAnswer(sourceContext: String): String =
+        buildString {
+            appendLine("Here is the current LifeOS source pack:")
+            sourceContext.lineSequence()
+                .filter { it.isNotBlank() }
+                .take(12)
+                .forEach { line ->
+                    append("• ")
+                    appendLine(line.removePrefix("- ").trim())
+                }
+            append("Chat should cite these handles directly: [App snapshot], [LifeOS Notion], [LifeOS Sheets], [MCP schema], [Template health].")
+        }
 
     private fun localChatMessagesForMemory(): List<ChatMessage> =
         synchronized(localChatLock) {
@@ -3797,13 +3852,18 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val sourceMessageId = insertLocalChatMessage(ChatRole.USER, if (source == "voice") "Voice note: $text" else text)
         val memory = canonicalRuntimeMemory(includeLegacyChat = true)
         val configs = liteLlmSettings.readAll()
+        val currentState = _uiState.value
+        val sourcePackContext = lifeOsSourcePackPromptContext(
+            memory = memory,
+            backendHome = currentState.backendHome,
+            activeDomain = currentState.selectedLifeOsDomain,
+        )
         val promptText = promptContext
             ?.takeIf { it.isNotBlank() }
             ?.let { "$it\n\nUser request:\n$text" }
             ?: text
-        val interpretation = interpretWithVisibleRetries(promptText, text, memory, promptContext, configs)
+        val interpretation = interpretWithVisibleRetries(promptText, text, memory, promptContext, configs, sourcePackContext)
         val turn = interpretation.turn
-        val currentState = _uiState.value
         val sources = chatSourcesForTurn(
             memory = memory,
             backendHome = currentState.backendHome,
@@ -3870,6 +3930,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         memory: HouseholdUiMemory,
         promptContext: String?,
         configs: List<LiteLlmConfig>,
+        sourcePackContext: String,
     ): AiInterpretation {
         CommandEnvelopeDraftMapper.tryMap(originalText)?.let { turn ->
             _uiState.update {
@@ -3887,6 +3948,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
         val localReceipt = DeterministicReceiptParser.tryParse(originalText, promptContext)
         val localTurn = interpreter.interpret(originalText, memory, promptContext)
+        if (originalText.looksLikeSourcePackRequest()) {
+            return AiInterpretation(
+                turn = AiTurn(reply = sourcePackAnswer(sourcePackContext), draft = null),
+                origin = FoodDraftCommandOrigin.AI_REVIEW,
+                autoAcceptAllowed = false,
+                status = "Answered from LifeOS source pack context.",
+            )
+        }
         var lastProviderDiagnostic = ""
         configs.forEachIndexed { index, config ->
             val routeLabel = if (index == 0) "primary" else "fallback"
@@ -3896,7 +3965,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     voiceStatus = "Trying $routeLabel AI provider.",
                 )
             }
-            when (val result = liteLlmInterpreter.interpretWithDiagnostics(promptText, memory, config)) {
+            when (val result = liteLlmInterpreter.interpretWithDiagnostics(promptText, memory, config, sourcePackContext)) {
                 is LiteLlmInterpretation.Success -> {
                     _uiState.update {
                         it.copy(
@@ -4886,6 +4955,18 @@ private val Int.pluralWord: String
 
 private fun Throwable.safeMessage(): String =
     message?.take(140)?.ifBlank { null } ?: "unknown error"
+
+private fun String.looksLikeSourcePackRequest(): Boolean {
+    val lower = lowercase()
+    val asksAboutSourcePack = "source pack" in lower ||
+        "source-pack" in lower ||
+        ("sources" in lower && ("lifeos" in lower || "notion" in lower || "sheets" in lower || "mcp" in lower))
+    val asksAboutSync = ("sync loop" in lower || "data plane" in lower) &&
+        ("lifeos" in lower || "notion" in lower || "sheets" in lower || "mcp" in lower)
+    val asksAboutArchitecture = ("what can you cite" in lower || "what are your sources" in lower) &&
+        ("app" in lower || "notion" in lower || "sheets" in lower)
+    return asksAboutSourcePack || asksAboutSync || asksAboutArchitecture
+}
 
 private fun GroceryStatus.toCanonicalShoppingLineStatus(): com.wonderfood.core.model.household.ShoppingLineStatus =
     when (this) {
