@@ -84,6 +84,125 @@ function sendStopReply(res: any, id: string, status: 'running' | 'completed' | '
   ok(res, { run_id: id, status, conversation_id: run.conversationId, run_status: run.status });
 }
 
+type ChatRunResponse = Awaited<ReturnType<typeof handleServerChat>>;
+
+async function runServerChat(params: {
+  conversationId: string;
+  message: string;
+  threadTitle: string;
+  detail: string;
+  idempotencyKey: string;
+  domainId: string;
+  runId: string;
+  previousResponseId?: string;
+  retryOfMessageId?: string;
+  userMessageId: string;
+  appendUserMessage?: boolean;
+}): Promise<ChatRunResponse> {
+  const controller = new AbortController();
+  const { conversationId, runId } = params;
+
+  runStatus.set(runId, {
+    status: 'running',
+    controller,
+    conversationId,
+  });
+  runByConversation.set(conversationId, runId);
+
+  const shouldAppendUser = params.appendUserMessage !== false;
+  if (shouldAppendUser) {
+    appendServerMessage(conversationId, {
+      id: params.userMessageId,
+      role: 'user',
+      text: params.message,
+    });
+  }
+
+  let response: ChatRunResponse | null = null;
+
+  try {
+    response = await handleServerChat({
+      conversationId,
+      message: params.message,
+      threadTitle: params.threadTitle,
+      idempotencyKey: params.idempotencyKey,
+      domainId: params.domainId,
+      runId,
+      signal: controller.signal,
+      previousResponseId: params.previousResponseId,
+      retryOfMessageId: params.retryOfMessageId,
+    });
+  } catch {
+    response = {
+      conversation_id: conversationId,
+      messages: [
+        {
+          id: `server-${Date.now()}-asst`,
+          role: 'assistant',
+          text: 'I could not complete this response.',
+          answer: undefined,
+        },
+      ],
+      thread: {
+        id: conversationId,
+        title: params.threadTitle,
+        detail: params.detail,
+      },
+      warnings: ['Server runtime failed.'],
+      run: { id: runId, status: 'failed', needs_retry: true, aborted: false },
+    };
+  }
+
+  if (!response) {
+    response = {
+      conversation_id: conversationId,
+      messages: [],
+      thread: {
+        id: conversationId,
+        title: params.threadTitle,
+        detail: params.detail,
+      },
+      warnings: ['Server runtime produced no response.'],
+      run: { id: runId, status: 'failed', needs_retry: true, aborted: false },
+    };
+  }
+
+  const terminalRunStatus = response.run?.status
+    ? response.run.status === 'canceled'
+      ? 'cancelled'
+      : response.run.status === 'completed'
+        ? 'completed'
+        : 'failed'
+    : response.messages.length
+      ? 'completed'
+      : 'failed';
+
+  runStatus.set(runId, {
+    status: terminalRunStatus,
+    controller,
+    conversationId,
+  });
+
+  for (const message of response.messages) {
+    appendServerMessage(conversationId, message);
+    idempotencyCache.set(params.idempotencyKey, {
+      messageId: message.id,
+      runId,
+      conversationId,
+    });
+  }
+
+  runByConversation.delete(conversationId);
+
+  response.thread = {
+    id: conversationId,
+    title: params.threadTitle,
+    detail: params.detail,
+  };
+
+  return response;
+}
+
 const server = createServer(async (req: any, res: any) => {
   const path = getPath(req.url);
 
@@ -203,101 +322,20 @@ const server = createServer(async (req: any, res: any) => {
         ? ((existingMessage as { body?: string } | null)!.body as string)
         : text;
 
-    const controller = new AbortController();
-    runStatus.set(runId, {
-      status: 'running',
-      controller,
+    const response = await runServerChat({
       conversationId,
-    });
-    runByConversation.set(conversation.id, runId);
-
-    let response: Awaited<ReturnType<typeof handleServerChat>> | null = null;
-    try {
-      response = await handleServerChat({
-        conversationId,
-        message: runMessageText,
-        threadTitle: conversation.title,
-        idempotencyKey,
-        domainId: conversation.domain,
-        runId,
-        signal: controller.signal,
-        previousResponseId: typeof parsed.previous_response_id === 'string' ? parsed.previous_response_id : undefined,
-        retryOfMessageId,
-      });
-
-      if (response.run?.status === 'completed') {
-        runStatus.set(runId, {
-          status: 'completed',
-          controller,
-          conversationId,
-        });
-      } else {
-        runStatus.set(runId, {
-          status: response.run?.status === 'canceled' ? 'cancelled' : 'failed',
-          controller,
-          conversationId,
-        });
-      }
-    } catch {
-      runStatus.set(runId, {
-        status: 'failed',
-        controller,
-        conversationId,
-      });
-      response = {
-        conversation_id: conversation.id,
-        messages: [
-          {
-            id: `server-${Date.now()}-asst`,
-            role: 'assistant',
-            text: 'I could not complete this response.',
-            answer: undefined,
-          },
-        ],
-        thread: {
-          id: conversation.id,
-          title: conversation.title,
-          detail: conversation.detail,
-        },
-        warnings: ['Server runtime failed.'],
-        run: { id: runId, status: 'failed', needs_retry: true, aborted: false },
-      };
-    }
-
-    if (!response) {
-      response = {
-        conversation_id: conversation.id,
-        messages: [],
-        thread: {
-          id: conversation.id,
-          title: conversation.title,
-          detail: conversation.detail,
-        },
-        warnings: ['Server runtime produced no response.'],
-        run: {
-          id: runId,
-          status: 'failed',
-          needs_retry: true,
-          aborted: false,
-        },
-      };
-    }
-
-    for (const message of response.messages) {
-      appendServerMessage(conversationId, message);
-      idempotencyCache.set(idempotencyKey, {
-        messageId: message.id,
-        runId,
-        conversationId,
-      });
-      runByConversation.delete(conversation.id);
-    }
-
-    response.thread = {
-      id: conversation.id,
-      title: conversation.title,
+      message: runMessageText,
+      threadTitle: conversation.title,
       detail: conversation.detail,
-    };
+      idempotencyKey,
+      domainId: conversation.domain,
+      runId,
+      previousResponseId: typeof parsed.previous_response_id === 'string' ? parsed.previous_response_id : undefined,
+      retryOfMessageId,
+      userMessageId: userMessageId || `user-${Date.now()}`,
+      appendUserMessage: !retryOfMessageId,
+    });
+
     ok(res, response);
     return;
   }
@@ -340,7 +378,12 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
 
-    let payload: { conversation_id?: string; user_message_id?: string; idempotency_key?: string };
+    let payload: {
+      conversation_id?: string;
+      user_message_id?: string;
+      idempotency_key?: string;
+      previous_response_id?: string;
+    };
     try {
       payload = await readJsonBody(req);
     } catch {
@@ -361,7 +404,7 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
     const target = thread.messages.find((message) => message.id === payload.user_message_id && message.role === 'user') as
-      | ({ body: string } & { id: string; role: 'user' | 'assistant' })
+      | ({ text: string } & { id: string; role: 'user' | 'assistant' })
       | undefined;
     if (!target) {
       badRequest(res, 'target user message not found');
@@ -369,40 +412,20 @@ const server = createServer(async (req: any, res: any) => {
     }
     const idempotencyKey = payload.idempotency_key ?? `${conversationId}:${userMessageId}:retry`;
 
-    req.method = 'POST';
-    req.url = '/chat/send';
-    const wrapped = await (async () => {
-      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const controller = new AbortController();
-      runStatus.set(runId, { status: 'running', controller, conversationId });
-      runByConversation.set(conversationId, runId);
+    const wrapped = await runServerChat({
+      conversationId,
+      message: target.text,
+      threadTitle: thread.title,
+      detail: thread.detail,
+      idempotencyKey,
+      domainId: thread.domain,
+      runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      previousResponseId: payload.previous_response_id,
+      retryOfMessageId: userMessageId,
+      userMessageId,
+      appendUserMessage: false,
+    });
 
-      const response = await handleServerChat({
-        conversationId,
-        message: target.body,
-        threadTitle: thread.title,
-        idempotencyKey,
-        domainId: thread.domain,
-        runId,
-        signal: controller.signal,
-        retryOfMessageId: userMessageId,
-      });
-      for (const message of response.messages) {
-        appendServerMessage(conversationId, message);
-        idempotencyCache.set(idempotencyKey, {
-          messageId: message.id,
-          runId,
-          conversationId,
-        });
-      }
-      runByConversation.delete(conversationId);
-      response.thread = {
-        id: thread.id,
-        title: thread.title,
-        detail: thread.detail,
-      };
-      return response;
-    })();
     ok(res, wrapped);
     return;
   }
