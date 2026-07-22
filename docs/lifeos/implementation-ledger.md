@@ -35,6 +35,7 @@
 - `2026-07-22`: `npm run export:android` ✅.
 - `2026-07-22`: `97e9dc1` + follow-up run/check (same day) improved `/chat/send` and `/chat/retry` lifecycle; run state now appended user turns and deletes active-run state deterministically in both paths.
 - `2026-07-22`: `7bbe263` completed chat action-receipt completion flow and persisted retry/user append consistency in server chat routes.
+- `2026-07-22`: `a?` added conversation continuity and active-run introspection (`/chat/run`), plus agent handoff telemetry in server chat responses for Workstream B traceability.
 
 ## Required gates executed
 

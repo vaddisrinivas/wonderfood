@@ -23,6 +23,7 @@ export type ServerChatResponse = {
   conversation_id: string;
   messages: ServerChatMessage[];
   thread: { id: string; title: string; detail: string };
+  agent_handoffs?: Array<{ role: string; status: 'ok' | 'blocked'; reason?: string }>;
   warnings?: string[];
   run?: {
     id: string;
@@ -196,6 +197,7 @@ export async function handleServerChat(input: {
       title: input.threadTitle || 'Food context',
       detail: 'live response channel',
     },
+    agent_handoffs: orchestrated.roles,
     warnings,
     run: {
       id: orchestrated.runId,

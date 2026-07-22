@@ -9,6 +9,20 @@ import { callOpenAI } from '../providers/openai';
 import { markActionCompleted } from '../actions';
 
 type ExecutorResult = Awaited<ReturnType<typeof executeCommand>>;
+type RawRoleResult = { role: AgentRoleId; status: string; reason?: string };
+type AgentRoleHandoff = {
+  role: AgentRoleId;
+  status: 'ok' | 'blocked';
+  reason?: string;
+};
+
+function toRoleHandoff(roleResult: RawRoleResult): AgentRoleHandoff {
+  return {
+    role: roleResult.role,
+    status: roleResult.status === 'blocked' ? 'blocked' : 'ok',
+    reason: roleResult.reason,
+  };
+}
 type OrchestratorAction = {
   state: ExecutorResult['state'];
   step: ExecutorResult['step'];
@@ -20,6 +34,11 @@ export type OrchestratedRun = {
   runId: string;
   domain: string;
   query: string;
+  roles: Array<{
+    role: AgentRoleId;
+    status: 'ok' | 'blocked';
+    reason?: string;
+  }>;
   policy: Awaited<ReturnType<typeof applyDomainPolicy>>;
   retrieval: Awaited<ReturnType<typeof runRetrieval>>;
   plan: Awaited<ReturnType<typeof buildPlan>>;
@@ -65,12 +84,53 @@ export async function runChatOrchestrator(input: {
   previousResponseId?: string;
 }): Promise<OrchestratedRun> {
   const query = input.message.trim();
+
+  const retrievalRole = await executeAgentRole({
+    role: 'retrieval',
+    domain: input.domain,
+    payload: { query },
+  });
+  const domainRole = await executeAgentRole({
+    role: 'domain',
+    domain: input.domain,
+    payload: { command: input.commandHint ?? query },
+  });
+  const plannerRole = await executeAgentRole({
+    role: 'planner',
+    domain: input.domain,
+    payload: { command: input.commandHint ?? query },
+  });
+
   const retrieval = await runRetrieval({ query, domain: input.domain });
 
   const policy = await applyDomainPolicy({
     domain: input.domain,
     command: input.commandHint ?? query,
   });
+
+  const executorRole = await executeAgentRole({
+    role: 'executor',
+    domain: input.domain,
+    payload: {
+      command: input.commandHint ?? query,
+      tool: 'chat_reply',
+      allowed: policy.allowed,
+    },
+  });
+  const verifierRole = await executeAgentRole({
+    role: 'verifier',
+    domain: input.domain,
+    payload: { action: 'chat_reply', expected: 'chat_reply' },
+  });
+
+  const roles = [
+    toRoleHandoff(retrievalRole as RawRoleResult),
+    toRoleHandoff(domainRole as RawRoleResult),
+    toRoleHandoff(plannerRole as RawRoleResult),
+    toRoleHandoff(executorRole as RawRoleResult),
+    toRoleHandoff(verifierRole as RawRoleResult),
+    toRoleHandoff({ role: 'orchestrator', status: 'ok' }),
+  ];
 
   const plan = await buildPlan({ command: input.commandHint ?? query, domain: input.domain });
   const clarifyingQuestion = policy.requiresClarification ? policy.clarifyingQuestion : undefined;
@@ -125,6 +185,7 @@ Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))
     runId: input.runId ?? `orchestrator:${Date.now()}`,
     domain: input.domain,
     query,
+    roles,
     status: policy.requiresClarification ? 'clarification' : 'ok',
     requiresClarification: policy.requiresClarification ?? false,
     clarifyingQuestion,

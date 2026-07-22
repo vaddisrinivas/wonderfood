@@ -19,6 +19,11 @@ export type ServerResponseMessage = {
 export type ServerChatResponse = {
   conversation_id: string;
   messages: ServerResponseMessage[];
+  agent_handoffs?: Array<{
+    role: string;
+    status: 'ok' | 'blocked';
+    reason?: string;
+  }>;
   thread?: {
     title: string;
     detail: string;

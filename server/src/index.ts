@@ -15,6 +15,7 @@ const port = Number(process.env.PORT ?? '8787');
 const idempotencyCache = new Map<string, { messageId: string; runId: string; conversationId: string }>();
 const runStatus = new Map<string, { status: 'running' | 'completed' | 'cancelled' | 'failed'; controller: AbortController; conversationId: string }>();
 const runByConversation = new Map<string, string>();
+const previousResponseByConversation = new Map<string, string>();
 
 const DEFAULT_AUTH_TOKEN = process.env.LIFEOS_SERVER_TOKEN;
 
@@ -192,6 +193,10 @@ async function runServerChat(params: {
     });
   }
 
+  if (response.run?.previous_response_id) {
+    previousResponseByConversation.set(conversationId, response.run.previous_response_id);
+  }
+
   runByConversation.delete(conversationId);
 
   response.thread = {
@@ -224,6 +229,33 @@ const server = createServer(async (req: any, res: any) => {
         detail: thread.detail,
         updated_at: new Date().toISOString(),
       })),
+    });
+    return;
+  }
+
+  if (path === '/chat/run' && req.method === 'GET') {
+    const query = new URL(`http://127.0.0.1:${port}${req.url}`);
+    const conversationId = query.searchParams.get('conversation_id');
+    if (!conversationId) {
+      badRequest(res, 'conversation_id required');
+      return;
+    }
+    const runId = runByConversation.get(conversationId);
+    if (!runId) {
+      ok(res, {
+        conversation_id: conversationId,
+        active: false,
+        status: 'idle',
+        run_id: null,
+      });
+      return;
+    }
+    const run = runStatus.get(runId);
+    ok(res, {
+      conversation_id: conversationId,
+      active: true,
+      status: run?.status ?? 'failed',
+      run_id: runId,
     });
     return;
   }
@@ -281,6 +313,10 @@ const server = createServer(async (req: any, res: any) => {
     });
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const idempotencyKey = parsed.idempotency_key || `${conversationId}:${text}`;
+    const previousResponseId =
+      typeof parsed.previous_response_id === 'string' && parsed.previous_response_id.trim()
+        ? parsed.previous_response_id
+        : previousResponseByConversation.get(conversationId);
     const existing = idempotencyCache.get(idempotencyKey);
     if (existing) {
       const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
@@ -330,7 +366,7 @@ const server = createServer(async (req: any, res: any) => {
       idempotencyKey,
       domainId: conversation.domain,
       runId,
-      previousResponseId: typeof parsed.previous_response_id === 'string' ? parsed.previous_response_id : undefined,
+      previousResponseId,
       retryOfMessageId,
       userMessageId: userMessageId || `user-${Date.now()}`,
       appendUserMessage: !retryOfMessageId,
@@ -411,6 +447,10 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
     const idempotencyKey = payload.idempotency_key ?? `${conversationId}:${userMessageId}:retry`;
+    const previousResponseId =
+      typeof payload.previous_response_id === 'string' && payload.previous_response_id.trim()
+        ? payload.previous_response_id
+        : previousResponseByConversation.get(conversationId);
 
     const wrapped = await runServerChat({
       conversationId,
@@ -420,7 +460,7 @@ const server = createServer(async (req: any, res: any) => {
       idempotencyKey,
       domainId: thread.domain,
       runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      previousResponseId: payload.previous_response_id,
+      previousResponseId,
       retryOfMessageId: userMessageId,
       userMessageId,
       appendUserMessage: false,
