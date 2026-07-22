@@ -16,6 +16,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -8610,26 +8611,26 @@ private fun AiChatTopCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+        tonalElevation = 1.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LifeOsVectorBadge(
                     icon = Icons.AutoMirrored.Rounded.Chat,
-                    modifier = Modifier.size(42.dp),
+                    modifier = Modifier.size(36.dp),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
                         "WonderFood Chat",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -8642,11 +8643,11 @@ private fun AiChatTopCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 AssistChip(
                     onClick = onHistory,
                     enabled = messageCount > 0,
@@ -8955,21 +8956,27 @@ private fun AiRichList(block: AiRichBlock.ListBlock, color: Color) {
 
 @Composable
 private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            AiRichTableRow(cells = block.header, color = color, header = true)
-            block.rows.forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-                AiRichTableRow(
-                    cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
-                    color = color,
-                    header = false,
-                )
+        Surface(
+            modifier = Modifier.widthIn(min = 520.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AiRichTableRow(cells = block.header, color = color, header = true)
+                block.rows.forEach { row ->
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                    AiRichTableRow(
+                        cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
+                        color = color,
+                        header = false,
+                    )
+                }
             }
         }
     }
@@ -8977,12 +8984,16 @@ private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
 
 @Composable
 private fun AiRichTableRow(cells: List<String>, color: Color, header: Boolean) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+    val cellWidth = if (cells.size <= 2) 240.dp else 180.dp
+    Row(
+        modifier = Modifier
+            .background(if (header) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f) else Color.Transparent),
+    ) {
         cells.forEach { cell ->
             Text(
                 text = cell,
                 modifier = Modifier
-                    .weight(1f)
+                    .width(cellWidth)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
                 color = color,
