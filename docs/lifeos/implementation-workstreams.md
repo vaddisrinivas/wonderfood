@@ -1,11 +1,21 @@
 # LifeOS workstream contracts
 
-## Workstream A: Canonical data (`@/src/db`, `@/src/domain`)
+## Workstream A: Canonical data (`@/src/domain`, `@/src/db`)
 - Owner: A1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/adr-0001-architecture.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
   - `src/domain/catalog.ts`
   - `src/domain/runtime.ts`
+  - `src/domain/surface.ts`
+  - `src/domain/queries.ts`
+  - `src/domain/renderer.tsx`
   - `src/db/provider.tsx`
+  - `src/db/provider.native.tsx`
+  - `src/db/provider.web.tsx`
   - `src/db/migrations.ts`
   - `src/db/records.ts`
   - `src/db/conversations.ts`
@@ -15,85 +25,242 @@
   - `src/db/undo.ts`
   - `src/db/seed.ts`
 - Forbidden:
-  - Do not edit legacy provider/agent/domain code in `app` state screens.
-  - Do not introduce provider keys or secrets in Expo runtime.
+  - edit `app/*` screens
+  - provider keys or credentials in Expo runtime
 - Input contracts:
-  - Uses domain catalog + manifest data from `packages/domain-config`.
-  - All writes call schema validation before commit.
+  - `packages/domain-config/*`
+  - canonical runtime types in `src/domain/runtime.ts`
 - Output contracts:
-  - Canonical records and message tables persisted in SQLite.
-  - Recovery export from active DB path.
-- Acceptance:
-  - Migration replay to latest + rollback helper.
-  - Seeded deterministic dev data only when DB empty and `__DEV__`.
-  - No synchronous heavy DB calls in render paths.
-- File ownership:
-  - All files in `src/db/*` and `src/domain/*`.
+  - validated writes to SQLite
+  - canonical rows for records, relations, conversations, citations, actions, outbox, undo
+  - migration, rollback, and recovery snapshot helpers
+- Acceptance gates:
+  - migration replay to latest + rollback tests
+  - seed only when `__DEV__` and DB empty
+  - no synchronous heavy DB work in render
+- Anti-pattern guards:
+  - bound params only
+  - no provider field loss
+  - no native-only DB transaction assumptions
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
+
+## Workstream B: Chat + conversations (`@/src/chat`, future `server/src/chat/*`)
+- Owner: B1
 - Required docs:
   - `docs/lifeos/expo-implementation-plan.md`
   - `docs/lifeos/product-pass.md`
-  - `docs/lifeos/adr-0001-architecture.md`
-- Input contracts:
-  - `packages/domain-config/*`
-  - `src/domain/runtime.ts` canonical record/conversation/receipt contracts
-- Output contracts:
-  - Deterministic row mappings
-  - DB versioned export + rollback + seed evidence
-- Mandatory report:
-  - Files changed + checks run
-  - Evidence + blockers
-  - Assumptions + gaps
-
-## Workstream B: Chat + conversations (`@/src/chat`, future `server/*`)
-- Owner: B1
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
-  - `src/db/conversations.ts`
-  - future `server/src/*` chat modules
+  - `src/chat/client.ts`
+  - `src/chat/types.ts`
+  - `src/chat/citations.ts`
+  - `server/src/chat.ts`
+  - `server/src/conversations.ts`
+  - `server/src/provenance.ts`
 - Forbidden:
-  - No model or policy keys in Expo bundle.
-- Outputs:
-  - persisted conversation history + structured message envelopes.
-- Gates:
-  - idempotent write path and rollback of failed writes.
+  - model/policy/provider keys in Expo
+  - agent hidden-chain exposure in UI
+- Input contracts:
+  - domain runtime views and source snapshots
+  - action envelope schemas from Workstream E
+- Output contracts:
+  - linear multi-turn conversation history
+  - streamable UI-safe answer blocks
+  - typed action receipt + citation output
+- Acceptance gates:
+  - 10-turn stable recovery
+  - relaunch resume
+  - cancellation + retry safety
+  - duplicate prevention on retries
+- Anti-pattern guards:
+  - no response-editing branch UI
+  - no summary-as-evidence
 - Mandatory report:
-  - Conversation table evidence and fallback checks with app UI handoff tests.
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
 
 ## Workstream C: Notion adapter
 - Owner: C1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
-  - placeholder in future `server/src/providers/notion/*`
+  - `server/src/providers/notion/client.ts`
+  - `server/src/providers/notion/discovery.ts`
+  - `server/src/providers/notion/projection.ts`
+  - `server/src/providers/notion/pull.ts`
+  - `server/src/providers/notion/push.ts`
+  - `server/src/providers/notion/webhook.ts`
+  - `server/src/providers/notion/citations.ts`
 - Forbidden:
-  - no raw webhook payload-as-record use.
+  - reading raw webhook payload as canonical data
+- Input contracts:
+  - Notion API v2026-03-11
+  - `data_source_id` + source snapshots
+- Output contracts:
+  - provider adapters preserving unsupported fields as source snapshots
+  - canonical record IDs for writeback
+- Acceptance gates:
+  - disposable import roundtrip
+  - webhook dedupe/out-of-order handling
+  - immutable citation spans
+- Anti-pattern guards:
+  - no DB writes from webhook payload without refetch
+  - no uncontrolled multi-master merges
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
 
 ## Workstream D: Google Sheets adapter
 - Owner: D1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
-  - placeholder in future `server/src/providers/sheets/*`
+  - `server/src/providers/sheets/client.ts`
+  - `server/src/providers/sheets/workbook.ts`
+  - `server/src/providers/sheets/projection.ts`
+  - `server/src/providers/sheets/pull.ts`
+  - `server/src/providers/sheets/push.ts`
+  - `server/src/providers/sheets/health.ts`
 - Forbidden:
-  - never fetch without explicit scope and stale URL checks.
+  - app-only direct sheet writes
+  - fetch without least-privilege scope checks
+- Input contracts:
+  - batch reads/writes
+  - workbook schema + stable IDs/updated-at
+- Output contracts:
+  - deterministic projection/health surface
+  - updated range for undo + prior value payload storage
+- Acceptance gates:
+  - disposable workbook read/write loop
+  - idempotent sync convergence
+  - formula preservation
+- Anti-pattern guards:
+  - missing updated range on append
+  - silent clobber of user-owned formulas/columns
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
 
 ## Workstream E: MCP + action engine
 - Owner: E1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
-  - future `server/src/mcp/*`
-  - `src/db/actions.ts`
-  - `src/db/undo.ts`
-- Output:
-  - one typed contract per action/citation/undo row.
+  - `server/src/mcp/server.ts`
+  - `server/src/mcp/resources.ts`
+  - `server/src/mcp/tools.ts`
+  - `server/src/mcp/auth.ts`
+  - `server/src/mcp/policy.ts`
+  - `server/src/workflows/*.ts`
+  - `src/actions/engine.ts`
+  - `src/actions/policy.ts`
+  - `src/actions/undo.ts`
+- Forbidden:
+  - tool endpoints without policy checks
+  - exposing sensitive/irreversible operations
+- Input contracts:
+  - domain catalogs and skills
+  - action/undo/receipt schemas
+- Output contracts:
+  - unified tool contracts for app, MCP, chat
+  - idempotent action IDs and undo receipts
+- Acceptance gates:
+  - scope denial and audit tests
+  - workflow checkpoint/compensation
+  - action replay does not duplicate
+- Anti-pattern guards:
+  - schema drift between channels
+  - free-form action shapes
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
 
 ## Workstream F: Expo UI
 - Owner: G1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
   - `app/*`
   - `src/components/*`
-  - `src/data/*`
+- Files restricted to transitional fallback:
+  - `src/data/sample.ts` (view-only fixture mode)
 - Forbidden:
-  - no hard-coded domain branching in tabs/screens beyond fallback demo states.
-- Output:
-  - screens consume domain/runtime repos and SQLite adapters.
+  - hard-coded food branching in navigation/surface screens
+  - direct provider network calls in UI
+- Input contracts:
+  - `src/domain/queries.ts`
+  - `src/domain/renderer.tsx`
+  - `src/db/*` repos
+- Output contracts:
+  - generic surface rendering for active domain
+  - loading/offline/invalid/permission/error states
+  - no hardcoded tab-specific code paths in data surfaces
+- Acceptance gates:
+  - responsive QA at 320/390/768/1280
+  - accessibility basics on core screens
+  - overflow-free layouts
+- Anti-pattern guards:
+  - write operations in render
+  - direct provider IDs in UI
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff
 
 ## Workstream G: Android + Health Connect
 - Owner: H1
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/implementation-ledger.md`
 - Files owned:
-  - `android/*` future manifests and Gradle wrapper once added back.
-- Blocked until runtime gates complete.
+  - `android/*`
+- Forbidden:
+  - physical device Health Connect validation before explicit gate
+  - native edits before server/runtime base gates
+- Input contracts:
+  - emulator matrix results
+  - EAS build constraints
+- Output contracts:
+  - offline and background sync visibility
+  - permission-safe Health Connect pathways
+- Acceptance gates:
+  - emulator matrix pass
+  - APK/AAB production draft
+  - device-specific Health Connect gate
+- Anti-pattern guards:
+  - bypassing secure credential storage
+  - one-off native scripts without migration path
+- Mandatory report:
+  - files changed
+  - checks run
+  - evidence IDs
+  - blockers and confidence
+  - gaps before phase handoff

@@ -5,7 +5,7 @@
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
 | 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE (PASS) | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package host still pending for final ADR closure | Decide final server host in Phase 3 before closing ADR |
-| 1 — SQLite canonical runtime | Agent A | DONE (core + layout bootstrap) / PARTIAL (UI consumption) | `src/domain/{catalog,runtime}.ts`, `src/db/{migrations,provider,records,conversations,sources,outbox,actions,undo,seed}.ts`, `src/db/provider.native.tsx`, `src/db/provider.web.tsx`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still drives search/sources/record paths; phase-2 renderer adapter not complete | Finish screen migrations to domain queries and complete migration anti-pattern audits |
+| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still drives sample fallback in `/search`, `/record/[id]`, `/sources` | Transition phase-2 screens to domain queries and remove demo fallbacks |
 | 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx` | `src/data/sample.ts` still used by `/search`, `/record/[id]`, `/sources` and demo sections | Finish domain-agnostic renderer integration for remaining phase-2 screens and empty/loading states |
 | 3 — Server and real chat | Agent B (Chat/Responses/Conversations) | BLOCKED | no `server/` package yet | Phase 1 + Phase 2 required first | Start only after Phase 2 evidence |
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
@@ -23,14 +23,15 @@
 - `docs/lifeos/adr-0001-architecture.md` created.
 - `src/db/migrations.ts` now enforces v1 schema and rollback/export helpers.
 - `src/db/provider.tsx` now routes native through `SQLiteProvider` and web through a safe non-SQLite shell provider.
+- `docs/lifeos/implementation-workstreams.md` now defines explicit ownership, contracts, anti-pattern guards, and mandatory report fields per workstream.
 
 ## Required gates executed
 
-- `npm run config:validate` ✅
-- `npm run typecheck` ✅
-- `npm run doctor` ✅ (`NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor`)
-- `npm run export:web` ✅
-- `npm run export:android` ✅
+- `npm run config:validate` ✅ (re-run 2026-07-22)
+- `npm run typecheck` ✅ (re-run 2026-07-22)
+- `npm run doctor` ✅ (`NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor`, re-run 2026-07-22)
+- `npm run export:web` ✅ (re-run 2026-07-22)
+- `npm run export:android` ✅ (re-run 2026-07-22)
 
 First run of `npm run doctor` failed due local `.npm` path mismatch (`ENOTDIR /Users/srinivasvaddi/.npm`); rerun succeeded with explicit cache override.
 
