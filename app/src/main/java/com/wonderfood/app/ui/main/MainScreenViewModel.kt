@@ -211,7 +211,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     val healthPermissionContract = health.permissionContract()
     val healthPermissions: Set<String> = health.healthPermissions
     val healthWritePermissions: Set<String> = health.nutritionWritePermissions
-    private val localChatSeedMessage = "Ask naturally. I can use your kitchen, recipes, shopping list, plans, receipts, preferences, and Health Connect status when they are available."
+    private val localChatSeedMessage = "Ask naturally. I can answer with sources from your phone, LifeOS Notion, Sheets, MCP schema, and Health Connect when connected; changes stay review-only until you accept."
 
     private fun seedLocalChatIfNeeded() {
         synchronized(localChatLock) {
@@ -253,21 +253,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             localChatMessages.add(message)
             saveLocalChatMessagesLocked()
             message.id
-        }
-    }
-
-    private fun updateLocalChatMessage(id: Long, body: String): Boolean {
-        val clean = body.trim()
-        if (clean.isBlank()) return false
-        val now = System.currentTimeMillis()
-        return synchronized(localChatLock) {
-            val idx = localChatMessages.indexOfFirst { it.id == id }
-            if (idx < 0) return@synchronized false
-            val message = localChatMessages[idx]
-            if (message.role != ChatRole.USER) return@synchronized false
-            localChatMessages[idx] = message.copy(body = clean, createdAtMillis = now)
-            saveLocalChatMessagesLocked()
-            true
         }
     }
 
@@ -602,15 +587,24 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     private fun sourcePackAnswer(sourceContext: String): String =
         buildString {
+            val sync = sourceContext.lineSequence()
+                .firstOrNull { it.startsWith("Sync loop:") }
+                ?.removePrefix("Sync loop:")
+                ?.trim()
+                ?.trimEnd('.')
+                ?: "Notion -> Sheets -> Android -> MCP/GPT"
             appendLine("Here is the current LifeOS source pack:")
-            sourceContext.lineSequence()
-                .filter { it.isNotBlank() }
-                .take(12)
-                .forEach { line ->
-                    append("• ")
-                    appendLine(line.removePrefix("- ").trim())
-                }
-            append("Chat should cite these handles directly: [App snapshot], [LifeOS Notion], [LifeOS Sheets], [MCP schema], [Template health].")
+            appendLine()
+            appendLine("| Handle | What I use it for |")
+            appendLine("|---|---|")
+            appendLine("| [App snapshot] | Phone state: kitchen, shopping, recipes, meals, receipts, preferences, Health Connect. |")
+            appendLine("| [LifeOS Notion] | Human dashboard: relations, rollups, quests, habits, journal, template QA. |")
+            appendLine("| [LifeOS Sheets] | Spreadsheet mirror: schema rows, import/export checks, formulas, conflicts. |")
+            appendLine("| [MCP schema] | Headless/GPT bridge: domain catalog, validators, review-only proposals. |")
+            appendLine("| [Template health] | @now guard, sample/empty parity, relation and rollup checks. |")
+            appendLine()
+            appendLine("Sync loop: $sync.")
+            append("Any save still becomes a reviewable draft first.")
         }
 
     private fun localChatMessagesForMemory(): List<ChatMessage> =
@@ -1259,15 +1253,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             clearLocalChatHistory()
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
             _uiState.update { it.copy(voiceStatus = "Chat memory reset.") }
-        }
-    }
-
-    fun updateChatMessage(id: Long, body: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (updateLocalChatMessage(id, body)) {
-                refreshFromDisk(isWorking = false)
-                showFeedback("Chat message updated.")
-            }
         }
     }
 

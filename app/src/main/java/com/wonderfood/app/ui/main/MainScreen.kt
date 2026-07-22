@@ -528,7 +528,6 @@ fun MainScreen(
         onAcceptDraft = viewModel::acceptDraft,
         onRejectDraft = viewModel::rejectDraft,
         onDraftChange = viewModel::updatePendingDraft,
-        onChatMessageChange = viewModel::updateChatMessage,
         onClearChatHistory = viewModel::clearChatHistory,
         onDeleteInventory = viewModel::deleteInventory,
         onUpdateInventory = viewModel::updateInventory,
@@ -1525,7 +1524,6 @@ private fun WonderFoodScreen(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
-    onChatMessageChange: (Long, String) -> Unit,
     onClearChatHistory: () -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onUpdateInventory: InventoryUpdateHandler,
@@ -1617,7 +1615,6 @@ private fun WonderFoodScreen(
                     onAcceptDraft = onAcceptDraft,
                     onRejectDraft = onRejectDraft,
                     onDraftChange = onDraftChange,
-                    onChatMessageChange = onChatMessageChange,
                     onClearChatHistory = onClearChatHistory,
                     onDeleteInventory = onDeleteInventory,
                     onUpdateInventory = onUpdateInventory,
@@ -1704,7 +1701,6 @@ private fun WonderFoodScreen(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
-                onChatMessageChange = onChatMessageChange,
                 onClearChatHistory = onClearChatHistory,
                 onDeleteInventory = onDeleteInventory,
                 onUpdateInventory = onUpdateInventory,
@@ -1809,7 +1805,6 @@ private fun MainWorkspace(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
-    onChatMessageChange: (Long, String) -> Unit,
     onClearChatHistory: () -> Unit,
     onDeleteInventory: (Long) -> Unit,
     onUpdateInventory: InventoryUpdateHandler,
@@ -2267,7 +2262,6 @@ private fun MainWorkspace(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
-                onChatMessageChange = onChatMessageChange,
                 onOpenDataHome = {
                     onDismissFeedback()
                     settingsInitialDestination = SettingsDestination.DATA_HOME
@@ -8271,7 +8265,6 @@ private fun AiCaptureSheet(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
-    onChatMessageChange: (Long, String) -> Unit,
     onOpenDataHome: () -> Unit,
     onOpenAiControl: () -> Unit,
     onDismiss: () -> Unit,
@@ -8375,7 +8368,6 @@ private fun AiCaptureSheet(
                 onAcceptDraft = onAcceptDraft,
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
-                onChatMessageChange = onChatMessageChange,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -8503,7 +8495,6 @@ private fun AiConversationTimeline(
     onAcceptDraft: () -> Unit,
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
-    onChatMessageChange: (Long, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -8545,13 +8536,13 @@ private fun AiConversationTimeline(
             if (recentMessages.isEmpty()) {
                 item(key = "empty") {
                     EmptyState(
-                        title = "No AI notes yet.",
-                        subtitle = "Use text, voice, or receipt capture and WonderFood will draft structured food changes.",
+                        title = "Start a real food chat.",
+                        subtitle = "Ask a question, paste a receipt, plan meals, or ask what sources I can cite. I will draft changes separately for review.",
                     )
                 }
             } else {
                 items(recentMessages, key = { "message-${it.id}" }) { message ->
-                    AiThreadMessageBubble(message, onChatMessageChange)
+                    AiThreadMessageBubble(message)
                 }
             }
             item(key = "suggestions") {
@@ -8611,7 +8602,6 @@ private fun AiThreadDivider(label: String) {
 @Composable
 private fun AiThreadMessageBubble(
     message: ChatMessage,
-    onChange: (Long, String) -> Unit,
 ) {
     val isUser = message.role == ChatRole.USER
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
@@ -9094,6 +9084,7 @@ private fun AiCapabilityCenter(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val providerLive = "local fallback" !in providerStatus.lowercase()
     val dataHomeLive = backendHome.activeType != null && !backendHome.requiresOnboarding
+    val dataLabel = backendHome.chatSourceLabel()
     val healthLive = listOf("granted", "steps", "calorie", "protein", "ready", "connected")
         .any { it in healthStatus.lowercase() }
     Surface(
@@ -9108,13 +9099,15 @@ private fun AiCapabilityCenter(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                ObjectImage("🧩", MaterialTheme.colorScheme.secondaryContainer, 42.dp)
+                ObjectImage("📚", MaterialTheme.colorScheme.secondaryContainer, 38.dp)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Chat context", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Sources ready", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text(
-                        "What this answer can read, cite, draft, and hand off.",
+                        "${if (providerLive) "Model live" else "Local fallback"} · $dataLabel · citations visible",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 AssistChip(
@@ -9122,24 +9115,24 @@ private fun AiCapabilityCenter(
                     label = { Text(if (expanded) "Less" else "Details") },
                 )
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AiCapabilityPill(
-                    icon = if (providerLive) "🟢" else "🟡",
-                    label = if (providerLive) "Model live" else "Local AI fallback",
-                    onClick = onOpenAiControl,
-                )
-                AiCapabilityPill("💬", "$messageCount chat msgs")
-                AiCapabilityPill(
-                    icon = if (dataHomeLive) "🟢" else "🟡",
-                    label = "Data: ${backendHome.label}",
-                    onClick = onOpenDataHome,
-                )
-                AiCapabilityPill("📚", "Citations on")
-                AiCapabilityPill("🧠", "Food skill")
-                AiCapabilityPill("🧾", "Camera + voice")
-                AiCapabilityPill(if (healthLive) "🟢" else "⚪", "Health Connect")
-            }
             if (expanded) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AiCapabilityPill(
+                        icon = if (providerLive) "🟢" else "🟡",
+                        label = if (providerLive) "Model live" else "Local AI fallback",
+                        onClick = onOpenAiControl,
+                    )
+                    AiCapabilityPill("💬", "$messageCount chat msgs")
+                    AiCapabilityPill(
+                        icon = if (dataHomeLive) "🟢" else "🟡",
+                        label = "Data: $dataLabel",
+                        onClick = onOpenDataHome,
+                    )
+                    AiCapabilityPill("📚", "Citations on")
+                    AiCapabilityPill("🧠", "Food skill")
+                    AiCapabilityPill("🧾", "Camera + voice")
+                    AiCapabilityPill(if (healthLive) "🟢" else "⚪", "Health Connect")
+                }
                 AiCapabilityRows(
                     providerStatus = providerStatus,
                     backendHome = backendHome,
@@ -10009,6 +10002,15 @@ private fun BackendHomeUiState.dataPlaneDetail(): String =
         .joinToString(" • ")
         .ifBlank { "Choose Notion, Google Sheets, local SQLite, or Postgres as the data home." }
 
+private fun BackendHomeUiState.chatSourceLabel(): String =
+    when {
+        label.equals("Choose data home", ignoreCase = true) &&
+            (templateNotionUrl.isNotBlank() || templateSheetsUrl.isNotBlank()) -> "LifeOS links ready"
+        label.equals("On this phone", ignoreCase = true) -> "Phone store"
+        label.isNotBlank() -> label
+        else -> "Phone store"
+    }
+
 private fun BackendHomeUiState.lifeOsDataHomeDetail(): String =
     when {
         templateNotionUrl.isNotBlank() || templateSheetsUrl.isNotBlank() -> {
@@ -10091,7 +10093,6 @@ private fun WonderFoodPreview() {
             onAcceptDraft = {},
             onRejectDraft = {},
             onDraftChange = {},
-            onChatMessageChange = { _, _ -> },
             onClearChatHistory = {},
             onDeleteInventory = {},
             onUpdateInventory = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
