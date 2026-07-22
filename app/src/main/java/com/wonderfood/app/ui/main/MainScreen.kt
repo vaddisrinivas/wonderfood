@@ -5320,6 +5320,7 @@ private fun LifeOsControlCenter(
             onOpenChat = onOpenChat,
         )
         LifeOsMetricGrid(domain = domain, backendHome = backendHome, aiStatus = aiStatus, healthStatus = healthStatus)
+        LifeOsDataPlaneRibbon(backendHome = backendHome)
         Text("Package deck", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
             domains.forEach { option ->
@@ -5493,24 +5494,123 @@ private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiSta
 
 @Composable
 private fun LifeOsMetricCard(icon: ImageVector, label: String, value: String, detail: String, modifier: Modifier = Modifier) {
+    val active = value == "Live" || value == "Linked" || value == "On"
+    val accent = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = if (active) 3.dp else 1.dp,
+    ) {
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (active) 0.36f else 0.12f),
+                        MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            ),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = icon,
+                        modifier = Modifier.size(32.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                    )
+                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = accent)
+                Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                HorizontalDivider(color = accent.copy(alpha = if (active) 0.40f else 0.16f), thickness = 2.dp)
+            }
+        }
+    }
+}
+
+private data class LifeOsPipelineStep(
+    val icon: ImageVector,
+    val label: String,
+    val state: String,
+    val active: Boolean,
+)
+
+@Composable
+private fun LifeOsDataPlaneRibbon(backendHome: BackendHomeUiState) {
+    val steps = listOf(
+        LifeOsPipelineStep(Icons.Rounded.Description, "Notion", if (backendHome.templateNotionUrl.isNotBlank()) "linked" else "template", backendHome.templateNotionUrl.isNotBlank()),
+        LifeOsPipelineStep(Icons.Rounded.TableChart, "Sheets", if (backendHome.templateSheetsUrl.isNotBlank()) "linked" else "mirror", backendHome.templateSheetsUrl.isNotBlank()),
+        LifeOsPipelineStep(Icons.Rounded.RestaurantMenu, "Android", "native", true),
+        LifeOsPipelineStep(Icons.Rounded.Inventory2, "GPT/MCP", "citations", true),
+    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
         tonalElevation = 2.dp,
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LifeOsVectorBadge(
-                    icon = icon,
-                    modifier = Modifier.size(32.dp),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f),
-                )
-                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f),
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.18f),
+                    ),
+                ),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = Icons.Rounded.Inventory2,
+                        modifier = Modifier.size(36.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("Data-plane map", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "One schema, many surfaces. App stays native; sources stay citeable.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 2.dp)) {
+                    items(steps) { step ->
+                        LifeOsPipelineNode(step)
+                    }
+                }
             }
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsPipelineNode(step: LifeOsPipelineStep) {
+    val accent = if (step.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        modifier = Modifier.width(118.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (step.active) 0.24f else 0.12f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LifeOsVectorBadge(
+                icon = step.icon,
+                modifier = Modifier.size(34.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (step.active) 0.54f else 0.22f),
+            )
+            Text(step.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(modifier = Modifier.size(7.dp), shape = CircleShape, color = accent) {}
+                Text(step.state, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
         }
     }
 }
