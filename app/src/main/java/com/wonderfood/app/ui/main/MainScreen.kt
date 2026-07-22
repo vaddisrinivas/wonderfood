@@ -2074,6 +2074,7 @@ private fun MainWorkspace(
                     )
                     secondaryPane == SecondaryPane.SETTINGS -> PreferencesContent(
                         memory = state.memory,
+                        pendingDraft = state.pendingDraft,
                         preferences = state.preferencesForm,
                         aiConfig = state.aiConfigForm,
                         aiFallbackConfig = state.aiFallbackConfigForm,
@@ -4777,6 +4778,7 @@ private fun RecipeControlPanel(
 @Composable
 private fun PreferencesContent(
     memory: HouseholdUiMemory,
+    pendingDraft: FoodDraft?,
     preferences: FoodPreferences,
     aiConfig: LiteLlmConfig,
     aiFallbackConfig: LiteLlmConfig,
@@ -4860,6 +4862,8 @@ private fun PreferencesContent(
             LifeOsControlCenter(
                 domains = lifeOsDomains,
                 selectedDomainId = selectedLifeOsDomainId,
+                memory = memory,
+                pendingDraft = pendingDraft,
                 backendHome = backendHome,
                 aiStatus = aiStatus,
                 healthStatus = healthStatus,
@@ -5306,6 +5310,8 @@ private fun SettingsControlGroup(content: @Composable ColumnScope.() -> Unit) {
 private fun LifeOsControlCenter(
     domains: List<LifeOsDomain>,
     selectedDomainId: String,
+    memory: HouseholdUiMemory,
+    pendingDraft: FoodDraft?,
     backendHome: BackendHomeUiState,
     aiStatus: String,
     healthStatus: String,
@@ -5325,6 +5331,7 @@ private fun LifeOsControlCenter(
             onOpenChat = onOpenChat,
         )
         LifeOsMetricGrid(domain = domain, backendHome = backendHome, aiStatus = aiStatus, healthStatus = healthStatus)
+        LifeOsTodayBrainCard(memory = memory, pendingDraft = pendingDraft, backendHome = backendHome, healthStatus = healthStatus)
         LifeOsDataPlaneRibbon(backendHome = backendHome)
         Text("Package deck", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
@@ -5582,6 +5589,110 @@ private fun LifeOsHeroCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LifeOsTodayBrainCard(
+    memory: HouseholdUiMemory,
+    pendingDraft: FoodDraft?,
+    backendHome: BackendHomeUiState,
+    healthStatus: String,
+) {
+    val today = LocalDate.now().toEpochDay()
+    val mealsToday = memory.mealLogs.count { it.loggedDateEpochDay == today }
+    val openGroceries = memory.groceries.count { it.status == GroceryStatus.NEEDED }
+    val sourceLive = backendHome.templateNotionUrl.isNotBlank() ||
+        backendHome.templateSheetsUrl.isNotBlank() ||
+        backendHome.activeType != null
+    val healthLive = listOf("granted", "steps", "calorie", "protein", "ready", "connected")
+        .any { it in healthStatus.lowercase() }
+    val reviewCount = if (pendingDraft == null) 0 else 1
+    val tiles = listOf(
+        TodayBrainTileModel(Icons.Rounded.Restaurant, "Meals", mealsToday.toString(), if (mealsToday == 0) "plan next" else "logged today", mealsToday > 0),
+        TodayBrainTileModel(Icons.Rounded.ShoppingCart, "Groceries", openGroceries.toString(), if (openGroceries == 0) "cart clear" else "open items", openGroceries > 0),
+        TodayBrainTileModel(Icons.Rounded.Description, "Sources", if (sourceLive) "Live" else "Phone", backendHome.chatSourceLabel(), sourceLive),
+        TodayBrainTileModel(Icons.Rounded.Shield, "Review", reviewCount.toString(), if (reviewCount == 0) "gate clear" else "proposal waits", reviewCount > 0 || healthLive),
+    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+        tonalElevation = 3.dp,
+    ) {
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f),
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.16f),
+                    ),
+                ),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = Icons.Rounded.Kitchen,
+                        modifier = Modifier.size(38.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("Today brain", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Meals, groceries, source health, and review queue in one glance.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    DraftReviewPill(if (reviewCount == 0) "clear" else "$reviewCount review")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    TodayBrainTile(tiles[0], Modifier.weight(1f))
+                    TodayBrainTile(tiles[1], Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    TodayBrainTile(tiles[2], Modifier.weight(1f))
+                    TodayBrainTile(tiles[3], Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+private data class TodayBrainTileModel(
+    val icon: ImageVector,
+    val label: String,
+    val value: String,
+    val detail: String,
+    val active: Boolean,
+)
+
+@Composable
+private fun TodayBrainTile(tile: TodayBrainTileModel, modifier: Modifier = Modifier) {
+    val accent = if (tile.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        modifier = modifier.heightIn(min = 92.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (tile.active) 0.24f else 0.12f)),
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LifeOsVectorBadge(
+                    icon = tile.icon,
+                    modifier = Modifier.size(28.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (tile.active) 0.46f else 0.20f),
+                )
+                Text(tile.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(tile.value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = accent, maxLines = 1)
+            Text(tile.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
