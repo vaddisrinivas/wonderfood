@@ -1,6 +1,4 @@
-declare const require: any;
-
-const { createServer } = require('http');
+import { createServer } from 'http';
 import { handleServerChat } from './chat';
 import { ServerChatMessage } from './chat';
 import {

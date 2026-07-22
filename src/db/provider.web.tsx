@@ -1,11 +1,25 @@
 import { ReactNode } from 'react';
+import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 
-export type LifeOSDatabase = null;
+import { DATABASE_NAME, runMigrations } from '@/src/db/migrations';
+import { seedDatabase } from '@/src/db/seed';
+
+export type LifeOSDatabase = ReturnType<typeof useSQLiteContext>;
 
 export function useLifeOSDatabase(): LifeOSDatabase {
-  return null;
+  return useSQLiteContext();
 }
 
-export function LifeOSDatabaseProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+export function LifeOSDatabaseProvider({ children, seedInDev = true }: { children: ReactNode; seedInDev?: boolean }) {
+  return (
+    <SQLiteProvider
+      databaseName={DATABASE_NAME}
+      onInit={async (db) => {
+        await runMigrations(db);
+        await seedDatabase(db, { seedInDev });
+      }}
+    >
+      {children}
+    </SQLiteProvider>
+  );
 }

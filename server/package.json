@@ -5,7 +5,10 @@
   "description": "LifeOS server runtimes and AI/action APIs (placeholder scaffold).",
   "type": "module",
   "scripts": {
-    "start": "node src/index.ts",
-    "start:dev": "node src/index.ts"
+    "start": "tsx src/index.ts",
+    "start:dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.4"
   }
 }

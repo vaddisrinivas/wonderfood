@@ -89,6 +89,7 @@ export default function SourcesScreen() {
   const db = useLifeOSDatabase();
   const [sourceRows, setSourceRows] = useState<SourceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasDb = Boolean(db);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +152,23 @@ export default function SourcesScreen() {
           </View>
 
           <SectionTitle title="Data homes & surfaces" />
+          {!sourceRows.length ? (
+            <Card>
+              <Text style={styles.emptyTitle}>No sources connected in this session</Text>
+              <Text style={styles.emptyBody}>
+                {hasDb
+                  ? 'Adapter links are not loaded yet. Connect Notion and/or Sheets in System to begin sync capture.'
+                  : 'LifeOS loaded without a local graph yet. Open SQLite and add your first authority in System.'}
+              </Text>
+              <Link href="/system" asChild>
+                <Pressable style={styles.openSystem}>
+                  <Text style={styles.openSystemText}>Open system</Text>
+                  <Text style={styles.openSystemArrow}>→</Text>
+                </Pressable>
+              </Link>
+            </Card>
+          ) : null}
+
           <View style={styles.sourceGrid}>
             {sourceRows.map((sourceRow) => {
               const normalized = normalizeSourceName(sourceRow.name);
@@ -332,6 +350,11 @@ const styles = StyleSheet.create({
   policyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   policyCheck: { color: colors.moss, fontSize: 13, fontWeight: '900' },
   policyText: { color: colors.muted, fontSize: 12, lineHeight: 17, flex: 1 },
+  emptyTitle: { color: colors.ink, fontSize: 16, fontWeight: '800', marginTop: 16 },
+  emptyBody: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 8 },
+  openSystem: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  openSystemText: { color: colors.ink, fontWeight: '800', fontSize: 13 },
+  openSystemArrow: { color: colors.muted, fontSize: 18, fontWeight: '800' },
   systemAction: { minHeight: 112, marginTop: 24, marginBottom: 12, borderRadius: radius.md, backgroundColor: colors.ink, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 18 },
   systemActionEyebrow: { color: '#AFC19F', fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
   systemActionTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', marginTop: 5 },
