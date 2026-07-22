@@ -26,6 +26,7 @@ RESOURCES = {
     "wonderfood://skill/catalog-v1": ROOT / "docs/ai/skill-catalog-v1.md",
     "wonderfood://schema/command-envelope-v1": ROOT / "docs/ai/command-envelope.schema.v1.json",
     "wonderfood://schema/proposal-package-v1": ROOT / "docs/ai/proposal-package.schema.v1.json",
+    "wonderfood://lifeos/domain-catalog-v1": ROOT / "app/src/main/assets/lifeos/domain-catalog.v1.json",
     "wonderfood://contract/app-command": ROOT / "docs/app-command-contract.md",
 }
 
@@ -171,7 +172,7 @@ def status_payload() -> dict[str, Any]:
         "tools": [tool["name"] for tool in tool_defs()],
         "dataHomes": ["local_sqlite", "notion", "google_sheets", "postgres"],
         "skills": sorted(SKILL_IDS),
-        "schemas": ["wf.ai.command-envelope.v1", "wf.proposal-package.v1"],
+        "schemas": ["wf.ai.command-envelope.v1", "wf.proposal-package.v1", "lifeos.domain-catalog.v1"],
         "appEntrypoints": ["https://wonderfood.app/action", "wonderfood://action", "Android SEND", "Android AppFunctions"],
     }
 

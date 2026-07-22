@@ -40,7 +40,7 @@ def search_pages(query=None, page_size=25):
         data=body,
         headers={
             "Authorization": "Bearer " + token,
-            "Notion-Version": "2022-06-28",
+            "Notion-Version": "2026-03-11",
             "Content-Type": "application/json",
         },
         method="POST",
@@ -105,7 +105,7 @@ req = urllib.request.Request(
     data=body,
     headers={
         "Authorization": "Bearer " + token,
-        "Notion-Version": "2022-06-28",
+        "Notion-Version": "2026-03-11",
         "Content-Type": "application/json",
     },
     method="POST",
@@ -153,7 +153,7 @@ def request(method, path, payload=None, retry=True):
                 data=data,
                 headers={
                     "Authorization": "Bearer " + token,
-                    "Notion-Version": "2022-06-28",
+                    "Notion-Version": "2026-03-11",
                     "Content-Type": "application/json",
                 },
                 method=method,
@@ -199,8 +199,15 @@ def get_child_databases():
             return databases
         cursor = body.get("next_cursor")
 
-def query_database(database_id):
-    body = request("POST", "/databases/" + urllib.parse.quote(database_id, safe="") + "/query", {"page_size": 100})
+def data_source_id(database_id):
+    database = request("GET", "/databases/" + urllib.parse.quote(database_id, safe=""), retry=False)
+    sources = database.get("data_sources", [])
+    if not sources:
+        raise RuntimeError("Notion database has no data source: " + database_id)
+    return sources[0]["id"]
+
+def query_data_source(source_id):
+    body = request("POST", "/data_sources/" + urllib.parse.quote(source_id, safe="") + "/query", {"page_size": 100})
     return body.get("results", [])
 
 def prop_text(prop):
@@ -216,15 +223,15 @@ def prop_text(prop):
         return str(prop.get("checkbox", False)).lower()
     return ""
 
-def find_by_title(database_id, title_value):
-    for result in query_database(database_id):
+def find_by_title(source_id, title_value):
+    for result in query_data_source(source_id):
         for prop in result.get("properties", {}).values():
             if prop_text(prop) == title_value:
                 return result
     return None
 
-def find_by_page_id(database_id, page_id_value):
-    for result in query_database(database_id):
+def find_by_page_id(source_id, page_id_value):
+    for result in query_data_source(source_id):
         if result.get("id") == page_id_value:
             return result
     return None
@@ -234,8 +241,10 @@ kitchen_db = databases.get("WonderFood Kitchen")
 shopping_db = databases.get("WonderFood Shopping")
 if not kitchen_db or not shopping_db:
     raise SystemExit("Missing live Notion Kitchen or Shopping database.")
+kitchen_source = data_source_id(kitchen_db)
+shopping_source = data_source_id(shopping_db)
 
-kitchen_rows = query_database(kitchen_db)
+kitchen_rows = query_data_source(kitchen_source)
 if not kitchen_rows:
     raise SystemExit("Kitchen database has no exported seed rows.")
 kitchen_page = kitchen_rows[0]
@@ -246,7 +255,7 @@ request(
     "/pages/" + urllib.parse.quote(kitchen_page["id"], safe=""),
     {"properties": {"On hand": number(999), "Buy next": checkbox(True)}},
 )
-edited_kitchen = find_by_page_id(kitchen_db, kitchen_page["id"])
+edited_kitchen = find_by_page_id(kitchen_source, kitchen_page["id"])
 notion_edit_read_back = prop_text(edited_kitchen.get("properties", {}).get("On hand", {})).startswith("999")
 
 scenario_title = "Scenario Notion apples " + str(int(time.time()))
@@ -254,7 +263,7 @@ request(
     "POST",
     "/pages",
     {
-        "parent": {"database_id": shopping_db},
+        "parent": {"data_source_id": shopping_source},
         "properties": {
             "Item": title(scenario_title),
             "Amount": number(4),
@@ -264,7 +273,7 @@ request(
         },
     },
 )
-created_shopping = find_by_title(shopping_db, scenario_title)
+created_shopping = find_by_title(shopping_source, scenario_title)
 live_create_row = created_shopping is not None
 
 request(
@@ -272,7 +281,7 @@ request(
     "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
     {"properties": {"Status": select("In cart")}},
 )
-edited_shopping = find_by_title(shopping_db, scenario_title)
+edited_shopping = find_by_title(shopping_source, scenario_title)
 live_app_edit_read_back = prop_text(edited_shopping.get("properties", {}).get("Status", {})) == "In cart"
 
 request(
@@ -282,21 +291,21 @@ request(
 )
 archive_read_back = request("GET", "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""), retry=False).get("archived") is True
 
-database_before_repair = request("GET", "/databases/" + urllib.parse.quote(shopping_db, safe=""), retry=False)
+database_before_repair = request("GET", "/data_sources/" + urllib.parse.quote(shopping_source, safe=""), retry=False)
 repair_detected = "Status" in database_before_repair.get("properties", {})
 request(
     "PATCH",
-    "/databases/" + urllib.parse.quote(shopping_db, safe=""),
+    "/data_sources/" + urllib.parse.quote(shopping_source, safe=""),
     {"properties": {"Scenario repair marker": {"rich_text": {}}}},
 )
-database_with_marker = request("GET", "/databases/" + urllib.parse.quote(shopping_db, safe=""), retry=False)
+database_with_marker = request("GET", "/data_sources/" + urllib.parse.quote(shopping_source, safe=""), retry=False)
 repair_marker_created = "Scenario repair marker" in database_with_marker.get("properties", {})
 request(
     "PATCH",
-    "/databases/" + urllib.parse.quote(shopping_db, safe=""),
+    "/data_sources/" + urllib.parse.quote(shopping_source, safe=""),
     {"properties": {"Scenario repair marker": None}},
 )
-database_after_repair = request("GET", "/databases/" + urllib.parse.quote(shopping_db, safe=""), retry=False)
+database_after_repair = request("GET", "/data_sources/" + urllib.parse.quote(shopping_source, safe=""), retry=False)
 repair_verified = "Scenario repair marker" not in database_after_repair.get("properties", {}) and "Status" in database_after_repair.get("properties", {})
 
 payload = {

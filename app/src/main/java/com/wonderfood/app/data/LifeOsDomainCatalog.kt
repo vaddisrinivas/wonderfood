@@ -14,6 +14,9 @@ data class LifeOsDomain(
     val skills: List<String>,
     val schemaSurfaces: List<String>,
     val dataPlanes: List<String>,
+    val operatingLoops: List<String>,
+    val templateHealth: List<String>,
+    val benchmarks: List<String>,
 ) {
     val statusLabel: String
         get() = status.replace('-', ' ').replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
@@ -61,6 +64,9 @@ data class LifeOsDomainCatalog(
                             skills = item.optJSONArray("skills").strings(),
                             schemaSurfaces = item.optJSONArray("schema_surfaces").strings(),
                             dataPlanes = item.optJSONArray("data_planes").strings(),
+                            operatingLoops = item.optJSONArray("operating_loops").strings(),
+                            templateHealth = item.optJSONArray("template_health").strings(),
+                            benchmarks = item.optJSONArray("benchmarks").strings(),
                         ),
                     )
                 }
@@ -87,6 +93,9 @@ data class LifeOsDomainCatalog(
                         skills = listOf("inventory", "shopping", "recipes", "meal_logging", "planning", "receipt_parsing"),
                         schemaSurfaces = listOf("Home", "Kitchen", "Shopping", "Meals", "Recipes", "Spending"),
                         dataPlanes = listOf("Notion", "Google Sheets", "SQLite", "Postgres", "MCP"),
+                        operatingLoops = listOf("quests", "habits", "review", "journal"),
+                        templateHealth = listOf("dynamic dates only", "sample data reset", "source links visible"),
+                        benchmarks = listOf("LifeOS 2026", "2024 Notion", "LiFE RPG 2.0"),
                     ),
                 ),
             )

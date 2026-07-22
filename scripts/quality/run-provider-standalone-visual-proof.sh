@@ -77,7 +77,7 @@ token = os.environ["NOTION_TOKEN"]
 parent = os.environ.get("NOTION_TEST_PAGE_ID", "")
 headers = {
     "Authorization": "Bearer " + token,
-    "Notion-Version": "2022-06-28",
+    "Notion-Version": "2026-03-11",
     "Content-Type": "application/json",
 }
 if not parent:
@@ -148,7 +148,7 @@ captured_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 notion_headers = {
     "Authorization": "Bearer " + notion_token,
-    "Notion-Version": "2022-06-28",
+    "Notion-Version": "2026-03-11",
     "Content-Type": "application/json",
 }
 sheets_headers = {"Authorization": "Bearer " + sheets_token, "Content-Type": "application/json"}
@@ -223,9 +223,17 @@ def notion_children(page_id):
         cursor = body.get("next_cursor")
 
 def notion_rows(database_id):
+    database = http_json(
+        "GET",
+        "https://api.notion.com/v1/databases/" + urllib.parse.quote(database_id, safe=""),
+        notion_headers,
+    )
+    sources = database.get("data_sources", [])
+    if not sources:
+        raise RuntimeError("Notion database has no data source: " + database_id)
     body = http_json(
         "POST",
-        "https://api.notion.com/v1/databases/" + urllib.parse.quote(database_id, safe="") + "/query",
+        "https://api.notion.com/v1/data_sources/" + urllib.parse.quote(sources[0]["id"], safe="") + "/query",
         notion_headers,
         {"page_size": 5},
     )

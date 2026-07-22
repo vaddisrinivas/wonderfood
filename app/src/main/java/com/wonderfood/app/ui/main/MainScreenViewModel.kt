@@ -395,7 +395,43 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 title = "Active data home",
                 detail = backendHome.label,
                 quote = backendHome.detail,
-                uri = backendHome.sheetUrl,
+                uri = backendHome.dataPlaneUrl.ifBlank { backendHome.sheetUrl },
+            ),
+        )
+        if (backendHome.templateNotionUrl.isNotBlank()) {
+            add(
+                ChatSourceRef(
+                    title = "LifeOS Notion",
+                    detail = "Canonical human data plane and presentation dashboard",
+                    quote = "Use this for relations, rollups, dashboards, template health, and source-of-truth pages.",
+                    uri = backendHome.templateNotionUrl,
+                ),
+            )
+        }
+        if (backendHome.templateSheetsUrl.isNotBlank()) {
+            add(
+                ChatSourceRef(
+                    title = "LifeOS Sheets",
+                    detail = "Spreadsheet-primary schema and sync surface",
+                    quote = "Use this for auditable tables, formulas, imports, exports, and app/schema parity checks.",
+                    uri = backendHome.templateSheetsUrl,
+                ),
+            )
+        }
+        add(
+            ChatSourceRef(
+                title = "LifeOS package runtime",
+                detail = "Bundled domain catalog, schema surfaces, skills, MCP, and data planes",
+                quote = "Food is active Day 0. Health is companion. Plants is template-ready. New domains should come from config first.",
+                uri = "asset://lifeos/domain-catalog.v1.json",
+            ),
+        )
+        add(
+            ChatSourceRef(
+                title = "Template health",
+                detail = "LiFE RPG benchmark risk folded into LifeOS checks",
+                quote = "Avoid frozen @now duplication bugs; prefer explicit dynamic date buttons/checks and visible sample/empty parity.",
+                uri = "notion://template-health",
             ),
         )
         add(

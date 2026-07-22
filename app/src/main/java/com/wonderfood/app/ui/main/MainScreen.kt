@@ -5338,6 +5338,35 @@ private fun LifeOsControlCenter(
                 Text("Open model, skills & MCP settings")
             }
         }
+        if (domain.operatingLoops.isNotEmpty()) {
+            SettingsControlGroup {
+                Text("Operating loops", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Borrowed from strong LifeOS/RPG templates, but mapped to practical food workflows.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                domain.operatingLoops.forEach { loop ->
+                    LifeOsStatusLine("Loop", loop)
+                }
+            }
+        }
+        if (domain.templateHealth.isNotEmpty()) {
+            SettingsControlGroup {
+                Text("Template health", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                domain.templateHealth.forEach { check ->
+                    LifeOsStatusLine("Check", check)
+                }
+            }
+        }
+        if (domain.benchmarks.isNotEmpty()) {
+            SettingsControlGroup {
+                Text("Benchmark inputs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    domain.benchmarks.forEach { benchmark -> DraftReviewPill(benchmark) }
+                }
+            }
+        }
     }
     SettingsControlGroup {
         Text("Data planes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

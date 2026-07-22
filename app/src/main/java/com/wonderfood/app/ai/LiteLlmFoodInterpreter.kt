@@ -851,6 +851,8 @@ class LiteLlmFoodInterpreter(
 
             Current database snapshot read immediately before this AI turn:
             Snapshot values are authoritative. Say when a requested field is absent; do not silently fill it from memory or guess.
+            Source handles available in the Android UI after this turn: [App snapshot], [LifeOS Notion], [LifeOS Sheets], [MCP schema], [Template health], and any provider web/file citations.
+            When answering questions, tables, comparisons, or recommendations, mention the source handle(s) you used in the reply. If no source supports a claim, say it is an estimate or ask to connect/refresh the missing source.
             counts: inventory=${memory.inventory.size}, groceries=${memory.groceries.size}, recipes=${memory.recipes.size}, meal_logs=${memory.mealLogs.size}, meal_plans=${memory.mealPlans.size}, plan_entries=${memory.mealPlanEntries.size}, receipts=${memory.receipts.size}, actions=${memory.actions.size}, events=${memory.events.size}
             inventory: ${inventory.ifBlank { "empty" }}
             groceries: ${groceries.ifBlank { "empty" }}
@@ -931,6 +933,7 @@ If the user asks for calories, macros, or nutrition without a serving size or qu
 If logging a clearly named meal, a rough meal_log draft is allowed, but the reply must tell the user to confirm/correct calories and macros before accepting.
 For "tomorrow", use day_offset:1. For today, use day_offset:0.
 Always respect saved allergies and dislikes. Treat custom_ai_instructions as user-authored operating instructions unless they conflict with safety or the current message.
+When answering without a draft, still be useful: use bullets/tables when helpful and cite source handles like [App snapshot], [LifeOS Notion], [LifeOS Sheets], [MCP schema], [Template health], or provider web/file citations. Do not invent citations.
 
 Schema:
 {

@@ -24,6 +24,8 @@ NOTION_PAGE_ID = os.getenv("LIFEOS_NOTION_PAGE_ID", "3a45dd535a93816fb7d3d4a0a2b
 SPREADSHEET_ID = os.getenv("LIFEOS_SHEETS_ID", "1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU")
 TOKEN_FILE = pathlib.Path(os.getenv("GOOGLE_SHEETS_TOKEN_FILE", str(ROOT / "build/evidence/live-workspace/google-sheets-token.json")))
 MARKER = "LifeOS product surface installed by WonderFood Android"
+LIFERPG_MARKER = "LiFE RPG benchmark folded into WonderFood LifeOS"
+NOTION_VERSION = "2026-03-11"
 
 
 def request_json(method: str, url: str, headers: dict[str, str], body: object | None = None) -> dict:
@@ -44,7 +46,7 @@ def notion_headers() -> dict[str, str]:
         raise RuntimeError("NOTION_TOKEN or NOTION_API_KEY missing")
     return {
         "Authorization": f"Bearer {token}",
-        "Notion-Version": "2025-09-03",
+        "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 
@@ -100,6 +102,69 @@ def append_lifeos_notion_section() -> dict:
             "type": "bulleted_list_item",
             "bulleted_list_item": {
                 "rich_text": [{"type": "text", "text": {"content": "Config source: app/src/main/assets/lifeos/domain-catalog.v1.json controls active package metadata."}}]
+            },
+        },
+    ]
+    request_json(
+        "PATCH",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+        headers,
+        {"children": blocks},
+    )
+    return {"status": "appended", "page_id": NOTION_PAGE_ID}
+
+
+def append_liferpg_benchmark_section() -> dict:
+    headers = notion_headers()
+    children = request_json(
+        "GET",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=100",
+        headers,
+    ).get("results", [])
+    existing_text = json.dumps(children)
+    if LIFERPG_MARKER in existing_text:
+        return {"status": "already_present", "page_id": NOTION_PAGE_ID}
+
+    blocks = [
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "🎮 LiFE RPG benchmark upgrades"}}]},
+        },
+        {
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "icon": {"emoji": "🧭"},
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f"{LIFERPG_MARKER}. Borrow the useful structure, not the toy skin: quests, habits, boss fights, P.A.R.A., daily journal, RPGenie-style assistant posture, sample/empty parity, and template health checks."
+                        },
+                    }
+                ],
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Food quests: weekly cook/shop/clean/eat objectives linked to meals, groceries, recipes, spend, and Health Connect context."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Habit loops: water/protein/home-cooked/prep as positive loops; waste/overspend/duplicate-buying as review loops."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "Template health: avoid frozen @now after duplication; keep sample and empty templates equivalent; surface relation/rollup/schema checks visibly."}}]
             },
         },
     ]
@@ -201,6 +266,12 @@ def update_lifeos_sheet() -> dict:
         ["Data plane", "SQLite/Postgres", "Canonical store + hosted snapshot route", "Runtime"],
         ["AI/MCP", "WonderFood Chat", "Multi-turn, sources, markdown tables, proposal review", "Runtime"],
         ["MCP", "wonderfood_mcp_server.py", "Skills, schemas, validation, packages, review-only app links", "Ready"],
+        ["Benchmark", "LiFE RPG 2.0", "Quests, habits, boss fights, P.A.R.A., RPGenie, sample/empty parity", "Borrowed"],
+        ["Food loop", "Food quests", "Weekly cook/shop/clean/eat objectives", "Config"],
+        ["Food loop", "Good habits", "Water, protein, home-cooked meals, prep blocks", "Config"],
+        ["Food loop", "Bad-habit reviews", "Waste, missed meals, overspend, duplicate buying", "Config"],
+        ["Template health", "@now duplication risk", "Prefer explicit dynamic date buttons/checks and visible health checklist", "Required"],
+        ["Template health", "Source quoting", "App/local, Notion, Sheets, MCP, and web/file sources visible in chat", "Required"],
     ]
     value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Runtime!A1:D40')}"
     request_json("PUT", value_url + "?valueInputOption=RAW", headers, {"values": values})
@@ -235,6 +306,10 @@ def main() -> int:
         result["notion"] = append_lifeos_notion_section()
     except Exception as error:  # noqa: BLE001
         errors.append(f"notion: {error}")
+    try:
+        result["notion_liferpg"] = append_liferpg_benchmark_section()
+    except Exception as error:  # noqa: BLE001
+        errors.append(f"notion_liferpg: {error}")
     try:
         result["google_sheets"] = update_lifeos_sheet()
     except Exception as error:  # noqa: BLE001
