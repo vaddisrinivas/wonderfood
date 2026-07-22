@@ -70,10 +70,13 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Kitchen
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.RestaurantMenu
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -4842,6 +4845,7 @@ private fun PreferencesContent(
         )
         SettingsDestination.LIFEOS_CONTROL -> SettingsDetailPage(
             image = "🧬",
+            icon = Icons.Rounded.Inventory2,
             title = "LifeOS",
             subtitle = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }?.let { "${it.label} live · Notion, Sheets, app sources" }
                 ?: "Domains, skills, sources, and data homes",
@@ -5103,6 +5107,7 @@ private fun SettingsHomeContent(
 @Composable
 private fun SettingsDetailPage(
     image: String,
+    icon: ImageVector? = null,
     title: String,
     subtitle: String,
     onBack: () -> Unit,
@@ -5113,7 +5118,7 @@ private fun SettingsDetailPage(
         contentPadding = PaddingValues(bottom = 18.dp),
     ) {
         item {
-            SettingsSubpageHeader(image = image, title = title, subtitle = subtitle, onBack = onBack)
+            SettingsSubpageHeader(image = image, icon = icon, title = title, subtitle = subtitle, onBack = onBack)
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
@@ -5124,6 +5129,7 @@ private fun SettingsDetailPage(
 @Composable
 private fun SettingsSubpageHeader(
     image: String,
+    icon: ImageVector? = null,
     title: String,
     subtitle: String,
     onBack: () -> Unit,
@@ -5142,7 +5148,16 @@ private fun SettingsSubpageHeader(
             color = MaterialTheme.colorScheme.primaryContainer,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(image, style = MaterialTheme.typography.headlineMedium)
+                if (icon != null) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(34.dp),
+                    )
+                } else {
+                    Text(image, style = MaterialTheme.typography.headlineMedium)
+                }
             }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -5400,7 +5415,11 @@ private fun LifeOsHeroCard(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
-                    ObjectImage(domain.emoji, MaterialTheme.colorScheme.surface.copy(alpha = 0.72f), 58.dp)
+                    LifeOsVectorBadge(
+                        icon = domain.lifeOsIcon(),
+                        modifier = Modifier.size(58.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.76f),
+                    )
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${domain.label} LifeOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text(
@@ -5438,14 +5457,14 @@ private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiSta
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             LifeOsMetricCard(
-                icon = "🍽️",
+                icon = Icons.Rounded.RestaurantMenu,
                 label = "Food brain",
                 value = "Live",
                 detail = "${domain.schemaSurfaces.size} surfaces · ${domain.skills.size} skills",
                 modifier = Modifier.weight(1f),
             )
             LifeOsMetricCard(
-                icon = "📝",
+                icon = Icons.Rounded.Description,
                 label = "Notion",
                 value = notionState,
                 detail = "Dashboard + rollups",
@@ -5454,14 +5473,14 @@ private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiSta
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             LifeOsMetricCard(
-                icon = "📊",
+                icon = Icons.Rounded.TableChart,
                 label = "Sheets",
                 value = sheetsState,
                 detail = backendHome.chatSourceLabel(),
                 modifier = Modifier.weight(1f),
             )
             LifeOsMetricCard(
-                icon = "🛡️",
+                icon = Icons.Rounded.Shield,
                 label = "Review gate",
                 value = "On",
                 detail = "$healthState · $aiDetail",
@@ -5472,7 +5491,7 @@ private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiSta
 }
 
 @Composable
-private fun LifeOsMetricCard(icon: String, label: String, value: String, detail: String, modifier: Modifier = Modifier) {
+private fun LifeOsMetricCard(icon: ImageVector, label: String, value: String, detail: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(22.dp),
@@ -5482,7 +5501,11 @@ private fun LifeOsMetricCard(icon: String, label: String, value: String, detail:
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(icon, style = MaterialTheme.typography.titleMedium)
+                LifeOsVectorBadge(
+                    icon = icon,
+                    modifier = Modifier.size(32.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f),
+                )
                 Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -5507,7 +5530,11 @@ private fun LifeOsDomainCard(domain: LifeOsDomain, selected: Boolean, onSelect: 
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(domain.emoji, style = MaterialTheme.typography.titleLarge)
+                LifeOsVectorBadge(
+                    icon = domain.lifeOsIcon(),
+                    modifier = Modifier.size(32.dp),
+                    containerColor = if (selected) MaterialTheme.colorScheme.surface.copy(alpha = 0.58f) else MaterialTheme.colorScheme.surfaceVariant,
+                )
                 Text(domain.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
             }
             Text(domain.statusLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -5515,6 +5542,37 @@ private fun LifeOsDomainCard(domain: LifeOsDomain, selected: Boolean, onSelect: 
         }
     }
 }
+
+@Composable
+private fun LifeOsVectorBadge(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxSize(0.56f),
+            )
+        }
+    }
+}
+
+private fun LifeOsDomain.lifeOsIcon(): ImageVector =
+    when (id) {
+        "food" -> Icons.Rounded.RestaurantMenu
+        "plants" -> Icons.Rounded.Storefront
+        "health" -> Icons.Rounded.HealthAndSafety
+        else -> Icons.Rounded.Inventory2
+    }
 
 @Composable
 private fun LifeOsSourceCard(icon: String, title: String, detail: String, modifier: Modifier = Modifier) {
@@ -8563,7 +8621,11 @@ private fun AiChatTopCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ObjectImage("💬", MaterialTheme.colorScheme.primaryContainer, 42.dp)
+                LifeOsVectorBadge(
+                    icon = Icons.AutoMirrored.Rounded.Chat,
+                    modifier = Modifier.size(42.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
                         "WonderFood Chat",
@@ -8797,7 +8859,11 @@ private fun AiThreadMessageBubble(
         verticalAlignment = Alignment.Top,
     ) {
         if (!isUser) {
-            ObjectImage(image = "✦", color = MaterialTheme.colorScheme.primaryContainer, size = 30.dp)
+            LifeOsVectorBadge(
+                icon = Icons.AutoMirrored.Rounded.Chat,
+                modifier = Modifier.size(30.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            )
             Spacer(Modifier.width(8.dp))
         }
         Column(
