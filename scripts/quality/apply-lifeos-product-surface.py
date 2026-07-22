@@ -26,7 +26,9 @@ TOKEN_FILE = pathlib.Path(os.getenv("GOOGLE_SHEETS_TOKEN_FILE", str(ROOT / "buil
 MARKER = "LifeOS product surface installed by WonderFood Android"
 LIFERPG_MARKER = "LiFE RPG benchmark folded into WonderFood LifeOS"
 SYNC_LOOP_MARKER = "LifeOS source sync loop installed by WonderFood"
+SOURCE_PACK_MARKER = "LifeOS chat source pack installed by WonderFood"
 NOTION_VERSION = "2026-03-11"
+OWNED_NOTION_MARKERS = [MARKER, LIFERPG_MARKER, SYNC_LOOP_MARKER, SOURCE_PACK_MARKER]
 
 
 def request_json(method: str, url: str, headers: dict[str, str], body: object | None = None) -> dict:
@@ -52,13 +54,27 @@ def notion_headers() -> dict[str, str]:
     }
 
 
+def fetch_notion_children(headers: dict[str, str], block_id: str = NOTION_PAGE_ID) -> list[dict]:
+    children: list[dict] = []
+    cursor = ""
+    while True:
+        query = f"page_size=100{f'&start_cursor={cursor}' if cursor else ''}"
+        payload = request_json(
+            "GET",
+            f"https://api.notion.com/v1/blocks/{block_id}/children?{query}",
+            headers,
+        )
+        children.extend(payload.get("results", []))
+        if not payload.get("has_more"):
+            return children
+        cursor = payload.get("next_cursor", "")
+        if not cursor:
+            return children
+
+
 def append_lifeos_notion_section() -> dict:
     headers = notion_headers()
-    children = request_json(
-        "GET",
-        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=100",
-        headers,
-    ).get("results", [])
+    children = fetch_notion_children(headers)
     existing_text = json.dumps(children)
     if MARKER in existing_text:
         return {"status": "already_present", "page_id": NOTION_PAGE_ID}
@@ -117,11 +133,7 @@ def append_lifeos_notion_section() -> dict:
 
 def append_liferpg_benchmark_section() -> dict:
     headers = notion_headers()
-    children = request_json(
-        "GET",
-        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=100",
-        headers,
-    ).get("results", [])
+    children = fetch_notion_children(headers)
     existing_text = json.dumps(children)
     if LIFERPG_MARKER in existing_text:
         return {"status": "already_present", "page_id": NOTION_PAGE_ID}
@@ -180,11 +192,7 @@ def append_liferpg_benchmark_section() -> dict:
 
 def append_sync_loop_section() -> dict:
     headers = notion_headers()
-    children = request_json(
-        "GET",
-        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=100",
-        headers,
-    ).get("results", [])
+    children = fetch_notion_children(headers)
     existing_text = json.dumps(children)
     if SYNC_LOOP_MARKER in existing_text:
         return {"status": "already_present", "page_id": NOTION_PAGE_ID}
@@ -239,6 +247,95 @@ def append_sync_loop_section() -> dict:
         {"children": blocks},
     )
     return {"status": "appended", "page_id": NOTION_PAGE_ID}
+
+
+def append_source_pack_section() -> dict:
+    headers = notion_headers()
+    children = fetch_notion_children(headers)
+    existing_text = json.dumps(children)
+    if SOURCE_PACK_MARKER in existing_text:
+        return {"status": "already_present", "page_id": NOTION_PAGE_ID}
+
+    blocks = [
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "📚 Chat source pack"}}]},
+        },
+        {
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "icon": {"emoji": "📚"},
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f"{SOURCE_PACK_MARKER}. Android Chat should cite one compact source pack that points to app/local state, this Notion dashboard, the Google Sheets workbook, MCP schema resources, and template-health checks."
+                        },
+                    }
+                ],
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "[App snapshot] Kitchen, shopping, recipes, meals, receipts, preferences, and Health Connect context visible to Chat."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "[LifeOS Notion] Human dashboard: pretty presentation, relations, rollups, quests, habits, journal, financial/food vaults, and template health."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "[LifeOS Sheets] Workbook mirror: schema rows, sync loop, source-pack handles, import/export checks, and conflict inbox model."}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "[MCP schema] wonderfood://lifeos/domain-catalog-v1 exposes package metadata for GPT/plugin parity."}}]
+            },
+        },
+    ]
+    request_json(
+        "PATCH",
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+        headers,
+        {"children": blocks},
+    )
+    return {"status": "appended", "page_id": NOTION_PAGE_ID}
+
+
+def cleanup_duplicate_owned_notion_sections() -> dict:
+    headers = notion_headers()
+    children = fetch_notion_children(headers)
+    archived: list[str] = []
+    kept: dict[str, int] = {}
+    for marker in OWNED_NOTION_MARKERS:
+        sections: list[list[str]] = []
+        for index, block in enumerate(children):
+            if marker not in json.dumps(block):
+                continue
+            start = index - 1 if index > 0 and children[index - 1].get("type") == "heading_2" else index
+            end = start + 1
+            while end < len(children) and (end == start or children[end].get("type") not in {"heading_1", "heading_2"}):
+                end += 1
+            sections.append([item["id"] for item in children[start:end] if item.get("id")])
+        kept[marker] = 1 if sections else 0
+        for duplicate_section in sections[1:]:
+            for block_id in duplicate_section:
+                request_json("DELETE", f"https://api.notion.com/v1/blocks/{block_id}", headers)
+                archived.append(block_id)
+    return {"status": "cleaned", "archived_blocks": len(archived), "markers_seen": kept}
 
 
 def google_access_token() -> str:
@@ -297,6 +394,7 @@ def update_lifeos_sheet() -> dict:
     ]
     runtime_sheet_id = existing.get("LifeOS Runtime")
     sync_loop_sheet_id = existing.get("LifeOS Sync Loop")
+    source_pack_sheet_id = existing.get("LifeOS Source Pack")
     if runtime_sheet_id is None:
         requests.append(
             {
@@ -321,6 +419,18 @@ def update_lifeos_sheet() -> dict:
                 }
             }
         )
+    if source_pack_sheet_id is None:
+        requests.append(
+            {
+                "addSheet": {
+                    "properties": {
+                        "title": "LifeOS Source Pack",
+                        "gridProperties": {"rowCount": 80, "columnCount": 8},
+                        "tabColor": {"red": 0.12, "green": 0.50, "blue": 0.75},
+                    }
+                }
+            }
+        )
     request_json(
         "POST",
         f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}:batchUpdate",
@@ -331,6 +441,7 @@ def update_lifeos_sheet() -> dict:
     existing = {sheet["properties"]["title"]: sheet["properties"]["sheetId"] for sheet in metadata.get("sheets", [])}
     runtime_sheet_id = existing["LifeOS Runtime"]
     sync_loop_sheet_id = existing["LifeOS Sync Loop"]
+    source_pack_sheet_id = existing["LifeOS Source Pack"]
 
     values = [
         ["LifeOS 2026 — Product Runtime", "", "", ""],
@@ -365,6 +476,19 @@ def update_lifeos_sheet() -> dict:
     ]
     sync_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Sync Loop!A1:E40')}"
     request_json("PUT", sync_value_url + "?valueInputOption=RAW", headers, {"values": sync_values})
+    source_values = [
+        ["LifeOS 2026 — Chat Source Pack", "", "", "", ""],
+        ["Marker", SOURCE_PACK_MARKER, "", "", ""],
+        ["Citation handle", "Surface", "What Chat can quote", "Pointer", "Borrowed benchmark idea"],
+        ["[App snapshot]", "Android", "Kitchen, shopping, recipes, meal logs/plans, receipts, preferences, Health Connect context", "On-device canonical store", "Native first, not toy page"],
+        ["[LifeOS Notion]", "Notion", "Dashboards, relations, rollups, quests, habits, journal, vaults, template health", f"https://app.notion.com/p/manasa-srinivas/LifeOS-2026-{NOTION_PAGE_ID}", "Pretty + interconnected dashboard"],
+        ["[LifeOS Sheets]", "Google Sheets", "Schema rows, imports/exports, formula checks, conflict inbox, source handles", f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit", "Spreadsheet-primary operating mode"],
+        ["[MCP schema]", "MCP/GPT", "Domain catalog, skills, command schemas, validation, review-only links", "wonderfood://lifeos/domain-catalog-v1", "GPT/plugin parity"],
+        ["[Template health]", "Notion + Sheets + App", "@now duplication risk, sample/empty parity, relation/rollup checks, source visibility", "LifeOS Runtime + Sync Loop tabs", "LiFE RPG quality gate"],
+        ["[Food domain]", "Day 0 package", "Food quests, good/bad habits, boss fights, meal plans, inventory, grocery spend", "assets/lifeos/domain-catalog.v1.json", "Food-centered LifeOS"],
+    ]
+    source_value_url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/{urllib.parse.quote('LifeOS Source Pack!A1:E40')}"
+    request_json("PUT", source_value_url + "?valueInputOption=RAW", headers, {"values": source_values})
     request_json(
         "POST",
         f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}:batchUpdate",
@@ -395,10 +519,22 @@ def update_lifeos_sheet() -> dict:
                         "dimensions": {"sheetId": sync_loop_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 5}
                     }
                 },
+                {
+                    "repeatCell": {
+                        "range": {"sheetId": source_pack_sheet_id, "startRowIndex": 0, "endRowIndex": 3},
+                        "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                        "fields": "userEnteredFormat.textFormat",
+                    }
+                },
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {"sheetId": source_pack_sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 5}
+                    }
+                },
             ]
         },
     )
-    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheets": ["LifeOS Runtime", "LifeOS Sync Loop"]}
+    return {"status": "updated", "spreadsheet_id": SPREADSHEET_ID, "sheets": ["LifeOS Runtime", "LifeOS Sync Loop", "LifeOS Source Pack"]}
 
 
 def main() -> int:
@@ -416,6 +552,14 @@ def main() -> int:
         result["notion_sync_loop"] = append_sync_loop_section()
     except Exception as error:  # noqa: BLE001
         errors.append(f"notion_sync_loop: {error}")
+    try:
+        result["notion_source_pack"] = append_source_pack_section()
+    except Exception as error:  # noqa: BLE001
+        errors.append(f"notion_source_pack: {error}")
+    try:
+        result["notion_duplicate_cleanup"] = cleanup_duplicate_owned_notion_sections()
+    except Exception as error:  # noqa: BLE001
+        errors.append(f"notion_duplicate_cleanup: {error}")
     try:
         result["google_sheets"] = update_lifeos_sheet()
     except Exception as error:  # noqa: BLE001

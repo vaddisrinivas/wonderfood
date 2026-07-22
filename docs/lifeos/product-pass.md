@@ -53,3 +53,11 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - Android → native surface: Food now, local canonical store, review queue, Health Connect context, source cards.
 - MCP/GPT → headless client: same domain catalog, skills, schemas, validation, and review-only command envelopes.
 - Chat answers should cite source handles, not vibes: app snapshot, LifeOS Notion, LifeOS Sheets, MCP schema, template health, and provider web/file citations when available.
+
+## Chat source pack handles
+
+- `[App snapshot]`: on-device kitchen, shopping, recipes, meal logs/plans, receipts, preferences, and Health Connect context.
+- `[LifeOS Notion]`: presentation dashboard, relations, rollups, quests, habits, journal, vaults, and template-health checks.
+- `[LifeOS Sheets]`: workbook mirror for schema rows, import/export checks, formulas, conflicts, and source handles.
+- `[MCP schema]`: `wonderfood://lifeos/domain-catalog-v1` for GPT/plugin parity.
+- `[Template health]`: `@now` duplication guard, sample/empty parity, relation/rollup checks, and source visibility.

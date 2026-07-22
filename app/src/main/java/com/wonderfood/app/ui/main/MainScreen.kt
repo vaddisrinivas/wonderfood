@@ -5398,6 +5398,7 @@ private fun LifeOsControlCenter(
     SettingsControlGroup {
         Text("Runtime status", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         LifeOsStatusLine("AI/model", aiStatus)
+        LifeOsStatusLine("Source pack", "${active?.label ?: "Active"} cites app snapshot, Notion, Sheets, MCP, and template health")
         LifeOsStatusLine("Data home", backendHome.settingsSummary())
         LifeOsStatusLine("Health", healthStatus)
         LifeOsStatusLine("Config source", "assets/lifeos/domain-catalog.v1.json")

@@ -384,12 +384,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private fun chatSourcesForTurn(
         memory: HouseholdUiMemory,
         backendHome: BackendHomeUiState,
+        activeDomain: LifeOsDomain?,
         status: String,
         promptContext: String?,
         draft: FoodDraft?,
         providerSources: List<ChatSourceRef> = emptyList(),
     ): List<ChatSourceRef> = buildList {
         providerSources.take(4).forEach(::add)
+        lifeOsSourcePackSources(memory, backendHome, activeDomain, status).forEach(::add)
         add(
             ChatSourceRef(
                 title = "Active data home",
@@ -509,6 +511,52 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             )
         }
     }.distinctBy { it.title }.take(8)
+
+    private fun lifeOsSourcePackSources(
+        memory: HouseholdUiMemory,
+        backendHome: BackendHomeUiState,
+        activeDomain: LifeOsDomain?,
+        status: String,
+    ): List<ChatSourceRef> {
+        val domainLabel = activeDomain?.label.orEmpty().ifBlank { "Food" }
+        val handles = buildList {
+            add("Android local snapshot")
+            backendHome.templateNotionUrl.takeIf { it.isNotBlank() }?.let { add("LifeOS Notion") }
+            backendHome.templateSheetsUrl.takeIf { it.isNotBlank() }?.let { add("LifeOS Sheets") }
+            add("MCP domain catalog")
+            add("Template health")
+        }.joinToString(" → ")
+        val localCounts = listOf(
+            "kitchen ${memory.inventory.size}",
+            "shopping ${memory.groceries.size}",
+            "recipes ${memory.recipes.size}",
+            "meal logs ${memory.mealLogs.size}",
+            "plans ${memory.mealPlanEntries.size}",
+            "receipts ${memory.receipts.size}",
+        ).joinToString(", ")
+        val health = activeDomain?.templateHealth.orEmpty().take(3).joinToString("; ").ifBlank {
+            "schema parity, source links, and visible relation/rollup checks"
+        }
+        val sync = activeDomain?.syncLoop.orEmpty().take(4).joinToString(" → ").ifBlank {
+            "Notion → Sheets → Android → MCP/GPT"
+        }
+        return listOf(
+            ChatSourceRef(
+                title = "LifeOS source pack",
+                detail = "$domainLabel cited across app, Notion, Sheets, and MCP",
+                quote = "Handles: $handles. Local snapshot: $localCounts.",
+                uri = backendHome.templateNotionUrl.ifBlank {
+                    backendHome.templateSheetsUrl.ifBlank { "asset://lifeos/domain-catalog.v1.json" }
+                },
+            ),
+            ChatSourceRef(
+                title = "Sync health",
+                detail = status.ifBlank { "Schema/source parity check" },
+                quote = "Loop: $sync. Health: $health.",
+                uri = "wonderfood://lifeos/domain-catalog-v1",
+            ),
+        )
+    }
 
     private fun localChatMessagesForMemory(): List<ChatMessage> =
         synchronized(localChatLock) {
@@ -3755,9 +3803,11 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             ?: text
         val interpretation = interpretWithVisibleRetries(promptText, text, memory, promptContext, configs)
         val turn = interpretation.turn
+        val currentState = _uiState.value
         val sources = chatSourcesForTurn(
             memory = memory,
-            backendHome = _uiState.value.backendHome,
+            backendHome = currentState.backendHome,
+            activeDomain = currentState.selectedLifeOsDomain,
             status = interpretation.status,
             promptContext = promptContext,
             draft = turn.draft,
