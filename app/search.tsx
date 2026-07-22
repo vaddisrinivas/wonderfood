@@ -42,17 +42,40 @@ export default function SearchScreen() {
     };
   }, [db, query]);
 
-  const items = query ? results : commands;
+  const hasQuery = query.trim().length > 0;
+
   return <Page><View style={sharedStyles.content}>
     <View style={styles.searchBox}><Text style={styles.glass}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search everything or run a command…" placeholderTextColor={colors.muted} style={styles.input} /></View>
     <ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.label}>{query ? `${results.length} MATCHES` : 'QUICK ACTIONS'}</Text><Card style={styles.list}>
       {loading ? <View style={styles.loading}><Text style={styles.loadingText}>Searching records…</Text></View> : null}
-      {items.map((item) => {
-        const isRecord = 'collection' in item;
-        const href = isRecord ? { pathname: '/record/[id]', params: { id: item.id } } : (item as { href: string }).href;
-        return <Link href={href} asChild key={item.id}><Pressable style={styles.result}><View style={styles.resultIcon}><Text>{query ? '◉' : item.icon}</Text></View><View style={{ flex: 1 }}><Text style={styles.resultTitle}>{item.title}</Text><Text style={styles.resultDetail}>{query ? item.meta : item.detail}</Text></View>{query ? <Pill tone={(item as DomainRecordViewModel).tone}>{item.status}</Pill> : <Text style={styles.chevron}>›</Text>}</Pressable></Link>;
-      })}
-      {query && !loading && results.length === 0 ? <View style={styles.empty}><Text style={styles.emptyTitle}>Nothing exact yet</Text><Text style={styles.resultDetail}>Ask LifeOS to search connected sources or the web.</Text><Link href="/(tabs)/chat" style={styles.ask}>Ask with AI →</Link></View> : null}
+      {!loading && hasQuery ? (
+        results.length ? (
+          results.map((record) => {
+            const tone = record.tone ?? 'neutral';
+            const status = record.status ?? 'Active';
+            return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
+              <Pressable style={styles.result}>
+                <View style={styles.resultIcon}><Text>◉</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.resultTitle}>{record.title}</Text><Text style={styles.resultDetail}>{record.meta ?? ''}</Text></View>
+                <Pill tone={tone}>{status}</Pill>
+              </Pressable>
+            </Link>;
+          })
+        ) : (
+          <View style={styles.empty}><Text style={styles.emptyTitle}>Nothing exact yet</Text><Text style={styles.resultDetail}>Ask LifeOS to search connected sources or the web.</Text><Link href="/(tabs)/chat" style={styles.ask}>Ask with AI →</Link></View>
+        )
+      ) : null}
+      {!hasQuery ? (
+        commands.map((command) => (
+          <Link href={command.href} asChild key={command.id}>
+            <Pressable style={styles.result}>
+              <View style={styles.resultIcon}><Text>{command.icon}</Text></View>
+              <View style={{ flex: 1 }}><Text style={styles.resultTitle}>{command.title}</Text><Text style={styles.resultDetail}>{command.detail}</Text></View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </Link>
+        ))
+      ) : null}
     </Card></ScrollView>
   </View></Page>;
 }

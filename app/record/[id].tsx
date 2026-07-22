@@ -11,7 +11,7 @@ import { CanonicalRecord } from '@/src/domain/runtime';
 import { upsertRecord } from '@/src/db/records';
 
 function fallbackCanonicalFromView(
-  view: Awaited<ReturnType<typeof getDomainRecord>>,
+  view: NonNullable<Awaited<ReturnType<typeof getDomainRecord>>>,
   domainId: string
 ): CanonicalRecord {
   const sourceParts = view.source.split(' · ');
@@ -130,6 +130,8 @@ export default function RecordScreen() {
           status,
           meta,
         },
+        created_at: record.created_at,
+        updated_at: new Date().toISOString(),
         source: record.source,
         archived_at: record.archived_at,
         relations: record.relations,
