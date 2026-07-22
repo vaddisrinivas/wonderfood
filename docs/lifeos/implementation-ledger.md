@@ -5,7 +5,7 @@
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
 | 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE (PASS) | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package host still pending for final ADR closure | Decide final server host in Phase 3 before closing ADR |
-| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still drives sample fallback in `/search`, `/record/[id]`, `/sources` | Transition phase-2 screens to domain queries and remove demo fallbacks |
+| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md`, `bddbf0e` | `src/data/sample.ts` still used as null-DB fallback in `queryDomainRecords`, `getDomainRecord`, `listSourceRows` | Gate explicit DB-null handling and remove fixture dependency from end-user surfaces |
 | 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx` | `src/data/sample.ts` still used by `/search`, `/record/[id]`, `/sources` and demo sections | Finish domain-agnostic renderer integration for remaining phase-2 screens and empty/loading states |
 | 3 — Server and real chat | Agent B (Chat/Responses/Conversations) | BLOCKED | no `server/` package yet | Phase 1 + Phase 2 required first | Start only after Phase 2 evidence |
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
@@ -24,6 +24,7 @@
 - `src/db/migrations.ts` now enforces v1 schema and rollback/export helpers.
 - `src/db/provider.tsx` now routes native through `SQLiteProvider` and web through a safe non-SQLite shell provider.
 - `docs/lifeos/implementation-workstreams.md` now defines explicit ownership, contracts, anti-pattern guards, and mandatory report fields per workstream.
+- `bddbf0e` checkpointed UI runtime write-path correctness and search render typing fix.
 
 ## Required gates executed
 
