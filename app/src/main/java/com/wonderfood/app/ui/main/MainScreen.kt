@@ -8693,68 +8693,82 @@ private fun AiCaptureSheet(
             .semantics { contentDescription = "AI full page" },
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f),
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                ),
         ) {
-            AiChatTopCard(
-                pageTitle = pageContext.title,
-                messageCount = messages.size,
-                isWorking = isWorking,
-                onHistory = { showHistory = true },
-                onNewChat = onNewChat,
-                onDismiss = onDismiss,
-            )
-
-            AiConversationTimeline(
-                messages = displayedMessages,
-                draft = draft.takeUnless { viewingPreviousChat },
-                draftOrigin = draftOrigin,
-                isWorking = isWorking,
-                pageContext = pageContext,
-                providerStatus = providerStatus,
-                backendHome = backendHome,
-                healthStatus = healthStatus,
-                contextSummary = contextSummary,
-                onSuggestion = onInputChange,
-                onAcceptDraft = onAcceptDraft,
-                onRejectDraft = onRejectDraft,
-                onDraftChange = onDraftChange,
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            )
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AiChatTopCard(
+                    pageTitle = pageContext.title,
+                    messageCount = messages.size,
+                    isWorking = isWorking,
+                    onHistory = { showHistory = true },
+                    onNewChat = onNewChat,
+                    onDismiss = onDismiss,
+                )
 
-            if (viewingPreviousChat) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                AiConversationTimeline(
+                    messages = displayedMessages,
+                    draft = draft.takeUnless { viewingPreviousChat },
+                    draftOrigin = draftOrigin,
+                    isWorking = isWorking,
+                    pageContext = pageContext,
+                    providerStatus = providerStatus,
+                    backendHome = backendHome,
+                    healthStatus = healthStatus,
+                    contextSummary = contextSummary,
+                    onSuggestion = onInputChange,
+                    onAcceptDraft = onAcceptDraft,
+                    onRejectDraft = onRejectDraft,
+                    onDraftChange = onDraftChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+
+                if (viewingPreviousChat) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                     ) {
-                        Text("Reading a previous chat", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        Button(onClick = { selectedChatId = null }, shape = RoundedCornerShape(18.dp)) {
-                            Text("Current chat")
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Reading a previous chat", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                            Button(onClick = { selectedChatId = null }, shape = RoundedCornerShape(18.dp)) {
+                                Text("Current chat")
+                            }
                         }
                     }
+                } else {
+                    AiChatComposer(
+                        input = input,
+                        isWorking = isWorking,
+                        status = status,
+                        placeholder = pageContext.placeholder,
+                        onInputChange = onInputChange,
+                        onSend = sendAndClearFocus,
+                        onPickReceiptPhoto = onPickReceiptPhoto,
+                        onRecordVoiceNote = onRecordVoiceNote,
+                    )
                 }
-            } else {
-                AiChatComposer(
-                    input = input,
-                    isWorking = isWorking,
-                    status = status,
-                    placeholder = pageContext.placeholder,
-                    onInputChange = onInputChange,
-                    onSend = sendAndClearFocus,
-                    onPickReceiptPhoto = onPickReceiptPhoto,
-                    onRecordVoiceNote = onRecordVoiceNote,
-                )
             }
         }
     }
@@ -8784,12 +8798,21 @@ private fun AiChatTopCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        color = Color.Transparent,
         tonalElevation = 2.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
+                        ),
+                    ),
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -8814,19 +8837,7 @@ private fun AiChatTopCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
-            ) {
-                Text(
-                    text = if (messageCount > 0) "$messageCount msgs" else "sources",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
-            }
+            DraftReviewPill(if (isWorking) "thinking" else if (messageCount > 0) "$messageCount msgs" else "sources ready")
             IconButton(onClick = onHistory, enabled = messageCount > 0, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Rounded.Description, contentDescription = "Open chat history", modifier = Modifier.size(20.dp))
             }
@@ -9029,8 +9040,8 @@ private fun AiThreadMessageBubble(
     message: ChatMessage,
 ) {
     val isUser = message.role == ChatRole.USER
-    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -9045,7 +9056,7 @@ private fun AiThreadMessageBubble(
             Spacer(Modifier.width(8.dp))
         }
         Column(
-            modifier = Modifier.widthIn(max = 680.dp),
+            modifier = if (isUser) Modifier.widthIn(max = 680.dp) else Modifier.weight(1f),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
@@ -9070,13 +9081,26 @@ private fun AiThreadMessageBubble(
                     bottomEnd = 20.dp,
                 ),
                 color = bubbleColor,
-                tonalElevation = if (isUser) 0.dp else 1.dp,
+                tonalElevation = if (isUser) 0.dp else 2.dp,
+                border = if (isUser) null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
             ) {
-                AiRichMessageBody(
-                    body = message.body,
+                Column(
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
-                    color = textColor,
-                )
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!isUser) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Answer", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            if (message.sources.isNotEmpty()) {
+                                DraftReviewPill("${message.sources.size.coerceAtMost(6)} sources")
+                            }
+                        }
+                    }
+                    AiRichMessageBody(
+                        body = message.body,
+                        color = textColor,
+                    )
+                }
             }
             if (!isUser && message.sources.isNotEmpty()) {
                 AiMessageSourceStrip(sources = message.sources)
@@ -9135,41 +9159,60 @@ private fun AiRichList(block: AiRichBlock.ListBlock, color: Color) {
 private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            AiRichTableRow(cells = block.header, color = color, header = true)
-            block.rows.forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-                AiRichTableRow(
-                    cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
-                    color = color,
-                    header = false,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AiRichTableRow(cells: List<String>, color: Color, header: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (header) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f) else Color.Transparent),
-    ) {
-        cells.forEach { cell ->
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(
-                text = cell,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
-                color = color,
-                fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
+                "Table",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
             )
+            block.rows.forEachIndexed { rowIndex, row ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (rowIndex == 0) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.26f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                    },
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        block.header.forEachIndexed { index, header ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Text(
+                                    header,
+                                    modifier = Modifier.weight(0.38f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    row.getOrNull(index).orEmpty(),
+                                    modifier = Modifier.weight(0.62f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = color,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -9424,14 +9467,14 @@ private fun AiChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
         tonalElevation = 4.dp,
-        shadowElevation = 8.dp,
+        shadowElevation = 10.dp,
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
@@ -9453,15 +9496,15 @@ private fun AiChatComposer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AiComposerActionButton(
+                AiComposerToolChip(
                     icon = Icons.Rounded.AddAPhoto,
-                    contentDescription = "Attach receipt photo",
+                    label = "Receipt",
                     enabled = !isWorking,
                     onClick = onPickReceiptPhoto,
                 )
-                AiComposerActionButton(
+                AiComposerToolChip(
                     icon = Icons.Rounded.Mic,
-                    contentDescription = "Record voice note",
+                    label = "Voice",
                     enabled = !isWorking,
                     onClick = onRecordVoiceNote,
                 )
@@ -9496,23 +9539,37 @@ private fun AiChatComposer(
 }
 
 @Composable
-private fun AiComposerActionButton(
+private fun AiComposerToolChip(
     icon: ImageVector,
-    contentDescription: String,
+    label: String,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.size(44.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (enabled) 0.72f else 0.28f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+        modifier = Modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (enabled) 0.46f else 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
                 icon,
-                contentDescription = contentDescription,
+                contentDescription = label,
+                modifier = Modifier.size(18.dp),
                 tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
+                fontWeight = FontWeight.Bold,
             )
         }
     }
