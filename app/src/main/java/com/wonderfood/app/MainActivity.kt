@@ -2,6 +2,7 @@ package com.wonderfood.app
 
 import android.os.Bundle
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    persistProofPack(intent)
     voiceCommand = WonderFoodDeepLink.from(intent)
 
     enableEdgeToEdge()
@@ -48,8 +50,56 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
+    persistProofPack(intent)
     voiceCommand = WonderFoodDeepLink.from(intent)
   }
+
+  private fun persistProofPack(intent: Intent?) {
+    val uri = intent?.data ?: return
+    val isProofPack = intent.action == Intent.ACTION_VIEW &&
+      uri.scheme.equals("wonderfood", ignoreCase = true) &&
+      uri.host.equals("proof-pack", ignoreCase = true)
+    val isHttpsProofPack = intent.action == Intent.ACTION_VIEW &&
+      uri.scheme.equals("https", ignoreCase = true) &&
+      uri.host.orEmpty().lowercase() in setOf("wonderfood.app", "www.wonderfood.app") &&
+      uri.path.orEmpty().startsWith("/proof-pack")
+    if (!isProofPack && !isHttpsProofPack) return
+
+    val notionUrl = uri.getQueryParameter("notion")
+      ?: uri.getQueryParameter("notion_url")
+      ?: ""
+    val sheetsUrl = uri.getQueryParameter("sheets")
+      ?: uri.getQueryParameter("sheets_url")
+      ?: uri.getQueryParameter("sheet")
+      ?: ""
+    if (!isTrustedNotionUrl(notionUrl) && !isTrustedSheetsUrl(sheetsUrl)) return
+
+    getSharedPreferences(SHELL_PREFS_NAME, MODE_PRIVATE).edit {
+      if (isTrustedNotionUrl(notionUrl)) putString(KEY_TEMPLATE_NOTION_URL, notionUrl)
+      if (isTrustedSheetsUrl(sheetsUrl)) putString(KEY_TEMPLATE_SHEETS_URL, sheetsUrl)
+      putString(KEY_BACKEND_SYNC_STATUS, "Verified template proof pack saved on this device.")
+    }
+  }
+
+  private fun isTrustedNotionUrl(url: String): Boolean =
+    runCatching {
+      val uri = Uri.parse(url.trim())
+      uri.scheme.equals("https", ignoreCase = true) &&
+        uri.host.orEmpty().lowercase().let { host ->
+          host == "notion.so" ||
+            host.endsWith(".notion.so") ||
+            host == "notion.com" ||
+            host.endsWith(".notion.com")
+        }
+    }.getOrDefault(false)
+
+  private fun isTrustedSheetsUrl(url: String): Boolean =
+    runCatching {
+      val uri = Uri.parse(url.trim())
+      uri.scheme.equals("https", ignoreCase = true) &&
+        uri.host.orEmpty().lowercase() == "docs.google.com" &&
+        uri.path.orEmpty().startsWith("/spreadsheets/")
+    }.getOrDefault(false)
 
   private fun readThemeMode(): WonderFoodThemeMode =
     runCatching {
@@ -68,6 +118,10 @@ class MainActivity : ComponentActivity() {
 
   companion object {
     private const val THEME_PREFS_NAME = "wonderfood_theme"
+    private const val SHELL_PREFS_NAME = "wonderfood_shell"
     private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_BACKEND_SYNC_STATUS = "backend_sync_status"
+    private const val KEY_TEMPLATE_NOTION_URL = "template_notion_url"
+    private const val KEY_TEMPLATE_SHEETS_URL = "template_sheets_url"
   }
 }

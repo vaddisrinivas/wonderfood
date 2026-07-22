@@ -180,6 +180,29 @@ class LiteLlmFoodInterpreterTest {
     }
 
     @Test
+    fun responsesUrlCitationsAreReturnedAsChatSources() {
+        val server = startServer(
+            path = "/v1/responses",
+            status = 200,
+            body = responsesResponseWithUrlCitation("""{"reply":"Use the FDA guidance.","draft":null}"""),
+        )
+
+        val result = LiteLlmFoodInterpreter().interpretWithDiagnostics(
+            text = "Can I store cooked rice safely?",
+            memory = HouseholdUiMemory(),
+            config = server.config(basePath = "/v1/responses"),
+        )
+
+        assertTrue(result is LiteLlmInterpretation.Success)
+        val sources = (result as LiteLlmInterpretation.Success).sources
+        assertEquals(2, sources.size)
+        assertEquals("USDA Ask Extension", sources.first().title)
+        assertEquals("FDA Food Safety", sources.last().title)
+        assertEquals("https://www.fda.gov/food", sources.last().uri)
+        assertTrue(sources.last().quote.contains("FDA"))
+    }
+
+    @Test
     fun azureV1ChatEndpointKeepsModelInRequestBody() {
         var captured: CapturedRequest? = null
         val server = startServer(
@@ -412,6 +435,45 @@ class LiteLlmFoodInterpreterTest {
                 {
                   "type": "output_text",
                   "text": ${content.jsonQuoted()}
+                }
+              ]
+            }
+          ]
+        }
+        """.trimIndent()
+
+    private fun responsesResponseWithUrlCitation(content: String): String =
+        """
+        {
+          "output": [
+            {
+              "type": "web_search_call",
+              "action": {
+                "sources": [
+                  {
+                    "title": "USDA Ask Extension",
+                    "url": "https://ask.usda.gov/",
+                    "snippet": "Food safety answers from USDA."
+                  }
+                ]
+              }
+            },
+            {
+              "type": "message",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": ${content.jsonQuoted()},
+                  "annotations": [
+                    {
+                      "type": "url_citation",
+                      "title": "FDA Food Safety",
+                      "url": "https://www.fda.gov/food",
+                      "start_index": 15,
+                      "end_index": 27
+                    }
+                  ]
                 }
               ]
             }

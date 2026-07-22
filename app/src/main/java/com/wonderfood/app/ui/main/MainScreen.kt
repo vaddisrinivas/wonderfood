@@ -148,6 +148,7 @@ import com.wonderfood.app.ai.AiProvider
 import com.wonderfood.app.ai.LiteLlmConfig
 import com.wonderfood.app.WonderFoodVoiceCommand
 import com.wonderfood.app.data.ChatMessage
+import com.wonderfood.app.data.ChatSourceRef
 import com.wonderfood.app.data.ChatAction
 import com.wonderfood.app.data.ChatActionStatus
 import com.wonderfood.app.data.ChatRole
@@ -182,6 +183,7 @@ import com.wonderfood.app.data.MealPlanEntry
 import com.wonderfood.app.data.MealPlanEntryStatus
 import com.wonderfood.app.data.MealSlot
 import com.wonderfood.app.data.LinkActionDraft
+import com.wonderfood.app.data.LifeOsDomain
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.Recipe
 import com.wonderfood.app.data.RecipeDraft
@@ -616,6 +618,7 @@ fun MainScreen(
         onConnectNotionBackend = viewModel::connectNotionBackend,
         onConnectPostgresBackend = viewModel::connectPostgresBackend,
         onSelectPendingBackend = viewModel::selectPendingBackend,
+        onSelectLifeOsDomain = viewModel::selectLifeOsDomain,
         onDismissBackendOnboarding = viewModel::dismissBackendOnboardingForNow,
         onClearWorkspaceConflictInbox = viewModel::clearWorkspaceConflictInbox,
         modifier = modifier,
@@ -924,6 +927,7 @@ private fun BackendOnboardingDialog(
                         onClear = onClearConflictInbox,
                     )
                 }
+                BackendDataPlaneProofCard(backendHome)
                 BackendChoiceRow(
                     icon = Icons.Rounded.Kitchen,
                     title = "This phone",
@@ -1025,6 +1029,138 @@ private fun BackendOnboardingDialog(
             }
         },
     )
+}
+
+@Composable
+private fun BackendDataPlaneProofCard(backendHome: BackendHomeUiState) {
+    val context = LocalContext.current
+    val hasLiveHome = backendHome.activeType != null && !backendHome.requiresOnboarding
+    val hasUrl = backendHome.dataPlaneUrl.isNotBlank()
+    val hasTemplateProofPack = backendHome.templateNotionUrl.isNotBlank() || backendHome.templateSheetsUrl.isNotBlank()
+    fun openProofUrl(url: String) {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        }
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 1.dp,
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                ObjectImage(
+                    image = if (hasLiveHome) "🗂️" else "🟡",
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    size = 44.dp,
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Data-plane links", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (hasLiveHome) {
+                            "${backendHome.label} is the selected source of truth."
+                        } else {
+                            "No live Notion, Sheets, or Postgres data home is connected yet."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AiCapabilityPill(if (hasLiveHome) "🟢" else "🟡", if (hasLiveHome) "Data home selected" else "Setup needed")
+                AiCapabilityPill("🧬", if (hasLiveHome) "Schema linked" else "Schema waiting")
+                AiCapabilityPill("↩️", "Rollback protected")
+                AiCapabilityPill("⚖️", "Import review")
+            }
+            BackendProofLine(
+                label = "Source target",
+                value = backendHome.dataPlaneProofDetail(),
+            )
+            BackendProofLine(
+                label = "Provider id",
+                value = backendHome.externalId.ifBlank { "Not saved yet" },
+            )
+            BackendProofLine(
+                label = "Account",
+                value = backendHome.accountLabel.ifBlank { "Not saved yet" },
+            )
+            BackendProofLine(
+                label = "Schema contract",
+                value = when (backendHome.activeType) {
+                    BackendType.GOOGLE_SHEETS -> "Google Sheets V4 graph tabs + hidden sync rows"
+                    BackendType.NOTION -> "Notion workspace databases + linked rows"
+                    BackendType.POSTGRES -> "Hosted snapshot schema + schema endpoint"
+                    BackendType.LOCAL_SQLITE -> "Room/SQLite canonical household store"
+                    null -> "Waiting for provider selection"
+                },
+            )
+            if (hasTemplateProofPack) {
+                BackendProofLine(
+                    label = "Template model",
+                    value = buildList {
+                        if (backendHome.templateNotionUrl.isNotBlank()) add("Notion data plane")
+                        if (backendHome.templateSheetsUrl.isNotBlank()) add("Google Sheets workbook")
+                    }.joinToString(" + "),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (backendHome.templateNotionUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { openProofUrl(backendHome.templateNotionUrl) },
+                            shape = RoundedCornerShape(18.dp),
+                        ) {
+                            Text("Open Notion template")
+                        }
+                    }
+                    if (backendHome.templateSheetsUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { openProofUrl(backendHome.templateSheetsUrl) },
+                            shape = RoundedCornerShape(18.dp),
+                        ) {
+                            Text("Open Sheets workbook")
+                        }
+                    }
+                }
+            }
+            backendHome.message.takeIf { it.isNotBlank() }?.let {
+                BackendProofLine("Last result", it)
+            }
+            backendHome.safetyMessage.takeIf { it.isNotBlank() }?.let {
+                BackendProofLine("Safety", it)
+            }
+            if (hasUrl) {
+                OutlinedButton(
+                    onClick = { openProofUrl(backendHome.dataPlaneUrl) },
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open ${backendHome.proofLabel.ifBlank { backendHome.label }}")
+                }
+            } else if (!hasTemplateProofPack) {
+                Text(
+                    "Connect or create a provider below. Then this card will expose the live Notion page, Sheet workbook, or hosted endpoint directly.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackendProofLine(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value.ifBlank { "Not available" },
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
@@ -1449,6 +1585,7 @@ private fun WonderFoodScreen(
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
+    onSelectLifeOsDomain: (String) -> Unit,
     onDismissBackendOnboarding: () -> Unit,
     onClearWorkspaceConflictInbox: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1540,6 +1677,7 @@ private fun WonderFoodScreen(
                     onConnectNotionBackend = onConnectNotionBackend,
                     onConnectPostgresBackend = onConnectPostgresBackend,
                     onSelectPendingBackend = onSelectPendingBackend,
+                    onSelectLifeOsDomain = onSelectLifeOsDomain,
                     onDismissBackendOnboarding = onDismissBackendOnboarding,
                     onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                     modifier = Modifier.weight(1f),
@@ -1626,6 +1764,7 @@ private fun WonderFoodScreen(
                 onConnectNotionBackend = onConnectNotionBackend,
                 onConnectPostgresBackend = onConnectPostgresBackend,
                 onSelectPendingBackend = onSelectPendingBackend,
+                onSelectLifeOsDomain = onSelectLifeOsDomain,
                 onDismissBackendOnboarding = onDismissBackendOnboarding,
                 onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                 modifier = Modifier.fillMaxSize(),
@@ -1730,11 +1869,13 @@ private fun MainWorkspace(
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
+    onSelectLifeOsDomain: (String) -> Unit,
     onDismissBackendOnboarding: () -> Unit,
     onClearWorkspaceConflictInbox: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var secondaryPane by rememberSaveable { mutableStateOf<SecondaryPane?>(null) }
+    var settingsInitialDestination by rememberSaveable { mutableStateOf(SettingsDestination.HOME) }
     var showAiCapture by rememberSaveable { mutableStateOf(false) }
     var shopMode by rememberSaveable { mutableStateOf(ShopMode.TO_BUY) }
     var manualCreateKind by rememberSaveable { mutableStateOf<ManualCreateKind?>(null) }
@@ -1863,6 +2004,7 @@ private fun MainWorkspace(
                         onAiClick = { openAi() },
                         onSettingsClick = {
                             onDismissFeedback()
+                            settingsInitialDestination = SettingsDestination.HOME
                             showAiCapture = false
                             secondaryPane = SecondaryPane.SETTINGS
                         },
@@ -1937,6 +2079,8 @@ private fun MainWorkspace(
                         syncStatus = state.syncStatus,
                         canonicalSummary = state.canonicalSummary,
                         backendHome = state.backendHome,
+                        lifeOsDomains = state.lifeOsDomains,
+                        selectedLifeOsDomainId = state.selectedLifeOsDomainId,
                         workspaceConflictInbox = state.workspaceConflictInbox,
                         googleAccountEmail = state.googleAccountEmail,
                         googleOAuthClientId = state.googleOAuthClientId,
@@ -1965,11 +2109,13 @@ private fun MainWorkspace(
                         onConnectNotionBackend = onConnectNotionBackend,
                         onConnectPostgresBackend = onConnectPostgresBackend,
                         onSelectPendingBackend = onSelectPendingBackend,
+                        onSelectLifeOsDomain = onSelectLifeOsDomain,
                         onDeleteAllPlans = onDeleteAllPlans,
                         onClearChatHistory = onClearChatHistory,
                         onThemeModeChange = onThemeModeChange,
                         onRequestHealthConnect = onRequestHealthConnect,
                         onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
+                        initialDestination = settingsInitialDestination,
                         onBack = { secondaryPane = null },
                     )
                     state.detailTarget != null -> {
@@ -2102,6 +2248,8 @@ private fun MainWorkspace(
                 messages = state.memory.messages,
                 pageContext = aiContext,
                 providerStatus = state.aiStatus,
+                backendHome = state.backendHome,
+                healthStatus = state.healthStatus,
                 contextSummary = state.memory.aiVisibleContextSummary(),
                 status = when {
                     state.isWorking && state.aiAttemptStatus.isNotBlank() -> state.aiAttemptStatus
@@ -2120,6 +2268,18 @@ private fun MainWorkspace(
                 onRejectDraft = onRejectDraft,
                 onDraftChange = onDraftChange,
                 onChatMessageChange = onChatMessageChange,
+                onOpenDataHome = {
+                    onDismissFeedback()
+                    settingsInitialDestination = SettingsDestination.DATA_HOME
+                    showAiCapture = false
+                    secondaryPane = SecondaryPane.SETTINGS
+                },
+                onOpenAiControl = {
+                    onDismissFeedback()
+                    settingsInitialDestination = SettingsDestination.AI_ASSISTANT
+                    showAiCapture = false
+                    secondaryPane = SecondaryPane.SETTINGS
+                },
                 onDismiss = { showAiCapture = false },
             )
         }
@@ -3215,7 +3375,10 @@ private fun FoodHubContent(
     onOpenRecipe: (Recipe) -> Unit,
 ) {
     var mode by rememberSaveable { mutableStateOf(FoodHubMode.CAN_MAKE) }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Food", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -3332,7 +3495,11 @@ private fun CanMakeRecipesContent(
     onOpen: (Recipe) -> Unit,
 ) {
     if (canonicalRecipeMatches.isNotEmpty()) {
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 12.dp),
+        ) {
             item { SectionLabel("Best from your kitchen") }
             items(canonicalRecipeMatches.take(8), key = { it.id }) { item ->
                 MemoryCard(
@@ -3344,6 +3511,10 @@ private fun CanMakeRecipesContent(
                         else -> MaterialTheme.colorScheme.tertiaryContainer
                     },
                     image = "R",
+                    onOpen = {
+                        memory.recipes.firstOrNull { recipe -> recipe.title.equals(item.title, ignoreCase = true) }
+                            ?.let(onOpen)
+                    },
                 )
             }
         }
@@ -3364,7 +3535,11 @@ private fun CanMakeRecipesContent(
         EmptyState("No matched recipes yet.", "Save recipes with ingredients, then WonderFood will rank them from your Kitchen.")
         return
     }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 12.dp),
+    ) {
         item {
             SectionLabel("Best from your kitchen")
         }
@@ -4603,6 +4778,8 @@ private fun PreferencesContent(
     syncStatus: String,
     canonicalSummary: CanonicalHouseholdUiSummary,
     backendHome: BackendHomeUiState,
+    lifeOsDomains: List<LifeOsDomain>,
+    selectedLifeOsDomainId: String,
     workspaceConflictInbox: WorkspaceConflictInbox?,
     googleAccountEmail: String,
     googleOAuthClientId: String,
@@ -4631,14 +4808,16 @@ private fun PreferencesContent(
     onConnectNotionBackend: (String, String) -> Unit,
     onConnectPostgresBackend: (String, String, String) -> Unit,
     onSelectPendingBackend: (BackendType) -> Unit,
+    onSelectLifeOsDomain: (String) -> Unit,
     onClearWorkspaceConflictInbox: () -> Unit,
     onDeleteAllPlans: () -> Unit,
     onClearChatHistory: () -> Unit,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
     onRequestHealthConnect: () -> Unit,
+    initialDestination: SettingsDestination = SettingsDestination.HOME,
     onBack: () -> Unit,
 ) {
-    var destination by rememberSaveable { mutableStateOf(SettingsDestination.HOME) }
+    var destination by rememberSaveable(initialDestination) { mutableStateOf(initialDestination) }
     var backupPassphrase by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = destination != SettingsDestination.HOME) {
         destination = SettingsDestination.HOME
@@ -4652,6 +4831,8 @@ private fun PreferencesContent(
             healthSummary = healthSummary,
             backendHome = backendHome,
             canonicalSummary = canonicalSummary,
+            lifeOsDomains = lifeOsDomains,
+            selectedLifeOsDomainId = selectedLifeOsDomainId,
             googleAccountEmail = googleAccountEmail,
             googleSyncStatus = googleSyncStatus,
             settingsSaveStatus = settingsSaveStatus,
@@ -4659,6 +4840,24 @@ private fun PreferencesContent(
             onOpen = { destination = it },
             onBack = onBack,
         )
+        SettingsDestination.LIFEOS_CONTROL -> SettingsDetailPage(
+            image = "🧬",
+            title = "LifeOS control center",
+            subtitle = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }?.let { "${it.label} package · ${it.statusLabel}" }
+                ?: "Domain packages, schema, skills, and data planes",
+            onBack = { destination = SettingsDestination.HOME },
+        ) {
+            LifeOsControlCenter(
+                domains = lifeOsDomains,
+                selectedDomainId = selectedLifeOsDomainId,
+                backendHome = backendHome,
+                aiStatus = aiStatus,
+                healthStatus = healthStatus,
+                onSelectDomain = onSelectLifeOsDomain,
+                onOpenDataHome = { destination = SettingsDestination.DATA_HOME },
+                onOpenAi = { destination = SettingsDestination.AI_ASSISTANT },
+            )
+        }
         SettingsDestination.FOOD_PROFILE -> SettingsDetailPage(
             image = "🍽️",
             title = "Food profile",
@@ -4779,6 +4978,8 @@ private fun SettingsHomeContent(
     healthSummary: HealthDailySummary,
     backendHome: BackendHomeUiState,
     canonicalSummary: CanonicalHouseholdUiSummary,
+    lifeOsDomains: List<LifeOsDomain>,
+    selectedLifeOsDomainId: String,
     googleAccountEmail: String,
     googleSyncStatus: String,
     settingsSaveStatus: String,
@@ -4809,6 +5010,16 @@ private fun SettingsHomeContent(
             item { SettingsSaveStatus(status = settingsSaveStatus) }
         }
         item { SettingsSectionHeader("YOUR EXPERIENCE") }
+        item {
+            val selectedDomain = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId }
+            SettingsHomeRow(
+                icon = Icons.Rounded.Description,
+                title = "LifeOS control center",
+                subtitle = selectedDomain?.let { "${it.emoji} ${it.label} · ${it.statusLabel} · ${it.schemaSurfaces.size} schema surfaces" }
+                    ?: "Domain packages, schema, skills, MCP, and data planes",
+                onClick = { onOpen(SettingsDestination.LIFEOS_CONTROL) },
+            )
+        }
         item {
             SettingsHomeRow(
                 icon = Icons.Rounded.Restaurant,
@@ -5070,6 +5281,136 @@ private fun SettingsControlGroup(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
+private fun LifeOsControlCenter(
+    domains: List<LifeOsDomain>,
+    selectedDomainId: String,
+    backendHome: BackendHomeUiState,
+    aiStatus: String,
+    healthStatus: String,
+    onSelectDomain: (String) -> Unit,
+    onOpenDataHome: () -> Unit,
+    onOpenAi: () -> Unit,
+) {
+    val active = domains.firstOrNull { it.id == selectedDomainId } ?: domains.firstOrNull()
+    SettingsStatusBlock(
+        icon = Icons.Rounded.Description,
+        title = active?.let { "${it.emoji} ${it.label} package" } ?: "LifeOS package runtime",
+        body = active?.summary ?: "Packaged domains define tabs, skills, schema surfaces, and data-plane bindings.",
+    )
+    SettingsControlGroup {
+        Text("Domain packages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        domains.forEach { domain ->
+            LifeOsDomainRow(
+                domain = domain,
+                selected = domain.id == selectedDomainId,
+                onSelect = { onSelectDomain(domain.id) },
+            )
+        }
+    }
+    active?.let { domain ->
+        SettingsControlGroup {
+            Text("Native surface map", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Food is the Day 0 native app surface. Other packages can be selected now, but they become full native domains only after their tab map is implemented from config.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                domain.bottomTabs.forEach { tab -> DraftReviewPill(tab) }
+            }
+        }
+        SettingsControlGroup {
+            Text("Schema surfaces", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                domain.schemaSurfaces.forEach { surface -> DraftReviewPill(surface) }
+            }
+        }
+        SettingsControlGroup {
+            Text("Skills & MCP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                domain.skills.forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
+            }
+            DetailSection(
+                "MCP bridge",
+                "Local bridge exposes bundled skills, command schemas, validation, proposal packages, and review-only app links for GPT/plugin clients.",
+            )
+            OutlinedButton(onClick = onOpenAi, shape = RoundedCornerShape(18.dp)) {
+                Text("Open model, skills & MCP settings")
+            }
+        }
+    }
+    SettingsControlGroup {
+        Text("Data planes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            backendHome.dataPlaneDetail(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            active?.dataPlanes.orEmpty().forEach { plane -> DraftReviewPill(plane) }
+        }
+        OutlinedButton(onClick = onOpenDataHome, shape = RoundedCornerShape(18.dp)) {
+            Text("Open data home")
+        }
+    }
+    SettingsControlGroup {
+        Text("Runtime status", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        LifeOsStatusLine("AI/model", aiStatus)
+        LifeOsStatusLine("Data home", backendHome.settingsSummary())
+        LifeOsStatusLine("Health", healthStatus)
+        LifeOsStatusLine("Config source", "assets/lifeos/domain-catalog.v1.json")
+    }
+}
+
+@Composable
+private fun LifeOsDomainRow(
+    domain: LifeOsDomain,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onSelect)
+            .semantics { this.selected = selected },
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(domain.emoji, style = MaterialTheme.typography.titleLarge)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(domain.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("• ${domain.statusLabel}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    domain.summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (selected) Text("✓", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsStatusLine(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Text(label, modifier = Modifier.widthIn(min = 88.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value.ifBlank { "Not configured" }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
 private fun FoodProfileSettings(
     preferences: FoodPreferences,
     settingsSaveStatus: String,
@@ -5246,6 +5587,29 @@ private fun AiAssistantSettings(
             "403 means the provider received the request but rejected auth, model, project, deployment, or route access.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    SettingsControlGroup {
+        Text("Control plane", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "Configure the same pieces Chat advertises: provider route, assistant instructions, core Food skill, schemas, and MCP/agent bridge readiness.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AiCapabilityPill("🤖", if (selectedConfig.isUsable) "Model configured" else "Model missing")
+            AiCapabilityPill("🧠", if (preferences.aiSkillOverride.isBlank()) "Bundled skill" else "Custom skill")
+            AiCapabilityPill("🧬", "Schemas packaged")
+            AiCapabilityPill("🕸️", "MCP bridge-ready")
+        }
+        Text(
+            "Local GPT/plugin/MCP bridge is available as a review-only handoff; this screen owns the phone route and skill behavior.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        AiStackMap(
+            modelConfigured = selectedConfig.isUsable,
+            customSkill = preferences.aiSkillOverride.isNotBlank(),
         )
     }
     PreferenceTextField(
@@ -5445,6 +5809,85 @@ private fun AiProviderRouteLine(label: String, config: LiteLlmConfig) {
             if (config.isUsable) {
                 Text(
                     config.settingsAuthLabel(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiStackMap(modelConfigured: Boolean, customSkill: Boolean) {
+    val rows = listOf(
+        AiStackMapRow(
+            icon = "🤖",
+            title = "Model",
+            state = if (modelConfigured) "configured" else "missing key/route",
+            detail = "Primary + optional fallback. Chat uses the same route order.",
+        ),
+        AiStackMapRow(
+            icon = "🧠",
+            title = "Skills",
+            state = if (customSkill) "custom override" else "bundled Food skill",
+            detail = "Inventory, shopping, recipes, meals, planning, preferences, receipts, nutrition, navigation.",
+        ),
+        AiStackMapRow(
+            icon = "🧬",
+            title = "Schemas",
+            state = "packaged",
+            detail = "Command envelope, proposal package, Room, Notion/Sheets V4 graph, App Functions contracts.",
+        ),
+        AiStackMapRow(
+            icon = "🕸️",
+            title = "MCP + agents",
+            state = "local bridge ready",
+            detail = "scripts/mcp/wonderfood_mcp_server.py exposes skills, schemas, validation, packages, and review-only app links.",
+        ),
+        AiStackMapRow(
+            icon = "🗂️",
+            title = "Data bindings",
+            state = "selectable",
+            detail = "Local SQLite, Notion, Google Sheets, and Postgres all share canonical IDs and safe import review.",
+        ),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row -> AiStackMapCard(row) }
+    }
+}
+
+private data class AiStackMapRow(
+    val icon: String,
+    val title: String,
+    val state: String,
+    val detail: String,
+)
+
+@Composable
+private fun AiStackMapCard(row: AiStackMapRow) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(row.icon, style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(row.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(row.state, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    row.detail,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -5765,6 +6208,7 @@ private fun SettingsUnitTextField(
 
 private enum class SettingsDestination {
     HOME,
+    LIFEOS_CONTROL,
     FOOD_PROFILE,
     GOALS_HEALTH,
     AI_ASSISTANT,
@@ -7758,6 +8202,8 @@ private fun AiCaptureSheet(
     messages: List<ChatMessage>,
     pageContext: AiPageContext,
     providerStatus: String,
+    backendHome: BackendHomeUiState,
+    healthStatus: String,
     contextSummary: String,
     status: String,
     onInputChange: (String) -> Unit,
@@ -7769,6 +8215,8 @@ private fun AiCaptureSheet(
     onRejectDraft: () -> Unit,
     onDraftChange: (FoodDraft) -> Unit,
     onChatMessageChange: (Long, String) -> Unit,
+    onOpenDataHome: () -> Unit,
+    onOpenAiControl: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -7810,7 +8258,7 @@ private fun AiCaptureSheet(
                     )
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            "WonderFood AI",
+                            "WonderFood Chat",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -7846,6 +8294,16 @@ private fun AiCaptureSheet(
                 }
             }
 
+            AiCapabilityCenter(
+                providerStatus = providerStatus,
+                backendHome = backendHome,
+                healthStatus = healthStatus,
+                contextSummary = contextSummary,
+                messageCount = messages.size,
+                onOpenDataHome = onOpenDataHome,
+                onOpenAiControl = onOpenAiControl,
+            )
+
             AiConversationTimeline(
                 messages = displayedMessages,
                 draft = draft.takeUnless { viewingPreviousChat },
@@ -7853,6 +8311,8 @@ private fun AiCaptureSheet(
                 isWorking = isWorking,
                 pageContext = pageContext,
                 providerStatus = providerStatus,
+                backendHome = backendHome,
+                healthStatus = healthStatus,
                 contextSummary = contextSummary,
                 onSuggestion = onInputChange,
                 onAcceptDraft = onAcceptDraft,
@@ -7979,6 +8439,8 @@ private fun AiConversationTimeline(
     isWorking: Boolean,
     pageContext: AiPageContext,
     providerStatus: String,
+    backendHome: BackendHomeUiState,
+    healthStatus: String,
     contextSummary: String,
     onSuggestion: (String) -> Unit,
     onAcceptDraft: () -> Unit,
@@ -8049,6 +8511,7 @@ private fun AiConversationTimeline(
                 AiContextCard(
                     pageContext = pageContext,
                     providerStatus = providerStatus,
+                    backendHome = backendHome,
                     contextSummary = contextSummary,
                 )
             }
@@ -8094,8 +8557,6 @@ private fun AiThreadMessageBubble(
     onChange: (Long, String) -> Unit,
 ) {
     val isUser = message.role == ChatRole.USER
-    var editing by remember(message.id, message.body) { mutableStateOf(false) }
-    var editedBody by remember(message.id, message.body) { mutableStateOf(message.body) }
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -8124,42 +8585,8 @@ private fun AiThreadMessageBubble(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = { editing = true }) {
-                    Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (isUser) "Edit" else "Edit reply")
-                }
             }
-            if (editing) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp,
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = editedBody,
-                            onValueChange = { editedBody = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(if (isUser) "Your message" else "AI reply") },
-                            minLines = 3,
-                            maxLines = 10,
-                            shape = RoundedCornerShape(18.dp),
-                        )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    onChange(message.id, editedBody)
-                                    editing = false
-                                },
-                                enabled = editedBody.isNotBlank(),
-                                shape = RoundedCornerShape(18.dp),
-                            ) { Text("Save edit") }
-                            TextButton(onClick = { editedBody = message.body; editing = false }) { Text("Cancel") }
-                        }
-                    }
-                }
-            } else Surface(
+            Surface(
                 shape = RoundedCornerShape(
                     topStart = if (isUser) 18.dp else 4.dp,
                     topEnd = if (isUser) 4.dp else 18.dp,
@@ -8168,17 +8595,273 @@ private fun AiThreadMessageBubble(
                 ),
                 color = bubbleColor,
             ) {
-                Text(
-                    text = message.body,
+                AiRichMessageBody(
+                    body = message.body,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                    style = MaterialTheme.typography.bodyMedium,
                     color = textColor,
                 )
+            }
+            if (!isUser && message.sources.isNotEmpty()) {
+                AiMessageSourceStrip(sources = message.sources)
             }
         }
         if (isUser) {
             Spacer(Modifier.width(8.dp))
             ObjectImage(image = "🙂", color = MaterialTheme.colorScheme.tertiaryContainer, size = 38.dp)
+        }
+    }
+}
+
+private sealed interface AiRichBlock {
+    data class Paragraph(val text: String) : AiRichBlock
+    data class ListBlock(val items: List<String>, val ordered: Boolean) : AiRichBlock
+    data class TableBlock(val header: List<String>, val rows: List<List<String>>) : AiRichBlock
+}
+
+@Composable
+private fun AiRichMessageBody(body: String, modifier: Modifier = Modifier, color: Color) {
+    val blocks = remember(body) { body.parseAiRichBlocks() }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        blocks.forEach { block ->
+            when (block) {
+                is AiRichBlock.Paragraph -> Text(
+                    text = block.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = color,
+                )
+                is AiRichBlock.ListBlock -> AiRichList(block = block, color = color)
+                is AiRichBlock.TableBlock -> AiRichTable(block = block, color = color)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiRichList(block: AiRichBlock.ListBlock, color: Color) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        block.items.forEachIndexed { index, item ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Text(
+                    text = if (block.ordered) "${index + 1}." else "•",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = color,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = item,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = color,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiRichTable(block: AiRichBlock.TableBlock, color: Color) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AiRichTableRow(cells = block.header, color = color, header = true)
+            block.rows.forEach { row ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                AiRichTableRow(
+                    cells = block.header.indices.map { index -> row.getOrNull(index).orEmpty() },
+                    color = color,
+                    header = false,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiRichTableRow(cells: List<String>, color: Color, header: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        cells.forEach { cell ->
+            Text(
+                text = cell,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
+                color = color,
+                fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
+private fun String.parseAiRichBlocks(): List<AiRichBlock> {
+    val lines = lines()
+    val blocks = mutableListOf<AiRichBlock>()
+    var index = 0
+    while (index < lines.size) {
+        val line = lines[index]
+        val trimmed = line.trim()
+        when {
+            trimmed.isBlank() -> index += 1
+            index + 1 < lines.size && trimmed.looksLikePipeRow() && lines[index + 1].trim().isMarkdownTableSeparator() -> {
+                val header = trimmed.splitPipeCells()
+                val rows = mutableListOf<List<String>>()
+                index += 2
+                while (index < lines.size && lines[index].trim().looksLikePipeRow()) {
+                    rows += lines[index].trim().splitPipeCells()
+                    index += 1
+                }
+                if (header.isNotEmpty() && rows.isNotEmpty()) {
+                    blocks += AiRichBlock.TableBlock(header = header, rows = rows)
+                }
+            }
+            trimmed.isBulletLine() -> {
+                val items = mutableListOf<String>()
+                while (index < lines.size && lines[index].trim().isBulletLine()) {
+                    items += lines[index].trim().removeBulletPrefix()
+                    index += 1
+                }
+                blocks += AiRichBlock.ListBlock(items = items.filter { it.isNotBlank() }, ordered = false)
+            }
+            trimmed.isNumberedLine() -> {
+                val items = mutableListOf<String>()
+                while (index < lines.size && lines[index].trim().isNumberedLine()) {
+                    items += lines[index].trim().replace(Regex("^\\d+[.)]\\s+"), "")
+                    index += 1
+                }
+                blocks += AiRichBlock.ListBlock(items = items.filter { it.isNotBlank() }, ordered = true)
+            }
+            else -> {
+                val paragraph = mutableListOf<String>()
+                while (
+                    index < lines.size &&
+                    lines[index].trim().isNotBlank() &&
+                    !lines[index].trim().isBulletLine() &&
+                    !lines[index].trim().isNumberedLine() &&
+                    !(index + 1 < lines.size && lines[index].trim().looksLikePipeRow() && lines[index + 1].trim().isMarkdownTableSeparator())
+                ) {
+                    paragraph += lines[index].trim().trimMarkdownHeading()
+                    index += 1
+                }
+                blocks += AiRichBlock.Paragraph(paragraph.joinToString(" "))
+            }
+        }
+    }
+    return blocks.filterNot {
+        it is AiRichBlock.Paragraph && it.text.isBlank() ||
+            it is AiRichBlock.ListBlock && it.items.isEmpty()
+    }.ifEmpty { listOf(AiRichBlock.Paragraph(this)) }
+}
+
+private fun String.looksLikePipeRow(): Boolean = count { it == '|' } >= 2
+
+private fun String.isMarkdownTableSeparator(): Boolean =
+    looksLikePipeRow() && splitPipeCells().isNotEmpty() && splitPipeCells().all { cell ->
+        cell.isNotBlank() && cell.all { it == '-' || it == ':' || it.isWhitespace() }
+    }
+
+private fun String.splitPipeCells(): List<String> =
+    trim()
+        .trim('|')
+        .split('|')
+        .map { it.trim().trimInlineMarkdown() }
+        .filter { it.isNotBlank() }
+
+private fun String.isBulletLine(): Boolean =
+    startsWith("- ") || startsWith("* ") || startsWith("• ")
+
+private fun String.removeBulletPrefix(): String =
+    removePrefix("- ").removePrefix("* ").removePrefix("• ").trim().trimInlineMarkdown()
+
+private fun String.isNumberedLine(): Boolean = Regex("^\\d+[.)]\\s+.+").matches(this)
+
+private fun String.trimMarkdownHeading(): String = replace(Regex("^#{1,6}\\s+"), "").trimInlineMarkdown()
+
+private fun String.trimInlineMarkdown(): String =
+    trim()
+        .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
+        .replace(Regex("__(.+?)__"), "$1")
+        .replace(Regex("`(.+?)`"), "$1")
+
+@Composable
+private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
+    Column(
+        modifier = Modifier.widthIn(max = 620.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "Sources",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            sources.take(6).forEachIndexed { index, source ->
+                AiMessageSourceCard(index = index + 1, source = source)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
+    Surface(
+        modifier = Modifier.widthIn(min = 220.dp, max = 300.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "[$index]",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    source.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                source.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (source.quote.isNotBlank()) {
+                Text(
+                    source.quote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (source.uri.isNotBlank()) {
+                Text(
+                    source.uri.sourceUriLabel(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -8283,6 +8966,7 @@ private fun AiChatComposer(
 private fun AiContextCard(
     pageContext: AiPageContext,
     providerStatus: String,
+    backendHome: BackendHomeUiState,
     contextSummary: String,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -8304,9 +8988,10 @@ private fun AiContextCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        DraftReviewPill("Primary, then fallback")
-                        DraftReviewPill("Editable review")
-                        DraftReviewPill("No silent save")
+                        DraftReviewPill("Data: ${backendHome.label}")
+                        DraftReviewPill("Skills: food")
+                        DraftReviewPill("Tools: receipt, voice, Health")
+                        DraftReviewPill("Review before save")
                     }
                 }
             }
@@ -8320,6 +9005,204 @@ private fun AiContextCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun AiCapabilityCenter(
+    providerStatus: String,
+    backendHome: BackendHomeUiState,
+    healthStatus: String,
+    contextSummary: String,
+    messageCount: Int,
+    onOpenDataHome: () -> Unit,
+    onOpenAiControl: () -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val providerLive = "local fallback" !in providerStatus.lowercase()
+    val dataHomeLive = backendHome.activeType != null && !backendHome.requiresOnboarding
+    val healthLive = listOf("granted", "steps", "calorie", "protein", "ready", "connected")
+        .any { it in healthStatus.lowercase() }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                ObjectImage("🧩", MaterialTheme.colorScheme.secondaryContainer, 42.dp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Capability center", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "What Chat can use, cite, draft, and hand off right now.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                AssistChip(
+                    onClick = { expanded = !expanded },
+                    label = { Text(if (expanded) "Less" else "Details") },
+                )
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AiCapabilityPill(
+                    icon = if (providerLive) "🟢" else "🟡",
+                    label = if (providerLive) "Model live" else "Local AI fallback",
+                    onClick = onOpenAiControl,
+                )
+                AiCapabilityPill("💬", "$messageCount chat msgs")
+                AiCapabilityPill(
+                    icon = if (dataHomeLive) "🟢" else "🟡",
+                    label = "Data: ${backendHome.label}",
+                    onClick = onOpenDataHome,
+                )
+                AiCapabilityPill("📚", "Sources shown")
+                AiCapabilityPill("🧠", "Food skill")
+                AiCapabilityPill("🧾", "Receipt/voice tools")
+                AiCapabilityPill(if (healthLive) "🟢" else "⚪", "Health Connect")
+            }
+            if (expanded) {
+                AiCapabilityRows(
+                    providerStatus = providerStatus,
+                    backendHome = backendHome,
+                    contextSummary = contextSummary,
+                    healthStatus = healthStatus,
+                    providerLive = providerLive,
+                    dataHomeLive = dataHomeLive,
+                    healthLive = healthLive,
+                    onOpenDataHome = onOpenDataHome,
+                    onOpenAiControl = onOpenAiControl,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiCapabilityPill(icon: String, label: String, onClick: (() -> Unit)? = null) {
+    Surface(
+        modifier = if (onClick == null) {
+            Modifier
+        } else {
+            Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .clickable(role = Role.Button, onClick = onClick)
+        },
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(icon, style = MaterialTheme.typography.labelMedium)
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun AiCapabilityRows(
+    providerStatus: String,
+    backendHome: BackendHomeUiState,
+    contextSummary: String,
+    healthStatus: String,
+    providerLive: Boolean,
+    dataHomeLive: Boolean,
+    healthLive: Boolean,
+    onOpenDataHome: () -> Unit,
+    onOpenAiControl: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AiCapabilityRow(
+            icon = "🤖",
+            title = "Model route",
+            state = if (providerLive) "Live provider" else "Local fallback",
+            detail = providerStatus,
+        )
+        OutlinedButton(onClick = onOpenAiControl) {
+            Text("Configure model, skills & MCP")
+        }
+        AiCapabilityRow(
+            icon = "🗂️",
+            title = "Data plane",
+            state = if (dataHomeLive) "Connected" else "Needs setup",
+            detail = backendHome.dataPlaneDetail(),
+        )
+        AiCapabilityRow(
+            icon = "🔗",
+            title = "Data-plane links",
+            state = backendHome.dataPlaneProofState(dataHomeLive),
+            detail = backendHome.dataPlaneProofDetail(),
+        )
+        if (!dataHomeLive) {
+            OutlinedButton(onClick = onOpenDataHome) {
+                Text("Set up data home")
+            }
+        }
+        AiCapabilityRow(
+            icon = "📚",
+            title = "Citations",
+            state = "Visible",
+            detail = "Assistant messages can show app memory, active data home, provider URL/file citations, and OpenAI web-search sources.",
+        )
+        AiCapabilityRow(
+            icon = "🧠",
+            title = "Skills",
+            state = "Food active",
+            detail = "Bundled WonderFood skill plus your assistant instructions. Custom core skill can be edited in Settings.",
+        )
+        AiCapabilityRow(
+            icon = "🧬",
+            title = "Schemas",
+            state = "Bridge-ready",
+            detail = "Command envelope, proposal package, App Functions, Room schema, Notion/Sheets workspace graph, and sync contracts are in the app package/codebase.",
+        )
+        AiCapabilityRow(
+            icon = "🕸️",
+            title = "MCP / agents",
+            state = "Local bridge ready",
+            detail = "MCP stdio bridge exposes skills, schemas, validation, proposal packages, and review-only app links for GPT/plugin clients.",
+        )
+        AiCapabilityRow(
+            icon = "❤️",
+            title = "Health Connect",
+            state = if (healthLive) "Live/ready" else "Available when granted",
+            detail = healthStatus.ifBlank { "Health status and nutrition export stay review-gated." },
+        )
+        Text(
+            contextSummary,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AiCapabilityRow(icon: String, title: String, state: String, detail: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(icon, style = MaterialTheme.typography.titleMedium)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text("• $state", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Text(
+                detail.ifBlank { "Not configured." },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -9036,6 +9919,48 @@ private fun mealNutritionSummary(meal: MealLog): String {
 
 private fun foodEmoji(name: String): String = foodEmojiForName(name)
 
+private fun String.sourceUriLabel(): String =
+    trim()
+        .removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore('?')
+        .trimEnd('/')
+        .take(64)
+
+private fun BackendHomeUiState.dataPlaneDetail(): String =
+    listOf(
+        detail,
+        message.takeIf { it.isNotBlank() },
+        safetyMessage.takeIf { it.isNotBlank() },
+    )
+        .filterNotNull()
+        .joinToString(" • ")
+        .ifBlank { "Choose Notion, Google Sheets, local SQLite, or Postgres as the data home." }
+
+private fun BackendHomeUiState.dataPlaneProofState(dataHomeLive: Boolean): String =
+    when {
+        !dataHomeLive -> "Missing"
+        dataPlaneUrl.isNotBlank() -> "Link visible"
+        activeType == BackendType.LOCAL_SQLITE -> "On-device"
+        else -> "Saved"
+    }
+
+private fun BackendHomeUiState.dataPlaneProofDetail(): String =
+    if (activeType == null || requiresOnboarding) {
+        if (templateNotionUrl.isNotBlank() || templateSheetsUrl.isNotBlank()) {
+            "Verified template proof pack is visible below. Pick one active data home when ready."
+        } else {
+            "No live data-plane link saved yet. Configure Notion or Sheets in Settings → Data home, then Chat will show the proof here."
+        }
+    } else {
+        buildList {
+            add(proofLabel.ifBlank { label })
+            dataPlaneUrl.sourceUriLabel().takeIf { it.isNotBlank() }?.let { add(it) }
+            externalId.takeIf { it.isNotBlank() }?.let { add("id ${it.take(18)}") }
+            accountLabel.takeIf { it.isNotBlank() }?.let { add(it) }
+        }.joinToString(" • ")
+    }
+
 private fun HouseholdUiMemory.aiVisibleContextSummary(): String = buildString {
     appendLine("Sent when relevant:")
     appendLine(
@@ -9136,6 +10061,7 @@ private fun WonderFoodPreview() {
             onConnectNotionBackend = { _, _ -> },
             onConnectPostgresBackend = { _, _, _ -> },
             onSelectPendingBackend = {},
+            onSelectLifeOsDomain = {},
             onDismissBackendOnboarding = {},
             onClearWorkspaceConflictInbox = {},
         )

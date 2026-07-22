@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import com.wonderfood.app.data.AiTurn
+import com.wonderfood.app.data.ChatSourceRef
 import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraft
@@ -38,6 +39,7 @@ sealed interface LiteLlmInterpretation {
     data class Success(
         val turn: AiTurn,
         override val diagnostic: String,
+        val sources: List<ChatSourceRef> = emptyList(),
     ) : LiteLlmInterpretation
 
     data class Failure(
@@ -105,7 +107,7 @@ class LiteLlmFoodInterpreter(
         }
         val turn = parseTurn(content, text, memory)
             ?: return LiteLlmInterpretation.Failure("${response.diagnostic}; invalid WonderFood JSON")
-        return validateProviderTurn(turn, response.diagnostic)
+        return validateProviderTurn(turn, response.diagnostic, json.responseSourceRefs(config))
     }
 
     fun interpretReceiptPhoto(
@@ -230,7 +232,11 @@ class LiteLlmFoodInterpreter(
             else -> null
         }
 
-    private fun validateProviderTurn(turn: AiTurn, diagnostic: String): LiteLlmInterpretation {
+    private fun validateProviderTurn(
+        turn: AiTurn,
+        diagnostic: String,
+        sources: List<ChatSourceRef> = emptyList(),
+    ): LiteLlmInterpretation {
         val normalizedDraft = turn.draft?.let(FoodDraftNormalizer::normalize)
         val errors = normalizedDraft?.let(FoodDraftValidator::validate).orEmpty()
         if (errors.isNotEmpty()) {
@@ -241,6 +247,7 @@ class LiteLlmFoodInterpreter(
         return LiteLlmInterpretation.Success(
             turn.copy(draft = normalizedDraft),
             "$diagnostic; parsed WonderFood proposal",
+            sources = sources,
         )
     }
 
@@ -371,6 +378,11 @@ class LiteLlmFoodInterpreter(
             path.endsWith("/openai/v1") || "/openai/v1/" in path
         }
 
+    private fun LiteLlmConfig.usesOfficialOpenAiResponsesApi(): Boolean =
+        provider == AiProvider.OPENAI_COMPATIBLE &&
+            usesResponsesApi() &&
+            "api.openai.com" in baseUrl.lowercase()
+
     private fun String.appendUrlPath(path: String): String {
         val base = substringBefore('?').trimEnd('/')
         val query = substringAfter('?', "")
@@ -410,6 +422,11 @@ class LiteLlmFoodInterpreter(
         }
         optJSONObject("response_format")?.let { format ->
             request.put("text", JSONObject().put("format", JSONObject(format.toString())))
+        }
+        if (config.usesOfficialOpenAiResponsesApi()) {
+            request
+                .put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
+                .put("include", JSONArray().put("web_search_call.action.sources"))
         }
 
         val instructions = mutableListOf<String>()
@@ -514,6 +531,82 @@ class LiteLlmFoodInterpreter(
             }
         }.joinToString("\n").trim()
     }
+
+    private fun JSONObject.responseSourceRefs(config: LiteLlmConfig): List<ChatSourceRef> {
+        if (!config.usesResponsesApi()) return emptyList()
+        val output = optJSONArray("output") ?: return emptyList()
+        return buildList {
+            for (outputIndex in 0 until output.length()) {
+                val item = output.optJSONObject(outputIndex) ?: continue
+                if (item.optString("type") == "web_search_call") {
+                    item.optJSONObject("action")
+                        ?.optJSONArray("sources")
+                        ?.let { sources ->
+                            for (sourceIndex in 0 until sources.length()) {
+                                val source = sources.optJSONObject(sourceIndex) ?: continue
+                                val url = source.optString("url").trim()
+                                val title = source.optString("title").trim().ifBlank { url }
+                                if (title.isBlank()) continue
+                                add(
+                                    ChatSourceRef(
+                                        title = title.take(80),
+                                        detail = "OpenAI web search source",
+                                        quote = source.optString("snippet").trim().take(240),
+                                        uri = url.take(512),
+                                    ),
+                                )
+                            }
+                        }
+                }
+                val content = item.optJSONArray("content") ?: continue
+                for (contentIndex in 0 until content.length()) {
+                    val part = content.optJSONObject(contentIndex) ?: continue
+                    val text = part.outputTextValue()
+                    val annotations = part.optJSONArray("annotations") ?: continue
+                    for (annotationIndex in 0 until annotations.length()) {
+                        val annotation = annotations.optJSONObject(annotationIndex) ?: continue
+                        when (annotation.optString("type")) {
+                            "url_citation" -> {
+                                val url = annotation.optString("url").trim()
+                                val title = annotation.optString("title").trim().ifBlank { url }
+                                if (title.isBlank()) continue
+                                add(
+                                    ChatSourceRef(
+                                        title = title.take(80),
+                                        detail = "OpenAI URL citation",
+                                        quote = text.citationSnippet(
+                                            annotation.optInt("start_index", -1),
+                                            annotation.optInt("end_index", -1),
+                                        ),
+                                        uri = url.take(512),
+                                    ),
+                                )
+                            }
+                            "file_citation" -> {
+                                val filename = annotation.optString("filename").trim()
+                                if (filename.isNotBlank()) {
+                                    add(ChatSourceRef(filename.take(80), "OpenAI file citation"))
+                                }
+                            }
+                            "container_file_citation" -> {
+                                val filename = annotation.optString("filename").trim()
+                                if (filename.isNotBlank()) {
+                                    add(ChatSourceRef(filename.take(80), "OpenAI container file citation"))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }.distinctBy { "${it.title}|${it.uri}" }.take(6)
+    }
+
+    private fun JSONObject.outputTextValue(): String =
+        when (val text = opt("text")) {
+            is String -> text
+            is JSONObject -> text.optString("value")
+            else -> ""
+        }
 
     private fun JSONObject.toAnthropicRequest(config: LiteLlmConfig): JSONObject {
         val sourceMessages = optJSONArray("messages") ?: JSONArray()
@@ -1001,6 +1094,14 @@ private fun String.promptClip(maxLength: Int): String =
         .replace(Regex("""\s+"""), " ")
         .trim()
         .let { if (it.length <= maxLength) it else it.take(maxLength - 1) + "…" }
+
+private fun String.citationSnippet(startIndex: Int, endIndex: Int): String {
+    if (isBlank()) return ""
+    val start = startIndex.coerceIn(0, length)
+    val end = endIndex.coerceIn(start, length)
+    val citation = substring(start, end).trim().ifBlank { "" }
+    return citation.ifBlank { promptClip(180) }.take(240)
+}
 
 private fun String.safeProviderExcerpt(apiKey: String): String =
     (if (apiKey.isBlank()) this else replace(apiKey, "[redacted]"))

@@ -1,0 +1,58 @@
+{
+  "schema_version": "lifeos.domain-catalog.v1",
+  "active_domain_id": "food",
+  "domains": [
+    {
+      "id": "food",
+      "label": "Food",
+      "emoji": "🍽️",
+      "status": "active",
+      "summary": "Kitchen, shopping, recipes, meal planning, receipts, nutrition, Health Connect context.",
+      "bottom_tabs": ["Now", "Food", "Week", "Saved", "Cart"],
+      "skills": [
+        "inventory",
+        "shopping",
+        "recipes",
+        "meal_logging",
+        "planning",
+        "receipt_parsing",
+        "preferences",
+        "navigation"
+      ],
+      "schema_surfaces": [
+        "Home",
+        "Kitchen",
+        "Shopping",
+        "Meals",
+        "Recipes",
+        "Ingredients",
+        "Spending",
+        "Purchase Lines",
+        "Needs Review"
+      ],
+      "data_planes": ["Notion", "Google Sheets", "SQLite", "Postgres", "MCP"]
+    },
+    {
+      "id": "health",
+      "label": "Health",
+      "emoji": "❤️",
+      "status": "companion",
+      "summary": "Health Connect observations, goals, calories, steps, nutrition export, recovery notes.",
+      "bottom_tabs": ["Today", "Metrics", "Trends", "Plans", "Sources"],
+      "skills": ["health_observation", "goal_review", "nutrition_export", "trend_summary"],
+      "schema_surfaces": ["Observations", "Goals", "Meals", "Metrics", "Sources", "Needs Review"],
+      "data_planes": ["Health Connect", "Notion", "Google Sheets", "SQLite", "MCP"]
+    },
+    {
+      "id": "plants",
+      "label": "Plants",
+      "emoji": "🪴",
+      "status": "template-ready",
+      "summary": "Plant profiles, watering/fertilizing schedules, observations, care logs, supplies.",
+      "bottom_tabs": ["Today", "Plants", "Care", "Journal", "Supplies"],
+      "skills": ["plant_care", "schedule_generation", "observation_logging", "supply_tracking"],
+      "schema_surfaces": ["Plants", "Care Schedule", "Care Logs", "Observations", "Supplies", "Needs Review"],
+      "data_planes": ["Notion", "Google Sheets", "SQLite", "MCP"]
+    }
+  ]
+}

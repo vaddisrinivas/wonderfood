@@ -29,6 +29,7 @@ import com.wonderfood.app.data.CanonicalSavedRecipeItem
 import com.wonderfood.app.data.CanonicalWeekPlanItem
 import com.wonderfood.app.data.ChatRole
 import com.wonderfood.app.data.ChatMessage
+import com.wonderfood.app.data.ChatSourceRef
 import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.FoodDraft
@@ -40,6 +41,8 @@ import com.wonderfood.app.data.FoodDraftNormalizer
 import com.wonderfood.app.data.FoodDraftValidator
 import com.wonderfood.app.data.FoodEventType
 import com.wonderfood.app.data.HouseholdUiMemory
+import com.wonderfood.app.data.LifeOsDomain
+import com.wonderfood.app.data.LifeOsDomainCatalog
 import com.wonderfood.app.data.FoodPreferences
 import com.wonderfood.app.data.GroceryItem
 import com.wonderfood.app.data.GroceryStatus
@@ -175,8 +178,13 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         refreshBackendHome()
     }
     private val shellPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == KEY_WORKSPACE_CONFLICT_INBOX) {
-            _uiState.update { it.copy(workspaceConflictInbox = readWorkspaceConflictInbox()) }
+        when (key) {
+            KEY_WORKSPACE_CONFLICT_INBOX -> {
+                _uiState.update { it.copy(workspaceConflictInbox = readWorkspaceConflictInbox()) }
+            }
+            KEY_TEMPLATE_NOTION_URL,
+            KEY_TEMPLATE_SHEETS_URL,
+            -> refreshBackendHome()
         }
     }
     private var pendingUndo: PendingUndo? = null
@@ -194,6 +202,8 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         WonderFoodUiState(
             section = readSelectedSection(),
             workspaceConflictInbox = readWorkspaceConflictInbox(),
+            lifeOsDomains = LifeOsDomainCatalog.bundled(appContext).domains,
+            selectedLifeOsDomainId = readSelectedLifeOsDomainId(),
         ),
     )
     val uiState: StateFlow<WonderFoodUiState> = _uiState.asStateFlow()
@@ -201,7 +211,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     val healthPermissionContract = health.permissionContract()
     val healthPermissions: Set<String> = health.healthPermissions
     val healthWritePermissions: Set<String> = health.nutritionWritePermissions
-    private val localChatSeedMessage = "Tell me food things naturally. Try: `I bought eggs, Greek yogurt, spinach and frozen berries` or `Log chicken rice bowl for lunch`."
+    private val localChatSeedMessage = "Ask naturally. I can use your kitchen, recipes, shopping list, plans, receipts, preferences, and Health Connect status when they are available."
 
     private fun seedLocalChatIfNeeded() {
         synchronized(localChatLock) {
@@ -217,10 +227,16 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                     chatId = localChatCounter,
                 ),
             )
+            saveLocalChatMessagesLocked()
         }
     }
 
-    private fun insertLocalChatMessage(role: ChatRole, body: String, chatId: Long = localChatCounter): Long {
+    private fun insertLocalChatMessage(
+        role: ChatRole,
+        body: String,
+        chatId: Long = localChatCounter,
+        sources: List<ChatSourceRef> = emptyList(),
+    ): Long {
         val clean = body.trim()
         if (clean.isBlank()) return -1L
         val now = System.currentTimeMillis()
@@ -232,8 +248,10 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 body = clean,
                 createdAtMillis = now,
                 chatId = chatId,
+                sources = sources,
             )
             localChatMessages.add(message)
+            saveLocalChatMessagesLocked()
             message.id
         }
     }
@@ -246,7 +264,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             val idx = localChatMessages.indexOfFirst { it.id == id }
             if (idx < 0) return@synchronized false
             val message = localChatMessages[idx]
+            if (message.role != ChatRole.USER) return@synchronized false
             localChatMessages[idx] = message.copy(body = clean, createdAtMillis = now)
+            saveLocalChatMessagesLocked()
             true
         }
     }
@@ -254,7 +274,6 @@ class MainScreenViewModel(context: Context) : ViewModel() {
     private fun startLocalNewChat() {
         synchronized(localChatLock) {
             localChatCounter += 1
-            localMessageCounter = 0L
             insertLocalChatMessage(
                 role = ChatRole.ASSISTANT,
                 body = "New chat started. Your kitchen, recipes, groceries, plans, and settings are still saved.",
@@ -276,6 +295,185 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
+    private fun loadLocalChatMessages() {
+        synchronized(localChatLock) {
+            val raw = shellPrefs.getString(KEY_LOCAL_CHAT_HISTORY, null).orEmpty()
+            if (raw.isBlank()) return@synchronized
+            val loaded = runCatching {
+                val array = JSONArray(raw)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.optJSONObject(index) ?: continue
+                        val role = runCatching { ChatRole.valueOf(item.optString("role")) }.getOrNull() ?: continue
+                        val body = item.optString("body").trim()
+                        if (body.isBlank()) continue
+                        add(
+                            ChatMessage(
+                                id = item.optLong("id"),
+                                role = role,
+                                body = body,
+                                createdAtMillis = item.optLong("createdAtMillis", System.currentTimeMillis()),
+                                chatId = item.optLong("chatId", 1L).coerceAtLeast(1L),
+                                sources = item.optJSONArray("sources").toChatSourceRefs(),
+                            ),
+                        )
+                    }
+                }
+            }.getOrDefault(emptyList())
+            if (loaded.isEmpty()) return@synchronized
+            localChatMessages.clear()
+            localChatMessages.addAll(loaded.sortedWith(compareBy<ChatMessage> { it.chatId }.thenBy { it.createdAtMillis }.thenBy { it.id }))
+            localChatCounter = localChatMessages.maxOfOrNull { it.chatId } ?: 1L
+            localMessageCounter = localChatMessages.minOfOrNull { it.id }?.coerceAtMost(0L) ?: 0L
+        }
+    }
+
+    private fun saveLocalChatMessagesLocked() {
+        val array = JSONArray()
+        localChatMessages
+            .sortedWith(compareBy<ChatMessage> { it.chatId }.thenBy { it.createdAtMillis }.thenBy { it.id })
+            .takeLast(240)
+            .forEach { message ->
+                array.put(
+                    JSONObject()
+                        .put("id", message.id)
+                        .put("role", message.role.name)
+                        .put("body", message.body)
+                        .put("createdAtMillis", message.createdAtMillis)
+                        .put("chatId", message.chatId)
+                        .put("sources", message.sources.toJsonArray()),
+                )
+            }
+        shellPrefs.edit { putString(KEY_LOCAL_CHAT_HISTORY, array.toString()) }
+    }
+
+    private fun JSONArray?.toChatSourceRefs(): List<ChatSourceRef> {
+        if (this == null) return emptyList()
+        return buildList {
+            for (index in 0 until length()) {
+                val item = optJSONObject(index) ?: continue
+                val title = item.optString("title").trim()
+                val detail = item.optString("detail").trim()
+                if (title.isBlank() || detail.isBlank()) continue
+                add(
+                    ChatSourceRef(
+                        title = title.take(80),
+                        detail = detail.take(160),
+                        quote = item.optString("quote").trim().take(240),
+                        uri = item.optString("uri").trim().take(512),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun List<ChatSourceRef>.toJsonArray(): JSONArray {
+        val array = JSONArray()
+        take(8).forEach { source ->
+            array.put(
+                JSONObject()
+                    .put("title", source.title)
+                    .put("detail", source.detail)
+                    .put("quote", source.quote)
+                    .put("uri", source.uri),
+            )
+        }
+        return array
+    }
+
+    private fun chatSourcesForTurn(
+        memory: HouseholdUiMemory,
+        backendHome: BackendHomeUiState,
+        status: String,
+        promptContext: String?,
+        draft: FoodDraft?,
+        providerSources: List<ChatSourceRef> = emptyList(),
+    ): List<ChatSourceRef> = buildList {
+        providerSources.take(4).forEach(::add)
+        add(
+            ChatSourceRef(
+                title = "Active data home",
+                detail = backendHome.label,
+                quote = backendHome.detail,
+                uri = backendHome.sheetUrl,
+            ),
+        )
+        add(
+            ChatSourceRef(
+                title = "AI route",
+                detail = status.ifBlank { "Local deterministic parser" },
+                quote = if (draft == null) "No draft was staged." else "${draft.title}: ${draft.rows.take(3).joinToString("; ")}",
+            ),
+        )
+        promptContext
+            ?.lineSequence()
+            ?.firstOrNull { it.isNotBlank() }
+            ?.let { line ->
+                add(ChatSourceRef("Current app page", line.take(120), promptContext.lineSequence().take(4).joinToString(" ").take(220)))
+            }
+        if (memory.inventory.isNotEmpty()) {
+            add(
+                ChatSourceRef(
+                    title = "Kitchen",
+                    detail = "${memory.inventory.size} food item${memory.inventory.size.pluralWord}",
+                    quote = memory.inventory.take(6).joinToString("; ") { "${it.name} (${it.zone.label}${if (it.quantity.isBlank()) "" else ", ${it.quantity}"})" },
+                ),
+            )
+        }
+        if (memory.groceries.isNotEmpty()) {
+            add(
+                ChatSourceRef(
+                    title = "Shopping",
+                    detail = "${memory.groceries.count { it.status == GroceryStatus.NEEDED }} to buy, ${memory.groceries.count { it.status == GroceryStatus.BOUGHT }} bought",
+                    quote = memory.groceries.take(6).joinToString("; ") { "${it.name} (${it.status.name.lowercase()})" },
+                ),
+            )
+        }
+        if (memory.recipes.isNotEmpty()) {
+            add(
+                ChatSourceRef(
+                    title = "Recipes",
+                    detail = "${memory.recipes.size} saved recipe${memory.recipes.size.pluralWord}",
+                    quote = memory.recipes.take(5).joinToString("; ") { it.title },
+                ),
+            )
+        }
+        if (memory.mealPlanEntries.isNotEmpty() || memory.mealLogs.isNotEmpty()) {
+            add(
+                ChatSourceRef(
+                    title = "Meals and plans",
+                    detail = "${memory.mealLogs.size} logs, ${memory.mealPlanEntries.size} planned entries",
+                    quote = (memory.mealPlanEntries.take(4).map { "${it.slot.label}: ${it.title}" } + memory.mealLogs.take(3).map { "${it.mealSlot.label}: ${it.title}" })
+                        .take(6)
+                        .joinToString("; "),
+                ),
+            )
+        }
+        if (memory.receipts.isNotEmpty()) {
+            add(
+                ChatSourceRef(
+                    title = "Receipts",
+                    detail = "${memory.receipts.size} receipt capture${memory.receipts.size.pluralWord}",
+                    quote = memory.receipts.take(3).joinToString("; ") { it.rawText.lineSequence().firstOrNull().orEmpty().ifBlank { it.status.name.lowercase() } },
+                ),
+            )
+        }
+        if (!memory.preferences.isEmpty) {
+            add(
+                ChatSourceRef(
+                    title = "Preferences",
+                    detail = "Diet, allergy, store, nutrition, and assistant instruction fields",
+                    quote = listOf(
+                        memory.preferences.dietStyle.takeIf { it.isNotBlank() }?.let { "Diet: $it" },
+                        memory.preferences.allergies.takeIf { it.isNotBlank() }?.let { "Allergies: $it" },
+                        memory.preferences.dislikes.takeIf { it.isNotBlank() }?.let { "Dislikes: $it" },
+                        memory.preferences.preferredStaples.takeIf { it.isNotBlank() }?.let { "Staples: $it" },
+                    ).filterNotNull().joinToString("; "),
+                ),
+            )
+        }
+    }.distinctBy { it.title }.take(8)
+
     private fun localChatMessagesForMemory(): List<ChatMessage> =
         synchronized(localChatLock) {
             localChatMessages
@@ -292,6 +490,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         backendPrefs.registerOnSharedPreferenceChangeListener(backendPrefsListener)
         shellPrefs.registerOnSharedPreferenceChangeListener(shellPrefsListener)
         viewModelScope.launch(Dispatchers.IO) {
+            loadLocalChatMessages()
             seedLocalChatIfNeeded()
             ensureCanonicalHousehold()
             refreshFromDisk()
@@ -315,6 +514,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     fun selectSection(section: FoodSection) {
         setSection(section)
+    }
+
+    fun selectLifeOsDomain(domainId: String) {
+        val clean = domainId.trim().lowercase()
+        val domain = _uiState.value.lifeOsDomains.firstOrNull { it.id == clean } ?: return
+        shellPrefs.edit { putString(KEY_SELECTED_LIFEOS_DOMAIN, domain.id) }
+        _uiState.update { it.copy(selectedLifeOsDomainId = domain.id) }
+        showFeedback("${domain.label} package selected. Food remains the active native workspace until a package maps its tabs to app screens.")
     }
 
     fun openDetail(target: FoodDetailTarget) {
@@ -484,6 +691,22 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                 WonderFoodVoiceAction.SHOW_NUMBERS -> {
                     setSection(FoodSection.TODAY)
                     "Opened today's numbers."
+                }
+                WonderFoodVoiceAction.PROOF_PACK -> {
+                    val notionUrl = command.templateNotionUrl.takeIf(::isTrustedNotionUrl).orEmpty()
+                    val sheetsUrl = command.templateSheetsUrl.takeIf(::isTrustedSheetsUrl).orEmpty()
+                    if (notionUrl.isBlank() && sheetsUrl.isBlank()) {
+                        "Proof pack link was ignored: expected HTTPS Notion and/or Google Sheets URLs."
+                    } else {
+                        shellPrefs.edit {
+                            if (notionUrl.isNotBlank()) putString(KEY_TEMPLATE_NOTION_URL, notionUrl)
+                            if (sheetsUrl.isNotBlank()) putString(KEY_TEMPLATE_SHEETS_URL, sheetsUrl)
+                            putString(KEY_BACKEND_SYNC_STATUS, "Verified template proof pack saved on this device.")
+                        }
+                        setSection(FoodSection.TODAY)
+                        refreshBackendHome()
+                        "Template proof pack saved. Open Settings → Data home to see Notion and Sheets links."
+                    }
                 }
                 WonderFoodVoiceAction.LOG_WATER -> {
                     val amount = command.amount?.toInt() ?: 250
@@ -1506,12 +1729,18 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         backendHome.copy(
                             message = syncStatus.ifBlank { backendHome.message },
                             safetyMessage = safetyStatus,
-                        )
+                        ).withTemplateProofLinks()
                     },
                 )
             }
         }
     }
+
+    private fun BackendHomeUiState.withTemplateProofLinks(): BackendHomeUiState =
+        copy(
+            templateNotionUrl = shellPrefs.getString(KEY_TEMPLATE_NOTION_URL, "").orEmpty(),
+            templateSheetsUrl = shellPrefs.getString(KEY_TEMPLATE_SHEETS_URL, "").orEmpty(),
+        )
 
     fun chooseLocalBackend() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1527,7 +1756,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         detail = "Private local storage is active.",
                         requiresOnboarding = false,
                         safetyMessage = safety,
-                    ),
+                    ).withTemplateProofLinks(),
                 )
             }
             showFeedback("WonderFood will keep data on this phone. Rollback snapshot saved from $previous.")
@@ -1700,6 +1929,10 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         },
                         requiresOnboarding = false,
                         sheetUrl = reference.canonicalUrl,
+                        dataPlaneUrl = reference.canonicalUrl,
+                        externalId = reference.spreadsheetId,
+                        accountLabel = accountEmail,
+                        proofLabel = "Google Sheets workbook",
                         safetyMessage = safety,
                     ),
                     sheetsImportPreview = sheetsImportPreview,
@@ -1906,6 +2139,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                             val upsertedRows = workspaceExport?.upsertedRows ?: 0
                             "Notion created $createdCount database${createdCount.pluralWord} and upserted $upsertedRows linked workspace row${upsertedRows.pluralWord}."
                         },
+                        dataPlaneUrl = reference.canonicalUrl,
+                        externalId = reference.pageId,
+                        proofLabel = "Notion root page",
                         safetyMessage = safety,
                     ),
                     sheetsImportPreview = importPreview,
@@ -1994,6 +2230,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         } else {
                             "${reference.mode.label} exported ${export.first.byteCount} bytes."
                         },
+                        dataPlaneUrl = reference.endpoint,
+                        externalId = reference.householdId,
+                        proofLabel = "${reference.mode.label} endpoint",
                         safetyMessage = safety,
                     ),
                 )
@@ -3467,11 +3706,12 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         val origin: FoodDraftCommandOrigin,
         val autoAcceptAllowed: Boolean,
         val status: String,
+        val sources: List<ChatSourceRef> = emptyList(),
     )
 
     private suspend fun submitToAi(text: String, source: String, promptContext: String? = null, autoAccept: Boolean = false) {
         val sourceMessageId = insertLocalChatMessage(ChatRole.USER, if (source == "voice") "Voice note: $text" else text)
-        val memory = canonicalRuntimeMemory(includeLegacyChat = false)
+        val memory = canonicalRuntimeMemory(includeLegacyChat = true)
         val configs = liteLlmSettings.readAll()
         val promptText = promptContext
             ?.takeIf { it.isNotBlank() }
@@ -3479,7 +3719,15 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             ?: text
         val interpretation = interpretWithVisibleRetries(promptText, text, memory, promptContext, configs)
         val turn = interpretation.turn
-        insertLocalChatMessage(ChatRole.ASSISTANT, turn.reply)
+        val sources = chatSourcesForTurn(
+            memory = memory,
+            backendHome = _uiState.value.backendHome,
+            status = interpretation.status,
+            promptContext = promptContext,
+            draft = turn.draft,
+            providerSources = interpretation.sources,
+        )
+        insertLocalChatMessage(ChatRole.ASSISTANT, turn.reply, sources = sources)
         if (autoAccept && turn.draft != null && interpretation.autoAcceptAllowed) {
             val origin = FoodDraftCommandOrigin.VOICE_AUTO_ACCEPT
             val result = if (turn.draft.canApplyDirectlyToCanonicalHousehold(origin)) {
@@ -3575,6 +3823,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
                         origin = if (result.turn.draft.containsReceiptDraft()) FoodDraftCommandOrigin.RECEIPT else FoodDraftCommandOrigin.AI_REVIEW,
                         autoAcceptAllowed = false,
                         status = result.diagnostic,
+                        sources = result.sources,
                     )
                 }
                 is LiteLlmInterpretation.Failure -> {
@@ -4086,6 +4335,9 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             )
         }.getOrDefault(FoodSection.TODAY)
 
+    private fun readSelectedLifeOsDomainId(): String =
+        shellPrefs.getString(KEY_SELECTED_LIFEOS_DOMAIN, "food").orEmpty().ifBlank { "food" }
+
     private fun rememberWorkspaceConflictInbox(inbox: WorkspaceConflictInbox) {
         shellPrefs.edit { putString(KEY_WORKSPACE_CONFLICT_INBOX, inbox.toJson().toString()) }
     }
@@ -4142,6 +4394,26 @@ class MainScreenViewModel(context: Context) : ViewModel() {
 
     private fun WonderFoodVoiceCommand.directActionPreferenceKey(): String =
         "handled:$idempotencyKey"
+
+    private fun isTrustedNotionUrl(url: String): Boolean =
+        runCatching {
+            val uri = Uri.parse(url.trim())
+            uri.scheme.equals("https", ignoreCase = true) &&
+                uri.host.orEmpty().lowercase().let { host ->
+                    host == "notion.so" ||
+                        host.endsWith(".notion.so") ||
+                        host == "notion.com" ||
+                        host.endsWith(".notion.com")
+                }
+        }.getOrDefault(false)
+
+    private fun isTrustedSheetsUrl(url: String): Boolean =
+        runCatching {
+            val uri = Uri.parse(url.trim())
+            uri.scheme.equals("https", ignoreCase = true) &&
+                uri.host.orEmpty().lowercase() == "docs.google.com" &&
+                uri.path.orEmpty().startsWith("/spreadsheets/")
+        }.getOrDefault(false)
 
     private suspend fun executeDraftCommand(
         draft: FoodDraft,
@@ -4509,11 +4781,15 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         const val DIRECT_ACTION_PREFS_NAME = "wonderfood_direct_actions"
         const val GOOGLE_SYNC_PREFS_NAME = "wonderfood_google_sync"
         const val KEY_SELECTED_SECTION = "selected_section"
+        const val KEY_SELECTED_LIFEOS_DOMAIN = "selected_lifeos_domain"
         const val KEY_GOOGLE_EMAIL = "google_email"
         const val KEY_GOOGLE_NAME = "google_name"
         const val KEY_GOOGLE_WEB_CLIENT_ID = "google_web_client_id"
         const val KEY_BACKEND_SYNC_STATUS = "backend_sync_status"
         const val KEY_WORKSPACE_CONFLICT_INBOX = "workspace_conflict_inbox"
+        const val KEY_TEMPLATE_NOTION_URL = "template_notion_url"
+        const val KEY_TEMPLATE_SHEETS_URL = "template_sheets_url"
+        const val KEY_LOCAL_CHAT_HISTORY = "local_chat_history_v1"
         const val PREFERENCE_AUTO_SAVE_DELAY_MILLIS = 450L
         const val BACKEND_SNAPSHOT_SYNC_DEBOUNCE_MILLIS = 900L
     }
@@ -4631,7 +4907,12 @@ data class WonderFoodUiState(
     val undoMessage: String = "",
     val isWorking: Boolean = false,
     val backendHome: BackendHomeUiState = BackendHomeUiState(),
+    val lifeOsDomains: List<LifeOsDomain> = emptyList(),
+    val selectedLifeOsDomainId: String = "food",
 )
+
+val WonderFoodUiState.selectedLifeOsDomain: LifeOsDomain?
+    get() = lifeOsDomains.firstOrNull { it.id == selectedLifeOsDomainId } ?: lifeOsDomains.firstOrNull()
 
 data class BackendHomeUiState(
     val activeType: BackendType? = null,
@@ -4639,8 +4920,14 @@ data class BackendHomeUiState(
     val detail: String = "Pick where WonderFood keeps kitchen, plan, recipe and shopping data.",
     val requiresOnboarding: Boolean = true,
     val sheetUrl: String = "",
+    val dataPlaneUrl: String = "",
+    val externalId: String = "",
+    val accountLabel: String = "",
+    val proofLabel: String = "",
     val message: String = "",
     val safetyMessage: String = "",
+    val templateNotionUrl: String = "",
+    val templateSheetsUrl: String = "",
 ) {
     companion object {
         fun fromConfig(
@@ -4653,6 +4940,7 @@ data class BackendHomeUiState(
                     label = "On this phone",
                     detail = "Private local storage is active.",
                     requiresOnboarding = false,
+                    proofLabel = "Local Room/SQLite store",
                 )
                 is GoogleSheetsConfig -> BackendHomeUiState(
                     activeType = BackendType.GOOGLE_SHEETS,
@@ -4660,14 +4948,34 @@ data class BackendHomeUiState(
                     detail = "Sheet connected. Schema check and sync are next.",
                     requiresOnboarding = false,
                     sheetUrl = config.spreadsheetUrl,
+                    dataPlaneUrl = config.spreadsheetUrl,
+                    externalId = config.spreadsheetId,
+                    accountLabel = config.accountEmail.orEmpty(),
+                    proofLabel = "Google Sheets workbook",
+                )
+                is NotionConfig -> BackendHomeUiState(
+                    activeType = BackendType.NOTION,
+                    label = "Notion",
+                    detail = "Notion page connected. Workspace databases and sync contracts are saved.",
+                    requiresOnboarding = false,
+                    dataPlaneUrl = config.pageUrl,
+                    externalId = config.rootPageId,
+                    accountLabel = config.workspaceName.orEmpty(),
+                    proofLabel = "Notion root page",
+                )
+                is PostgresConfig -> BackendHomeUiState(
+                    activeType = BackendType.POSTGRES,
+                    label = when (config.connectionMode) {
+                        PostgresConnectionMode.POSTGREST -> "PostgREST"
+                        PostgresConnectionMode.WONDERFOOD_SERVER -> "WonderFood server"
+                    },
+                    detail = "Hosted snapshot endpoint connected for household ${config.householdId}.",
+                    requiresOnboarding = false,
+                    dataPlaneUrl = config.endpoint,
+                    externalId = config.householdId,
+                    proofLabel = "Hosted endpoint",
                 )
                 null -> BackendHomeUiState(requiresOnboarding = !onboardingDismissed)
-                else -> BackendHomeUiState(
-                    activeType = config.type,
-                    label = config.type.label,
-                    detail = "Connection details saved.",
-                    requiresOnboarding = false,
-                )
             }
     }
 }

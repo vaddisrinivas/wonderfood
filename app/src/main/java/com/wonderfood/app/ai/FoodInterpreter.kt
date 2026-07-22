@@ -6,6 +6,7 @@ import com.wonderfood.app.data.CompositeDraft
 import com.wonderfood.app.data.FoodCandidate
 import com.wonderfood.app.data.HouseholdUiMemory
 import com.wonderfood.app.data.GroceryDraft
+import com.wonderfood.app.data.GroceryStatus
 import com.wonderfood.app.data.InventoryDraft
 import com.wonderfood.app.data.MealLogDraft
 import com.wonderfood.app.data.MealPlanEntryDraft
@@ -29,6 +30,7 @@ class FoodInterpreter {
         val explicitGrocery = lower.looksLikeGrocery()
         val explicitInventory = lower.looksLikeInventory()
         return when {
+            lower.looksLikeStructuredStatusRequest() -> structuredStatusTurn(memory)
             lower.looksLikePlannedRecipeRequest() && !text.hasRecipeDetails() &&
                 memory.recipes.none { recipe -> recipe.title.sameFoodTitle(text.extractPlannedMealTitle(lower.detectMealSlot())) } ->
                 recipeClarificationTurn(text.extractPlannedMealTitle(lower.detectMealSlot()))
@@ -202,6 +204,30 @@ class FoodInterpreter {
             else -> "Your local food memory is empty. Tell me what you bought or upload receipt text first."
         }
         return AiTurn(reply = suggestion, draft = null)
+    }
+
+    private fun structuredStatusTurn(memory: HouseholdUiMemory): AiTurn {
+        val openGroceries = memory.groceries.count { it.status != GroceryStatus.BOUGHT }
+        val plannedMeals = memory.mealPlanEntries.size
+        val capturedReceipts = memory.receipts.size
+        val recentMeals = memory.mealLogs.takeLast(3).joinToString(", ") { it.title }.ifBlank { "none yet" }
+        return AiTurn(
+            reply = """
+                Here is a local WonderFood status table.
+
+                | Area | Count | What this means |
+                |---|---:|---|
+                | Kitchen items | ${memory.inventory.size} | Food available for suggestions and meal planning |
+                | Open groceries | $openGroceries | Items still needing review or purchase |
+                | Saved recipes | ${memory.recipes.size} | Recipes Chat can cite and schedule |
+                | Planned meals | $plannedMeals | Calendar entries ready for the week |
+                | Receipts | $capturedReceipts | Receipt captures available for audit/import |
+
+                - Recent meals: $recentMeals
+                - Data changes still require review before saving.
+            """.trimIndent(),
+            draft = null,
+        )
     }
 }
 
@@ -468,6 +494,10 @@ private fun String.looksLikeMealLog(): Boolean =
 
 private fun String.looksLikeNutritionQuestion(): Boolean =
     listOf("calorie", "calories", "kcal", "protein", "carb", "carbs", "fat", "macro", "macros", "nutrition").any { it in this }
+
+private fun String.looksLikeStructuredStatusRequest(): Boolean =
+    ("table" in this || "status" in this || "compare" in this || "summary" in this) &&
+        listOf("show", "status", "table", "compare", "summarize", "summary", "overview").any { it in this }
 
 private fun String.looksLikeRecipe(): Boolean =
     listOf("recipe", "recepie", "reciepe", "make ", "cook ", "i made").any { it in this }

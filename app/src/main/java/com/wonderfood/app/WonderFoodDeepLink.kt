@@ -18,6 +18,8 @@ data class WonderFoodVoiceCommand(
     val quantity: String = "",
     val zone: String = "",
     val category: String = "",
+    val templateNotionUrl: String = "",
+    val templateSheetsUrl: String = "",
     val linkActions: List<WonderFoodLinkAction> = emptyList(),
 )
 
@@ -33,6 +35,7 @@ enum class WonderFoodVoiceAction {
     ADD_INVENTORY,
     PLAN_MEALS,
     SHOW_NUMBERS,
+    PROOF_PACK,
     AI_REVIEW,
     LINK_ACTION,
 }
@@ -68,9 +71,29 @@ object WonderFoodDeepLink {
             "add" -> prefillAddCommand(uri)
             "action" -> linkActionCommand(uri)
             "open" -> openCommand(uri)
+            "proof-pack" -> proofPackCommand(uri)
             "voice", "quick" -> voiceCommand(uri)
             else -> null
         }
+    }
+
+    private fun proofPackCommand(uri: Uri): WonderFoodVoiceCommand? {
+        val notionUrl = uri.getQueryParameter("notion").orEmpty()
+            .ifBlank { uri.getQueryParameter("notion_url").orEmpty() }
+            .cleanText(600)
+        val sheetsUrl = uri.getQueryParameter("sheets").orEmpty()
+            .ifBlank { uri.getQueryParameter("sheets_url").orEmpty() }
+            .ifBlank { uri.getQueryParameter("sheet").orEmpty() }
+            .cleanText(600)
+        if (notionUrl.isBlank() && sheetsUrl.isBlank()) return null
+        return WonderFoodVoiceCommand(
+            idempotencyKey = uri.explicitIdempotencyKey(),
+            action = WonderFoodVoiceAction.PROOF_PACK,
+            section = "data_home",
+            text = uri.toString().cleanText(WonderFoodCommandContract.MAX_LINK_TEXT_LENGTH),
+            templateNotionUrl = notionUrl,
+            templateSheetsUrl = sheetsUrl,
+        )
     }
 
     private fun appLinkCommand(uri: Uri): WonderFoodVoiceCommand? {
@@ -79,6 +102,7 @@ object WonderFoodDeepLink {
         val first = uri.pathSegments.getOrNull(0).orEmpty().cleanToken()
         if (first == "add") return prefillAddCommand(uri)
         if (first == "action") return linkActionCommand(uri)
+        if (first == "proof-pack") return proofPackCommand(uri)
         return null
     }
 

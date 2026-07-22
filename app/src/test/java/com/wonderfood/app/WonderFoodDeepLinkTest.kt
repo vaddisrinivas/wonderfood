@@ -117,6 +117,27 @@ class WonderFoodDeepLinkTest {
     }
 
     @Test
+    fun proofPackLinkCarriesNotionAndSheetsUrls() {
+        val command = WonderFoodDeepLink.from(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse(
+                    "wonderfood://proof-pack?requestId=proof-1" +
+                        "&notion=https%3A%2F%2Fapp.notion.com%2Fp%2Fmanasa-srinivas%2FLifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1" +
+                        "&sheets=https%3A%2F%2Fdocs.google.com%2Fspreadsheets%2Fd%2F1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU%2Fedit",
+                ),
+            ),
+        )
+
+        assertNotNull(command)
+        requireNotNull(command)
+        assertEquals(WonderFoodVoiceAction.PROOF_PACK, command.action)
+        assertEquals("proof-1", command.idempotencyKey)
+        assertEquals("https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1", command.templateNotionUrl)
+        assertEquals("https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit", command.templateSheetsUrl)
+    }
+
+    @Test
     fun shareIntentAndCommandTextIntentShareSameReviewEnvelope() {
         val shared = WonderFoodDeepLink.from(
             Intent(Intent.ACTION_SEND)

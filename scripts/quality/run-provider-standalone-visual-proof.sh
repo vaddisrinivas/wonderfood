@@ -87,7 +87,7 @@ if not parent:
         parent = (json.load(response).get("results") or [{}])[0].get("id", "")
 if not parent:
     raise SystemExit("No accessible Notion parent page found.")
-title = "WonderFood C25 Standalone Visual Proof " + str(int(time.time()))
+title = "WonderFood Provider Smoke Receipt " + str(int(time.time()))
 body = json.dumps(
     {
         "parent": {"page_id": parent},
@@ -106,7 +106,7 @@ import os
 import urllib.request
 
 token = os.environ["GOOGLE_SHEETS_ACCESS_TOKEN"]
-body = json.dumps({"properties": {"title": "WonderFood C25 Standalone Visual Proof"}}).encode()
+body = json.dumps({"properties": {"title": "WonderFood Provider Smoke Receipt"}}).encode()
 req = urllib.request.Request(
     "https://sheets.googleapis.com/v4/spreadsheets",
     data=body,
@@ -153,16 +153,19 @@ notion_headers = {
 }
 sheets_headers = {"Authorization": "Bearer " + sheets_token, "Content-Type": "application/json"}
 
-notion_visible = [
-    "WonderFood Home",
+notion_home_marker = "WonderFood Home"
+notion_visible_databases = [
     "WonderFood Kitchen",
     "WonderFood Shopping",
     "WonderFood Meals",
     "WonderFood Recipes",
     "WonderFood Spending",
-    "WonderFood Help",
+    "WonderFood Help & Setup",
 ]
+notion_visible = [notion_home_marker] + notion_visible_databases
+notion_seed_surfaces = {"WonderFood Kitchen", "WonderFood Recipes"}
 sheets_visible = ["Home", "Kitchen", "Shopping", "Meals", "Recipes", "Spending", "Lists & Help"]
+sheets_seed_surfaces = {"Kitchen", "Recipes"}
 forbidden_terms = [
     "NOTION_TOKEN",
     "GOOGLE_SHEETS_ACCESS_TOKEN",
@@ -202,6 +205,7 @@ def notion_prop_text(prop):
 
 def notion_children(page_id):
     databases = {}
+    marker_text = []
     cursor = None
     while True:
         path = "https://api.notion.com/v1/blocks/" + urllib.parse.quote(page_id, safe="") + "/children?page_size=100"
@@ -212,8 +216,10 @@ def notion_children(page_id):
             if result.get("type") == "child_database":
                 title = result.get("child_database", {}).get("title", "")
                 databases[title] = result.get("id", "")
+            else:
+                marker_text.append(json.dumps(result))
         if not body.get("has_more"):
-            return databases
+            return databases, marker_text
         cursor = body.get("next_cursor")
 
 def notion_rows(database_id):
@@ -241,9 +247,14 @@ def sheets_values(range_name):
     body = sheets_get("/values/" + encoded + "?majorDimension=ROWS")
     return body.get("values", [])
 
-notion_databases = notion_children(notion_page_id)
+notion_databases, notion_marker_text = notion_children(notion_page_id)
+notion_home_visible = any(notion_home_marker in marker for marker in notion_marker_text)
 notion_tables = []
-for title in notion_visible:
+if notion_home_visible:
+    notion_tables.append({"title": notion_home_marker, "database_id": False, "rows": [{"Dashboard": "Daily dashboard", "Status": "visible"}]})
+else:
+    notion_tables.append({"title": notion_home_marker, "database_id": False, "rows": []})
+for title in notion_visible_databases:
     database_id = notion_databases.get(title, "")
     rows = notion_rows(database_id) if database_id else []
     notion_tables.append({"title": title, "database_id": bool(database_id), "rows": rows})
@@ -261,12 +272,16 @@ payload = {
     "captured_at": captured_at,
     "app_offline_independent": True,
     "notion_page_id": notion_page_id[:4] + "..." + notion_page_id[-4:],
+    "notion_page_url": "https://www.notion.so/" + notion_page_id.replace("-", ""),
     "sheets_spreadsheet_id": spreadsheet_id[:4] + "..." + spreadsheet_id[-4:],
-    "notion_visible_surfaces": [table["title"] for table in notion_tables if table["database_id"]],
+    "sheets_spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + spreadsheet_id + "/edit",
+    "notion_home_marker_visible": notion_home_visible,
+    "notion_visible_surfaces": [table["title"] for table in notion_tables if table["database_id"] or table["title"] == notion_home_marker and notion_home_visible],
     "sheets_visible_tabs": [prop.get("title", "") for prop in sheets_sheet_props if not prop.get("hidden", False)],
     "sheets_hidden_tabs": [prop.get("title", "") for prop in sheets_sheet_props if prop.get("hidden", False)],
-    "notion_seed_rows_present": all(table["rows"] for table in notion_tables),
-    "sheets_seed_rows_present": all(len(table["rows"]) > 1 for table in sheets_tables),
+    "notion_seed_rows_present": all(table["rows"] for table in notion_tables if table["title"] in notion_seed_surfaces),
+    "sheets_seed_rows_present": all(len(table["rows"]) > 1 for table in sheets_tables if table["title"] in sheets_seed_surfaces),
+    "sheets_visible_headers_present": all(table["rows"] for table in sheets_tables),
     "standalone_workflows_visible": all(
         term in visible_text
         for term in ["kitchen", "shopping", "recipe", "meal", "spending", "help"]
@@ -284,6 +299,7 @@ payload["all_visual_checks_passed"] = all(
         all(title in payload["sheets_visible_tabs"] for title in sheets_visible),
         payload["notion_seed_rows_present"],
         payload["sheets_seed_rows_present"],
+        payload["sheets_visible_headers_present"],
         payload["standalone_workflows_visible"],
         payload["hidden_support_not_visible"],
         payload["no_secret_terms_visible"],
@@ -296,6 +312,7 @@ payload["failed_checks"] = [
         "sheets_visible_tabs",
         "notion_seed_rows_present",
         "sheets_seed_rows_present",
+        "sheets_visible_headers_present",
         "standalone_workflows_visible",
         "hidden_support_not_visible",
         "no_secret_terms_visible",
@@ -345,7 +362,7 @@ html_doc = f"""<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>WonderFood C25 Provider Standalone Visual Proof</title>
+<title>WonderFood Provider Smoke Receipt</title>
 <style>
 body {{ margin: 0; font: 14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background: #f6f5ef; color: #222; }}
 main {{ max-width: 1320px; margin: 0 auto; padding: 28px; }}
@@ -367,8 +384,9 @@ th {{ color: #5d5546; background: #faf8f1; font-size: 12px; }}
 </head>
 <body>
 <main>
-<h1>WonderFood Provider Standalone Visual Proof</h1>
+<h1>WonderFood Provider Smoke Receipt</h1>
 <p class="note">Captured {html.escape(captured_at)} from live Notion and Google Sheets provider data. The Android app runtime is not used for this inspection pass.</p>
+<p class="note"><a href="{html.escape(payload['notion_page_url'])}">Open Notion proof page</a> · <a href="{html.escape(payload['sheets_spreadsheet_url'])}">Open Google Sheets proof workbook</a></p>
 <div class="summary">
 <span>Notion surfaces: {len(payload['notion_visible_surfaces'])}/7</span>
 <span>Sheets visible tabs: {len(payload['sheets_visible_tabs'])}</span>

@@ -9,12 +9,20 @@ data class ChatMessage(
     val body: String,
     val createdAtMillis: Long,
     val chatId: Long = 1L,
+    val sources: List<ChatSourceRef> = emptyList(),
 )
 
 enum class ChatRole {
     USER,
     ASSISTANT,
 }
+
+data class ChatSourceRef(
+    val title: String,
+    val detail: String,
+    val quote: String = "",
+    val uri: String = "",
+)
 
 data class InventoryItem(
     val id: Long,

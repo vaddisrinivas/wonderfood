@@ -72,6 +72,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="wonderfood" android:host="add" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wonderfood" android:host="proof-pack" />
+            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -81,6 +87,7 @@
                 <data android:host="www.wonderfood.app" />
                 <data android:pathPrefix="/add" />
                 <data android:pathPrefix="/action" />
+                <data android:pathPrefix="/proof-pack" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
