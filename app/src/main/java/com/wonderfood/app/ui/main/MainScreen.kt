@@ -5396,37 +5396,39 @@ private fun LifeOsHeroCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         color = Color.Transparent,
-        tonalElevation = 4.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+        tonalElevation = 3.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
     ) {
         Box(
             modifier = Modifier
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
-                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f),
-                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.22f),
                         ),
                     ),
                 )
-                .padding(18.dp),
+                .padding(14.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     LifeOsVectorBadge(
                         icon = domain.lifeOsIcon(),
-                        modifier = Modifier.size(58.dp),
+                        modifier = Modifier.size(46.dp),
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.76f),
                     )
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("${domain.label} LifeOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${domain.label} LifeOS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(
                             domain.summary,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -5437,10 +5439,10 @@ private fun LifeOsHeroCard(
                     DraftReviewPill(healthStatus.ifBlank { "Health ready" }.take(36))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onOpenChat, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                    Button(onClick = onOpenChat, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(18.dp)) {
                         Text("Open chat")
                     }
-                    OutlinedButton(onClick = onOpenDataHome, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                    OutlinedButton(onClick = onOpenDataHome, modifier = Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(18.dp)) {
                         Text("Data plane")
                     }
                 }
