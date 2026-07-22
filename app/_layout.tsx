@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { colors } from '@/src/theme';
+import { LifeOSDatabaseProvider } from '@/src/db/provider';
 
 function HeaderActions() {
   return (
@@ -16,25 +17,27 @@ function HeaderActions() {
 
 export default function RootLayout() {
   return (
-    <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{
-        headerStyle: { backgroundColor: colors.canvas },
-        headerShadowVisible: false,
-        headerTintColor: colors.ink,
-        headerTitleStyle: { fontWeight: '800' },
-        contentStyle: { backgroundColor: colors.canvas },
-        headerRight: HeaderActions,
-      }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="record/[id]" options={{ title: 'Record', headerRight: undefined }} />
-        <Stack.Screen name="search" options={{ title: 'Search', presentation: 'modal', headerRight: undefined }} />
-        <Stack.Screen name="capture" options={{ title: 'Quick capture', presentation: 'modal', headerRight: undefined }} />
-        <Stack.Screen name="system" options={{ title: 'LifeOS system', headerRight: undefined }} />
-        <Stack.Screen name="sources" options={{ title: 'Sources & sync', headerRight: undefined }} />
-        <Stack.Screen name="+not-found" options={{ title: 'Not found', headerRight: undefined }} />
-      </Stack>
-    </>
+    <LifeOSDatabaseProvider>
+      <>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{
+          headerStyle: { backgroundColor: colors.canvas },
+          headerShadowVisible: false,
+          headerTintColor: colors.ink,
+          headerTitleStyle: { fontWeight: '800' },
+          contentStyle: { backgroundColor: colors.canvas },
+          headerRight: HeaderActions,
+        }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="record/[id]" options={{ title: 'Record', headerRight: undefined }} />
+          <Stack.Screen name="search" options={{ title: 'Search', presentation: 'modal', headerRight: undefined }} />
+          <Stack.Screen name="capture" options={{ title: 'Quick capture', presentation: 'modal', headerRight: undefined }} />
+          <Stack.Screen name="system" options={{ title: 'LifeOS system', headerRight: undefined }} />
+          <Stack.Screen name="sources" options={{ title: 'Sources & sync', headerRight: undefined }} />
+          <Stack.Screen name="+not-found" options={{ title: 'Not found', headerRight: undefined }} />
+        </Stack>
+      </>
+    </LifeOSDatabaseProvider>
   );
 }
 

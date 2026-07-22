@@ -4,8 +4,8 @@
 
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
-| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE | `ead01ad`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, baseline `packages/domain-config/*` | No explicit server package exists yet for ADR artifacts | Add ADR artifacts and domain runtime contracts (`docs/lifeos/implementation-workstreams.md`, `src/domain/*`, `docs/lifeos/adr-0001-architecture.md`) |
-| 1 — SQLite canonical runtime | Agent A | IN_PROGRESS | none | Database layer not yet created; app still consumes static sample data | Implement SQLite provider, migrations, records/conversations/sources/outbox/action/undo runtimes and wire baseline feeds |
+| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE | `3db1f9b`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package still pending for final host confirmation | Decide server package host in Phase 3 before final ADR closure |
+| 1 — SQLite canonical runtime | Agent A | DONE (core) / PARTIAL (UI wiring) | `src/domain/{catalog,runtime}.ts`, `src/db/{migrations,provider,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still used directly by several screens; domain-agnostic renderer not complete | Continue wiring screen repos to DB selectors and complete migration anti-pattern audits |
 | 2 — Generic domain renderer | Agent G (Expo UX) | BLOCKED | static screens only in `app/(tabs)` | Phase 1 replacement not complete | Wait for Phase 1 completion |
 | 3 — Server and real chat | Agent B (Chat/Responses/Conversations) | BLOCKED | no `server/` package yet | Phase 1 + Phase 2 required first | Start only after Phase 2 evidence |
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
@@ -17,9 +17,22 @@
 
 ## Required evidence log
 
-- `ead01ad` checkpoint committed before any Phase 0/1 mutations.
+- `3db1f9b` checkpoint committed before and includes baseline SQLite/manifest scaffolds.
 - `docs/lifeos/expo-implementation-plan.md` read and mapped to file-level contracts.
 - `docs/lifeos/product-pass.md` read and used for acceptance framing.
+- `docs/lifeos/adr-0001-architecture.md` created.
+- `src/db/migrations.ts` now enforces v1 schema and rollback/export helpers.
+- `src/db/provider.tsx` now routes native through `SQLiteProvider` and web through a safe non-SQLite shell provider.
+
+## Required gates executed
+
+- `npm run config:validate`
+- `npm run typecheck`
+- `npm run doctor`
+- `npm run export:web`
+- `npm run export:android`
+
+All required gates pass on the current branch after applying the phase-0/1 implementation and SQLite compatibility alignment (`expo-sqlite` -> `~57.0.1`).
 
 ## Execution rules
 

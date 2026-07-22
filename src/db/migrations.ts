@@ -65,8 +65,10 @@ const MIGRATIONS: Migration[] = [
       `);
 
       await db.execAsync(`
-        CREATE INDEX IF NOT EXISTS ${TABLES.records}_domain_idx ON ${TABLES.records}(domain, collection);
-        CREATE INDEX IF NOT EXISTS ${TABLES.records}_updated_idx ON ${TABLES.records}(updated_at);
+        CREATE INDEX IF NOT EXISTS ${TABLES.records}_domain_idx ON ${TABLES.records}(domain, collection)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.records}_updated_idx ON ${TABLES.records}(updated_at)
       `);
 
       await db.execAsync(`
@@ -259,8 +261,11 @@ const MIGRATIONS: Migration[] = [
 ];
 
 export async function getDatabaseVersion(db: SQLiteDatabase): Promise<number> {
-  const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  return row?.user_version ?? 0;
+  const row = await db.getFirstAsync<{ user_version: number | string }>('PRAGMA user_version');
+  if (row == null) return 0;
+  if (typeof row.user_version === 'number') return row.user_version;
+  const parsed = Number.parseInt(row.user_version, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
@@ -275,7 +280,9 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
     }
 
     await db.withTransactionAsync(async () => {
+      await db.execAsync('PRAGMA foreign_keys = OFF');
       await migration.up(db);
+      await db.execAsync('PRAGMA foreign_keys = ON');
       await db.execAsync(`PRAGMA user_version = ${migration.version}`);
     });
   }

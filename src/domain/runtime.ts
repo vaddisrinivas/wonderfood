@@ -94,7 +94,7 @@ export function buildSurfaceSummary(manifest: DomainManifest): DomainSurfaceSumm
   }));
 }
 
-export function normalizeRelations(input: unknown, allowedCollections: Set<string>, domain: DomainId): CanonicalRelation[] {
+export function normalizeRelations(input: unknown, allowedCollections: Set<string>): CanonicalRelation[] {
   if (!Array.isArray(input)) {
     return [];
   }
@@ -104,14 +104,21 @@ export function normalizeRelations(input: unknown, allowedCollections: Set<strin
       const relationRecord = relation as Record<string, unknown>;
       const name = typeof relationRecord.name === 'string' ? relationRecord.name : '';
       const targetId = typeof relationRecord.target_id === 'string' ? relationRecord.target_id : '';
-      const relationIsValid = name.length > 0 && targetId.length > 0;
-      if (!relationIsValid) {
+    const relationIsValid = name.length > 0 && targetId.length > 0;
+    if (!relationIsValid) {
+      return null;
+    }
+
+    if (targetId.includes(':')) {
+      const [targetDomain, targetCollection] = targetId.split(':');
+      if (targetDomain && targetCollection && !allowedCollections.has(targetCollection)) {
         return null;
       }
-      return { name, target_id: targetId };
-    })
-    .filter((relation): relation is CanonicalRelation => relation !== null)
-    .filter((relation) => allowedCollections.has(relation.target_id.split(':')[0]) || allowedCollections.has(relation.target_id));
+    }
+
+    return { name, target_id: targetId };
+  })
+    .filter((relation): relation is CanonicalRelation => relation !== null);
 
   const seen = new Set<string>();
   return parsed.filter((relation) => {
@@ -160,7 +167,7 @@ export function validateCanonicalRecord(
   assertRecord(manifest.collections.includes(collection), `Invalid ${context}: unknown collection ${collection}`);
 
   const relationIds = new Set(manifest.collections);
-  const relations = normalizeRelations(record.relations, relationIds, domain);
+  const relations = normalizeRelations(record.relations, relationIds);
   const source = normalizeSource(record.source);
   const archivedAt = typeof record.archived_at === 'string' ? record.archived_at : null;
   const createdAt =
@@ -210,4 +217,3 @@ export function makeNewThreadTitle(seedText: string): string {
 
   return seedText.length > 20 ? `${seedText.slice(0, 20)}…` : seedText;
 }
-

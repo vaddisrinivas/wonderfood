@@ -27,6 +27,22 @@
   - Migration replay to latest + rollback helper.
   - Seeded deterministic dev data only when DB empty and `__DEV__`.
   - No synchronous heavy DB calls in render paths.
+- File ownership:
+  - All files in `src/db/*` and `src/domain/*`.
+- Required docs:
+  - `docs/lifeos/expo-implementation-plan.md`
+  - `docs/lifeos/product-pass.md`
+  - `docs/lifeos/adr-0001-architecture.md`
+- Input contracts:
+  - `packages/domain-config/*`
+  - `src/domain/runtime.ts` canonical record/conversation/receipt contracts
+- Output contracts:
+  - Deterministic row mappings
+  - DB versioned export + rollback + seed evidence
+- Mandatory report:
+  - Files changed + checks run
+  - Evidence + blockers
+  - Assumptions + gaps
 
 ## Workstream B: Chat + conversations (`@/src/chat`, future `server/*`)
 - Owner: B1
@@ -39,6 +55,8 @@
   - persisted conversation history + structured message envelopes.
 - Gates:
   - idempotent write path and rollback of failed writes.
+- Mandatory report:
+  - Conversation table evidence and fallback checks with app UI handoff tests.
 
 ## Workstream C: Notion adapter
 - Owner: C1

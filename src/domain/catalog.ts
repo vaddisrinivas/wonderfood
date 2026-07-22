@@ -80,15 +80,25 @@ function assertCondition(condition: boolean, message: string): void {
 
 function parseString(value: unknown, path: string): string {
   assertCondition(typeof value === 'string' && value.trim().length > 0, `Expected non-empty string at ${path}`);
-  return value;
+  return value as string;
 }
 
 function parseStringArray(value: unknown, path: string): string[] {
   assertCondition(Array.isArray(value), `Expected array at ${path}`);
-  for (const [index, item] of value.entries()) {
+  const values = value as unknown[];
+  for (const [index, item] of values.entries()) {
     assertCondition(typeof item === 'string', `Expected string item at ${path}[${index}]`);
   }
-  return value as string[];
+  return values as string[];
+}
+
+function parseObjectArray(value: unknown, path: string): Record<string, unknown>[] {
+  assertCondition(Array.isArray(value), `Expected array at ${path}`);
+  const values = value as unknown[];
+  for (const [index, item] of values.entries()) {
+    assertCondition(isObject(item), `Expected object at ${path}[${index}]`);
+  }
+  return values as Record<string, unknown>[];
 }
 
 function parseDomainManifest(value: unknown, path: string): DomainManifest {
@@ -96,7 +106,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
   const raw = value as Record<string, unknown>;
   assertCondition(raw.schema_version === 'lifeos.domain.v1', `Invalid schema_version at ${path}`);
 
-  const surfaces = parseStringArray(raw.surfaces, `${path}.surfaces`) as unknown[];
+  const surfaces = parseObjectArray(raw.surfaces, `${path}.surfaces`);
   const parsedSurfaces = surfaces.map((surface, index) => {
     assertCondition(isObject(surface), `Expected object at ${path}.surfaces[${index}]`);
     const s = surface as Record<string, unknown>;
@@ -108,7 +118,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     };
   });
 
-  const relations = parseStringArray(raw.relations, `${path}.relations`) as unknown[];
+  const relations = parseObjectArray(raw.relations, `${path}.relations`);
   const parsedRelations = relations.map((relation, index) => {
     assertCondition(isObject(relation), `Expected object at ${path}.relations[${index}]`);
     const rel = relation as Record<string, unknown>;
@@ -119,7 +129,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     };
   });
 
-  const mcp = raw.mcp as Record<string, unknown> | undefined;
+  const mcp = raw.mcp as Record<string, unknown>;
   assertCondition(isObject(mcp), `Expected mcp object at ${path}.mcp`);
 
   return {
@@ -145,8 +155,10 @@ function parseCatalog(value: unknown): DomainCatalog {
   const raw = value as Record<string, unknown>;
   assertCondition(raw.schema_version === 'lifeos.domain-catalog.v1', 'Invalid catalog schema version');
   const shell = raw.shell as Record<string, unknown> | undefined;
-  assertCondition(isObject(shell), 'Expected shell object');
-  const domainsRaw = parseStringArray(raw.domains, 'catalog.domains') as unknown[];
+  if (!isObject(shell)) {
+    throw new Error('[domain-catalog] Expected shell object');
+  }
+  const domainsRaw = parseObjectArray(raw.domains, 'catalog.domains');
 
   const domains: DomainCatalogEntry[] = domainsRaw.map((domain, index) => {
     assertCondition(isObject(domain), `Expected object at catalog.domains[${index}]`);
@@ -181,9 +193,41 @@ function parseCatalog(value: unknown): DomainCatalog {
   };
 }
 
+export function getDomainManifest(domains: DomainCatalog['domains'], id: string): DomainManifest | undefined {
+  const entry = domains.find((domain) => domain.id === id);
+  if (!entry) return undefined;
+  try {
+    return parseDomainManifest(loadManifestByPath(entry.manifest), `domain-manifest:${id}`);
+  } catch {
+    return undefined;
+  }
+}
+
+export function getManifestPath(domains: DomainCatalog['domains'], id: string): string | undefined {
+  return domains.find((domain) => domain.id === id)?.manifest;
+}
+
+export function getDomainManifestByPath(domains: DomainCatalog['domains'], manifestPath: string): DomainManifest | undefined {
+  const entry = domains.find((domain) => domain.manifest === manifestPath);
+  if (!entry) return undefined;
+  return getDomainManifest(domains, entry.id);
+}
+
+export function getActiveManifestPath(): string {
+  const { activeDomain } = loadCatalog();
+  if (!activeDomain) {
+    throw new Error('[domain-catalog] Missing active domain');
+  }
+  return activeDomain.manifest;
+}
+
 function loadManifestByPath(manifestPath: string): unknown {
-  if (manifestPath === './domains/food.v1.json') {
-    return foodManifestJson;
+  const manifestMap: Record<string, unknown> = {
+    './domains/food.v1.json': foodManifestJson,
+  };
+  const manifest = manifestMap[manifestPath];
+  if (manifest) {
+    return manifest;
   }
 
   throw new Error(`[domain-catalog] Unsupported manifest path: ${manifestPath}`);
@@ -209,14 +253,3 @@ export function loadCatalog(): ParsedCatalog {
 
   return { catalog, activeDomainId: catalog.active_domain_id, activeDomain, activeManifest, domainsById };
 }
-
-export function getDomainManifest(domains: DomainCatalog['domains'], id: string): DomainManifest | undefined {
-  const entry = domains.find((domain) => domain.id === id);
-  if (!entry) return undefined;
-  try {
-    return parseDomainManifest(loadManifestByPath(entry.manifest), `domain-manifest:${id}`);
-  } catch {
-    return undefined;
-  }
-}
-
