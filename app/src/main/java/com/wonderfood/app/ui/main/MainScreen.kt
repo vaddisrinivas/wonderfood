@@ -9213,7 +9213,7 @@ private fun String.trimInlineMarkdown(): String =
 private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
     Column(
         modifier = Modifier.widthIn(max = 680.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -9222,7 +9222,7 @@ private fun AiMessageSourceStrip(sources: List<ChatSourceRef>) {
         ) {
             Icon(Icons.Rounded.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Text(
-                "Cited sources",
+                "Sources",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -9250,9 +9250,9 @@ private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
     val important = index == 1 || source.title.contains("source pack", ignoreCase = true)
     Surface(
         modifier = Modifier
-            .width(312.dp)
-            .heightIn(min = 152.dp),
-        shape = RoundedCornerShape(22.dp),
+            .width(244.dp)
+            .heightIn(min = 112.dp),
+        shape = RoundedCornerShape(18.dp),
         color = if (important) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f) else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
@@ -9261,19 +9261,19 @@ private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
         tonalElevation = if (important) 2.dp else 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 LifeOsVectorBadge(
                     icon = source.sourceIcon(),
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(28.dp),
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (important) 0.58f else 1f),
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
                         "[$index] ${source.title}",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -9296,10 +9296,10 @@ private fun AiMessageSourceCard(index: Int, source: ChatSourceRef) {
                 ) {
                     Text(
                         source.quote,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (important) 4 else 3,
+                        maxLines = if (important) 3 else 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
