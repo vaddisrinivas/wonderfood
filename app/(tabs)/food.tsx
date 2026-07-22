@@ -1,21 +1,61 @@
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { foodRecords } from '@/src/data/sample';
+import { useLifeOSDatabase } from '@/src/db/provider';
+import { getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { colors, radius } from '@/src/theme';
-import foodManifest from '@/packages/domain-config/domains/food.v1.json';
+import { loadCatalog } from '@/src/domain/catalog';
+import { buildSurfaceCatalog } from '@/src/domain/surface';
 
-const views = foodManifest.surfaces.map((surface) => surface.label);
+type FoodRecordView = {
+  id: string;
+  collection?: string;
+  title: string;
+  meta: string;
+  status: string;
+  tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral';
+  body: string;
+  source: string;
+};
+
+const { activeManifest } = loadCatalog();
+const surfaceCatalog = buildSurfaceCatalog(activeManifest);
+
+const defaultTab = surfaceCatalog.tabs[0] ?? 'Overview';
+const defaultViews = surfaceCatalog.tabs;
 
 export default function FoodScreen() {
-  const [active, setActive] = useState('Overview');
-  const shown = active === 'Overview' ? foodRecords : foodRecords.filter((item) => {
-    if (active === 'Meals') return item.meta.includes('Meal') || item.meta.includes('Recipe');
-    if (active === 'Kitchen') return item.meta.includes('Pantry');
-    return item.meta.includes('Shopping');
-  });
+  const db = useLifeOSDatabase();
+  const [active, setActive] = useState(defaultTab);
+  const [records, setRecords] = useState<FoodRecordView[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const shown: FoodRecordView[] = useMemo(() => {
+    if (active === 'Overview') {
+      return records;
+    }
+    return records.filter((item) => item.collection?.toLowerCase().includes(active.toLowerCase()) || item.meta.toLowerCase().includes(active.toLowerCase()));
+  }, [active, records]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const collections = getSurfaceCollectionsForLabel(active);
+    const load = async () => {
+      setLoading(true);
+      const next = await queryDomainCollections(db, collections);
+      if (!cancelled) {
+        setRecords(next as FoodRecordView[]);
+        setLoading(false);
+      }
+    };
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [active, db]);
 
   return (
     <Page>
@@ -32,7 +72,7 @@ export default function FoodScreen() {
           <PageHeader eyebrow="Food domain · Active" title="Eat well. Waste less." subtitle="Meals, recipes, pantry, shopping and nutrition share one connected graph." />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
-            {views.map((view) => (
+            {defaultViews.map((view) => (
               <Pressable key={view} accessibilityRole="button" accessibilityState={{ selected: active === view }} onPress={() => setActive(view)} style={[styles.segment, active === view && styles.segmentActive]}>
                 <Text style={[styles.segmentText, active === view && styles.segmentTextActive]}>{view}</Text>
               </Pressable>
@@ -50,10 +90,11 @@ export default function FoodScreen() {
           ) : null}
 
           <SectionTitle title={active === 'Overview' ? 'Your food graph' : active} action="Ask AI" href="/chat" />
+          {loading ? <Text style={styles.loading}>Loading data…</Text> : null}
           <View style={styles.records}>
             {shown.map((record) => (
               <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
-                <Pressable style={({ pressed }) => [styles.record, pressed && { opacity: 0.65 }]}>
+                <Pressable style={({ pressed }) => [styles.record, pressed && { opacity: 0.65 }]}> 
                   <View style={styles.recordCopy}>
                     <View style={styles.recordTop}><Text style={styles.recordTitle}>{record.title}</Text><Pill tone={record.tone}>{record.status}</Pill></View>
                     <Text style={styles.recordMeta}>{record.meta}</Text>
@@ -99,6 +140,7 @@ const styles = StyleSheet.create({
   recordMeta: { color: colors.muted, fontSize: 12, marginTop: 4 },
   recordBody: { color: colors.ink, fontSize: 13, lineHeight: 19, marginTop: 9 },
   recordSource: { color: colors.moss, fontSize: 11, fontWeight: '700', marginTop: 9 },
+  loading: { color: colors.muted, marginBottom: 12 },
   chevron: { color: colors.muted, fontSize: 28, paddingLeft: 12 },
   schemaCard: { marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'center' },
   schemaTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, marginBottom: 5 },

@@ -70,6 +70,10 @@ export async function listProviderLinks(db: SQLiteDatabase): Promise<ProviderLin
   return db.getAllAsync<ProviderLinkRow>('SELECT * FROM provider_links ORDER BY updated_at DESC');
 }
 
+export async function getAllProviderLinks(db: SQLiteDatabase): Promise<ProviderLink[]> {
+  return listProviderLinks(db);
+}
+
 export async function getProviderLink(db: SQLiteDatabase, id: string): Promise<ProviderLink | null> {
   return db.getFirstAsync<ProviderLinkRow>('SELECT * FROM provider_links WHERE id = ?', [id]);
 }

@@ -4,9 +4,9 @@
 
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
-| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE | `3db1f9b`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package still pending for final host confirmation | Decide server package host in Phase 3 before final ADR closure |
-| 1 — SQLite canonical runtime | Agent A | DONE (core) / PARTIAL (UI wiring) | `src/domain/{catalog,runtime}.ts`, `src/db/{migrations,provider,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still used directly by several screens; domain-agnostic renderer not complete | Continue wiring screen repos to DB selectors and complete migration anti-pattern audits |
-| 2 — Generic domain renderer | Agent G (Expo UX) | BLOCKED | static screens only in `app/(tabs)` | Phase 1 replacement not complete | Wait for Phase 1 completion |
+| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE (PASS) | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Server package host still pending for final ADR closure | Decide final server host in Phase 3 before closing ADR |
+| 1 — SQLite canonical runtime | Agent A | DONE (core + layout bootstrap) / PARTIAL (UI consumption) | `src/domain/{catalog,runtime}.ts`, `src/db/{migrations,provider,records,conversations,sources,outbox,actions,undo,seed}.ts`, `src/db/provider.native.tsx`, `src/db/provider.web.tsx`, `app/_layout.tsx`, `package.json`, `package-lock.json`, `docs/lifeos/implementation-workstreams.md` | `src/data/sample.ts` still drives search/sources/record paths; phase-2 renderer adapter not complete | Finish screen migrations to domain queries and complete migration anti-pattern audits |
+| 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx` | `src/data/sample.ts` still used by `/search`, `/record/[id]`, `/sources` and demo sections | Finish domain-agnostic renderer integration for remaining phase-2 screens and empty/loading states |
 | 3 — Server and real chat | Agent B (Chat/Responses/Conversations) | BLOCKED | no `server/` package yet | Phase 1 + Phase 2 required first | Start only after Phase 2 evidence |
 | 4 — MCP parity | Agent E | BLOCKED | no MCP server yet | upstream adapters and runtime not in place | Start after phase 3 contracts |
 | 5 — Notion adapter | Agent C | BLOCKED | no provider package | wait for server runtime | Hold |
@@ -26,13 +26,15 @@
 
 ## Required gates executed
 
-- `npm run config:validate`
-- `npm run typecheck`
-- `npm run doctor`
-- `npm run export:web`
-- `npm run export:android`
+- `npm run config:validate` ✅
+- `npm run typecheck` ✅
+- `npm run doctor` ✅ (`NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor`)
+- `npm run export:web` ✅
+- `npm run export:android` ✅
 
-All required gates pass on the current branch after applying the phase-0/1 implementation and SQLite compatibility alignment (`expo-sqlite` -> `~57.0.1`).
+First run of `npm run doctor` failed due local `.npm` path mismatch (`ENOTDIR /Users/srinivasvaddi/.npm`); rerun succeeded with explicit cache override.
+
+All required gates pass on the current branch after phase-0/1 completion checks and SQLite compatibility alignment (`expo-sqlite` -> `~57.0.1`).
 
 ## Execution rules
 
