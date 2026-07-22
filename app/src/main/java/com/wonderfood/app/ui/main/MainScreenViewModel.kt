@@ -1250,7 +1250,7 @@ class MainScreenViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             startLocalNewChat()
             refreshFromDisk(pendingDraft = null, pendingSourceMessageId = null, isWorking = false)
-            _uiState.update { it.copy(voiceStatus = "New chat started.") }
+            _uiState.update { it.copy(voiceStatus = "Ready · sources on.") }
         }
     }
 

@@ -8808,6 +8808,7 @@ private fun AiCaptureSheet(
     var showHistory by rememberSaveable { mutableStateOf(false) }
     val displayedChatId = selectedChatId ?: currentChatId
     val displayedMessages = messages.filter { it.chatId == displayedChatId }
+    val visibleMessages = displayedMessages.filterNot { it.isLocalChatStarter() }
     val viewingPreviousChat = displayedChatId != currentChatId
     LaunchedEffect(currentChatId) {
         selectedChatId = null
@@ -8843,7 +8844,8 @@ private fun AiCaptureSheet(
             ) {
                 AiChatTopCard(
                     pageTitle = pageContext.title,
-                    messageCount = messages.size,
+                    messageCount = visibleMessages.size,
+                    historyEnabled = messages.any { !it.isLocalChatStarter() },
                     isWorking = isWorking,
                     onHistory = { showHistory = true },
                     onNewChat = onNewChat,
@@ -8851,7 +8853,7 @@ private fun AiCaptureSheet(
                 )
 
                 AiConversationTimeline(
-                    messages = displayedMessages,
+                    messages = visibleMessages,
                     draft = draft.takeUnless { viewingPreviousChat },
                     draftOrigin = draftOrigin,
                     isWorking = isWorking,
@@ -8915,10 +8917,17 @@ private fun AiCaptureSheet(
     }
 }
 
+private fun ChatMessage.isLocalChatStarter(): Boolean =
+    role == ChatRole.ASSISTANT && (
+        body == "Ask naturally. I can answer with sources from your phone, LifeOS Notion, Sheets, MCP schema, and Health Connect when connected; changes stay review-only until you accept." ||
+            body.startsWith("New chat started.")
+        )
+
 @Composable
 private fun AiChatTopCard(
     pageTitle: String,
     messageCount: Int,
+    historyEnabled: Boolean,
     isWorking: Boolean,
     onHistory: () -> Unit,
     onNewChat: () -> Unit,
@@ -8947,10 +8956,10 @@ private fun AiChatTopCard(
         ) {
             LifeOsVectorBadge(
                 icon = Icons.AutoMirrored.Rounded.Chat,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(30.dp),
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
             )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Column(modifier = Modifier.weight(1f, fill = true), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     "WonderFood",
                     style = MaterialTheme.typography.titleSmall,
@@ -8966,15 +8975,15 @@ private fun AiChatTopCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            DraftReviewPill(if (isWorking) "thinking" else if (messageCount > 0) "$messageCount msgs" else "sources ready")
-            IconButton(onClick = onHistory, enabled = messageCount > 0, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Description, contentDescription = "Open chat history", modifier = Modifier.size(20.dp))
+            DraftReviewPill(if (isWorking) "thinking" else if (messageCount > 0) "$messageCount msgs" else "ready")
+            IconButton(onClick = onHistory, enabled = historyEnabled, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Description, contentDescription = "Open chat history", modifier = Modifier.size(19.dp))
             }
-            IconButton(onClick = onNewChat, enabled = !isWorking, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Add, contentDescription = "Start new chat", modifier = Modifier.size(22.dp))
+            IconButton(onClick = onNewChat, enabled = !isWorking, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Add, contentDescription = "Start new chat", modifier = Modifier.size(21.dp))
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close AI capture", modifier = Modifier.size(22.dp))
+            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Close, contentDescription = "Close AI capture", modifier = Modifier.size(21.dp))
             }
         }
     }
@@ -9097,10 +9106,11 @@ private fun AiConversationTimeline(
             }
             val recentMessages = messages.asReversed()
             if (recentMessages.isEmpty()) {
-                item(key = "empty") {
-                    EmptyState(
-                        title = "Start a real food chat.",
-                        subtitle = "Ask a question, paste a receipt, plan meals, or ask what sources I can cite. I will draft changes separately for review.",
+                item(key = "welcome") {
+                    AiWelcomeDeck(
+                        pageContext = pageContext,
+                        backendHome = backendHome,
+                        onSuggestion = onSuggestion,
                     )
                 }
             } else {
@@ -9109,16 +9119,6 @@ private fun AiConversationTimeline(
                 }
             }
             if (!hasMessages) {
-                item(key = "suggestions") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(pageContext.suggestions) { suggestion ->
-                            SuggestionChip(
-                                onClick = { onSuggestion(suggestion) },
-                                label = { Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            )
-                        }
-                    }
-                }
                 item(key = "context") {
                     AiContextCard(
                         pageContext = pageContext,
@@ -9145,6 +9145,123 @@ private fun AiConversationTimeline(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary,
             )
+        }
+    }
+}
+
+@Composable
+private fun AiWelcomeDeck(
+    pageContext: AiPageContext,
+    backendHome: BackendHomeUiState,
+    onSuggestion: (String) -> Unit,
+) {
+    val prompts = listOf(
+        Icons.Rounded.RestaurantMenu to "Plan dinner from my pantry",
+        Icons.Rounded.TableChart to "Show a source-backed food table",
+        Icons.Rounded.ShoppingCart to "Build a shopping list for this week",
+        Icons.Rounded.Description to "What can you cite from LifeOS?",
+    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+        tonalElevation = 3.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.18f),
+                        ),
+                    ),
+                )
+                .padding(16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = Icons.AutoMirrored.Rounded.Chat,
+                        modifier = Modifier.size(48.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "Ask Food LifeOS",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "Chat like GPT. I cite app, Notion, Sheets, MCP, then stage any save for review.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DraftReviewPill(backendHome.chatSourceLabel())
+                    DraftReviewPill("citations")
+                    DraftReviewPill("tables")
+                    DraftReviewPill("review gate")
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    prompts.forEach { (icon, prompt) ->
+                        AiWelcomePromptRow(
+                            icon = icon,
+                            label = prompt,
+                            onClick = { onSuggestion(prompt) },
+                        )
+                    }
+                    pageContext.suggestions.take(2).forEach { suggestion ->
+                        AiWelcomePromptRow(
+                            icon = Icons.Rounded.Add,
+                            label = suggestion,
+                            onClick = { onSuggestion(suggestion) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiWelcomePromptRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LifeOsVectorBadge(
+                icon = icon,
+                modifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
+            )
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
     }
 }
