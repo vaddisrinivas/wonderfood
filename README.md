@@ -19,7 +19,7 @@ Both native targets use the application identifier `com.wonderfood.app`.
 
 Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn server chat with streaming, tables, source citations, action receipts and idempotent Undo; SQLite persistence; MCP Streamable HTTP; Notion data-source pull/push/webhooks; Google Sheets adapter; Health Connect read bridge; and self-contained Android release packaging. Food is active; Health and Plants are real config packages available for later selection.
 
-Provider secrets stay outside the repo. Local live Notion/OpenAI proof is available when the private environment is loaded; Sheets remains deterministic adapter/proof mode until a Google Sheets access token and workbook are supplied.
+Provider secrets stay outside the repo. Local live Notion/OpenAI and Google Sheets pulls are available when the private environment is loaded; the approved workbook keeps a human-facing Runtime dashboard plus a machine-readable `LifeOS Canonical` tab for sync and source citations.
 
 - [LifeOS 2026 Notion](https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1)
 - [LifeOS Google Sheets](https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit)

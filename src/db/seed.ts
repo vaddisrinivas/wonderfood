@@ -10,7 +10,10 @@ type SeedOptions = {
 
 export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}): Promise<void> {
   const catalog = loadCatalog();
-  if (!options.seedInDev || !__DEV__) {
+  // A fresh release install must not render an empty shell. The bundled rows
+  // are explicitly local sample data; live provider rows can replace them
+  // after the user connects a source.
+  if (!options.seedInDev) {
     return;
   }
 
@@ -40,9 +43,9 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
           source: sample.source,
         },
         source: {
-          provider: 'notion',
+          provider: 'sqlite',
           external_id: `sample-${sample.id}`,
-          url: null,
+          url: `wonderfood://sample/${sample.id}`,
           observed_at: createdAt,
           content_hash: null,
         },

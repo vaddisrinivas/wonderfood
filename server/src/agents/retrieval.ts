@@ -1,5 +1,6 @@
 import { listRecords } from '../mcp/state';
 import { pullNotionRecordsLive } from '../providers/notion/pull';
+import { pullSheetsRecordsLive } from '../providers/sheets/pull';
 
 export type RetrievalSnapshot = {
   id: string;
@@ -104,7 +105,7 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
         limit: recordLimit,
       });
 
-  const snapshots = recordQuery
+  const localSnapshots = recordQuery
     .map((record, index) => ({
       id: record.id,
       label: record.title || record.id,
@@ -121,32 +122,32 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
     }))
     .filter((snapshot) => snapshot.label.trim().length > 0 && snapshot.id.trim().length > 0);
 
-  if (snapshots.length > 0) {
-    return {
-      query: input.query,
-      domain: input.domain,
-      snapshots,
-    };
-  }
-
-  // A fresh client can have no local MCP rows yet. If Notion is configured,
-  // retrieve the canonical data source before telling Chat that nothing exists.
-  // Webhook events remain change signals; this is an on-demand read path only.
+  // Webhook events remain change signals; retrieval always refetches provider
+  // authority so Chat can cite the surface the user actually asked about.
   const liveNotion = await pullNotionRecordsLive({ domain: input.domain, limit: 50 });
-  if (liveNotion.status === 'ready' && liveNotion.records.length > 0) {
-    const needle = trimmedQuery.toLowerCase();
-    const stopWords = new Set(['what', 'which', 'where', 'when', 'does', 'about', 'the', 'this', 'that', 'item', 'canonical', 'please', 'tell', 'show', 'give', 'with', 'from']);
-    const queryTerms = needle.split(/[^a-z0-9_]+/).filter((term) => term.length > 2 && !stopWords.has(term));
-    const liveSnapshots = liveNotion.records
+  const liveSheets = await pullSheetsRecordsLive({ domain: input.domain });
+  const needle = trimmedQuery.toLowerCase();
+  const stopWords = new Set(['what', 'which', 'where', 'when', 'does', 'about', 'the', 'this', 'that', 'item', 'canonical', 'please', 'tell', 'show', 'give', 'with', 'from', 'live', 'spreadsheet']);
+  const queryTerms = needle.split(/[^a-z0-9_]+/).filter((term) => term.length > 2 && !stopWords.has(term));
+
+  function providerSnapshots(
+    records: Array<{ id: string; title: string; collection: string; properties: Record<string, unknown>; source?: Record<string, unknown> }>,
+    provider: 'notion' | 'google_sheets',
+    detailSuffix: string,
+  ): RetrievalSnapshot[] {
+    return records
       .map((record, index) => {
         const searchable = `${record.title} ${record.collection} ${JSON.stringify(record.properties)}`.toLowerCase();
         const matchCount = queryTerms.filter((term) => searchable.includes(term)).length;
+        const externalId = typeof record.source?.external_id === 'string' ? record.source.external_id : record.id;
         return {
           id: record.id,
           label: record.title || record.id,
-          detail: `${record.collection} · notion · ${liveNotion.source_snapshots[index] && typeof liveNotion.source_snapshots[index] === 'object' && 'data_source_id' in (liveNotion.source_snapshots[index] as Record<string, unknown>) ? String((liveNotion.source_snapshots[index] as Record<string, unknown>).data_source_id) : 'canonical data source'}`,
-          url: `wonderfood://notion/page/${encodeURIComponent(record.id)}`,
-          tone: 'moss' as const,
+          detail: `${record.collection} · ${detailSuffix} · ${externalId}`,
+          url: provider === 'notion'
+            ? `wonderfood://notion/page/${encodeURIComponent(record.id)}`
+            : `wonderfood://sheets/record/${encodeURIComponent(input.domain)}/${encodeURIComponent(record.id)}`,
+          tone: provider === 'notion' ? 'moss' as const : 'blue' as const,
           score: queryTerms.length > 0
             ? Number((matchCount / queryTerms.length + (matchCount > 0 ? 0.1 : 0)).toFixed(2))
             : Number((0.6 - index * 0.05).toFixed(2)),
@@ -157,16 +158,23 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
       })
       .filter((snapshot) => queryTerms.length === 0 || snapshot.matchCount > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, recordLimit)
       .map(({ searchable: _searchable, matchCount: _matchCount, ...snapshot }) => snapshot);
+  }
 
-    if (liveSnapshots.length > 0) {
-      return {
-        query: input.query,
-        domain: input.domain,
-        snapshots: liveSnapshots,
-      };
-    }
+  const providerSources = [
+    ...(liveNotion.status === 'ready' ? providerSnapshots(liveNotion.records, 'notion', 'notion') : []),
+    ...(liveSheets.status === 'ready' ? providerSnapshots(liveSheets.records, 'google_sheets', 'google sheets') : []),
+  ];
+
+  const dedupedProviderSources = providerSources.filter((snapshot, index, all) => all.findIndex((candidate) => candidate.id === snapshot.id && candidate.tone === snapshot.tone) === index);
+  const mergedSources = [...localSnapshots, ...dedupedProviderSources].filter((snapshot, index, all) => all.findIndex((candidate) => candidate.id === snapshot.id && candidate.tone === snapshot.tone) === index).slice(0, recordLimit);
+
+  if (mergedSources.length > 0) {
+    return {
+      query: input.query,
+      domain: input.domain,
+      snapshots: mergedSources,
+    };
   }
 
   if (!hasQuery) {

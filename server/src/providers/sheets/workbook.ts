@@ -37,6 +37,10 @@ type RawSpreadsheetResource = {
 };
 
 export const WELL_KNOWN_TABS = ['LifeOS Runtime', 'LifeOS Source Pack', 'LifeOS Health', 'LifeOS Sync Loop'];
+// Keep the product-facing Runtime dashboard separate from the machine-readable
+// table used for provider sync. Existing workbooks may not have this tab yet;
+// callers must fall back to the dashboard for backwards compatibility.
+export const CANONICAL_RUNTIME_TAB_NAME = 'LifeOS Canonical';
 export const WELL_KNOWN_RUNTIME_COLUMNS = [
   'id',
   'lifeos_id',

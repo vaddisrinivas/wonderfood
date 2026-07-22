@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { nowIsoNow, ProviderOperation, ProviderWriteResult } from '../contracts';
 import { readSheetsConfig, sheetsFetch } from './client';
 import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX } from './client';
-import { WELL_KNOWN_RUNTIME_COLUMNS, parseWorkBookMetadata } from './workbook';
+import { CANONICAL_RUNTIME_TAB_NAME, WELL_KNOWN_RUNTIME_COLUMNS, parseWorkBookMetadata } from './workbook';
 
 type SheetsRecord = {
   id: string;
@@ -318,7 +318,10 @@ async function readRuntimeState(): Promise<SheetRuntimeState | { ok: false; reas
   }
 
   const metadata = parseWorkBookMetadata(metadataResponse.data || {}, spreadsheetId);
-  const runtimeTab = metadata.tabs.find((tab) => tab.title === RUNTIME_TAB_PREFIX) || metadata.tabs[0];
+  const runtimeTab =
+    metadata.tabs.find((tab) => tab.title === CANONICAL_RUNTIME_TAB_NAME) ||
+    metadata.tabs.find((tab) => tab.title === RUNTIME_TAB_PREFIX) ||
+    metadata.tabs[0];
   if (!runtimeTab) {
     return { ok: false, reason: 'LifeOS Runtime tab missing.' };
   }

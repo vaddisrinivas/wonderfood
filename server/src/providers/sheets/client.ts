@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 export const SHEETS_API_BASE_URL = 'https://sheets.googleapis.com/v4';
 export const SHEETS_REQUEST_TIMEOUT_MS = 15000;
 export const SHEETS_WORKBOOK_TAB_PREFIX = 'LifeOS';
@@ -18,7 +20,18 @@ export type SheetsApiResponse<T> = {
 };
 
 export function readSheetsConfig(): SheetsClientConfig | null {
-  const accessToken = process.env.GOOGLE_SHEETS_ACCESS_TOKEN?.trim() || process.env.GOOGLE_SHEETS_TOKEN?.trim();
+  let accessToken = process.env.GOOGLE_SHEETS_ACCESS_TOKEN?.trim() || process.env.GOOGLE_SHEETS_TOKEN?.trim() || '';
+  if (!accessToken) {
+    const tokenFile = process.env.GOOGLE_SHEETS_TOKEN_FILE?.trim();
+    if (tokenFile) {
+      try {
+        const cached = JSON.parse(readFileSync(tokenFile, 'utf8')) as { access_token?: unknown };
+        accessToken = typeof cached.access_token === 'string' ? cached.access_token.trim() : '';
+      } catch {
+        // Treat an unreadable/expired local cache as unconfigured; never expose its contents.
+      }
+    }
+  }
   if (!accessToken) {
     return null;
   }

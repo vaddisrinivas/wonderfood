@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
 import { toSheetsCanonicalProjection } from './projection';
 import { readSheetsConfig } from './client';
-import { parseWorkBookMetadata, WELL_KNOWN_RUNTIME_COLUMNS, REQUIRED_RUNTIME_COLUMNS } from './workbook';
+import {
+  CANONICAL_RUNTIME_TAB_NAME,
+  parseWorkBookMetadata,
+  WELL_KNOWN_RUNTIME_COLUMNS,
+  REQUIRED_RUNTIME_COLUMNS,
+} from './workbook';
 import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX, sheetsFetch } from './client';
 
 type SheetsValuesResponse = {
@@ -283,7 +288,10 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
   }
 
   const metadata = parseWorkBookMetadata(metadataResponse.data || {}, config.spreadsheetId);
-  const runtimeTab = metadata.tabs.find((tab) => tab.title === RUNTIME_TAB_NAME) || metadata.tabs[0];
+  const runtimeTab =
+    metadata.tabs.find((tab) => tab.title === CANONICAL_RUNTIME_TAB_NAME) ||
+    metadata.tabs.find((tab) => tab.title === RUNTIME_TAB_NAME) ||
+    metadata.tabs[0];
   if (!runtimeTab) {
     return {
       status: 'disabled',
