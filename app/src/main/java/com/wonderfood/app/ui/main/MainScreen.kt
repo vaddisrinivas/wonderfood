@@ -118,6 +118,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -2109,6 +2110,10 @@ private fun MainWorkspace(
                         onClearChatHistory = onClearChatHistory,
                         onThemeModeChange = onThemeModeChange,
                         onRequestHealthConnect = onRequestHealthConnect,
+                        onOpenChat = {
+                            secondaryPane = null
+                            showAiCapture = true
+                        },
                         onClearWorkspaceConflictInbox = onClearWorkspaceConflictInbox,
                         initialDestination = settingsInitialDestination,
                         onBack = { secondaryPane = null },
@@ -4808,6 +4813,7 @@ private fun PreferencesContent(
     onClearChatHistory: () -> Unit,
     onThemeModeChange: (WonderFoodThemeMode) -> Unit,
     onRequestHealthConnect: () -> Unit,
+    onOpenChat: () -> Unit,
     initialDestination: SettingsDestination = SettingsDestination.HOME,
     onBack: () -> Unit,
 ) {
@@ -4850,6 +4856,7 @@ private fun PreferencesContent(
                 onSelectDomain = onSelectLifeOsDomain,
                 onOpenDataHome = { destination = SettingsDestination.DATA_HOME },
                 onOpenAi = { destination = SettingsDestination.AI_ASSISTANT },
+                onOpenChat = onOpenChat,
             )
         }
         SettingsDestination.FOOD_PROFILE -> SettingsDetailPage(
@@ -5284,30 +5291,29 @@ private fun LifeOsControlCenter(
     onSelectDomain: (String) -> Unit,
     onOpenDataHome: () -> Unit,
     onOpenAi: () -> Unit,
+    onOpenChat: () -> Unit,
 ) {
     val active = domains.firstOrNull { it.id == selectedDomainId } ?: domains.firstOrNull()
     var showArchitecture by rememberSaveable(active?.id ?: "lifeos") { mutableStateOf(false) }
-    SettingsStatusBlock(
-        icon = Icons.Rounded.Description,
-        title = active?.let { "${it.emoji} ${it.label} is live" } ?: "LifeOS",
-        body = "Food is the Android workspace. Notion and Sheets are source surfaces. GPT/MCP uses the same catalog and review rules.",
-    )
     active?.let { domain ->
-        SettingsControlGroup {
-            Text("Overview", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            LifeOsStatusLine("Workspace", "${domain.label}: ${domain.summary}")
-            LifeOsStatusLine("Sources", "App snapshot + Notion + Sheets + MCP + Template QA")
-            LifeOsStatusLine("Data home", backendHome.lifeOsDataHomeDetail())
-            LifeOsStatusLine("Health", healthStatus)
-        }
-        SettingsControlGroup {
-            Text("Domains", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        LifeOsHeroCard(
+            domain = domain,
+            backendHome = backendHome,
+            healthStatus = healthStatus,
+            onOpenDataHome = onOpenDataHome,
+            onOpenChat = onOpenChat,
+        )
+        LifeOsMetricGrid(domain = domain, backendHome = backendHome, aiStatus = aiStatus, healthStatus = healthStatus)
+        Text("Package deck", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
             domains.forEach { option ->
-                LifeOsCompactDomainRow(
-                    domain = option,
-                    selected = option.id == selectedDomainId,
-                    onSelect = { onSelectDomain(option.id) },
-                )
+                item(key = option.id) {
+                    LifeOsDomainCard(
+                        domain = option,
+                        selected = option.id == selectedDomainId,
+                        onSelect = { onSelectDomain(option.id) },
+                    )
+                }
             }
         }
         SettingsControlGroup {
@@ -5326,17 +5332,22 @@ private fun LifeOsControlCenter(
         }
         SettingsControlGroup {
             Text("Source pack", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            LifeOsStatusLine("App", "Local Food snapshot and review queue")
-            LifeOsStatusLine("Notion", "Dashboard, relations, rollups, template QA")
-            LifeOsStatusLine("Sheets", "Auditable workbook mirror and skill map")
-            LifeOsStatusLine("MCP", "Domain catalog, schemas, validators, proposals")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                LifeOsSourceCard("📱", "App", "Local Food snapshot", Modifier.weight(1f))
+                LifeOsSourceCard("📝", "Notion", "Dashboard + rollups", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                LifeOsSourceCard("📊", "Sheets", "Auditable mirror", Modifier.weight(1f))
+                LifeOsSourceCard("🧬", "MCP", "Schemas + validators", Modifier.weight(1f))
+            }
         }
         SettingsControlGroup {
             Text("Skills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            DetailSection(
-                "How to think about it",
-                "One domain skill per domain. Workflow skills for repeatable playbooks. Schemas are shared contracts unless they have behavior.",
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                LifeOsSourceCard("🍽️", "Domain", "Food brain", Modifier.weight(1f))
+                LifeOsSourceCard("🔁", "Workflow", "Playbooks", Modifier.weight(1f))
+                LifeOsSourceCard("📐", "Schema", "Contracts", Modifier.weight(1f))
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 domain.skills.take(5).forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
                 if (domain.skills.size > 5) DraftReviewPill("+${domain.skills.size - 5} more")
@@ -5355,6 +5366,137 @@ private fun LifeOsControlCenter(
         }
         if (showArchitecture) {
             LifeOsArchitectureDetails(domain = domain, aiStatus = aiStatus, backendHome = backendHome)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsHeroCard(
+    domain: LifeOsDomain,
+    backendHome: BackendHomeUiState,
+    healthStatus: String,
+    onOpenDataHome: () -> Unit,
+    onOpenChat: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        tonalElevation = 4.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f),
+                            MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    ),
+                )
+                .padding(18.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+                    ObjectImage(domain.emoji, MaterialTheme.colorScheme.surface.copy(alpha = 0.72f), 58.dp)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${domain.label} LifeOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            domain.summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DraftReviewPill("${domain.schemaSurfaces.size} surfaces")
+                    DraftReviewPill("${domain.skills.size} skills")
+                    DraftReviewPill(backendHome.chatSourceLabel())
+                    DraftReviewPill(healthStatus.ifBlank { "Health ready" }.take(36))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onOpenChat, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                        Text("Open chat brain")
+                    }
+                    OutlinedButton(onClick = onOpenDataHome, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                        Text("Data homes")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiState, aiStatus: String, healthStatus: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            LifeOsMetricCard("Surfaces", domain.schemaSurfaces.size.toString(), "App + templates", Modifier.weight(1f))
+            LifeOsMetricCard("Skills", domain.skills.size.toString(), "Food active", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            LifeOsMetricCard("Sources", "5", backendHome.chatSourceLabel(), Modifier.weight(1f))
+            LifeOsMetricCard("Health", if (healthStatus.isBlank()) "Ready" else "Live", aiStatus.ifBlank { "Local fallback" }.take(26), Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun LifeOsMetricCard(label: String, value: String, detail: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 2.dp,
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsDomainCard(domain: LifeOsDomain, selected: Boolean, onSelect: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .width(176.dp)
+            .heightIn(min = 132.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(role = Role.Button, onClick = onSelect)
+            .semantics { this.selected = selected },
+        shape = RoundedCornerShape(24.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.42f) else MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = if (selected) 3.dp else 1.dp,
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(domain.emoji, style = MaterialTheme.typography.titleLarge)
+                Text(domain.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            Text(domain.statusLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(domain.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun LifeOsSourceCard(icon: String, title: String, detail: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.heightIn(min = 88.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(icon, style = MaterialTheme.typography.titleMedium)
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -8295,63 +8437,13 @@ private fun AiCaptureSheet(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ObjectImage(
-                        image = "💬",
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        size = 52.dp,
-                    )
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            "WonderFood Chat",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            pageContext.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { showHistory = true }, enabled = messages.isNotEmpty()) {
-                        Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("History")
-                    }
-                    TextButton(onClick = onNewChat, enabled = !isWorking) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("New chat")
-                    }
-                }
-            }
-
-            AiCapabilityCenter(
-                providerStatus = providerStatus,
-                backendHome = backendHome,
-                healthStatus = healthStatus,
-                contextSummary = contextSummary,
+            AiChatTopCard(
+                pageTitle = pageContext.title,
                 messageCount = messages.size,
-                onOpenDataHome = onOpenDataHome,
-                onOpenAiControl = onOpenAiControl,
+                isWorking = isWorking,
+                onHistory = { showHistory = true },
+                onNewChat = onNewChat,
+                onDismiss = onDismiss,
             )
 
             AiConversationTimeline(
@@ -8415,6 +8507,68 @@ private fun AiCaptureSheet(
             },
             onDismiss = { showHistory = false },
         )
+    }
+}
+
+@Composable
+private fun AiChatTopCard(
+    pageTitle: String,
+    messageCount: Int,
+    isWorking: Boolean,
+    onHistory: () -> Unit,
+    onNewChat: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ObjectImage("💬", MaterialTheme.colorScheme.primaryContainer, 42.dp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        "WonderFood Chat",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        pageTitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close AI capture")
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                AssistChip(
+                    onClick = onHistory,
+                    enabled = messageCount > 0,
+                    label = { Text("History") },
+                    leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+                AssistChip(
+                    onClick = onNewChat,
+                    enabled = !isWorking,
+                    label = { Text("New") },
+                    leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+                DraftReviewPill("Sources on")
+            }
+        }
     }
 }
 

@@ -603,7 +603,14 @@ class MainScreenViewModel(context: Context) : ViewModel() {
             appendLine("| [MCP schema] | Headless/GPT bridge: domain catalog, validators, review-only proposals. |")
             appendLine("| [Template health] | @now guard, sample/empty parity, relation and rollup checks. |")
             appendLine()
-            appendLine("Sync loop: $sync.")
+            appendLine("Sync path:")
+            sync.split(" -> ")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .take(5)
+                .forEachIndexed { index, hop ->
+                    appendLine("${index + 1}. $hop")
+                }
             append("Any save still becomes a reviewable draft first.")
         }
 
