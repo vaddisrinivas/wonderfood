@@ -202,6 +202,51 @@ if [ "$(sqlite3 "$DB_PATH" 'PRAGMA user_version;')" != "1" ]; then
   exit 1
 fi
 
+ROLLBACK_DB="${DB_PATH}.rollback"
+cp "$DB_PATH" "$ROLLBACK_DB"
+if [ ! -s "$ROLLBACK_DB" ]; then
+  echo "[FAIL] rollback fixture copy failed"
+  exit 1
+fi
+
+sqlite3 "$ROLLBACK_DB" "
+PRAGMA foreign_keys = OFF;
+BEGIN;
+DROP TABLE IF EXISTS source_snapshot_relations;
+DROP TABLE IF EXISTS citations;
+DROP TABLE IF EXISTS agent_runs;
+DROP TABLE IF EXISTS workflow_runs;
+DROP TABLE IF EXISTS undo_events;
+DROP TABLE IF EXISTS action_events;
+DROP TABLE IF EXISTS outbox_events;
+DROP TABLE IF EXISTS source_snapshots;
+DROP TABLE IF EXISTS provider_links;
+DROP TABLE IF EXISTS conversation_messages;
+DROP TABLE IF EXISTS conversations;
+DROP TABLE IF EXISTS record_relations;
+DROP TABLE IF EXISTS records;
+DROP TABLE IF EXISTS meta;
+PRAGMA user_version = 0;
+COMMIT;
+"
+
+if [ "$(sqlite3 "$ROLLBACK_DB" 'PRAGMA user_version;')" != "0" ]; then
+  echo "[FAIL] rollback did not clear schema version"
+  exit 1
+fi
+
+for table in records conversations conversation_messages record_relations source_snapshot_relations source_snapshots action_events undo_events workflow_runs agent_runs outbox_events provider_links citations meta; do
+  if [ -n "$(sqlite3 "$ROLLBACK_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name='$table';")" ]; then
+    echo "[FAIL] table '$table' still exists after rollback"
+    exit 1
+  fi
+done
+
+if [ "$(sqlite3 "$ROLLBACK_DB" 'PRAGMA user_version;')" != "0" ]; then
+  echo "[FAIL] rollback failed to restore version 0"
+  exit 1
+fi
+
 RECOVERY_COPY="${DB_PATH}.recovered"
 cp "$DB_PATH" "$RECOVERY_COPY"
 if [ ! -s "$RECOVERY_COPY" ]; then
@@ -228,4 +273,5 @@ fi
 
 echo "[PASS] SQLite runtime migration/recovery smoke complete"
 echo "[PASS] Recovery snapshot preserved records and metadata"
+echo "[PASS] rollback smoke restored schema to empty state"
 rm -f "$TEMP_DIR.sql"
