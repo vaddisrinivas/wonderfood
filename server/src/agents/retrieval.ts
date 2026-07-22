@@ -167,7 +167,13 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
   ];
 
   const dedupedProviderSources = providerSources.filter((snapshot, index, all) => all.findIndex((candidate) => candidate.id === snapshot.id && candidate.tone === snapshot.tone) === index);
-  const mergedSources = [...localSnapshots, ...dedupedProviderSources].filter((snapshot, index, all) => all.findIndex((candidate) => candidate.id === snapshot.id && candidate.tone === snapshot.tone) === index).slice(0, recordLimit);
+  const mergedSources = [...localSnapshots, ...dedupedProviderSources]
+    .filter((snapshot, index, all) => all.findIndex((candidate) => candidate.id === snapshot.id && candidate.tone === snapshot.tone) === index)
+    // Put exact provider matches ahead of the local fallback rows. This keeps
+    // Chat's first source cards and action hints about the thing the user
+    // asked for while still retaining local-first context for offline use.
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label) || a.tone.localeCompare(b.tone))
+    .slice(0, recordLimit);
 
   if (mergedSources.length > 0) {
     return {
