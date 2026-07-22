@@ -1,130 +1,109 @@
-# WonderFood
+# WonderFood LifeOS
 
-Local-first food planning for Android: kitchen inventory, recipes, meal plans, shopping, receipts, selectable data homes, and reviewable AI proposals in one private workspace.
+WonderFood is being reimagined as a local-first LifeOS built with Expo and React Native: a quiet workspace for food, planning, personal context, and reviewable AI actions.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Android](https://img.shields.io/badge/Android-8%2B-3ddc84.svg)](app/build.gradle.kts)
-[![Kotlin](https://img.shields.io/badge/Kotlin-Compose-f18e33.svg)](app/build.gradle.kts)
-[![Local-first](https://img.shields.io/badge/local--first-review%20before%20save-147d48.svg)](PRIVACY.md)
+[![Expo SDK 57](https://img.shields.io/badge/Expo-SDK%2057-000020.svg)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React%20Native-0.86-61dafb.svg)](https://reactnative.dev/)
+[![Android primary](https://img.shields.io/badge/platform-Android%20primary-3ddc84.svg)](app.json)
 
-![WonderFood screenshot gallery](docs/images/screenshot-gallery.png)
+## Platform order
 
-## Demo
+1. **Static web first:** fastest review and deployment surface.
+2. **Android primary:** product-quality mobile target and first native release.
+3. **iOS last:** enabled in configuration, packaged after web and Android gates are stable.
 
-![WonderFood demo](docs/images/wonderfood-demo.gif)
+Both native targets use the application identifier `com.wonderfood.app`.
 
-## Why It Exists
+## Current implementation
 
-Food apps usually split your life into separate places: pantry lists, recipes, meal logs, shopping, receipts, nutrition, and AI chats. WonderFood keeps them in one workspace, lets the household choose where that workspace lives, and treats every AI/share/deep-link mutation as a draft you can edit, accept, or reject.
+Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn local chat with structured answers and source links, system/source screens, Expo packaging, and a validated Food domain package with canonical schemas and three workflows.
 
-## Highlights
+Runtime adapters are the next phase: SQLite persistence, live Notion/Sheets sync, server-side model/MCP execution, real action receipts/Undo, and native Android capture/Health Connect. The UI labels demo data honestly until those adapters pass live gates.
 
-- **Kitchen inventory:** fridge, freezer, pantry, lots, expiry, prices, notes, images, and nullable nutrition.
-- **Meal workspace:** daily meal timeline, meal plans, recipe matching, meal logs, and use-first prompts.
-- **Shopping and receipts:** manual lists, receipt evidence, deterministic receipt parsing, and put-away review.
-- **Reviewable AI:** provider output maps to typed command envelopes; app validation owns every write.
-- **No-LLM fallbacks:** manual forms, CSV import/export, deterministic parsing, and command links work without an in-app LLM.
-- **External commands:** Android shares, HTTPS/custom-scheme links, and explicit command intents stage bounded proposals.
-- **Selectable data homes:** start local, or connect Google Sheets, Notion, or a Postgres-backed HTTPS API with rollback snapshots before switching.
-- **Optional integrations:** encrypted Google Drive app-data backup and Health Connect support can be enabled by the user.
+- [LifeOS 2026 Notion](https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1)
+- [LifeOS Google Sheets](https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit)
+- Domain runtime files: `packages/domain-config/`
 
-## Current Release Work: 1.0.5
+## Local development
 
-WonderFood 1.0.5 is the active verification target:
-
-- **Canonical local runtime:** app state, imports, exports, AI context, and AppFunctions are being cut over to canonical household commands and Room state.
-- **New V3 shell:** `Now`, `Food`, `Week`, and `Cart` organize the app around daily use instead of setup screens.
-- **Local-first default:** SQLite works without accounts, internet, Notion, Sheets, Postgres, or AI.
-- **Real data homes:** Google Sheets, Notion, and Postgres use one canonical household contract instead of provider-specific snapshots.
-- **Readable household workspaces:** Notion and Sheets schema work focuses on useful food, recipe, meal, purchase, cart, and planning views that humans can inspect and automate.
-- **Safer switching:** backend changes create a local rollback snapshot before committing the new data home.
-- **AI as proposals:** recipe import, pantry normalization, can-cook ranking, meal planning, cart building, personalization, cooking coach, receipt parsing, and nutrition estimation have typed contracts while deterministic app validation owns writes.
-- **Provider-ready mapping:** TheMealDB and Open Food Facts mappings now preserve source, confidence, warnings, and cache policy.
-- **Better import/receipt consistency:** deterministic receipt parsing, draft normalization, canonical import/export, and snapshot merging make AI and non-AI intake behave more uniformly.
-- **Manual workflows still work:** food entry, cart items, recipe creation, and meal logging are available without AI.
-- **Release proof:** local tests, emulator/device proof, live-provider proof, signing, checksums, CI, PR merge, and release publication are required before 1.0.5 is called complete.
-
-Latest published install remains [WonderFood 1.0.4](https://github.com/vaddisrinivas/wonderfood/releases/tag/v1.0.4) until the 1.0.5 release evidence is complete:
-
-- Use `WonderFood-play-v1.0.4.apk` for Google/Play-integrated features.
-- Use `WonderFood-foss-v1.0.4.apk` for the no-Google-dependency build.
-
-## Product Principles
-
-- Food data stays on-device unless the user explicitly chooses a remote data home, invokes an external provider, creates an encrypted backup, exports, or shares.
-- AI, assistant, share, and deep-link mutations are proposals. The user can edit, accept, or reject them before persistence.
-- Unknown nutrition remains unknown. Provider estimates retain source and confidence.
-- External bulk proposals are bounded, validated, audited, and applied atomically.
-- No personal pantry, account, receipt, health, credential, or provider data is bundled.
-
-Product status lives in [FEATURES.md](FEATURES.md), release order in [ROADMAP.md](ROADMAP.md), and user-visible changes in [CHANGELOG.md](CHANGELOG.md).
-
-## Build
-
-Requirements: JDK 17 and Android SDK 36.
+Requirements: Node.js 22+, npm, and Android Studio for native Android work.
 
 ```bash
-git clone https://github.com/vaddisrinivas/wonderfood.git
-cd wonderfood
-./gradlew :app:assembleFossDebug :app:testFossDebugUnitTest
+npm install
+npm run start
 ```
 
-Play-integrated debug build:
+Launch a target:
 
 ```bash
-./gradlew :app:assemblePlayDebug
+npm run web
+npm run android
+npm run ios
 ```
 
-Install on a connected device or emulator:
+## Quality gates
+
+Run the same ordered checks used by CI:
 
 ```bash
-./gradlew :app:installFossDebug
+npm run typecheck
+npm run config:validate
+npm run doctor
+npm run export:web
+npm run export:android
 ```
 
-Full local quality gate:
+Or run the combined gate:
 
 ```bash
-./scripts/quality/android-harness.sh local
+npm run quality
 ```
 
-Connected Android tests:
+Exports are written to `dist/web` and `dist/android`. The web export is static. Android remains the primary native package; iOS export/build automation will follow after those gates stabilize.
+
+## EAS packaging
+
+Preview Android APK:
 
 ```bash
-./scripts/quality/android-harness.sh connected
+npx eas-cli build --platform android --profile preview-android
 ```
 
-## Optional Integrations
+Production Android App Bundle:
 
-- AI providers are configured as a deterministic Primary and one optional Fallback. Each request tries Primary once, then Fallback only after failure; there is no rotation or load balancing.
-- Data home setup is shown on first run. Local SQLite needs no account. Google Sheets uses a Sheet URL plus Google authorization in the `play` flavor. Notion uses a page URL plus integration token. Postgres uses a Postgres-backed HTTPS API or user-owned service endpoint with household ID and API token. Android must not ship raw database credentials, privileged server tokens, or raw database socket paths.
-- Google Drive app-data backup is available in the `play` flavor and requires replacing `google_web_client_id` in `app/src/main/res/values/google_auth.xml` with a public OAuth web client ID.
-- Health Connect access is available in the `play` flavor and requested through Android's permission flow.
-- HTTPS app links require a deployed `https://wonderfood.app/.well-known/assetlinks.json`.
-- Other apps can stage commands with links, Android shares, or the explicit command intent documented in [docs/app-command-contract.md](docs/app-command-contract.md).
+```bash
+npx eas-cli build --platform android --profile production-android
+```
 
-## FOSS Distribution
+iOS production build, last in the rollout:
 
-WonderFood is Apache-2.0 and local-first, with Fastlane metadata and screenshots prepared under [fastlane/metadata/android/en-US](fastlane/metadata/android/en-US). The `foss` flavor builds without Google Identity, Play Services Auth, or Health Connect SDK dependencies; the `play` flavor keeps Google Drive backup and Health Connect integrations. Distribution notes and disclosure drafts live in [docs/distribution/FOSS_READINESS.md](docs/distribution/FOSS_READINESS.md).
+```bash
+npx eas-cli build --platform ios --profile production-ios
+```
 
-## Modules
+Signing credentials and provider secrets stay in EAS or local environment storage; they must not be committed.
 
-- `app`: Compose UI, Android integrations, command/deep-link intake, local SQLite runtime, import/export, and sync UI.
-- `core:model`: canonical food domain and snapshot contracts.
-- `core:engine`: validated command execution policies.
-- `core:data`: Room repository and migration contracts.
-- `core:ai`: versioned structured proposal envelopes and provider boundaries.
+## Product contracts and retained evidence
 
-The runtime app uses the canonical household repository for the v1.0.5 path. Keep contract changes synchronized across app, Room, sync, AI, and AppFunctions.
+The React Native shell is new, but WonderFood's validated product work remains authoritative reference material:
 
-## Privacy and Security
+- [LifeOS product pass](docs/lifeos/product-pass.md) and [UI copy audit](docs/lifeos/ui-copy-audit.md)
+- [AI contracts and golden fixtures](docs/ai/README.md)
+- [MCP bridge](docs/mcp-bridge.md)
+- [Privacy](PRIVACY.md), [security](SECURITY.md), and [release checklist](docs/release/RELEASE_CHECKLIST.md)
+- [Testing evidence](docs/testing/README.md), [design history](docs/design/v3-product-experience.md), and [distribution readiness](docs/distribution/FOSS_READINESS.md)
+- Existing screenshots, demo media, release notes, and native Android evidence remain under `docs/`, `fastlane/`, and repository history.
 
-See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md). Android automatic backup is disabled; WonderFood's explicit backup flow encrypts archives before upload. Cleartext networking is denied except emulator/local-development loopback hosts.
+Do not treat historical Kotlin/Compose commands as current Expo build instructions. Preserve those records while the LifeOS implementation replaces the legacy runtime.
 
-Release signing and OAuth proof gates are tracked in [docs/release/RELEASE_CHECKLIST.md](docs/release/RELEASE_CHECKLIST.md).
+## Safety principles
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Device screenshots, accessibility feedback, food-domain test cases, and import/export edge cases are especially useful.
+- Local-first data remains usable without an account or AI provider.
+- Ordinary reversible changes write directly and offer Undo; sensitive or irreversible changes stay explicit.
+- Provider credentials never ship in the app or repository.
+- Unknown nutrition stays unknown; estimates retain provenance and confidence.
+- Destructive agent actions require explicit user confirmation.
 
 ## License
 

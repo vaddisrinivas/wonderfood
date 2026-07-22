@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wonderfood.app/schemas/domain.v1.schema.json",
+  "title": "LifeOS domain package",
+  "type": "object",
+  "required": ["schema_version", "id", "label", "surfaces", "collections", "relations", "skills", "workflows", "data_homes", "mcp"],
+  "properties": {
+    "schema_version": { "const": "lifeos.domain.v1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "label": { "type": "string", "minLength": 1 },
+    "home_surface": { "type": "string" },
+    "surfaces": { "type": "array", "minItems": 1 },
+    "collections": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "relations": { "type": "array" },
+    "skills": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "workflows": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "data_homes": { "type": "array", "items": { "enum": ["notion", "google_sheets", "sqlite", "postgres"] }, "uniqueItems": true },
+    "mcp": { "type": "object", "required": ["resources", "tools"] }
+  },
+  "additionalProperties": false
+}

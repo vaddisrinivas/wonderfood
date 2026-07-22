@@ -7,16 +7,16 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - Food is the active Day 0 domain.
 - Health is a companion domain through Health Connect.
 - Plants remains the zero-code package sanity check.
-- Android, Notion, Google Sheets, SQLite/Postgres, GPT/MCP all share the same schema-story: domain catalog + schema surfaces + skills + reviewable command envelopes.
+- Expo, Notion, Google Sheets, SQLite/Postgres, GPT/MCP share one contract: domain catalog + canonical schemas + domain skills + workflow configs + typed tools.
 
 ## User-visible surfaces
 
-- App: native Food workspace plus full-screen GPT-like chat.
-- Chat: multi-turn threads, history, markdown tables/lists, visible sources, draft review, model/data/MCP capability center.
+- App: responsive Food workspace plus full-screen GPT-like chat on web and Android first, iOS last.
+- Chat: multi-turn threads, history, tables/lists, precise source citations, typed actions with receipts and Undo.
 - Settings: LifeOS control center, Data home, AI assistant, Health Connect, backup/import/export.
 - Notion: human data plane and presentation dashboard.
 - Sheets: spreadsheet-primary data plane.
-- MCP: GPT/plugin bridge exposing skills, schemas, validation, and review-only app links.
+- MCP: server-side bridge exposing the same skills, schemas, resources, validation, and risk-bounded actions.
 
 ## Product bar
 
@@ -24,7 +24,7 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - No hidden “package story”; domain catalog must be visible in-app.
 - Schema and data-plane links must be visible from Chat and Settings.
 - AI responses must cite app/data-plane sources when available.
-- User edits proposals before saving; user does not “edit AI answers.”
+- User edits records in normal editors and never edits AI answers. Exact reversible actions apply directly and return Undo.
 
 ## Notion benchmark inputs
 
@@ -43,15 +43,15 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - Stage P.A.R.A. → Projects, Areas, Resources, Archive across Food now and future domains later.
 - Activity log / daily journal → daily food + health context log, source-backed.
 - Financial vault → food spending and grocery budget surface.
-- RPGenie Tavern → GPT-like assistant posture: conversational, contextual, source-quoting, review-only writes.
+- RPGenie Tavern → GPT-like assistant posture: conversational, contextual, source-quoting, reversible writes with Undo.
 - Sample/empty template split → every domain template needs both beautiful sample data and a clean operational empty state.
 
 ## Source sync loop
 
 - Notion → human data plane: dashboards, relations, rollups, template health, and presentation.
 - Google Sheets → spreadsheet-primary mirror: auditable rows, formulas, import/export, schema-health checks.
-- Android → native surface: Food now, local canonical store, review queue, Health Connect context, source cards.
-- MCP/GPT → headless client: same domain catalog, skills, schemas, validation, and review-only command envelopes.
+- Expo → web/Android/iOS surface: Food now, local canonical store, Health Connect context, source cards, record editors and Undo receipts.
+- MCP/GPT → headless client: same domain catalog, skills, schemas, validation, actions and risk policy.
 - Chat answers should cite source handles, not vibes: app snapshot, LifeOS Notion, LifeOS Sheets, MCP schema, template health, and provider web/file citations when available.
 
 ## Chat source pack handles
@@ -66,10 +66,10 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 ## Skill architecture
 
 - Domain skill = user-facing operating brain for a package: Food, Health, Plants, Finance, etc.
-- Workflow skill = repeatable playbook inside/across domains: weekly reset, grocery rescue, pantry boss fight, health export, template-health audit.
+- Workflow config = repeatable typed playbook inside/across domains: weekly reset, receipt reconciliation, meal-plan shopping, health export, template-health audit.
 - Schema = contract/resource, not usually a top-level skill: command envelope, Notion/Sheets graph, Room tables, validation rules.
-- MCP exposes all three: domain catalog, schema resources/validators, and workflow actions.
-- Default rule: one domain skill per domain, workflow skills only when the workflow has its own steps/state/gates, schemas as versioned files shared by app, Notion, Sheets, and GPT/MCP.
+- MCP exposes all three: domain skill, schema resources/validators, and workflow actions.
+- Default rule: one domain skill per domain; workflows are versioned configs unless they need genuinely distinct judgment; schemas are contracts/resources, never skills.
 
 ## Notion UI automation stance
 

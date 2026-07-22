@@ -1,0 +1,45 @@
+{
+  "$schema": "../schemas/domain.v1.schema.json",
+  "schema_version": "lifeos.domain.v1",
+  "id": "food",
+  "label": "Food",
+  "home_surface": "food.overview",
+  "surfaces": [
+    { "id": "food.overview", "label": "Overview", "views": ["next_meal", "use_soon", "shopping_summary", "food_graph"] },
+    { "id": "food.meals", "label": "Meals", "collections": ["meal_plan", "meal_log", "recipe"] },
+    { "id": "food.kitchen", "label": "Kitchen", "collections": ["inventory", "ingredient", "purchase_line"] },
+    { "id": "food.shopping", "label": "Shopping", "collections": ["shopping_item", "purchase", "store"] }
+  ],
+  "collections": [
+    "inventory",
+    "ingredient",
+    "recipe",
+    "meal_plan",
+    "meal_log",
+    "shopping_item",
+    "purchase",
+    "purchase_line",
+    "store",
+    "preference",
+    "nutrition_observation",
+    "source_record"
+  ],
+  "relations": [
+    { "from": "inventory", "to": "ingredient", "name": "represents" },
+    { "from": "recipe", "to": "ingredient", "name": "uses" },
+    { "from": "meal_plan", "to": "recipe", "name": "plans" },
+    { "from": "meal_log", "to": "meal_plan", "name": "completes" },
+    { "from": "shopping_item", "to": "inventory", "name": "restocks" },
+    { "from": "purchase_line", "to": "shopping_item", "name": "fulfills" },
+    { "from": "purchase_line", "to": "inventory", "name": "adds" },
+    { "from": "nutrition_observation", "to": "meal_log", "name": "describes" },
+    { "from": "source_record", "to": "*", "name": "supports" }
+  ],
+  "skills": ["food"],
+  "workflows": ["weekly_food_reset", "receipt_to_kitchen", "meal_plan_to_shopping"],
+  "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
+  "mcp": {
+    "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],
+    "tools": ["search", "read_record", "create_record", "update_record", "archive_record", "run_workflow"]
+  }
+}
