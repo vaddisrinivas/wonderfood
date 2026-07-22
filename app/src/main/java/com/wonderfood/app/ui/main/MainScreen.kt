@@ -5350,20 +5350,20 @@ private fun LifeOsControlCenter(
         SettingsControlGroup {
             Text("Source pack", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                LifeOsSourceCard("📱", "App", "Local Food snapshot", Modifier.weight(1f))
-                LifeOsSourceCard("📝", "Notion", "Dashboard + rollups", Modifier.weight(1f))
+                LifeOsSourceCard(Icons.Rounded.RestaurantMenu, "App", "Local Food snapshot", "native", Modifier.weight(1f))
+                LifeOsSourceCard(Icons.Rounded.Description, "Notion", "Dashboard + rollups", "template", Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                LifeOsSourceCard("📊", "Sheets", "Auditable mirror", Modifier.weight(1f))
-                LifeOsSourceCard("🧬", "MCP", "Schemas + validators", Modifier.weight(1f))
+                LifeOsSourceCard(Icons.Rounded.TableChart, "Sheets", "Auditable mirror", "mirror", Modifier.weight(1f))
+                LifeOsSourceCard(Icons.Rounded.Inventory2, "MCP", "Schemas + validators", "bridge", Modifier.weight(1f))
             }
         }
         SettingsControlGroup {
             Text("Skills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                LifeOsSourceCard("🍽️", "Domain", "Food brain", Modifier.weight(1f))
-                LifeOsSourceCard("🔁", "Workflow", "Playbooks", Modifier.weight(1f))
-                LifeOsSourceCard("📐", "Schema", "Contracts", Modifier.weight(1f))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
+                item { LifeOsSourceCard(Icons.Rounded.RestaurantMenu, "Domain", "Food brain", "active", Modifier.width(148.dp)) }
+                item { LifeOsSourceCard(Icons.Rounded.Settings, "Workflow", "Playbooks", "ready", Modifier.width(148.dp)) }
+                item { LifeOsSourceCard(Icons.Rounded.Inventory2, "Schema", "Contracts", "guarded", Modifier.width(148.dp)) }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 domain.skills.take(5).forEach { skill -> DraftReviewPill(skill.replace('_', ' ')) }
@@ -5673,20 +5673,42 @@ private fun LifeOsDomain.lifeOsIcon(): ImageVector =
         "plants" -> Icons.Rounded.Storefront
         "health" -> Icons.Rounded.HealthAndSafety
         else -> Icons.Rounded.Inventory2
-    }
+}
 
 @Composable
-private fun LifeOsSourceCard(icon: String, title: String, detail: String, modifier: Modifier = Modifier) {
+private fun LifeOsSourceCard(icon: ImageVector, title: String, detail: String, state: String, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.heightIn(min = 88.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier.heightIn(min = 108.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+        tonalElevation = 1.dp,
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(icon, style = MaterialTheme.typography.titleMedium)
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Box(
+            modifier = Modifier.background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f),
+                    ),
+                ),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LifeOsVectorBadge(
+                        icon = icon,
+                        modifier = Modifier.size(34.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(state, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                    }
+                }
+                Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+            }
         }
     }
 }
