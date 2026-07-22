@@ -1,11 +1,39 @@
 import { Link, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, Card, Metric, Page, PageHeader, Pill, Row, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { loadCatalog } from '@/src/domain/catalog';
+import { queryDomainRecords } from '@/src/domain/queries';
+import { DomainRecordViewModel } from '@/src/domain/renderer';
+import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors } from '@/src/theme';
 
 export default function TodayScreen() {
   const router = useRouter();
+  const db = useLifeOSDatabase();
+  const catalog = loadCatalog();
+  const [loading, setLoading] = useState(true);
+  const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const items = await queryDomainRecords(db);
+      if (!cancelled) {
+        setRecords(items);
+        setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  const rhythmRows = records.slice(0, 3);
+
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -18,15 +46,19 @@ export default function TodayScreen() {
               <Link href="/system" asChild><Pressable><Text style={styles.avatar}>SV</Text></Pressable></Link>
             </View>
           </View>
-          <PageHeader eyebrow="Good morning, Srinivas" title="A calm day starts here." subtitle="One view across your meals, kitchen, notes and connected data." />
+          <PageHeader
+            eyebrow="Good morning, Srinivas"
+            title="A calm day starts here."
+            subtitle={`One view across ${catalog.activeManifest.label} and connected sources.`}
+          />
 
           <Card tone="moss" style={styles.hero}>
             <View style={styles.heroCopy}>
               <Pill tone="moss">NEXT · 7:30 PM</Pill>
-              <Text style={styles.heroTitle}>Sheet-pan tandoori chicken</Text>
-              <Text style={sharedStyles.body}>35 min · everything is already in the kitchen</Text>
+              <Text style={styles.heroTitle}>{rhythmRows[0]?.title ?? `Start your ${catalog.activeManifest.label} loop`}</Text>
+              <Text style={sharedStyles.body}>{rhythmRows[0]?.meta ?? 'Records will appear here as soon as source sync lands.'}</Text>
               <View style={styles.heroActions}>
-                <ActionButton label="Open meal" onPress={() => router.push('/record/recipe-tandoori')} />
+                <ActionButton label="Open first record" onPress={() => router.push(rhythmRows[0] ? `/record/${rhythmRows[0].id}` : '/capture')} />
                 <ActionButton label="Ask AI" quiet onPress={() => router.push('/chat')} />
               </View>
             </View>
@@ -34,29 +66,35 @@ export default function TodayScreen() {
           </Card>
 
           <View style={[sharedStyles.grid, styles.metrics]}>
-            <Metric value="3" label="Meals planned" footnote="Breakfast → dinner" />
-            <Metric value="2" label="Use soon" footnote="No food wasted" />
-            <Metric value="8" label="Shopping items" footnote="2 already at home" />
+            <Metric value={loading ? '…' : `${records.length}`} label={`${catalog.activeManifest.label} records`} footnote="Total across this domain" />
+            <Metric value={loading ? '…' : `${records.filter((row) => row.collection.includes('recipe')).length}`} label="Recipes" footnote="Quickly reusable" />
+            <Metric value={loading ? '…' : `${records.filter((row) => row.collection.includes('shopping')).length}`} label="Shopping items" footnote="Pending and tracked" />
           </View>
 
           <SectionTitle title="Today’s rhythm" action="Ask about today" href="/chat" />
           <Card style={styles.listCard}>
-            <Row icon="☀" title="Greek yogurt bowl" detail="Breakfast · 8:30 AM · 24g protein" href="/record/pantry-yogurt" />
-            <Row icon="◐" title="Leftover green dal" detail="Lunch · 1:00 PM · ready to heat" href="/record/meal-green-dal" />
-            <Row icon="☾" title="Tandoori chicken" detail="Dinner · 7:30 PM · 35 min" href="/record/recipe-tandoori" />
+            {rhythmRows.length ? rhythmRows.map((row) => (
+              <Row
+                key={row.id}
+                icon="◉"
+                title={row.title}
+                detail={row.meta || `${row.collection} · ${row.status}`}
+                href={{ pathname: '/record/[id]', params: { id: row.id } }}
+              />
+            )) : <Row icon="⌁" title={`No ${catalog.activeManifest.label} rows yet`} detail="Capture something to seed your timeline" href="/capture" />}
           </Card>
 
           <SectionTitle title="Worth your attention" />
           <View style={sharedStyles.grid}>
             <Card tone="amber" style={styles.attentionCard}>
               <Text style={styles.cardIcon}>◷</Text><Text style={styles.cardTitle}>Use the yogurt</Text>
-              <Text style={sharedStyles.muted}>Expires Friday. Tonight’s marinade uses half.</Text>
-              <Link href="/record/pantry-yogurt" style={styles.cardLink}>See pantry item →</Link>
+              <Text style={sharedStyles.muted}>{catalog.activeManifest.label} surfaces are set to highlight near-term actions.</Text>
+              <Link href="/sources" style={styles.cardLink}>Open sources →</Link>
             </Card>
             <Card tone="blue" style={styles.attentionCard}>
               <Text style={styles.cardIcon}>✓</Text><Text style={styles.cardTitle}>Shopping is nearly ready</Text>
-              <Text style={sharedStyles.muted}>Review 8 items before your next store run.</Text>
-              <Link href="/(tabs)/food" style={styles.cardLink}>Open food workspace →</Link>
+              <Text style={sharedStyles.muted}>Review grouped shopping rows before your next run.</Text>
+              <Link href="/(tabs)/food" style={styles.cardLink}>Open {catalog.activeManifest.label} workspace →</Link>
             </Card>
           </View>
 

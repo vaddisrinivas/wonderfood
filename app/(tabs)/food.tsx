@@ -8,23 +8,25 @@ import { getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/dom
 import { colors, radius } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
+import { DomainRecordViewModel } from '@/src/domain/renderer';
 
-type FoodRecordView = {
-  id: string;
-  collection?: string;
-  title: string;
-  meta: string;
-  status: string;
-  tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral';
-  body: string;
-  source: string;
-};
+type FoodRecordView = DomainRecordViewModel;
 
 const { activeManifest } = loadCatalog();
 const surfaceCatalog = buildSurfaceCatalog(activeManifest);
 
 const defaultTab = surfaceCatalog.tabs[0] ?? 'Overview';
 const defaultViews = surfaceCatalog.tabs;
+
+function getTopSummary(records: FoodRecordView[]) {
+  const byCollection = (name: string) => records.find((record) => record.collection === name);
+
+  return [
+    byCollection('meal_plan') ?? records[0],
+    byCollection('inventory') ?? records[1],
+    byCollection('shopping_item') ?? records[2],
+  ];
+}
 
 export default function FoodScreen() {
   const db = useLifeOSDatabase();
@@ -36,8 +38,14 @@ export default function FoodScreen() {
     if (active === 'Overview') {
       return records;
     }
-    return records.filter((item) => item.collection?.toLowerCase().includes(active.toLowerCase()) || item.meta.toLowerCase().includes(active.toLowerCase()));
+    return records.filter((item) =>
+      item.collection.toLowerCase().includes(active.toLowerCase())
+      || item.meta.toLowerCase().includes(active.toLowerCase())
+    );
   }, [active, records]);
+
+  const hasRecords = records.length > 0;
+  const topSummary = getTopSummary(records);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +59,6 @@ export default function FoodScreen() {
       }
     };
     void load();
-
     return () => {
       cancelled = true;
     };
@@ -62,52 +69,93 @@ export default function FoodScreen() {
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         <View style={sharedStyles.content}>
           <View style={styles.topbar}>
-            <View><Text style={styles.brand}>LIFEOS / FOOD</Text><Text style={styles.date}>Package-driven workspace</Text></View>
+            <View><Text style={styles.brand}>LIFEOS / {activeManifest.label.toUpperCase()}</Text><Text style={styles.date}>Package-driven workspace</Text></View>
             <View style={styles.topActions}>
               <Link href="/search" style={styles.topIcon}>⌕</Link>
               <Link href="/capture" style={styles.capture}>＋ Add</Link>
               <Link href="/system" style={styles.avatar}>SV</Link>
             </View>
           </View>
-          <PageHeader eyebrow="Food domain · Active" title="Eat well. Waste less." subtitle="Meals, recipes, pantry, shopping and nutrition share one connected graph." />
+          <PageHeader
+            eyebrow={`${activeManifest.label} domain · Active`}
+            title={`${activeManifest.label} workspace`}
+            subtitle="Meals, pantry, shopping, and nutrition run from one canonical graph."
+          />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
             {defaultViews.map((view) => (
-              <Pressable key={view} accessibilityRole="button" accessibilityState={{ selected: active === view }} onPress={() => setActive(view)} style={[styles.segment, active === view && styles.segmentActive]}>
+              <Pressable
+                key={view}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active === view }}
+                onPress={() => setActive(view)}
+                style={[styles.segment, active === view && styles.segmentActive]}
+              >
                 <Text style={[styles.segmentText, active === view && styles.segmentTextActive]}>{view}</Text>
               </Pressable>
             ))}
           </ScrollView>
 
           {active === 'Overview' ? (
-            <>
-              <View style={sharedStyles.grid}>
-                <Card tone="moss" style={styles.feature}><Text style={styles.kicker}>TONIGHT</Text><Text style={styles.featureTitle}>Tandoori chicken</Text><Text style={sharedStyles.muted}>35 min · ingredients ready</Text></Card>
-                <Card tone="amber" style={styles.feature}><Text style={styles.kicker}>USE SOON</Text><Text style={styles.featureTitle}>2 pantry items</Text><Text style={sharedStyles.muted}>Yogurt and coriander</Text></Card>
-                <Card tone="blue" style={styles.feature}><Text style={styles.kicker}>SHOPPING</Text><Text style={styles.featureTitle}>8 open items</Text><Text style={sharedStyles.muted}>Grouped by store aisle</Text></Card>
-              </View>
-            </>
+            <View style={sharedStyles.grid}>
+              {hasRecords ? (
+                topSummary.map((item, index) => {
+                  const labels = ['TONIGHT', 'USE SOON', 'SHOPPING'];
+                  const tones: Array<'moss' | 'amber' | 'blue'> = ['moss', 'amber', 'blue'];
+                  if (!item) {
+                    return null;
+                  }
+
+                  return (
+                    <Card key={`${item.id}-${index}`} tone={tones[index] ?? 'moss'} style={styles.feature}>
+                      <Text style={styles.kicker}>{labels[index] ?? 'ACTIVE'}</Text>
+                      <Text style={styles.featureTitle}>{item.title}</Text>
+                      <Text style={sharedStyles.muted}>{item.meta}</Text>
+                    </Card>
+                  );
+                })
+              ) : (
+                <Card tone="moss" style={styles.feature}>
+                  <Text style={styles.kicker}>NO ROWS</Text>
+                  <Text style={styles.featureTitle}>Add your first {activeManifest.label} record</Text>
+                  <Text style={sharedStyles.muted}>Use capture or sync so this workspace can render live rows.</Text>
+                  <Link href="/capture" style={styles.cardLink}>Create first record →</Link>
+                </Card>
+              )}
+            </View>
           ) : null}
 
-          <SectionTitle title={active === 'Overview' ? 'Your food graph' : active} action="Ask AI" href="/chat" />
+          <SectionTitle title={active === 'Overview' ? 'Your active graph' : active} action="Ask AI" href="/chat" />
           {loading ? <Text style={styles.loading}>Loading data…</Text> : null}
           <View style={styles.records}>
-            {shown.map((record) => (
-              <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
-                <Pressable style={({ pressed }) => [styles.record, pressed && { opacity: 0.65 }]}> 
-                  <View style={styles.recordCopy}>
-                    <View style={styles.recordTop}><Text style={styles.recordTitle}>{record.title}</Text><Pill tone={record.tone}>{record.status}</Pill></View>
-                    <Text style={styles.recordMeta}>{record.meta}</Text>
-                    <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
-                    <Text style={styles.recordSource}>{record.source}</Text>
-                  </View>
-                  <Text style={styles.chevron}>›</Text>
-                </Pressable>
-              </Link>
-            ))}
+            {shown.length ? (
+              shown.map((record) => (
+                <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
+                  <Pressable style={({ pressed }) => [styles.record, pressed && { opacity: 0.65 }]}>
+                    <View style={styles.recordCopy}>
+                      <View style={styles.recordTop}><Text style={styles.recordTitle}>{record.title}</Text><Pill tone={record.tone}>{record.status}</Pill></View>
+                      <Text style={styles.recordMeta}>{record.meta}</Text>
+                      <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
+                      <Text style={styles.recordSource}>{record.source}</Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
+                  </Pressable>
+                </Link>
+              ))
+            ) : (
+              <Card tone="moss" style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No {activeManifest.label.toLowerCase()} rows yet</Text>
+                <Text style={sharedStyles.muted}>Try capture or connect sources in System.</Text>
+              </Card>
+            )}
           </View>
           <Card style={styles.schemaCard}>
-            <View style={{ flex: 1 }}><Text style={styles.schemaTitle}>This workspace comes from config</Text><Text style={sharedStyles.muted}>Food schemas, views, skills and agent tools can be replaced by another domain package.</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.schemaTitle}>This workspace comes from config</Text>
+              <Text style={sharedStyles.muted}>
+                {activeManifest.label} schemas, views, skills, and tools can be replaced by another domain package.
+              </Text>
+            </View>
             <Link href="/system" style={styles.schemaLink}>Inspect system →</Link>
           </Card>
         </View>
@@ -142,7 +190,10 @@ const styles = StyleSheet.create({
   recordSource: { color: colors.moss, fontSize: 11, fontWeight: '700', marginTop: 9 },
   loading: { color: colors.muted, marginBottom: 12 },
   chevron: { color: colors.muted, fontSize: 28, paddingLeft: 12 },
+  emptyCard: { paddingVertical: 20, alignItems: 'flex-start' },
+  emptyTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, marginBottom: 4 },
   schemaCard: { marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'center' },
   schemaTitle: { color: colors.ink, fontWeight: '800', fontSize: 15, marginBottom: 5 },
   schemaLink: { color: colors.moss, fontWeight: '800', fontSize: 12 },
+  cardLink: { color: colors.moss, fontWeight: '800', fontSize: 13, marginTop: 14 },
 });

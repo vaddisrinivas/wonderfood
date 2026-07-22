@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import { handleServerChat } from './chat';
 import { ServerChatMessage } from './chat';
+import { handleMcpRequest } from './mcp/server';
 import {
   ensureConversation,
   appendServerMessage,
@@ -84,6 +85,7 @@ function sendStopReply(res: any, id: string, status: 'running' | 'completed' | '
 }
 
 type ChatRunResponse = Awaited<ReturnType<typeof handleServerChat>>;
+type StreamToken = (chunk: string) => void;
 
 async function runServerChat(params: {
   conversationId: string;
@@ -97,6 +99,8 @@ async function runServerChat(params: {
   retryOfMessageId?: string;
   userMessageId: string;
   appendUserMessage?: boolean;
+  stream?: boolean;
+  onModelToken?: StreamToken;
 }): Promise<ChatRunResponse> {
   const controller = new AbortController();
   const { conversationId, runId } = params;
@@ -130,6 +134,8 @@ async function runServerChat(params: {
       signal: controller.signal,
       previousResponseId: params.previousResponseId,
       retryOfMessageId: params.retryOfMessageId,
+      stream: params.stream,
+      onModelToken: params.onModelToken,
     });
   } catch {
     response = {
@@ -208,6 +214,10 @@ async function runServerChat(params: {
 
 const server = createServer(async (req: any, res: any) => {
   const path = getPath(req.url);
+  if (path.startsWith('/mcp')) {
+    await handleMcpRequest(req, res);
+    return;
+  }
 
   if (req.method === 'GET' && path === '/health') {
     ok(res, { status: 'ok', service: 'wonderfood-lifeos-server' });
@@ -275,6 +285,135 @@ const server = createServer(async (req: any, res: any) => {
     return;
   }
 
+  if (req.method === 'POST' && path === '/chat/send/stream') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+
+    let parsed: {
+      conversation_id?: string;
+      message?: { text?: string; id?: string };
+      domain_id?: string;
+      idempotency_key?: string;
+      previous_response_id?: string;
+      retry_of?: string;
+    };
+    try {
+      parsed = (await readJsonBody(req)) as typeof parsed;
+    } catch {
+      badRequest(res, 'Invalid JSON');
+      return;
+    }
+
+    const conversationId = parsed.conversation_id || `server-${Date.now()}`;
+    const text = typeof parsed.message?.text === 'string' ? parsed.message.text : '';
+    const userMessageId = typeof parsed.message?.id === 'string' ? parsed.message.id : undefined;
+    if (!text.trim()) {
+      badRequest(res, 'message.text is required');
+      return;
+    }
+    const conversation = ensureConversation(conversationId, parsed.domain_id || 'food', text.slice(0, 80));
+    upsertConversation({
+      id: conversation.id,
+      domain: conversation.domain,
+      title: conversation.title,
+      detail: conversation.detail,
+    });
+    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const idempotencyKey = parsed.idempotency_key || `${conversationId}:${text}`;
+    const previousResponseId =
+      typeof parsed.previous_response_id === 'string' && parsed.previous_response_id.trim()
+        ? parsed.previous_response_id
+        : previousResponseByConversation.get(conversationId);
+    const existing = idempotencyCache.get(idempotencyKey);
+    if (existing) {
+      const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
+      if (prior) {
+        const thread = getConversation(conversation.id);
+        const cachedResponse = {
+          conversation_id: conversation.id,
+          messages: [prior],
+          thread: thread
+            ? {
+                id: thread.id,
+                title: thread.title,
+                detail: thread.detail,
+              }
+            : {
+                id: conversation.id,
+                title: conversation.title,
+                detail: conversation.detail,
+              },
+          run: { id: existing.runId, status: 'completed', needs_retry: false, aborted: false },
+          warnings: ['Idempotency key replayed; returned prior answer.'],
+        };
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'cache',
+            response: cachedResponse,
+          })}\n\n`,
+        );
+        res.end();
+        return;
+      }
+    }
+
+    const retryOfMessageId =
+      typeof parsed.retry_of === 'string' && parsed.retry_of.trim() ? parsed.retry_of.trim() : undefined;
+    const existingMessage = retryOfMessageId
+      ? getConversation(conversation.id)?.messages.find((message) => message.id === retryOfMessageId)
+      : null;
+    const runMessageText =
+      typeof (existingMessage as { body?: string } | null)?.body === 'string'
+        ? ((existingMessage as { body?: string } | null)!.body as string)
+        : text;
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+    });
+    res.write(`data: ${JSON.stringify({ type: 'run.start', run_id: runId, conversation_id: conversation.id })}\n\n`);
+
+    const finalResponse = await runServerChat({
+      conversationId,
+      message: runMessageText,
+      threadTitle: conversation.title,
+      detail: conversation.detail,
+      idempotencyKey,
+      domainId: conversation.domain,
+      runId,
+      previousResponseId,
+      retryOfMessageId,
+      userMessageId: userMessageId || `user-${Date.now()}`,
+      appendUserMessage: !retryOfMessageId,
+      stream: true,
+      onModelToken: (chunk) => {
+        if (chunk) {
+          res.write(`data: ${JSON.stringify({ type: 'token', run_id: runId, conversation_id: conversation.id, delta: chunk })}\n\n`);
+        }
+      },
+    });
+
+    if (!res.writableEnded) {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'run.end',
+          run_id: runId,
+          conversation_id: conversation.id,
+          response: finalResponse ?? null,
+        })}\n\n`,
+      );
+      res.end();
+    }
+    return;
+  }
+
   if (req.method === 'POST' && path === '/chat/send') {
     if (!assertAuth(req, res)) {
       return;
@@ -320,7 +459,7 @@ const server = createServer(async (req: any, res: any) => {
       const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
       if (prior) {
         const thread = getConversation(conversation.id);
-        ok(res, {
+        const cachedResponse = {
           conversation_id: conversation.id,
           messages: [prior],
           thread: thread
@@ -333,7 +472,7 @@ const server = createServer(async (req: any, res: any) => {
                 id: conversation.id,
                 title: conversation.title,
                 detail: conversation.detail,
-              },
+            },
           run: {
             id: existing.runId,
             status: 'completed',
@@ -341,7 +480,8 @@ const server = createServer(async (req: any, res: any) => {
             aborted: false,
           },
           warnings: ['Idempotency key replayed; returned prior answer.'],
-        });
+        };
+        ok(res, cachedResponse);
         return;
       }
     }

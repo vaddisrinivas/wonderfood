@@ -202,6 +202,21 @@ if [ "$(sqlite3 "$DB_PATH" 'PRAGMA user_version;')" != "1" ]; then
   exit 1
 fi
 
+RECOVERY_COPY="${DB_PATH}.recovered"
+cp "$DB_PATH" "$RECOVERY_COPY"
+if [ ! -s "$RECOVERY_COPY" ]; then
+  echo "[FAIL] recovery snapshot copy failed"
+  exit 1
+fi
+if [ "$(sqlite3 "$RECOVERY_COPY" 'SELECT COUNT(*) FROM records')" != "1" ]; then
+  echo "[FAIL] recovered DB did not preserve records"
+  exit 1
+fi
+if [ "$(sqlite3 "$RECOVERY_COPY" "SELECT COUNT(*) FROM meta WHERE key = 'lifecycle'")" != "1" ]; then
+  echo "[FAIL] recovered DB lost lifecycle metadata"
+  exit 1
+fi
+
 sqlite3 "$DB_PATH" "INSERT INTO meta (key, value) VALUES ('recovery_check', 'ok');"
 DUMP_PATH="${DB_PATH}.dump"
 sqlite3 "$DB_PATH" ".dump" > "$DUMP_PATH"
@@ -212,4 +227,5 @@ if [ ! -s "$DUMP_PATH" ]; then
 fi
 
 echo "[PASS] SQLite runtime migration/recovery smoke complete"
+echo "[PASS] Recovery snapshot preserved records and metadata"
 rm -f "$TEMP_DIR.sql"

@@ -29,29 +29,15 @@ type MessageRow = ChatMessage;
 const seedThreads: ChatThread[] = [
   {
     id: 'seed',
-    title: 'Tonight’s dinner',
-    detail: 'Kernel mode active',
-    messages: [
-      {
-        id: 'seed-a1',
-        role: 'assistant',
-        text: 'I can see your Food workspace: three planned meals, two use-soon items, and the current grocery run. What would make tonight easier?',
-      },
-    ],
-  },
-  {
-    id: 'seed-kitchen',
-    title: 'Kitchen questions',
-    detail: 'Use-soon & inventory',
-    messages: [
-      { id: 'seed-a2', role: 'assistant', text: 'Greek yogurt is the item to use first; it expires Friday and connects to two meals.' },
-    ],
+    title: 'Food context',
+    detail: 'Empty conversation',
+    messages: [{ id: 'seed-a1', role: 'assistant', text: 'Ask a question to start a conversation.' }],
   },
 ];
 
 const seedModeNotice = {
   title: 'Offline mode',
-  detail: 'No server endpoint configured. Answers are fallback summaries from local UI schema.',
+  detail: 'No server endpoint configured. Messages are local and not source-grounded.',
 };
 
 export default function ChatScreen() {
@@ -82,8 +68,14 @@ export default function ChatScreen() {
         setActiveThreadId(dbThreads[0].id);
         setMode('offline');
       } else {
-        setThreads(seedThreads);
-        setActiveThreadId(seedThreads[0].id);
+        const baseThread: ChatThread = {
+          id: 'thread-empty',
+          title: 'Food context',
+          detail: chatServerConfig.url ? 'Live runtime available' : seedModeNotice.detail,
+          messages: seedThreads[0].messages,
+        };
+        setThreads([baseThread]);
+        setActiveThreadId(baseThread.id);
         setMode(chatServerConfig.url ? 'server' : 'offline');
       }
     };
@@ -106,7 +98,7 @@ export default function ChatScreen() {
     const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: `Food context on · ${seedModeNotice.title.toLowerCase()}`,
+      detail: `${seedModeNotice.title.toLowerCase()} · ${chatServerConfig.url ? 'live runtime' : 'local-only'}`,
       messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'Food context is on. I can help with meals, recipes, shopping, and source-backed actions.' }],
     };
 
@@ -127,6 +119,37 @@ export default function ChatScreen() {
     });
   };
 
+  const appendStreamingToken = (threadId: string, messageId: string, token: string) => {
+    setThreads((current) => {
+      const target = current.findIndex((thread) => thread.id === threadId);
+      if (target < 0) {
+        return current;
+      }
+      const copy = [...current];
+      const thread = copy[target];
+      const messageIndex = thread.messages.findIndex((message) => message.id === messageId);
+      if (messageIndex < 0) {
+        const nextMessages = [...thread.messages, { id: messageId, role: 'assistant', text: token, answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] } }];
+        copy[target] = { ...thread, messages: nextMessages };
+        return copy;
+      }
+      const nextMessages = thread.messages.map((message, index) =>
+        index === messageIndex
+          ? {
+              ...message,
+              text: `${message.text}${token}`,
+              answer: {
+                ...message.answer,
+                intro: message.answer?.intro ?? '',
+              },
+            }
+          : message,
+      );
+      copy[target] = { ...thread, messages: nextMessages };
+      return copy;
+    });
+  };
+
   const sendMessage = async () => {
     const text = draft.trim();
     if (!text || sending) {
@@ -136,6 +159,14 @@ export default function ChatScreen() {
     setSending(true);
     setActiveRunId(null);
     setWarnings([]);
+    const streamRunId = `stream-${Date.now()}`;
+    const streamMessageId = `asst-${streamRunId}`;
+
+    const withPlaceholder = {
+      ...activeThread,
+      messages: [...activeThread.messages, { id: streamMessageId, role: 'assistant', text: '', answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] } }],
+    };
+    appendOrReplaceThread(withPlaceholder);
 
     const result = await sendChatMessage({
       db,
@@ -144,6 +175,9 @@ export default function ChatScreen() {
       domainId: activeDomainId,
       serverUrl: chatServerConfig.url,
       serverToken: chatServerConfig.token,
+      onModelToken: (token) => {
+        appendStreamingToken(activeThread.id, streamMessageId, token);
+      },
     });
 
     appendOrReplaceThread(result.thread);
@@ -290,7 +324,7 @@ export default function ChatScreen() {
 function MessageBubble({ message }: { message: MessageRow }) {
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
-  const citations = ensureCitations(answerRows?.citations);
+  const citations = answerRows?.citations?.length ? ensureCitations(answerRows.citations) : [];
 
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>

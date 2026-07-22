@@ -23,7 +23,7 @@ export const defaultCitations: ChatCitation[] = [
 
 export function ensureCitations(items: ChatCitation[] | null | undefined): ChatCitation[] {
   if (!items || items.length === 0) {
-    return defaultCitations;
+    return [];
   }
 
   return items.filter((item) => item.label && item.detail && item.href);

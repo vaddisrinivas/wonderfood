@@ -2,9 +2,6 @@ import { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadCatalog } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
-import { createConversation, appendMessage } from '@/src/db/conversations';
-import { createActionEvent } from '@/src/db/actions';
-import { createUndoEvent } from '@/src/db/undo';
 import { foodRecords } from '@/src/data/sample';
 
 type SeedOptions = {
@@ -56,34 +53,4 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
     );
   }
 
-  const threadId = 'thread-demo';
-  const conversation = await createConversation(db, {
-    id: threadId,
-    domain: catalog.activeDomainId,
-    title: 'Tonight’s dinner',
-    detail: 'Food context demo',
-  });
-  await appendMessage(db, {
-    id: `${threadId}-welcome`,
-    conversation_id: conversation.id,
-    role: 'assistant',
-    sort_index: 0,
-    body: 'I can help with kitchen-aware meal planning. Ask about pantry timing, dinner plans, and shopping.'
-  });
-
-  const actionId = 'seed-proof-action';
-  await createActionEvent(db, {
-    id: actionId,
-    domain: catalog.activeDomainId,
-    conversation_id: conversation.id,
-    actor: 'system',
-    tool: 'seed',
-    record_ids: [threadId],
-  });
-  await createUndoEvent(db, {
-    id: 'seed-proof-undo',
-    action_id: actionId,
-    payload: { label: 'seed-action', canUndo: true },
-    expires_at: null,
-  });
 }

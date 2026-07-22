@@ -49,6 +49,7 @@ export type ChatSendInput = {
   sortIndex?: number;
   serverRunId?: string;
   retryOfMessageId?: string;
+  onModelToken?: (token: string) => void;
 };
 
 export type ChatSendResult = {

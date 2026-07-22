@@ -58,43 +58,25 @@ export type ServerChatResponse = {
   };
 };
 
-const fallbackRows = [
-  { meal: 'Tonight', use: 'Tandoori chicken', next: 'Pair with quick yogurt side.' },
-  { meal: 'Tomorrow', use: 'Green dal', next: 'Pair with remaining spinach.' },
-  { meal: 'Breakfast', use: 'Yogurt bowl', next: 'Finish before Friday.' },
-];
-
-function makeFallbackAnswer(text: string): ChatStructuredAnswer {
-  const lower = text.toLowerCase();
-  const focus = lower.includes('shop') || lower.includes('buy')
-    ? 'A focused grocery pass'
-    : lower.includes('yogurt') || lower.includes('expire')
-      ? 'Use yogurt first'
-      : 'A practical kitchen next step';
+function makeTextAnswer(inputText: string, modelText?: string): ChatStructuredAnswer {
+  const safeInput = inputText.trim() || 'your request';
+  const detail = modelText?.trim();
+  const intro = detail
+    ? `${detail.slice(0, 180)} for "${safeInput.slice(0, 120)}".`
+    : `Live model response is not available for "${safeInput.slice(0, 120)}".`;
 
   return {
-    title: focus,
-    intro: 'I used the active Food context and available sources to keep this practical.',
-    rows: lower.includes('shop') || lower.includes('buy')
-      ? [
-          { meal: 'Produce', use: 'Coriander, lemons', next: 'Supports tonight and green dal.' },
-          { meal: 'Dairy', use: 'Greek yogurt', next: 'Finish before Friday.' },
-          { meal: 'Pantry', use: 'Naan', next: 'Add only if needed.' },
-        ]
-      : fallbackRows,
-    citations: [
-      { label: 'App snapshot', detail: 'Local canonical graph', href: 'wonderfood://app/snapshot', tone: 'moss' },
-      { label: 'LifeOS Notion', detail: 'Template + relations', href: 'https://app.notion.com', tone: 'blue' },
-      { label: 'LifeOS Sheets', detail: 'Projection and formulas', href: 'https://docs.google.com/spreadsheets', tone: 'amber' },
-    ],
+    title: 'LifeOS model response',
+    intro,
+    rows: [],
+    citations: [],
   };
 }
 
 function normalizeAnswerFromModel(input: { inputText: string; modelText: string }): ChatStructuredAnswer {
   const hasStructuredHint = /\{\s*"title"\s*:/m.test(input.modelText);
   if (!hasStructuredHint) {
-    const fallback = makeFallbackAnswer(input.inputText);
-    return { ...fallback, intro: `${fallback.intro} Model reply appended. ${input.modelText}` };
+    return makeTextAnswer(input.inputText, input.modelText);
   }
 
   try {
@@ -111,10 +93,8 @@ function normalizeAnswerFromModel(input: { inputText: string; modelText: string 
     // fall back to heuristics
   }
 
-  const fallback = makeFallbackAnswer(input.inputText);
   return {
-    ...fallback,
-    intro: `${fallback.intro} ${input.modelText.slice(0, 180)}`,
+    ...makeTextAnswer(input.inputText, input.modelText),
   };
 }
 
@@ -128,6 +108,8 @@ export async function handleServerChat(input: {
   signal?: AbortSignal;
   previousResponseId?: string;
   retryOfMessageId?: string;
+  stream?: boolean;
+  onModelToken?: (token: string) => void;
 }): Promise<ServerChatResponse> {
   const domain = input.domainId || 'food';
   const conversation = getConversation(input.conversationId);
@@ -147,6 +129,8 @@ export async function handleServerChat(input: {
     runId: input.runId,
     signal: input.signal,
     previousResponseId: input.previousResponseId,
+    stream: input.stream,
+    onModelToken: input.onModelToken,
   });
 
   const needsRetry = orchestrated.ai.status !== 'ok' && !orchestrated.ai.source?.startsWith('openai-fetch-aborted');
@@ -158,7 +142,7 @@ export async function handleServerChat(input: {
     inputText,
     modelText: orchestrated.ai.text,
   })
-    : makeFallbackAnswer(inputText);
+    : makeTextAnswer(inputText);
 
   const provenance = orchestrated.provenance;
   const citations = toCitationsFromSnapshots(orchestrated.retrieval.snapshots);
@@ -171,7 +155,11 @@ export async function handleServerChat(input: {
     role: 'assistant',
     text: orchestrated.status === 'clarification'
       ? orchestrated.clarifyingQuestion || 'I need one short clarification before I can write.'
-      : `I processed: ${input.message}`,
+      : orchestrated.ai.text
+      ? orchestrated.ai.text.length > 220
+        ? `${orchestrated.ai.text.slice(0, 217)}…`
+        : orchestrated.ai.text
+      : modelAnswer.intro,
     answer: modelAnswer,
   };
 
@@ -228,5 +216,3 @@ export async function handleServerChat(input: {
     },
   };
 }
-
-export { makeFallbackAnswer };

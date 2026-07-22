@@ -2,7 +2,7 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { listConversations, getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
-import { ensureCitations, defaultCitations } from '@/src/chat/citations';
+// keep citations user-controlled to avoid fabricated defaults when model fallback is in effect
 
 export const chatServerConfig = {
   url: process.env.EXPO_PUBLIC_LIFEOS_SERVER_URL?.trim() ?? '',
@@ -125,16 +125,28 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       };
     }
 
-    const serverResult = await sendToServer({
-      conversationId,
-      text,
-      domainId,
-      userId,
-      limit: 4,
-      token: chatServerConfig.token,
-      baseUrl: chatServerConfig.url,
-      retryOf,
-    });
+    const serverEndpoint = chatServerConfig.url;
+    const serverResult = input.onModelToken
+      ? await sendToServerStream({
+          conversationId,
+          text,
+          domainId,
+          userId,
+          token: chatServerConfig.token,
+          baseUrl: serverEndpoint,
+          retryOf,
+          onToken: input.onModelToken,
+        })
+      : await sendToServer({
+          conversationId,
+          text,
+          domainId,
+          userId,
+          limit: 4,
+          token: chatServerConfig.token,
+          baseUrl: serverEndpoint,
+          retryOf,
+        });
 
     if (!serverResult) {
       return {
@@ -254,16 +266,27 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     };
   }
 
-  const serverResult = await sendToServer({
-    conversationId,
-    text,
-    domainId,
-    userId,
-    limit: 1,
-    token: input.serverToken ?? chatServerConfig.token,
-    baseUrl: input.serverUrl ?? chatServerConfig.url,
-    retryOf,
-  });
+  const serverResult = input.onModelToken
+    ? await sendToServerStream({
+      conversationId,
+      text,
+      domainId,
+      userId,
+      token: input.serverToken ?? chatServerConfig.token,
+      baseUrl: input.serverUrl ?? chatServerConfig.url,
+      retryOf,
+      onToken: input.onModelToken,
+    })
+    : await sendToServer({
+      conversationId,
+      text,
+      domainId,
+      userId,
+      limit: 1,
+      token: input.serverToken ?? chatServerConfig.token,
+      baseUrl: input.serverUrl ?? chatServerConfig.url,
+      retryOf,
+    });
 
   if (!serverResult) {
     const fallback = makeOfflineAnswer(text);
@@ -312,7 +335,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     role: latest.role,
     sort_index: nextSortIndex + 1,
     body: latest.text ?? fallback.intro,
-    answer_payload: latest.answer ? { answer: latest.answer, citations: ensureCitations(latest.answer?.citations) } : undefined,
+    answer_payload: latest.answer ? { answer: latest.answer, citations: latest.answer?.citations ?? [] } : undefined,
   });
 
   const updated = await getConversation(db, conversationId);
@@ -387,6 +410,169 @@ async function sendToServer(payload: {
   }
 }
 
+async function sendToServerStream(payload: {
+  conversationId: string;
+  text: string;
+  domainId: string;
+  userId: string;
+  baseUrl: string;
+  token?: string;
+  retryOf?: string;
+  onToken?: (token: string) => void;
+}): Promise<ServerChatResponse | null> {
+  if (!payload.baseUrl) {
+    return null;
+  }
+
+  const endpoint = payload.baseUrl.replace(/\/$/, '');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(`${endpoint}/chat/send/stream`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        ...(payload.token ? { authorization: `Bearer ${payload.token}` } : {}),
+      },
+      body: JSON.stringify({
+        conversation_id: payload.conversationId,
+        domain_id: payload.domainId,
+        message: { id: payload.userId, role: 'user', text: payload.text },
+        idempotency_key: `${payload.conversationId}:${payload.userId}`,
+        ...(payload.retryOf ? { retry_of: payload.retryOf } : {}),
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      return null;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: ServerChatResponse | null = null;
+
+    while (true) {
+      const read = await reader.read();
+      if (read.done) {
+        break;
+      }
+      buffer += decoder.decode(read.value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+
+        for (const rawFrame of frames) {
+          const lines = rawFrame
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith('data:'));
+        for (const line of lines) {
+          const dataText = line.replace(/^data:\s*/, '');
+          if (!dataText) {
+            continue;
+          }
+          try {
+            const event = JSON.parse(dataText) as {
+              type: string;
+              response?: ServerChatResponse;
+              conversation_id?: string;
+              messages?: ServerResponseMessage[];
+              thread?: ServerChatResponse['thread'];
+              run?: ServerChatResponse['run'];
+              warnings?: string[];
+              delta?: string;
+              error?: string;
+            };
+            if (event.type === 'token' && event.delta) {
+              payload.onToken?.(event.delta);
+              continue;
+            }
+            if (event.type === 'run.end' && event.response) {
+              result = event.response;
+              continue;
+            }
+            if (event.type === 'cache' && event.response) {
+              result = event.response;
+              continue;
+            }
+            if (event.type === 'cache' && !event.response) {
+              result = {
+                conversation_id: event.conversation_id || conversationId,
+                messages: event.messages || [],
+                thread: event.thread,
+                run: event.run,
+                warnings: event.warnings,
+              };
+              continue;
+            }
+            if (event.type === 'error') {
+              if (event.error) {
+                return null;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+    }
+
+    if (buffer) {
+      const lines = buffer
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('data:'));
+        for (const line of lines) {
+          const dataText = line.replace(/^data:\s*/, '');
+          if (!dataText) continue;
+          try {
+            const event = JSON.parse(dataText) as {
+              type: string;
+              response?: ServerChatResponse;
+              conversation_id?: string;
+              messages?: ServerResponseMessage[];
+              thread?: ServerChatResponse['thread'];
+              run?: ServerChatResponse['run'];
+              warnings?: string[];
+              delta?: string;
+            };
+            if (event.type === 'token' && event.delta) {
+              payload.onToken?.(event.delta);
+            }
+            if (event.type === 'run.end' && event.response) {
+              result = event.response;
+              continue;
+            }
+            if (event.type === 'cache' && event.response) {
+              result = event.response;
+              continue;
+            }
+            if (event.type === 'cache' && !event.response) {
+              result = {
+                conversation_id: event.conversation_id || conversationId,
+                messages: event.messages || [],
+                thread: event.thread,
+                run: event.run,
+                warnings: event.warnings,
+              };
+            }
+          } catch {
+            continue;
+          }
+      }
+    }
+
+    return result;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function stopServerRun(input: { runId: string; baseUrl: string; token?: string; }) {
   if (!input.baseUrl) {
     return null;
@@ -420,22 +606,13 @@ export async function stopServerRun(input: { runId: string; baseUrl: string; tok
 function makeOfflineAnswer(input: string): ChatAnswer {
   const lower = input.toLowerCase();
   const isShopping = lower.includes('shop') || lower.includes('buy') || lower.includes('grocery');
-  const isYogurt = lower.includes('yogurt') || lower.includes('expire');
+  const hasConstraintWords = lower.includes('yogurt') || lower.includes('expire');
+  const kind = isShopping ? 'request' : hasConstraintWords ? 'check' : 'request';
 
   return {
-    title: isShopping ? 'A focused grocery pass' : isYogurt ? 'Use the yogurt first' : 'A practical kitchen next step',
-    intro: 'Live model endpoint unavailable. This is a capped, typed local answer using the active Food context.',
-    rows: isShopping
-      ? [
-          { meal: 'Produce', use: 'Coriander, lemons', next: 'Supports tonight and green dal.' },
-          { meal: 'Dairy', use: 'Greek yogurt', next: 'Use now before Friday.' },
-          { meal: 'Pantry', use: 'Naan', next: 'Add if you want a full meal.' },
-        ]
-      : [
-          { meal: 'Tonight', use: 'Tandoori chicken', next: 'Pair with quick yogurt side.' },
-          { meal: 'Tomorrow', use: 'Green dal', next: 'Use remaining spinach quickly.' },
-          { meal: 'Breakfast', use: 'Yogurt bowl', next: 'Finish before Friday.' },
-        ],
-    citations: defaultCitations,
+    title: `Offline ${kind}`,
+    intro: 'Live model unavailable. Response is local and not source-grounded.',
+    rows: [],
+    citations: [],
   };
 }
