@@ -5455,76 +5455,125 @@ private fun LifeOsMetricGrid(domain: LifeOsDomain, backendHome: BackendHomeUiSta
     val sheetsState = if (backendHome.templateSheetsUrl.isNotBlank()) "Linked" else "Ready"
     val healthState = if (healthStatus.isBlank()) "Ready" else "Live"
     val aiDetail = aiStatus.ifBlank { "Local fallback" }.take(28)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            LifeOsMetricCard(
-                icon = Icons.Rounded.RestaurantMenu,
-                label = "Food brain",
-                value = "Live",
-                detail = "${domain.schemaSurfaces.size} surfaces · ${domain.skills.size} skills",
-                modifier = Modifier.weight(1f),
-            )
-            LifeOsMetricCard(
-                icon = Icons.Rounded.Description,
-                label = "Notion",
-                value = notionState,
-                detail = "Dashboard + rollups",
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            LifeOsMetricCard(
-                icon = Icons.Rounded.TableChart,
-                label = "Sheets",
-                value = sheetsState,
-                detail = backendHome.chatSourceLabel(),
-                modifier = Modifier.weight(1f),
-            )
-            LifeOsMetricCard(
-                icon = Icons.Rounded.Shield,
-                label = "Review gate",
-                value = "On",
-                detail = "$healthState · $aiDetail",
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun LifeOsMetricCard(icon: ImageVector, label: String, value: String, detail: String, modifier: Modifier = Modifier) {
-    val active = value == "Live" || value == "Linked" || value == "On"
-    val accent = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val signals = listOf(
+        LifeOsDashboardSignal(
+            icon = Icons.Rounded.RestaurantMenu,
+            label = "Food brain",
+            value = "Live",
+            detail = "${domain.schemaSurfaces.size} surfaces",
+            active = true,
+        ),
+        LifeOsDashboardSignal(
+            icon = Icons.Rounded.Description,
+            label = "Notion",
+            value = notionState,
+            detail = "rollups",
+            active = notionState == "Linked",
+        ),
+        LifeOsDashboardSignal(
+            icon = Icons.Rounded.TableChart,
+            label = "Sheets",
+            value = sheetsState,
+            detail = backendHome.chatSourceLabel(),
+            active = sheetsState == "Linked",
+        ),
+        LifeOsDashboardSignal(
+            icon = Icons.Rounded.Shield,
+            label = "Review",
+            value = "On",
+            detail = "$healthState · $aiDetail",
+            active = true,
+        ),
+    )
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
         color = Color.Transparent,
-        border = BorderStroke(1.dp, if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.outlineVariant),
-        tonalElevation = if (active) 3.dp else 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+        tonalElevation = 3.dp,
     ) {
         Box(
             modifier = Modifier.background(
                 Brush.linearGradient(
                     listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (active) 0.36f else 0.12f),
                         MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f),
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.16f),
                     ),
-                )
+                ),
             ),
         ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     LifeOsVectorBadge(
-                        icon = icon,
-                        modifier = Modifier.size(32.dp),
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        icon = Icons.Rounded.RestaurantMenu,
+                        modifier = Modifier.size(38.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
                     )
-                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("Food brain live", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${domain.skills.size} skills · ${domain.schemaSurfaces.size} surfaces · ${backendHome.chatSourceLabel()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                    ) {
+                        Text(
+                            "gate on",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
-                Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = accent)
-                Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                HorizontalDivider(color = accent.copy(alpha = if (active) 0.40f else 0.16f), thickness = 2.dp)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 2.dp)) {
+                    items(signals) { signal ->
+                        LifeOsDashboardSignalTile(signal)
+                    }
+                }
             }
+        }
+    }
+}
+
+private data class LifeOsDashboardSignal(
+    val icon: ImageVector,
+    val label: String,
+    val value: String,
+    val detail: String,
+    val active: Boolean,
+)
+
+@Composable
+private fun LifeOsDashboardSignalTile(signal: LifeOsDashboardSignal) {
+    val accent = if (signal.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        modifier = Modifier
+            .width(128.dp)
+            .heightIn(min = 104.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (signal.active) 0.24f else 0.12f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                LifeOsVectorBadge(
+                    icon = signal.icon,
+                    modifier = Modifier.size(30.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (signal.active) 0.48f else 0.18f),
+                )
+                Surface(modifier = Modifier.size(7.dp), shape = CircleShape, color = accent) {}
+            }
+            Text(signal.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(signal.value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(signal.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
