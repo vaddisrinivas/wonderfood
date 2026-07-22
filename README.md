@@ -36,6 +36,8 @@ npm run start
 
 Copy `.env.example` to `.env.local`, set the Mac LAN address, and start the server with the private environment loaded. Never commit tokens.
 
+The current personal hosted runtime uses `https://lifeos-api.thetechcruise.com` through a named Cloudflare Tunnel. It is backed by the Mac server process, requires `LIFEOS_SERVER_TOKEN` for chat/write/MCP calls, and is not a replacement for a managed always-on host. Build the phone with the matching `EXPO_PUBLIC_LIFEOS_SERVER_URL` and `EXPO_PUBLIC_LIFEOS_SERVER_TOKEN` values.
+
 Launch a target:
 
 ```bash
