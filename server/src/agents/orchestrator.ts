@@ -6,6 +6,7 @@ import { executeCommand } from './executor';
 import { verifyResult } from './verifier';
 import { makeConversationProvenance, toCitationsFromSnapshots } from '../provenance';
 import { callOpenAI } from '../providers/openai';
+import { markActionCompleted } from '../actions';
 
 type ExecutorResult = Awaited<ReturnType<typeof executeCommand>>;
 type OrchestratorAction = {
@@ -109,11 +110,13 @@ Context sources: ${JSON.stringify(toCitationsFromSnapshots(retrieval.snapshots))
     answerText: ai.text,
   });
 
+  const completedActionReceipt = actionRun ? markActionCompleted(actionRun.receipt.id) : null;
+
   const action = actionRun
     ? {
-        state: actionRun.state,
+        state: completedActionReceipt?.status ?? actionRun.state,
         step: actionRun.step,
-        receipt: actionRun.receipt,
+        receipt: completedActionReceipt ?? actionRun.receipt,
         verification,
       }
     : undefined;
