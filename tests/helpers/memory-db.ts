@@ -8,6 +8,7 @@ export class MemoryDb {
   providerLinks = new Map<string, Row>();
   sourceSnapshots = new Map<string, Row>();
   sourceSnapshotRelations: Row[] = [];
+  outbox = new Map<string, Row>();
 
   async execAsync(_sql: string) {}
 
@@ -81,6 +82,11 @@ export class MemoryDb {
       }
       return;
     }
+    if (compact.startsWith('INSERT INTO outbox_events')) {
+      const [id, action_key, domain, payload_json, status, created_at, updated_at] = params;
+      this.outbox.set(id, { id, action_key, domain, payload_json, status, attempts: 0, last_error: null, created_at, updated_at });
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 
@@ -103,6 +109,12 @@ export class MemoryDb {
       const rows = Array.from(this.sourceSnapshots.values())
         .filter((row) => row.provider === params[0] && row.external_id === params[1])
         .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)));
+      return (rows[0] ?? null) as T | null;
+    }
+    if (compact === 'SELECT * FROM outbox_events WHERE action_key = ? ORDER BY created_at DESC LIMIT 1') {
+      const rows = Array.from(this.outbox.values())
+        .filter((row) => row.action_key === params[0])
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
       return (rows[0] ?? null) as T | null;
     }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
@@ -130,6 +142,7 @@ export class MemoryDb {
       providerLinks: new Map(this.providerLinks),
       sourceSnapshots: new Map(this.sourceSnapshots),
       sourceSnapshotRelations: this.sourceSnapshotRelations.map((row) => ({ ...row })),
+      outbox: new Map(this.outbox),
     };
   }
 
@@ -141,5 +154,6 @@ export class MemoryDb {
     this.providerLinks = new Map(snapshot.providerLinks);
     this.sourceSnapshots = new Map(snapshot.sourceSnapshots);
     this.sourceSnapshotRelations = snapshot.sourceSnapshotRelations.map((row) => ({ ...row }));
+    this.outbox = new Map(snapshot.outbox);
   }
 }

@@ -45,6 +45,13 @@ export async function listOutboxEvents(db: SQLiteDatabase, status?: OutboxStatus
   return db.getAllAsync<OutboxEvent>('SELECT * FROM outbox_events ORDER BY updated_at ASC');
 }
 
+export async function getOutboxEventByActionKey(db: SQLiteDatabase, actionKey: string): Promise<OutboxEvent | null> {
+  return db.getFirstAsync<OutboxEvent>(
+    'SELECT * FROM outbox_events WHERE action_key = ? ORDER BY created_at DESC LIMIT 1',
+    [actionKey],
+  );
+}
+
 export async function markOutboxEvent(
   db: SQLiteDatabase,
   id: string,
