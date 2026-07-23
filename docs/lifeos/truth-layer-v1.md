@@ -2,6 +2,7 @@
 
 The app may look like Notion, Sheets, chat, or a native dashboard, but records mutate through one local boundary:
 
+0. `runMigrations()` upgrades fresh or legacy databases to the current schema and fills canonical record envelope defaults.
 1. A UI, sync adapter, workflow, or chat action creates an `Operation`.
 2. `applyOperation()` validates the active domain manifest and current revision.
 3. The operation writes the canonical record, relation rows, provenance, and ledger row in one transaction.
@@ -29,5 +30,6 @@ Proof gates:
 - `npm run check:provider-clear-restore`
 - `npm run check:ai-runtime`
 - `npm run check:writer-boundary`
+- `npm run check:migrations`
 
-Those gates prove provider clear/restore/disconnect, operation revision, stale-write rejection, idempotency, local undo, AI capability rejection, dry-run without writes, and user/sync/AI writer attribution.
+Those gates prove migration defaults, provider clear/restore/disconnect, operation revision, stale-write rejection, idempotency, local undo, AI capability rejection, dry-run without writes, and user/sync/AI writer attribution.
