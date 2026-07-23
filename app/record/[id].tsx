@@ -381,6 +381,11 @@ export default function RecordScreen() {
   const recordConfig = settings.runtime.surfaceConfig.record;
   const nutritionLimit = countSetting(recordConfig.nutritionLimit, 6);
   const primaryNutrition = foodDetail?.nutrition.slice(0, Math.min(4, nutritionLimit)) ?? [];
+  const openIngredientCount = ingredientsByState.needed.length + ingredientsByState.shopping.length;
+  const availabilitySummary = foodDetail
+    ? `${ingredientsByState.available.length} available · ${openIngredientCount} to resolve`
+    : '';
+  const primaryNutritionSummary = primaryNutrition.slice(0, 2);
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -504,6 +509,24 @@ export default function RecordScreen() {
         <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={[styles.title, { color: theme.colors.ink }]} multiline />
         <Text style={[styles.meta, { color: theme.colors.muted }]}>{record.collection} · {meta}</Text>
         <Text style={[styles.heroBody, { color: theme.colors.ink }]}>{body || 'No note yet.'}</Text>
+        {foodDetail ? (
+          <View style={styles.heroEvidence}>
+            {primaryNutritionSummary.map(([label, value]) => (
+              <View key={`hero-${label}`} style={[styles.heroEvidenceCell, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+                <Text style={[styles.heroEvidenceValue, { color: theme.colors.ink }]}>{value}</Text>
+                <Text style={[styles.heroEvidenceLabel, { color: theme.colors.muted }]}>{label}</Text>
+              </View>
+            ))}
+            <View style={[styles.heroEvidenceCell, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+              <Text style={[styles.heroEvidenceValue, { color: theme.colors.ink }]}>{availabilitySummary}</Text>
+              <Text style={[styles.heroEvidenceLabel, { color: theme.colors.muted }]}>Availability</Text>
+            </View>
+            <View style={[styles.heroEvidenceCell, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+              <Text style={[styles.heroEvidenceValue, { color: theme.colors.ink }]}>{foodDetail.instructions.length} steps · {foodDetail.logs.length} logs</Text>
+              <Text style={[styles.heroEvidenceLabel, { color: theme.colors.muted }]}>History</Text>
+            </View>
+          </View>
+        ) : null}
         <View style={styles.quickActions}>
           <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
           <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
@@ -763,6 +786,10 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1, marginTop: 22, padding: 0 },
   meta: { color: colors.muted, fontSize: 13, marginTop: 8 },
   heroBody: { color: colors.ink, fontSize: 16, lineHeight: 24, marginTop: 14, maxWidth: 820 },
+  heroEvidence: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
+  heroEvidenceCell: { flexGrow: 1, flexBasis: 128, minHeight: 72, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 12, justifyContent: 'center' },
+  heroEvidenceValue: { color: colors.ink, fontSize: 15, lineHeight: 19, fontWeight: '900' },
+  heroEvidenceLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 6 },
   editor: { minHeight: 150, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, color: colors.ink, fontSize: 15, lineHeight: 23 },
   actions: { flexDirection: 'row', gap: 9, marginTop: 12 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
