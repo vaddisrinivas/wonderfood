@@ -303,6 +303,24 @@ export default function ConfigStudioScreen() {
             subtitle="Choose domains, tune skills, enable workflows and agents, adjust sync, and layer validated schema overrides. Your overrides survive app upgrades."
           />
 
+          <View style={[styles.summaryGrid, compact && styles.stack]}>
+            <Card tone="moss" style={styles.summaryCard}>
+              <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>{activeDomain.label}</Text>
+              <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Active package</Text>
+              <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Swap the domain without rebuilding the app shell.</Text>
+            </Card>
+            <Card tone="blue" style={styles.summaryCard}>
+              <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>6</Text>
+              <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Configurable screens</Text>
+              <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Home, Food, Chat, Search, Capture and Record are runtime-tunable.</Text>
+            </Card>
+            <Card tone="plum" style={styles.summaryCard}>
+              <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>{agentRegistry.agents.length}</Text>
+              <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Agents ready</Text>
+              <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Enable only the helpers you want in this LifeOS.</Text>
+            </Card>
+          </View>
+
           <SectionTitle title="Domains" />
           <View style={[styles.grid, compact && styles.stack]}>
             {catalogDomains.map((domain) => {
@@ -699,6 +717,11 @@ const styles = StyleSheet.create({
   contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.blue, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  summaryGrid: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  summaryCard: { flex: 1, minWidth: 220, minHeight: 132 },
+  summaryNumber: { color: colors.ink, fontSize: 24, lineHeight: 29, fontWeight: '900', letterSpacing: -0.7 },
+  summaryTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', marginTop: 8 },
+  summaryBody: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
   grid: { flexDirection: 'row', gap: 12 },
   contractGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   contractIntro: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: -4, marginBottom: 12 },
@@ -708,13 +731,13 @@ const styles = StyleSheet.create({
   contractChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   stack: { flexDirection: 'column' },
   column: { flex: 1, minWidth: 220 },
-  domainCard: { minHeight: 255, padding: 20 },
+  domainCard: { minHeight: 204, padding: 20 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   domainGlyph: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   domainGlyphText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '800', marginTop: 18 },
+  cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '800', marginTop: 14 },
   cardBody: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
-  select: { marginTop: 'auto', borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, alignItems: 'center', padding: 10 },
+  select: { marginTop: 18, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, alignItems: 'center', padding: 10 },
   selectActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   selectText: { color: colors.ink, fontSize: 11, fontWeight: '900' },
   selectTextActive: { color: '#FFF' },
