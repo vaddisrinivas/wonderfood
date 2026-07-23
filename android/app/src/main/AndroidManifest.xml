@@ -12,6 +12,7 @@
   <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
   <queries>
     <package android:name="com.google.android.apps.healthdata" />
+    <package android:name="com.google.android.healthconnect.controller" />
     <intent>
       <action android:name="android.intent.action.VIEW"/>
       <category android:name="android.intent.category.BROWSABLE"/>
