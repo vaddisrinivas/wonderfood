@@ -130,6 +130,10 @@ const routes = [
     path: '/config',
     must: [
       'Active package contract',
+      'Screen Builder',
+      'NEAR-NOTION APP MODEL',
+      'screens editable',
+      'Open screen',
       'Collections',
       'MCP contract',
       'Screen composition',

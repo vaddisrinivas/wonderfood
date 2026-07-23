@@ -41,6 +41,51 @@ const schemaFiles = [
 
 const catalogDomains = catalog.domains as unknown as DomainCatalogEntry[];
 
+const screenBlueprints = [
+  {
+    id: 'home',
+    title: 'Home',
+    route: '/',
+    intent: 'Daily command center: now card, review queue, life spaces, recent graph and source trust.',
+    editable: ['section order', 'now card', 'review cards', 'recent cards', 'life spaces', 'source trust', 'control card'],
+  },
+  {
+    id: 'food',
+    title: 'Workspace',
+    route: '/food',
+    intent: 'Near-Notion domain surface: hero, view tabs, manifest dashboard blocks, widgets, board and attention queue.',
+    editable: ['section order', 'hero', 'tabs', 'dashboard blocks', 'widgets', 'board columns', 'attention cards'],
+  },
+  {
+    id: 'chat',
+    title: 'Chat',
+    route: '/chat',
+    intent: 'GPT-like turn surface: thread rail, source chips, prompt rail, context card and cited answers.',
+    editable: ['thread rail', 'source chips', 'prompt presets', 'context note', 'source evidence'],
+  },
+  {
+    id: 'record',
+    title: 'Record',
+    route: '/record/meal-green-dal',
+    intent: 'Notion-page style detail view: hero, nutrition, ingredients, instructions, history, properties, relations and provenance.',
+    editable: ['section order', 'nutrition cards', 'ingredients', 'instructions', 'history', 'properties', 'relations', 'provenance'],
+  },
+  {
+    id: 'search',
+    title: 'Search',
+    route: '/search',
+    intent: 'Universal command/search surface for records, actions, capture and AI questions.',
+    editable: ['section order', 'hero', 'quick actions', 'results', 'result cards', 'empty hint'],
+  },
+  {
+    id: 'capture',
+    title: 'Capture',
+    route: '/capture',
+    intent: 'Inbox-first capture for notes, food, receipts, voice, links and photos before classification.',
+    editable: ['section order', 'hero', 'type picker', 'editor', 'attachments', 'route card', 'destination hint'],
+  },
+] as const;
+
 type LifeOSProfile = {
   lifeos: string;
   profile: string;
@@ -320,6 +365,47 @@ export default function ConfigStudioScreen() {
               <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Enable only the helpers you want in this LifeOS.</Text>
             </Card>
           </View>
+
+          <SectionTitle title="Screen Builder" />
+          <Card tone="blue" style={styles.builderCard}>
+            <View style={[styles.builderHero, compact && styles.builderHeroCompact]}>
+              <View style={styles.builderCopy}>
+                <Pill tone="blue">NEAR-NOTION APP MODEL</Pill>
+                <Text style={[styles.builderTitle, { color: theme.colors.ink }]}>{activeDomain.label} screens are profile-driven.</Text>
+                <Text style={[styles.builderBody, { color: theme.colors.muted }]}>
+                  Each screen is a YAML/JSON-controlled page: choose sections, counts, cards, prompts, widgets and evidence behavior from the app. All screens editable; domain manifests bring schema while this builder decides presentation.
+                </Text>
+              </View>
+              <View style={[styles.builderStats, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+                <Text style={[styles.builderStatNumber, { color: theme.colors.ink }]}>{screenBlueprints.length}</Text>
+                <Text style={[styles.builderStatLabel, { color: theme.colors.muted }]}>screens editable</Text>
+                <Text style={[styles.builderStatNumber, { color: theme.colors.ink }]}>{activeManifest?.dashboard_blocks?.length ?? 0}</Text>
+                <Text style={[styles.builderStatLabel, { color: theme.colors.muted }]}>manifest blocks</Text>
+              </View>
+            </View>
+            <View style={styles.screenGrid}>
+              {screenBlueprints.map((screen, index) => (
+                <View key={screen.id} style={[styles.screenTile, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+                  <View style={styles.screenTop}>
+                    <View style={[styles.screenBadge, { backgroundColor: index === 0 ? theme.colors.ink : theme.colors.mossSoft }]}>
+                      <Text style={[styles.screenBadgeText, { color: index === 0 ? theme.colors.paper : theme.colors.moss }]}>{String(index + 1).padStart(2, '0')}</Text>
+                    </View>
+                    <Pill tone={screen.id === 'food' ? 'moss' : screen.id === 'chat' ? 'plum' : 'blue'}>{screen.editable.length} knobs</Pill>
+                  </View>
+                  <Text style={[styles.screenTitle, { color: theme.colors.ink }]}>{screen.title}</Text>
+                  <Text style={[styles.screenIntent, { color: theme.colors.muted }]}>{screen.intent}</Text>
+                  <View style={styles.screenChips}>
+                    {screen.editable.slice(0, 5).map((item) => <Pill key={item} tone="neutral">{item}</Pill>)}
+                    {screen.editable.length > 5 ? <Pill tone="blue">+{screen.editable.length - 5}</Pill> : null}
+                  </View>
+                  <Pressable accessibilityRole="button" onPress={() => router.push(screen.route)} style={({ pressed }) => [styles.screenOpen, { borderTopColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.screenOpenText, { color: theme.colors.ink }]}>Open screen</Text>
+                    <Text style={[styles.screenOpenArrow, { color: theme.colors.muted }]}>→</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </Card>
 
           <SectionTitle title="Domains" />
           <View style={[styles.grid, compact && styles.stack]}>
@@ -727,6 +813,26 @@ const styles = StyleSheet.create({
   summaryNumber: { color: colors.ink, fontSize: 24, lineHeight: 29, fontWeight: '900', letterSpacing: -0.7 },
   summaryTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', marginTop: 8 },
   summaryBody: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
+  builderCard: { padding: 20 },
+  builderHero: { flexDirection: 'row', gap: 18, alignItems: 'stretch' },
+  builderHeroCompact: { flexDirection: 'column' },
+  builderCopy: { flex: 1, minWidth: 260 },
+  builderTitle: { color: colors.ink, fontSize: 25, lineHeight: 30, fontWeight: '900', letterSpacing: -0.8, marginTop: 14 },
+  builderBody: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 8, maxWidth: 760 },
+  builderStats: { width: 170, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, justifyContent: 'center' },
+  builderStatNumber: { color: colors.ink, fontSize: 32, lineHeight: 37, fontWeight: '900', letterSpacing: -1 },
+  builderStatLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
+  screenGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 },
+  screenTile: { flexGrow: 1, flexBasis: 280, minHeight: 266, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16 },
+  screenTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  screenBadge: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.mossSoft, alignItems: 'center', justifyContent: 'center' },
+  screenBadgeText: { color: colors.moss, fontSize: 12, fontWeight: '900' },
+  screenTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 16 },
+  screenIntent: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
+  screenChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
+  screenOpen: { marginTop: 'auto', paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  screenOpenText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  screenOpenArrow: { color: colors.muted, fontSize: 17, fontWeight: '900' },
   grid: { flexDirection: 'row', gap: 12 },
   contractGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   contractIntro: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: -4, marginBottom: 12 },
