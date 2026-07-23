@@ -46,7 +46,7 @@ async function notionRequest(token: string, method: string, path: string, payloa
   });
   const body = await readJson(response);
   if (!response.ok) {
-    throw new Error(`Notion ${method} ${path} failed ${response.status}`);
+    throw new Error(`Notion ${method} ${path} failed ${response.status}: ${JSON.stringify(body).slice(0, 500)}`);
   }
   return body;
 }
@@ -62,16 +62,51 @@ function pageTitle(page: Json) {
 }
 
 async function findNotionParentPage(token: string) {
-  if (process.env.NOTION_TEST_PAGE_ID?.trim()) return process.env.NOTION_TEST_PAGE_ID.trim();
+  const shallowParent = async (page: Json | null): Promise<string> => {
+    let current = page;
+    let lastPageId = String(current?.id || '');
+    for (let index = 0; current && index < 8; index += 1) {
+      const parent = current.parent && typeof current.parent === 'object' ? current.parent as Json : null;
+      if (parent?.type === 'workspace') return String(current.id || lastPageId);
+      if (parent?.type !== 'page_id' || !parent.page_id) return lastPageId;
+      lastPageId = String(parent.page_id);
+      current = await notionRequest(token, 'GET', `/pages/${encodeURIComponent(lastPageId)}`).catch(() => null);
+    }
+    return lastPageId;
+  };
 
-  const search = await notionRequest(token, 'POST', '/search', {
-    filter: { property: 'object', value: 'page' },
-    page_size: 25,
+  if (process.env.NOTION_TEST_PAGE_ID?.trim()) {
+    const candidate = process.env.NOTION_TEST_PAGE_ID.trim();
+    const page = await notionRequest(token, 'GET', `/pages/${candidate}`).catch(() => null);
+    const shallow = await shallowParent(page);
+    if (shallow) return shallow;
+  }
+
+  const searchPages = async (query?: string, pageSize = 25) => {
+    const search = await notionRequest(token, 'POST', '/search', {
+      filter: { property: 'object', value: 'page' },
+      page_size: pageSize,
+      ...(query ? { query } : {}),
+    });
+    return Array.isArray(search.results) ? search.results as Json[] : [];
+  };
+  const preferredPages = await searchPages('OpenClaw LifeOS', 5);
+  const preferred = preferredPages.find((page) => !page.archived && pageTitle(page) === 'OpenClaw LifeOS');
+  if (preferred?.id) return shallowParent(preferred);
+  const preferredAncestor = preferredPages.find((page) => !page.archived);
+  const shallowPreferred = await shallowParent(preferredAncestor ?? null);
+  if (shallowPreferred) return shallowPreferred;
+
+  const pages = await searchPages(undefined, 25);
+  const workspacePages = pages.filter((page) => {
+    const parent = page.parent && typeof page.parent === 'object' ? page.parent as Json : null;
+    return !page.archived
+      && parent?.type === 'workspace'
+      && !pageTitle(page).startsWith('WonderFood C14 Scenario Proof')
+      && !pageTitle(page).startsWith('WonderFood V4 Linked Workspace');
   });
-  const pages = Array.isArray(search.results) ? search.results as Json[] : [];
-  const preferred = pages.find((page) => !page.archived && pageTitle(page) === 'OpenClaw LifeOS');
-  const fallback = pages.find((page) => !page.archived);
-  return String((preferred || fallback || {}).id || '');
+  const fallback = workspacePages[0] || pages.find((page) => !page.archived);
+  return shallowParent(fallback ?? null);
 }
 
 function firstDataSourceId(database: Json) {
@@ -82,21 +117,10 @@ function firstDataSourceId(database: Json) {
 async function provisionNotionDataSource(token: string) {
   const parentPageId = await findNotionParentPage(token);
   ensure(parentPageId, 'No accessible Notion parent page found for direct writeback proof.');
-  const pageTitleText = `WonderFood Direct Writeback Proof ${stamp}`;
-  const page = await notionRequest(token, 'POST', '/pages', {
-    parent: { page_id: parentPageId },
-    properties: {
-      title: {
-        title: [{ type: 'text', text: { content: pageTitleText } }],
-      },
-    },
-  });
-  const pageId = String(page.id || '');
-  ensure(pageId, 'Notion proof page id missing.');
 
   const database = await notionRequest(token, 'POST', '/databases', {
-    parent: { type: 'page_id', page_id: pageId },
-    title: [{ type: 'text', text: { content: 'App Writeback Records' } }],
+    parent: { type: 'page_id', page_id: parentPageId },
+    title: [{ type: 'text', text: { content: `WonderFood Direct Writeback Records ${stamp}` } }],
     initial_data_source: {
       properties: {
         Name: { title: {} },
@@ -106,7 +130,7 @@ async function provisionNotionDataSource(token: string) {
   const databaseId = String(database.id || '');
   const dataSourceId = firstDataSourceId(database) || firstDataSourceId(await notionRequest(token, 'GET', `/databases/${databaseId}`));
   ensure(dataSourceId, 'Notion data source id missing after provision.');
-  return { proofPageId: pageId, dataSourceId };
+  return { proofPageId: '', dataSourceId, databaseId };
 }
 
 async function runNotionProof() {
@@ -114,7 +138,7 @@ async function runNotionProof() {
   if (!token) return { provider: 'notion', status: 'skipped', reason: 'missing_token' };
 
   const dataSource = process.env.NOTION_DATA_SOURCE_ID?.trim()
-    ? { proofPageId: '', dataSourceId: process.env.NOTION_DATA_SOURCE_ID.trim() }
+    ? { proofPageId: '', dataSourceId: process.env.NOTION_DATA_SOURCE_ID.trim(), databaseId: '' }
     : await provisionNotionDataSource(token);
   const db = new MemoryDb() as never;
   let createdPageId = '';
@@ -178,8 +202,15 @@ async function runNotionProof() {
   const created = await notionRequest(token, 'GET', `/pages/${createdPageId}`);
   const readBackTitle = pageTitle(created);
   await notionRequest(token, 'PATCH', `/pages/${createdPageId}`, { in_trash: true });
-  if (dataSource.proofPageId) {
-    await notionRequest(token, 'PATCH', `/pages/${dataSource.proofPageId}`, { in_trash: true });
+  let cleanupDatabaseArchived = false;
+  if (dataSource.databaseId) {
+    await notionRequest(token, 'PATCH', `/blocks/${encodeURIComponent(dataSource.databaseId)}`, { archived: true })
+      .then(() => {
+        cleanupDatabaseArchived = true;
+      })
+      .catch(() => {
+        cleanupDatabaseArchived = false;
+      });
   }
 
   return {
@@ -188,8 +219,11 @@ async function runNotionProof() {
     delivery_status: delivery.status,
     page_id: mask(createdPageId),
     data_source_id: mask(dataSource.dataSourceId),
+    database_id: mask(dataSource.databaseId),
     read_back_title: readBackTitle,
     cleanup_archived_page: true,
+    cleanup_database_archived: cleanupDatabaseArchived,
+    cleanup_database_left_for_manual_review: Boolean(dataSource.databaseId) && !cleanupDatabaseArchived,
   };
 }
 

@@ -10,6 +10,20 @@ TOKEN_FILE="${GOOGLE_SHEETS_TOKEN_FILE:-${ROOT_DIR}/build/evidence/live-workspac
 OUT_DIR="${GOOGLE_SHEETS_SCENARIO_OUT:-app/build/evidence/live-workspace}"
 mkdir -p "$(dirname "$TOKEN_FILE")" "$OUT_DIR"
 
+if [[ -z "${SSL_CERT_FILE:-}" ]]; then
+  cert_file="$(python3 - <<'PY' 2>/dev/null || true
+try:
+    import certifi
+    print(certifi.where())
+except Exception:
+    pass
+PY
+)"
+  if [[ -n "$cert_file" && -f "$cert_file" ]]; then
+    export SSL_CERT_FILE="$cert_file"
+  fi
+fi
+
 AGENT_ENV_WRAPPER="$HOME/.codex/skills/agent-env/scripts/run-with-agent-env.sh"
 if [[ "${WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV:-0}" != "1" &&
       -x "$AGENT_ENV_WRAPPER" &&

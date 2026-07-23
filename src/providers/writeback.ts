@@ -157,7 +157,7 @@ function buildNotionRequest(payload: ProviderWritePayload, settings: LifeOSSetti
           'notion-version': '2026-03-11',
         },
         body: JSON.stringify({
-          parent: { type: 'data_source_id', data_source_id: dataSourceId },
+          parent: { data_source_id: dataSourceId },
           properties: notionProperties(payload.record),
         }),
       },
