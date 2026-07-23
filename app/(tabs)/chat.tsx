@@ -15,7 +15,7 @@ import { Link, useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
-import { listChatThreads, sendChatMessage } from '@/src/chat/client';
+import { listChatThreads, makeWelcomeAnswer, sendChatMessage } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -109,11 +109,17 @@ export default function ChatScreen() {
         setActiveThreadId(dbThreads[0].id);
         setMode(nextMode);
       } else {
+        const welcomeAnswer = makeWelcomeAnswer(localRecords, domainLabel);
         const baseThread: ChatThread = {
           id: 'thread-empty',
           title: `${domainLabel} context`,
           detail: nextMode === 'direct' ? 'Direct model ready' : seedModeNotice.detail,
-          messages: seedThreads[0].messages,
+          messages: [{
+            id: 'seed-a1',
+            role: 'assistant',
+            text: welcomeAnswer.intro,
+            answer: welcomeAnswer,
+          }],
         };
         setThreads([baseThread]);
         setActiveThreadId(baseThread.id);
