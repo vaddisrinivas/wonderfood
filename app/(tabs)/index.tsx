@@ -65,38 +65,44 @@ export default function TodayScreen() {
             </View>
           </View>
 
-          <Card tone="moss" style={styles.nowCard}>
-            <View style={styles.nowHeader}>
-              <Pill tone="moss">{catalog.activeManifest.label.toUpperCase()} ACTIVE</Pill>
-              <Text style={styles.nowDate}>{todayLabel}</Text>
-            </View>
-            <Text style={[styles.nowTitle, compact && styles.nowTitleCompact]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
-            <Text style={styles.nowBody}>
-              {firstRecord?.body || firstRecord?.meta || 'Start with a meal, receipt, pantry item or question. Home should show daily work, not internal machinery.'}
-            </Text>
-            <View style={styles.nowActions}>
-              <ActionButton label={firstRecord ? 'Open now card' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
-              <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
-            </View>
-          </Card>
-
-          <SectionTitle title="Review queue" action="Ask about today" href="/chat" />
-          <Card style={styles.reviewCard}>
-            {reviewRows.length ? reviewRows.map((row, index) => (
-              <Row
-                key={row.id}
-                icon={index === 0 ? '!' : '↻'}
-                title={index === 0 ? `Review ${row.title}` : row.title}
-                detail={row.meta || `${row.collection} · ${row.status}`}
-                href={{ pathname: '/record/[id]', params: { id: row.id } }}
-              />
-            )) : (
-              <View style={styles.emptyReview}>
-                <Text style={styles.emptyReviewTitle}>No review items yet</Text>
-                <Text style={styles.emptyReviewBody}>Receipts, source conflicts and AI proposals will land here before anything writes to your graph.</Text>
+          {homeConfig.showNowCard ? (
+            <Card tone="moss" style={styles.nowCard}>
+              <View style={styles.nowHeader}>
+                <Pill tone="moss">{catalog.activeManifest.label.toUpperCase()} ACTIVE</Pill>
+                <Text style={styles.nowDate}>{todayLabel}</Text>
               </View>
-            )}
-          </Card>
+              <Text style={[styles.nowTitle, compact && styles.nowTitleCompact]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
+              <Text style={styles.nowBody}>
+                {firstRecord?.body || firstRecord?.meta || 'Start with a meal, receipt, pantry item or question. Home should show daily work, not internal machinery.'}
+              </Text>
+              <View style={styles.nowActions}>
+                <ActionButton label={firstRecord ? 'Open now card' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
+                <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
+              </View>
+            </Card>
+          ) : null}
+
+          {homeConfig.showReviewQueue ? (
+            <>
+              <SectionTitle title="Review queue" action="Ask about today" href="/chat" />
+              <Card style={styles.reviewCard}>
+                {reviewRows.length ? reviewRows.map((row, index) => (
+                  <Row
+                    key={row.id}
+                    icon={index === 0 ? '!' : '↻'}
+                    title={index === 0 ? `Review ${row.title}` : row.title}
+                    detail={row.meta || `${row.collection} · ${row.status}`}
+                    href={{ pathname: '/record/[id]', params: { id: row.id } }}
+                  />
+                )) : (
+                  <View style={styles.emptyReview}>
+                    <Text style={styles.emptyReviewTitle}>No review items yet</Text>
+                    <Text style={styles.emptyReviewBody}>Receipts, source conflicts and AI proposals will land here before anything writes to your graph.</Text>
+                  </View>
+                )}
+              </Card>
+            </>
+          ) : null}
 
           {homeConfig.showLifeSpaces ? (
             <>
@@ -124,20 +130,24 @@ export default function TodayScreen() {
             </>
           ) : null}
 
-          <SectionTitle title="Recent graph" action="Open Sources" href="/sources" />
-          <Card style={styles.timelineCard}>
-            {recentRows.length ? recentRows.map((row) => (
-              <Row
-                key={row.id}
-                icon="◉"
-                title={row.title}
-                detail={`${row.collection} · ${row.source}`}
-                href={{ pathname: '/record/[id]', params: { id: row.id } }}
-              />
-            )) : (
-              <Row icon="▣" title="Local graph ready" detail="Connect Notion or Sheets, or capture a record to start the timeline." href="/sources" />
-            )}
-          </Card>
+          {homeConfig.showRecentGraph ? (
+            <>
+              <SectionTitle title="Recent graph" action="Open Sources" href="/sources" />
+              <Card style={styles.timelineCard}>
+                {recentRows.length ? recentRows.map((row) => (
+                  <Row
+                    key={row.id}
+                    icon="◉"
+                    title={row.title}
+                    detail={`${row.collection} · ${row.source}`}
+                    href={{ pathname: '/record/[id]', params: { id: row.id } }}
+                  />
+                )) : (
+                  <Row icon="▣" title="Local graph ready" detail="Connect Notion or Sheets, or capture a record to start the timeline." href="/sources" />
+                )}
+              </Card>
+            </>
+          ) : null}
 
           {homeConfig.showSourceTrust ? (
             <>

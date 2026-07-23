@@ -113,7 +113,8 @@ export default function ChatScreen() {
   }, [activeDomainId, db, domainLabel]);
 
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
-  const sourceLimit = countSetting(settings.runtime.surfaceConfig.chat.sourceLimit, 8);
+  const chatConfig = settings.runtime.surfaceConfig.chat;
+  const sourceLimit = countSetting(chatConfig.sourceLimit, 8);
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -313,24 +314,26 @@ export default function ChatScreen() {
             {warnings.length ? <Card style={styles.modeNote}>{warnings.map((item) => <Text key={item} style={styles.modeText}>{item}</Text>)}</Card> : null}
 
             <View style={[styles.workspace, isWide && styles.workspaceWide]}>
-              <Card style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
-                <View style={styles.threadHeading}><Text style={styles.panelLabel}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={styles.plus}>＋</Text></Pressable></View>
-                <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
-                  {threads.map((thread) => {
-                    const active = thread.id === activeThreadId;
-                    return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, pressed && styles.pressed]}>
-                      <Text numberOfLines={1} style={[styles.threadTitle, active && styles.threadTitleActive]}>{thread.title}</Text>
-                      <Text numberOfLines={1} style={[styles.threadDetail, active && styles.threadDetailActive]}>{thread.detail}</Text>
-                    </Pressable>;
-                  })}
-                </ScrollView>
-                {isWide ? (
-                  <View style={styles.threadFoot}>
-                    <Pill tone="moss">{domainLabel} context on</Pill>
-                    <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
-                  </View>
-                ) : null}
-              </Card>
+              {chatConfig.showThreads ? (
+                <Card style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
+                  <View style={styles.threadHeading}><Text style={styles.panelLabel}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={styles.plus}>＋</Text></Pressable></View>
+                  <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
+                    {threads.map((thread) => {
+                      const active = thread.id === activeThreadId;
+                      return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, pressed && styles.pressed]}>
+                        <Text numberOfLines={1} style={[styles.threadTitle, active && styles.threadTitleActive]}>{thread.title}</Text>
+                        <Text numberOfLines={1} style={[styles.threadDetail, active && styles.threadDetailActive]}>{thread.detail}</Text>
+                      </Pressable>;
+                    })}
+                  </ScrollView>
+                  {isWide ? (
+                    <View style={styles.threadFoot}>
+                      <Pill tone="moss">{domainLabel} context on</Pill>
+                      <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+                    </View>
+                  ) : null}
+                </Card>
+              ) : null}
 
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
@@ -343,18 +346,20 @@ export default function ChatScreen() {
                   </Pressable>
                 </View>
 
-                <View style={styles.sourceStrip}>
-                  <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
-                    {sourceRecords.slice(0, sourceLimit).map((record) => (
-                      <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
-                        <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
-                        <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
-                      </Pressable>
-                    ))}
-                    {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
-                  </ScrollView>
-                </View>
+                {chatConfig.showSources ? (
+                  <View style={styles.sourceStrip}>
+                    <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
+                      {sourceRecords.slice(0, sourceLimit).map((record) => (
+                        <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
+                          <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
+                          <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
+                        </Pressable>
+                      ))}
+                      {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
+                    </ScrollView>
+                  </View>
+                ) : null}
                 <View style={styles.divider} />
                 <View style={styles.messages}>
                   {activeThread.messages.map((message: MessageRow) => (
@@ -363,7 +368,7 @@ export default function ChatScreen() {
                 </View>
 
                 <View style={styles.composerWrap}>
-                  {settings.runtime.surfaceConfig.chat.promptRail ? (
+                  {chatConfig.promptRail ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
                       {promptBank.map((prompt) => (
                         <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
@@ -397,11 +402,13 @@ export default function ChatScreen() {
               </Card>
             </View>
 
-            <Card tone="blue" style={styles.contextCard}>
-              <View style={styles.contextIcon}><Text>⌁</Text></View>
-              <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · open conversation resume in order · citations inline when available.</Text></View>
-              <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
-            </Card>
+            {chatConfig.showContextCard ? (
+              <Card tone="blue" style={styles.contextCard}>
+                <View style={styles.contextIcon}><Text>⌁</Text></View>
+                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · open conversation resume in order · citations inline when available.</Text></View>
+                <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
+              </Card>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

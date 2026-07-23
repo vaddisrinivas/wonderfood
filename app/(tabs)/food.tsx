@@ -90,8 +90,9 @@ export default function FoodScreen() {
   const kitchenItem = pickByNeed(records, 'pantry', 1);
   const shoppingItem = pickByNeed(records, 'shopping', 2);
   const activeCopy = viewCopy[active] ?? viewCopy.Overview;
-  const columnLimit = countSetting(settings.runtime.surfaceConfig.food.columnLimit, 4);
-  const attentionLimit = countSetting(settings.runtime.surfaceConfig.food.attentionLimit, 3);
+  const foodConfig = settings.runtime.surfaceConfig.food;
+  const columnLimit = countSetting(foodConfig.columnLimit, 4);
+  const attentionLimit = countSetting(foodConfig.attentionLimit, 3);
   const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, columnLimit);
   const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
   const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, columnLimit);
@@ -113,64 +114,76 @@ export default function FoodScreen() {
             </View>
           </View>
 
-          <View style={[styles.dashboard, compact && styles.dashboardCompact]}>
-            <Card tone="moss" style={styles.hero}>
-              <View style={styles.heroHeader}>
-                <Pill tone="moss">TONIGHT</Pill>
-                <Text style={styles.heroMeta}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
-              </View>
-              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
-                {todayMeal?.title ?? 'Decide dinner from what you have.'}
-              </Text>
-              <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
-                {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
-              </Text>
-              <View style={styles.heroActions}>
-                <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
-                <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
-              </View>
-            </Card>
+          {foodConfig.showHero ? (
+            <View style={[styles.dashboard, compact && styles.dashboardCompact]}>
+              <Card tone="moss" style={styles.hero}>
+                <View style={styles.heroHeader}>
+                  <Pill tone="moss">TONIGHT</Pill>
+                  <Text style={styles.heroMeta}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
+                </View>
+                <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
+                  {todayMeal?.title ?? 'Decide dinner from what you have.'}
+                </Text>
+                <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+                  {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
+                </Text>
+                <View style={styles.heroActions}>
+                  <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
+                  <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
+                </View>
+              </Card>
 
-            <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
-              <FeatureCard tone="amber" label="Use soon" item={kitchenItem} fallbackTitle="Nothing urgent" fallbackBody="Use-soon pantry items will appear here." />
-              <FeatureCard tone="blue" label="Shopping" item={shoppingItem} fallbackTitle="No shopping pressure" fallbackBody="Missing ingredients and receipt items will appear here." />
+              <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
+                <FeatureCard tone="amber" label="Use soon" item={kitchenItem} fallbackTitle="Nothing urgent" fallbackBody="Use-soon pantry items will appear here." />
+                <FeatureCard tone="blue" label="Shopping" item={shoppingItem} fallbackTitle="No shopping pressure" fallbackBody="Missing ingredients and receipt items will appear here." />
+              </View>
             </View>
-          </View>
+          ) : null}
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
-            {views.map((view) => (
-              <Pressable
-                key={view}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active === view }}
-                onPress={() => setActive(view)}
-                style={[styles.segment, active === view && styles.segmentActive]}
-              >
-                <Text style={[styles.segmentText, active === view && styles.segmentTextActive]}>{view}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          {foodConfig.showViewTabs ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
+              {views.map((view) => (
+                <Pressable
+                  key={view}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active === view }}
+                  onPress={() => setActive(view)}
+                  style={[styles.segment, active === view && styles.segmentActive]}
+                >
+                  <Text style={[styles.segmentText, active === view && styles.segmentTextActive]}>{view}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
 
           {active === 'Overview' ? (
             <>
-              <SectionTitle title="Food workspace" action="Ask" href="/chat" />
-              <View style={[styles.board, compact && styles.boardCompact]}>
-                <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
-                <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
-                <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
-              </View>
+              {foodConfig.showWorkspace ? (
+                <>
+                  <SectionTitle title="Food workspace" action="Ask" href="/chat" />
+                  <View style={[styles.board, compact && styles.boardCompact]}>
+                    <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
+                    <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
+                    <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
+                  </View>
+                </>
+              ) : null}
 
-              <SectionTitle title="Needs attention" />
-              <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
-                {reviewRows.length ? reviewRows.map((row) => (
-                  <MiniRecord key={row.id} record={row} />
-                )) : (
-                  <Card tone="moss" style={styles.emptyCard}>
-                    <Text style={styles.emptyTitle}>Nothing needs review</Text>
-                    <Text style={sharedStyles.muted}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
-                  </Card>
-                )}
-              </View>
+              {foodConfig.showAttention ? (
+                <>
+                  <SectionTitle title="Needs attention" />
+                  <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
+                    {reviewRows.length ? reviewRows.map((row) => (
+                      <MiniRecord key={row.id} record={row} />
+                    )) : (
+                      <Card tone="moss" style={styles.emptyCard}>
+                        <Text style={styles.emptyTitle}>Nothing needs review</Text>
+                        <Text style={sharedStyles.muted}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
+                      </Card>
+                    )}
+                  </View>
+                </>
+              ) : null}
             </>
           ) : null}
 
@@ -194,13 +207,15 @@ export default function FoodScreen() {
             </>
           ) : null}
 
-          <Card style={styles.configCard}>
-            <View style={styles.configCopy}>
-              <Text style={styles.configTitle}>Food is the active package</Text>
-              <Text style={sharedStyles.muted}>Views come from config, but the workspace stays about dinner, pantry and shopping.</Text>
-            </View>
-            <Link href="/config" style={styles.configLink}>Edit package</Link>
-          </Card>
+          {foodConfig.showPackageCard ? (
+            <Card style={styles.configCard}>
+              <View style={styles.configCopy}>
+                <Text style={styles.configTitle}>Food is the active package</Text>
+                <Text style={sharedStyles.muted}>Views come from config, but the workspace stays about dinner, pantry and shopping.</Text>
+              </View>
+              <Link href="/config" style={styles.configLink}>Edit package</Link>
+            </Card>
+          ) : null}
         </View>
       </ScrollView>
     </Page>

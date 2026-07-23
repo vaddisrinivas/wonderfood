@@ -51,21 +51,40 @@ export type LifeOSSettings = {
     density: 'comfortable' | 'compact';
     surfaceConfig: {
       home: {
+        showNowCard: boolean;
+        showReviewQueue: boolean;
         reviewLimit: string;
+        showRecentGraph: boolean;
         recentLimit: string;
         showLifeSpaces: boolean;
         showSourceTrust: boolean;
         showControlCard: boolean;
       };
       food: {
+        showHero: boolean;
+        showViewTabs: boolean;
+        showWorkspace: boolean;
+        showAttention: boolean;
+        showPackageCard: boolean;
         columnLimit: string;
         attentionLimit: string;
       };
       chat: {
+        showThreads: boolean;
+        showSources: boolean;
         sourceLimit: string;
         promptRail: boolean;
+        showContextCard: boolean;
       };
       record: {
+        showHero: boolean;
+        showNutrition: boolean;
+        showIngredients: boolean;
+        showInstructions: boolean;
+        showHistory: boolean;
+        showEditableNote: boolean;
+        showProperties: boolean;
+        showRelations: boolean;
         nutritionLimit: string;
         showProvenance: boolean;
       };
@@ -155,21 +174,40 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     density: 'comfortable',
     surfaceConfig: {
       home: {
+        showNowCard: true,
+        showReviewQueue: true,
         reviewLimit: '2',
+        showRecentGraph: true,
         recentLimit: '4',
         showLifeSpaces: true,
         showSourceTrust: true,
         showControlCard: true,
       },
       food: {
+        showHero: true,
+        showViewTabs: true,
+        showWorkspace: true,
+        showAttention: true,
+        showPackageCard: true,
         columnLimit: '4',
         attentionLimit: '3',
       },
       chat: {
+        showThreads: true,
+        showSources: true,
         sourceLimit: '8',
         promptRail: true,
+        showContextCard: true,
       },
       record: {
+        showHero: true,
+        showNutrition: true,
+        showIngredients: true,
+        showInstructions: true,
+        showHistory: true,
+        showEditableNote: true,
+        showProperties: true,
+        showRelations: true,
         nutritionLimit: '6',
         showProvenance: true,
       },
@@ -263,21 +301,40 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
   const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
   return {
     home: {
+      showNowCard: config.home?.showNowCard !== false,
+      showReviewQueue: config.home?.showReviewQueue !== false,
       reviewLimit: normalizePositiveString(config.home?.reviewLimit, defaults.home.reviewLimit),
+      showRecentGraph: config.home?.showRecentGraph !== false,
       recentLimit: normalizePositiveString(config.home?.recentLimit, defaults.home.recentLimit),
       showLifeSpaces: config.home?.showLifeSpaces !== false,
       showSourceTrust: config.home?.showSourceTrust !== false,
       showControlCard: config.home?.showControlCard !== false,
     },
     food: {
+      showHero: config.food?.showHero !== false,
+      showViewTabs: config.food?.showViewTabs !== false,
+      showWorkspace: config.food?.showWorkspace !== false,
+      showAttention: config.food?.showAttention !== false,
+      showPackageCard: config.food?.showPackageCard !== false,
       columnLimit: normalizePositiveString(config.food?.columnLimit, defaults.food.columnLimit),
       attentionLimit: normalizePositiveString(config.food?.attentionLimit, defaults.food.attentionLimit),
     },
     chat: {
+      showThreads: config.chat?.showThreads !== false,
+      showSources: config.chat?.showSources !== false,
       sourceLimit: normalizePositiveString(config.chat?.sourceLimit, defaults.chat.sourceLimit),
       promptRail: config.chat?.promptRail !== false,
+      showContextCard: config.chat?.showContextCard !== false,
     },
     record: {
+      showHero: config.record?.showHero !== false,
+      showNutrition: config.record?.showNutrition !== false,
+      showIngredients: config.record?.showIngredients !== false,
+      showInstructions: config.record?.showInstructions !== false,
+      showHistory: config.record?.showHistory !== false,
+      showEditableNote: config.record?.showEditableNote !== false,
+      showProperties: config.record?.showProperties !== false,
+      showRelations: config.record?.showRelations !== false,
       nutritionLimit: normalizePositiveString(config.record?.nutritionLimit, defaults.record.nutritionLimit),
       showProvenance: config.record?.showProvenance !== false,
     },

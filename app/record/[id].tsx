@@ -362,7 +362,8 @@ export default function RecordScreen() {
         previous: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'previous'),
       }
     : { available: [], needed: [], shopping: [], previous: [] };
-  const nutritionLimit = countSetting(settings.runtime.surfaceConfig.record.nutritionLimit, 6);
+  const recordConfig = settings.runtime.surfaceConfig.record;
+  const nutritionLimit = countSetting(recordConfig.nutritionLimit, 6);
   const primaryNutrition = foodDetail?.nutrition.slice(0, Math.min(4, nutritionLimit)) ?? [];
 
   const handleSave = async () => {
@@ -477,20 +478,22 @@ export default function RecordScreen() {
     <Page>
       <ScrollView keyboardShouldPersistTaps="handled">
         <View style={styles.pageContent}>
-          <Card tone={tone === 'neutral' ? undefined : tone} style={styles.hero}>
-            <View style={styles.statusRow}>
-              <Pill tone={tone}>{status}</Pill>
-              <Text style={styles.sync}>Updated {updatedAt}</Text>
-            </View>
-            <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
-            <Text style={styles.meta}>{record.collection} · {meta}</Text>
-            <Text style={styles.heroBody}>{body || 'No note yet.'}</Text>
-            <View style={styles.quickActions}>
-              <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
-              <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
-              <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
-            </View>
-          </Card>
+          {recordConfig.showHero ? (
+            <Card tone={tone === 'neutral' ? undefined : tone} style={styles.hero}>
+              <View style={styles.statusRow}>
+                <Pill tone={tone}>{status}</Pill>
+                <Text style={styles.sync}>Updated {updatedAt}</Text>
+              </View>
+              <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
+              <Text style={styles.meta}>{record.collection} · {meta}</Text>
+              <Text style={styles.heroBody}>{body || 'No note yet.'}</Text>
+              <View style={styles.quickActions}>
+                <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
+                <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
+                <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
+              </View>
+            </Card>
+          ) : null}
 
           <View style={[styles.workspace, compact && styles.workspaceCompact]}>
             <View style={styles.mainColumn}>
@@ -505,83 +508,107 @@ export default function RecordScreen() {
                 </Card>
               ) : null}
 
-              <SectionTitle title="Nutrition profile" />
-              <View style={styles.nutritionGrid}>
-                {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
-                  <Card key={label} style={styles.nutritionCard}>
-                    <Text style={styles.nutritionValue}>{value}</Text>
-                    <Text style={styles.nutritionLabel}>{label}</Text>
-                  </Card>
-                ))}
-              </View>
-
-              <SectionTitle title="Ingredients and availability" />
-              <View style={styles.ingredientBoard}>
-                <IngredientGroup title="Available" items={ingredientsByState.available} tone="moss" />
-                <IngredientGroup title="Needed" items={ingredientsByState.needed} tone="amber" />
-                <IngredientGroup title="Shopping" items={ingredientsByState.shopping} tone="blue" />
-                <IngredientGroup title="Previous / substitute" items={ingredientsByState.previous} tone="plum" />
-              </View>
-
-              <SectionTitle title="Instructions" />
-              <Card style={styles.listCard}>
-                {foodDetail.instructions.length ? foodDetail.instructions.map((step, index) => (
-                  <View key={step} style={styles.stepRow}>
-                    <Text style={styles.stepNumber}>{index + 1}</Text>
-                    <Text style={styles.stepText}>{step}</Text>
+              {recordConfig.showNutrition ? (
+                <>
+                  <SectionTitle title="Nutrition profile" />
+                  <View style={styles.nutritionGrid}>
+                    {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
+                      <Card key={label} style={styles.nutritionCard}>
+                        <Text style={styles.nutritionValue}>{value}</Text>
+                        <Text style={styles.nutritionLabel}>{label}</Text>
+                      </Card>
+                    ))}
                   </View>
-                )) : (
-                  <Text style={sharedStyles.muted}>No cooking instructions yet.</Text>
-                )}
-              </Card>
+                </>
+              ) : null}
 
-              <SectionTitle title="Cooking log and variations" />
-              <View style={sharedStyles.grid}>
-                <Card style={styles.historyCard}>
-                  <Text style={styles.cardTitle}>Previous notes</Text>
-                  {foodDetail.logs.map(([label, value]) => (
-                    <View key={label} style={styles.factRow}>
-                      <Text style={styles.factLabel}>{label}</Text>
-                      <Text style={styles.factValue}>{value}</Text>
-                    </View>
-                  ))}
-                </Card>
-                <Card tone="plum" style={styles.historyCard}>
-                  <Text style={styles.cardTitle}>Variations</Text>
-                  {foodDetail.variations.map((variation) => (
-                    <Text key={variation} style={styles.variation}>• {variation}</Text>
-                  ))}
-                </Card>
-              </View>
+              {recordConfig.showIngredients ? (
+                <>
+                  <SectionTitle title="Ingredients and availability" />
+                  <View style={styles.ingredientBoard}>
+                    <IngredientGroup title="Available" items={ingredientsByState.available} tone="moss" />
+                    <IngredientGroup title="Needed" items={ingredientsByState.needed} tone="amber" />
+                    <IngredientGroup title="Shopping" items={ingredientsByState.shopping} tone="blue" />
+                    <IngredientGroup title="Previous / substitute" items={ingredientsByState.previous} tone="plum" />
+                  </View>
+                </>
+              ) : null}
+
+              {recordConfig.showInstructions ? (
+                <>
+                  <SectionTitle title="Instructions" />
+                  <Card style={styles.listCard}>
+                    {foodDetail.instructions.length ? foodDetail.instructions.map((step, index) => (
+                      <View key={step} style={styles.stepRow}>
+                        <Text style={styles.stepNumber}>{index + 1}</Text>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    )) : (
+                      <Text style={sharedStyles.muted}>No cooking instructions yet.</Text>
+                    )}
+                  </Card>
+                </>
+              ) : null}
+
+              {recordConfig.showHistory ? (
+                <>
+                  <SectionTitle title="Cooking log and variations" />
+                  <View style={sharedStyles.grid}>
+                    <Card style={styles.historyCard}>
+                      <Text style={styles.cardTitle}>Previous notes</Text>
+                      {foodDetail.logs.map(([label, value]) => (
+                        <View key={label} style={styles.factRow}>
+                          <Text style={styles.factLabel}>{label}</Text>
+                          <Text style={styles.factValue}>{value}</Text>
+                        </View>
+                      ))}
+                    </Card>
+                    <Card tone="plum" style={styles.historyCard}>
+                      <Text style={styles.cardTitle}>Variations</Text>
+                      {foodDetail.variations.map((variation) => (
+                        <Text key={variation} style={styles.variation}>• {variation}</Text>
+                      ))}
+                    </Card>
+                  </View>
+                </>
+              ) : null}
             </>
           ) : null}
 
-          <SectionTitle title="Editable note" />
-          <TextInput
-            accessibilityLabel="Record details"
-            value={body}
-            onChangeText={setBody}
-            style={styles.editor}
-            multiline
-            textAlignVertical="top"
-          />
-          <View style={styles.actions}>
-            <ActionButton label={dirty ? 'Save changes' : 'Saved'} onPress={handleSave} />
-            {dirty ? <ActionButton label="Undo" quiet onPress={handleUndo} /> : null}
-          </View>
+          {recordConfig.showEditableNote ? (
+            <>
+              <SectionTitle title="Editable note" />
+              <TextInput
+                accessibilityLabel="Record details"
+                value={body}
+                onChangeText={setBody}
+                style={styles.editor}
+                multiline
+                textAlignVertical="top"
+              />
+              <View style={styles.actions}>
+                <ActionButton label={dirty ? 'Save changes' : 'Saved'} onPress={handleSave} />
+                {dirty ? <ActionButton label="Undo" quiet onPress={handleUndo} /> : null}
+              </View>
+            </>
+          ) : null}
             </View>
 
             <View style={[styles.sideColumn, compact && styles.sideColumnCompact]}>
-              <SectionTitle title="Properties" />
-              <Card style={styles.sideCard}>
-                <Fact label="Status" value={status} />
-                <Fact label="Collection" value={record.collection} />
-                <Fact label="Source" value={sourceLabel} />
-                <Fact label="Updated" value={updatedAt} />
-                <Fact label="Detail" value={structuredFoodDetail ? 'Structured food_detail' : 'Inferred fallback'} />
-              </Card>
+              {recordConfig.showProperties ? (
+                <>
+                  <SectionTitle title="Properties" />
+                  <Card style={styles.sideCard}>
+                    <Fact label="Status" value={status} />
+                    <Fact label="Collection" value={record.collection} />
+                    <Fact label="Source" value={sourceLabel} />
+                    <Fact label="Updated" value={updatedAt} />
+                    <Fact label="Detail" value={structuredFoodDetail ? 'Structured food_detail' : 'Inferred fallback'} />
+                  </Card>
+                </>
+              ) : null}
 
-              {primaryNutrition.length ? (
+              {recordConfig.showNutrition && primaryNutrition.length ? (
                 <>
                   <SectionTitle title="At a glance" />
                   <Card style={styles.sideCard}>
@@ -590,40 +617,44 @@ export default function RecordScreen() {
                 </>
               ) : null}
 
-              <SectionTitle title="Connected records" />
-              <View style={styles.relationGrid}>
-                {relations.length ? (
-                  relations.map((relation) => {
-                    const linked = linkedRecords[relation.target_id];
-                    const relationTone = linked ? toTone(linked.properties.tone) : 'neutral';
-                    return (
-                      <Pressable
-                        key={`${relation.name}:${relation.target_id}`}
-                        accessibilityRole="link"
-                        onPress={() => router.push(`/record/${relation.target_id}`)}
-                        style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
-                      >
-                        <View style={styles.relationTop}>
-                          <Text style={styles.relationName}>{relation.name}</Text>
-                          <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
-                        </View>
-                        <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
-                        <Text style={styles.relationDetail}>
-                          {linked
-                            ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
-                            : 'Linked record not loaded in this local graph yet.'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })
-                ) : (
-                  <Card style={styles.emptyRelationCard}>
-                    <Text style={sharedStyles.muted}>No linked records yet.</Text>
-                  </Card>
-                )}
-              </View>
+              {recordConfig.showRelations ? (
+                <>
+                  <SectionTitle title="Connected records" />
+                  <View style={styles.relationGrid}>
+                    {relations.length ? (
+                      relations.map((relation) => {
+                        const linked = linkedRecords[relation.target_id];
+                        const relationTone = linked ? toTone(linked.properties.tone) : 'neutral';
+                        return (
+                          <Pressable
+                            key={`${relation.name}:${relation.target_id}`}
+                            accessibilityRole="link"
+                            onPress={() => router.push(`/record/${relation.target_id}`)}
+                            style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
+                          >
+                            <View style={styles.relationTop}>
+                              <Text style={styles.relationName}>{relation.name}</Text>
+                              <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
+                            </View>
+                            <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
+                            <Text style={styles.relationDetail}>
+                              {linked
+                                ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
+                                : 'Linked record not loaded in this local graph yet.'}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    ) : (
+                      <Card style={styles.emptyRelationCard}>
+                        <Text style={sharedStyles.muted}>No linked records yet.</Text>
+                      </Card>
+                    )}
+                  </View>
+                </>
+              ) : null}
 
-              {settings.runtime.surfaceConfig.record.showProvenance ? (
+              {recordConfig.showProvenance ? (
                 <>
                   <SectionTitle title="Provenance" />
                   <Card>
