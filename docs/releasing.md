@@ -53,12 +53,15 @@ export ANDROID_KEY_ALIAS=...
 export ANDROID_KEY_PASSWORD=...
 
 ./scripts/quality/collect-release-evidence.sh
+npm run phase8:check:android-release-signed
 ```
 
 The collector writes a timestamped directory under `build/evidence/` with release
 APK verification output, SHA-256 sums, signing fingerprints, Google auth status
 for the current direct-settings app, assetlinks status, and connected-device
 evidence when ADB sees a device.
+The signed-release npm gate is stricter than the normal local artifact proof: it
+fails if the APK is debug-signed or the AAB is unsigned.
 5. Validate release signing fingerprint and App Links manifest:
 
 ```bash

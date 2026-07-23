@@ -66,6 +66,7 @@
     "phase7:check:chat-client-cross-surface": "./server/node_modules/.bin/tsx scripts/quality/check-phase7-chat-client-cross-surface.ts",
     "phase8:check:health-connect": "./scripts/quality/check-health-connect-android.sh",
     "phase8:check:android-release-artifacts": "./scripts/quality/check-android-release-artifacts.sh",
+    "phase8:check:android-release-signed": "REQUIRE_RELEASE_SIGNING=1 ./scripts/quality/check-android-release-artifacts.sh",
     "test:server:notion": "./server/node_modules/.bin/tsx server/test/notion/unit-notion-adapter.ts",
     "test:contract:notion": "./server/node_modules/.bin/tsx server/test/notion/contract-notion-webhook.ts",
     "test:server:webhook-ingress": "./server/node_modules/.bin/tsx server/test/provider-webhook-ingress.ts",
