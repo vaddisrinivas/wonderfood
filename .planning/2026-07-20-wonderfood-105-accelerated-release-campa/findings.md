@@ -92,3 +92,4 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - The replacement should be treated as an authority receipt: it proves live Notion and Sheets seed/read/edit/archive/undo/repair plus direct app create/update/archive write delivery under one redacted receipt.
 - It should not be used to claim direct manual UX inspection of the user's final Notion/Sheets dashboards; that remains separate product visual proof.
 - `check-live-provider-writeback.ts` now supports `PROVIDER_WRITEBACK_OUT`, so composite live receipts can keep all evidence in one directory instead of scattering proof files.
+- Provider writeback needs an explicit restore operation. Treating archive Undo as generic update is insufficient because Notion keeps the page in trash unless the write payload sends `in_trash:false`.

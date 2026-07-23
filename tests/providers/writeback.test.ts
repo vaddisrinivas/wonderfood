@@ -107,6 +107,32 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(body.record?.archived_at).toBeTruthy();
   });
 
+  it('queues archive Undo as provider restore for Notion and Sheets', async () => {
+    const db = new MemoryDb();
+    const created = await createRecord(db, 'writeback-restore-create');
+    await applyOperation(db as any, manifest, {
+      op_id: 'writeback-restore-archive',
+      kind: 'archive',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'writeback-yogurt',
+      expected_revision: created.record!.revision,
+      actor: 'user',
+      origin: 'manual',
+    });
+    const undone = await undoOperation(db as any, manifest, 'writeback-restore-archive');
+    expect(undone.status).toBe('applied');
+
+    const notionQueued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: undone.op_id });
+    const sheetsQueued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: undone.op_id });
+    expect(notionQueued.status).toBe('queued');
+    expect(sheetsQueued.status).toBe('queued');
+    const rows = Array.from(db.outbox.values()).map(payload);
+    expect(rows.map((row) => row.operation)).toEqual(['restore_record', 'restore_record']);
+    expect(rows.map((row) => row.endpoint)).toEqual(['/providers/notion/push', '/providers/sheets/push']);
+    expect(rows.every((row) => row.record?.archived_at == null && row.record?.deleted === false)).toBe(true);
+  });
+
   it('delivers queued Notion writes with device settings and marks outbox done', async () => {
     const db = new MemoryDb();
     await createRecord(db, 'writeback-deliver-notion');
@@ -175,6 +201,47 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(delivered.status).toBe('delivered');
     expect(calls[0].url).toBe('https://api.notion.com/v1/pages/notion-page-1');
     expect(JSON.parse(calls[0].init.body || '{}')).toEqual({ in_trash: true });
+  });
+
+  it('delivers Notion archive Undo as a restore request against the provider page id', async () => {
+    const db = new MemoryDb();
+    const created = await createRecord(db, 'writeback-deliver-notion-restore-create');
+    await applyOperation(db as any, manifest, {
+      op_id: 'writeback-deliver-notion-restore-archive',
+      kind: 'archive',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'writeback-yogurt',
+      expected_revision: created.record!.revision,
+      actor: 'user',
+      origin: 'manual',
+    });
+    const undone = await undoOperation(db as any, manifest, 'writeback-deliver-notion-restore-archive');
+    expect(undone.status).toBe('applied');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: undone.op_id });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued restore writeback');
+    queued.payload.external_id = 'notion-page-1';
+    queued.event.payload_json = JSON.stringify(queued.payload);
+    const calls: Array<{ url: string; init: { method: string; headers: Record<string, string>; body?: string } }> = [];
+
+    const delivered = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async (url, init) => {
+        calls.push({ url, init });
+        return { ok: true, status: 200, text: async () => '{}' };
+      },
+      platform: 'native',
+    });
+
+    expect(delivered.status).toBe('delivered');
+    expect(calls[0].url).toBe('https://api.notion.com/v1/pages/notion-page-1');
+    expect(JSON.parse(calls[0].init.body || '{}')).toMatchObject({ in_trash: false });
   });
 
   it('blocks browser delivery and marks failed provider responses', async () => {

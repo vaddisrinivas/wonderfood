@@ -74,11 +74,19 @@ checks = {
         and notion_write.get("update_delivery_status") == "delivered"
         and notion_write.get("archive_delivery_status") == "delivered"
     ),
+    "notion_restore_delivered": (
+        notion_write.get("restore_delivery_status") == "delivered"
+        and bool(notion_write.get("restore_read_back_visible"))
+    ),
     "sheets_create_update_archive_delivered": (
         sheets_write.get("delivery_status") == "delivered"
         and sheets_write.get("update_delivery_status") == "delivered"
         and sheets_write.get("archive_delivery_status") == "delivered"
         and bool(sheets_write.get("archive_read_back_found"))
+    ),
+    "sheets_restore_delivered": (
+        sheets_write.get("restore_delivery_status") == "delivered"
+        and bool(sheets_write.get("restore_read_back_found"))
     ),
     "no_token_or_secret_visible": not secret_visible,
 }
@@ -113,7 +121,7 @@ def row(name, value):
 
 rows = "\n".join(row(key, value) for key, value in checks.items())
 write_rows = "\n".join(
-    f"<tr><td>{html.escape(str(item.get('provider')))}</td><td>{html.escape(str(item.get('delivery_status')))}</td><td>{html.escape(str(item.get('update_delivery_status')))}</td><td>{html.escape(str(item.get('archive_delivery_status')))}</td></tr>"
+    f"<tr><td>{html.escape(str(item.get('provider')))}</td><td>{html.escape(str(item.get('delivery_status')))}</td><td>{html.escape(str(item.get('update_delivery_status')))}</td><td>{html.escape(str(item.get('archive_delivery_status')))}</td><td>{html.escape(str(item.get('restore_delivery_status')))}</td></tr>"
     for item in writeback.get("results", [])
 )
 
@@ -152,7 +160,7 @@ code {{ background:#efe7d4; padding:2px 5px; border-radius:5px; }}
 <h2>Checks</h2>
 <table><tbody>{rows}</tbody></table>
 <h2>Writeback delivery</h2>
-<table><thead><tr><th>Provider</th><th>Create</th><th>Update</th><th>Archive</th></tr></thead><tbody>{write_rows}</tbody></table>
+<table><thead><tr><th>Provider</th><th>Create</th><th>Update</th><th>Archive</th><th>Restore</th></tr></thead><tbody>{write_rows}</tbody></table>
 <h2>Evidence files</h2>
 <ul>
 <li><code>{html.escape(payload['notion_evidence'])}</code></li>

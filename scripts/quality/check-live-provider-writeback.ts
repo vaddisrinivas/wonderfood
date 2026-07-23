@@ -256,6 +256,27 @@ async function runNotionProof() {
   const archiveReadBackHidden = Boolean(archived.archived) || Boolean(archived.in_trash);
   ensure(archiveReadBackHidden, 'Notion archive writeback did not mark page archived or trashed.');
 
+  const restorePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'restore_record',
+    op_id: `live-notion-writeback-restore-${stamp}`,
+    expected_revision: 3,
+    record: { ...updatedRecord, archived_at: null, revision: 4, updated_at: new Date().toISOString() },
+    before: archivePayload.record,
+    external_id: createdPageId,
+  };
+  const restoreEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-notion-restore-${stamp}`,
+    action_key: `provider-write:notion:${restorePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(restorePayload),
+  });
+  const restoreDelivery = await deliverProviderWriteEvent({ db, event: restoreEvent, settings, platform: 'native' });
+  ensure(restoreDelivery.status === 'delivered', `Notion restore writeback not delivered: ${restoreDelivery.status}`);
+  const restored = await notionRequest(token, 'GET', `/pages/${createdPageId}`);
+  const restoreReadBackVisible = !Boolean(restored.archived) && !Boolean(restored.in_trash);
+  ensure(restoreReadBackVisible, 'Notion restore writeback did not restore page from trash.');
+
   await notionRequest(token, 'PATCH', `/pages/${createdPageId}`, { in_trash: true }).catch((error) => {
     if (!String(error instanceof Error ? error.message : error).includes('archived')) throw error;
   });
@@ -281,8 +302,10 @@ async function runNotionProof() {
     update_read_back_title: updateReadBackTitle,
     archive_read_back_archived: Boolean(archived.archived),
     archive_read_back_trashed: Boolean(archived.in_trash),
+    restore_read_back_visible: restoreReadBackVisible,
     update_delivery_status: updateDelivery.status,
     archive_delivery_status: archiveDelivery.status,
+    restore_delivery_status: restoreDelivery.status,
     cleanup_archived_page: true,
     cleanup_database_archived: cleanupDatabaseArchived,
     cleanup_database_left_for_manual_review: Boolean(dataSource.databaseId) && !cleanupDatabaseArchived,
@@ -518,6 +541,51 @@ async function runSheetsProof() {
     && archiveValues.flat().some((cell) => String(cell).includes(archivePayload.op_id));
   ensure(archiveReadBackFound, 'Sheets archive writeback did not round trip.');
 
+  const restorePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'restore_record',
+    op_id: `live-sheets-writeback-restore-${stamp}`,
+    expected_revision: 3,
+    record: {
+      ...updatePayload.record!,
+      archived_at: null,
+      revision: 4,
+      updated_at: new Date().toISOString(),
+    },
+    before: archivePayload.record,
+    external_id: payload.record_id,
+  };
+  const restoreEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-sheets-restore-${stamp}`,
+    action_key: `provider-write:google_sheets:${restorePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(restorePayload),
+  });
+  const restoreDelivery = await deliverProviderWriteEvent({
+    db,
+    event: restoreEvent,
+    settings,
+    platform: 'native',
+    fetcher: async (url, init) => {
+      const response = await fetch(url, init);
+      const clone = response.clone();
+      if (response.ok) {
+        const body = await clone.json().catch(() => null) as { updates?: { updatedRange?: string } } | null;
+        const nextRange = body?.updates?.updatedRange || '';
+        if (nextRange) updatedRanges.push(nextRange);
+      }
+      return response;
+    },
+  });
+  ensure(restoreDelivery.status === 'delivered', `Sheets restore writeback not delivered: ${restoreDelivery.status}`);
+  const restoreRange = updatedRanges[3] || '';
+  ensure(restoreRange, 'Sheets restore append did not return updatedRange.');
+  const restoreReadBack = await sheetsRequest(token, spreadsheetId, 'GET', `/values/${encodeURIComponent(restoreRange)}`);
+  const restoreValues = Array.isArray(restoreReadBack.values) ? restoreReadBack.values as unknown[][] : [];
+  const restoreReadBackFound = restoreValues.flat().some((cell) => String(cell).toLowerCase() === 'false')
+    && restoreValues.flat().some((cell) => String(cell).includes(restorePayload.op_id));
+  ensure(restoreReadBackFound, 'Sheets restore writeback did not round trip.');
+
   for (const range of updatedRanges) {
     await sheetsRequest(token, spreadsheetId, 'POST', `/values/${encodeURIComponent(range)}:clear`, {});
   }
@@ -528,10 +596,12 @@ async function runSheetsProof() {
     delivery_status: delivery.status,
     update_delivery_status: updateDelivery.status,
     archive_delivery_status: archiveDelivery.status,
+    restore_delivery_status: restoreDelivery.status,
     spreadsheet_id: mask(spreadsheetId),
     updated_ranges: updatedRanges.map((range) => range.replace(/![A-Z]+[0-9]+:.*/, '!<row>')),
     read_back_found: readBackFound,
     archive_read_back_found: archiveReadBackFound,
+    restore_read_back_found: restoreReadBackFound,
     cleanup_cleared_range: true,
   };
 }

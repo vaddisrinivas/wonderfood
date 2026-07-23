@@ -5,7 +5,7 @@ import { enqueueOutboxEvent, getOutboxEventByActionKey, markOutboxEvent, type Ou
 import type { DirectSyncProvider } from '@/src/providers/provider-local-copy';
 import type { LifeOSSettings } from '@/src/settings/lifeos-settings';
 
-export type ProviderWriteOperation = 'create_record' | 'update_record' | 'archive_record';
+export type ProviderWriteOperation = 'create_record' | 'update_record' | 'archive_record' | 'restore_record';
 
 export type ProviderWritePayload = {
   schema_version: 'lifeos.provider-write.v1';
@@ -73,6 +73,7 @@ function externalIdFor(provider: DirectSyncProvider, record: CanonicalRecord | n
 }
 
 function providerOperation(row: OperationRow, after: CanonicalRecord | null): ProviderWriteOperation {
+  if (row.kind === 'restore') return 'restore_record';
   if (row.kind === 'archive' || row.kind === 'delete' || after?.deleted || after?.archived_at) return 'archive_record';
   if (!row.before_json) return 'create_record';
   return 'update_record';
@@ -165,6 +166,11 @@ function buildNotionRequest(payload: ProviderWritePayload, settings: LifeOSSetti
   }
   const pageId = payload.external_id?.trim();
   if (!pageId) return { blocked: 'Notion page ID is missing for update/archive.' };
+  const body = payload.operation === 'archive_record'
+    ? { in_trash: true }
+    : payload.operation === 'restore_record'
+      ? { in_trash: false, properties: notionProperties(payload.record) }
+      : { properties: notionProperties(payload.record) };
   return {
     url: `https://api.notion.com/v1/pages/${encodeURIComponent(pageId)}`,
     init: {
@@ -174,24 +180,25 @@ function buildNotionRequest(payload: ProviderWritePayload, settings: LifeOSSetti
         'content-type': 'application/json',
         'notion-version': '2026-03-11',
       },
-      body: JSON.stringify({
-        ...(payload.operation === 'archive_record'
-          ? { in_trash: true }
-          : { properties: notionProperties(payload.record) }),
-      }),
+      body: JSON.stringify(body),
     },
   };
 }
 
 function sheetRow(payload: ProviderWritePayload) {
   const record = payload.record ?? payload.before;
+  const archived = payload.operation === 'archive_record'
+    ? 'true'
+    : payload.operation === 'restore_record'
+      ? 'false'
+      : String(record?.archived_at ? true : record?.deleted ?? false);
   return [
     payload.record_id,
     recordTitle(record),
     record?.domain ?? '',
     record?.collection ?? '',
     JSON.stringify(record?.properties ?? {}),
-    payload.operation === 'archive_record' ? 'true' : String(record?.archived_at ? true : record?.deleted ?? false),
+    archived,
     String(record?.revision ?? ''),
     new Date().toISOString(),
     payload.op_id,

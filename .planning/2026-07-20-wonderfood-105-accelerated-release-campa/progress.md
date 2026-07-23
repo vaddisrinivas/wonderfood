@@ -815,9 +815,22 @@
 - Replaced it with an Expo-era authority receipt gate and added `npm run check:provider-standalone-authority`.
 - The gate now runs live Notion scenario proof, live Google Sheets scenario proof, and direct app writeback in one output directory, then produces one redacted JSON/HTML/PNG receipt.
 - Fresh passed evidence:
-  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.json`
-  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.html`
-  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.png`
-  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof-mobile.png`
-- Receipt result: `all_authority_checks_passed=true`; Notion and Sheets both prove seed export, provider edit readback, archive readback, undo archive readback, repair, create/update/archive write delivery, and no token/secret visibility.
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.json`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.html`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.png`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof-mobile.png`
+- Receipt result: `all_authority_checks_passed=true`; Notion and Sheets both prove seed export, provider edit readback, archive readback, undo archive readback, repair, create/update/archive/restore write delivery, and no token/secret visibility.
 - Honest boundary: this closes a stale automated authority proof gap; it is not a manual direct-browser UX inspection of the user's production Notion/Sheets surfaces.
+
+## 2026-07-23 provider archive Undo writeback
+
+- Found a real provider Undo gap: archive Undo became a local `restore` operation, but provider writeback only knew create/update/archive. That could restore SQLite while leaving Notion trashed.
+- Added explicit `restore_record` provider write payloads.
+- Notion restore delivery uses `in_trash:false` on `Notion-Version: 2026-03-11`; Sheets restore delivery appends a canonical row with `archived=false`.
+- Verified:
+  - `npm run check:provider-writeback` ✅ — 8 tests, including Notion and Sheets restore payloads.
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+  - `npm run check:live-provider-writeback` ✅ through `agent-env`, evidence `app/build/evidence/live-workspace/direct_provider_writeback-1784834264.json`.
+  - `npm run check:provider-standalone-authority` ✅, evidence `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.json`.
+  - `npm run check:product` ✅ after the restore fix — full Vitest suite `16` files / `61` tests, config/control/schema/template/web/accessibility/roundtrip/sync/provider/chat/export gates all passed.
