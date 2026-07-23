@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
-import { colors } from '@/src/theme';
+import { useLifeOSTheme } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
 
 const icons: Record<string, string> = {
@@ -14,17 +14,22 @@ const icons: Record<string, string> = {
 
 export default function TabLayout() {
   const domain = loadCatalog().activeManifest;
+  const theme = useLifeOSTheme();
   return (
     <Tabs screenOptions={({ route }) => ({
-      headerStyle: { backgroundColor: colors.canvas },
+      headerStyle: { backgroundColor: theme.colors.canvas },
       headerShadowVisible: false,
-      headerTintColor: colors.ink,
+      headerTintColor: theme.colors.ink,
       headerTitleStyle: { fontWeight: '800' },
-      tabBarStyle: styles.tabBar,
-      tabBarItemStyle: styles.tabItem,
-      tabBarActiveTintColor: colors.moss,
-      tabBarInactiveTintColor: colors.muted,
-      tabBarLabelStyle: styles.tabLabel,
+      tabBarStyle: [
+        styles.tabBar,
+        theme.density === 'compact' && styles.tabBarCompact,
+        { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line },
+      ],
+      tabBarItemStyle: [styles.tabItem, theme.density === 'compact' && styles.tabItemCompact],
+      tabBarActiveTintColor: theme.colors.moss,
+      tabBarInactiveTintColor: theme.colors.muted,
+      tabBarLabelStyle: [styles.tabLabel, theme.density === 'compact' && styles.tabLabelCompact],
       tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>{icons[route.name] ?? '•'}</Text>,
     })}>
       <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false }} />
@@ -37,8 +42,11 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: { backgroundColor: colors.paper, borderTopColor: colors.line, height: 76, paddingTop: 7, paddingBottom: 8 },
+  tabBar: { height: 76, paddingTop: 7, paddingBottom: 8 },
+  tabBarCompact: { height: 62, paddingTop: 4, paddingBottom: 5 },
   tabItem: { minWidth: 0, paddingHorizontal: 0 },
+  tabItemCompact: { paddingVertical: 0 },
   tabLabel: { fontSize: 8, fontWeight: '800' },
+  tabLabelCompact: { fontSize: 7 },
   tabIcon: { fontSize: 17, fontWeight: '800', height: 23 },
 });
