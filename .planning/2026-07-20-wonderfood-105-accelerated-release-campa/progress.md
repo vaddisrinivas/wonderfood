@@ -761,3 +761,16 @@
   - `app/build/evidence/live-workspace/notion_scenarios-1784832719.json`
   - `app/build/evidence/live-workspace/google_sheets_scenarios-1784832734.json`
   - `app/build/evidence/live-workspace/direct_provider_writeback-1784832741.json` — Notion and Sheets create/update/archive delivered; Notion proof artifacts cleaned.
+
+## 2026-07-23 load-bearing guard audit
+
+- Read the external review note recommending hard audit of `apply.ts`, `ai/runtime.ts`, and `config/*`.
+- Audited one-write-path and capability flow.
+- Found and fixed a real one-write-path hole: a second `create` without an idempotency replay could overwrite an existing record. `applyOperation` now rejects this as `record_already_exists`.
+- Added regression coverage in `tests/ops/apply.test.ts`.
+- Strengthened operation-boundary grep so direct record deletes are not missed; provider local-copy clear remains an explicit audited lifecycle exception, not accidental silence.
+- Verified:
+  - `npm run check:operation-boundary` ✅
+  - `npm exec -- vitest run tests/ops/apply.test.ts tests/ops/writer-boundary.test.ts tests/ai/runtime.test.ts` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅

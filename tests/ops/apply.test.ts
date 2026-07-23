@@ -97,6 +97,48 @@ describe('applyOperation', () => {
     expect(JSON.parse(db.records.get('test-dal')?.properties).body).toBe('Updated once');
   });
 
+  it('rejects create on an existing record without overwriting it', async () => {
+    const db = new MemoryDb() as any;
+    await applyOperation(db, manifest, {
+      op_id: 'create-unique-yogurt',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'unique-yogurt',
+      record: {
+        title: 'Original yogurt',
+        properties: { body: 'Original body' },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'unique-yogurt', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    const duplicateCreate = await applyOperation(db, manifest, {
+      op_id: 'create-unique-yogurt-overwrite',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'unique-yogurt',
+      record: {
+        title: 'Overwrite yogurt',
+        properties: { body: 'Bad overwrite' },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'unique-yogurt', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    expect(duplicateCreate.status).toBe('rejected');
+    expect(duplicateCreate.reject_reason).toBe('record_already_exists');
+    expect(db.records.get('unique-yogurt')?.title).toBe('Original yogurt');
+    expect(JSON.parse(db.records.get('unique-yogurt')?.properties).body).toBe('Original body');
+  });
+
   it('rejects invalid records without partial record writes', async () => {
     const db = new MemoryDb() as any;
     const rejected = await applyOperation(db, manifest, {

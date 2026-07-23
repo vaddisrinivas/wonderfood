@@ -78,3 +78,9 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - Direct live provider writeback must prove more than create. It now proves create, update, and archive for Notion and Sheets.
 - Notion page archive/trash delivery uses `in_trash: true`; using the older archive field failed live delivery/readback.
 - Sheets direct archive is represented as an appended provider write row with archived=true, then proof cleanup clears the appended proof rows.
+
+## Load-bearing Guard Audit Findings
+
+- The AI capability gate is real for current manifests: `DomainManifest.collections` is a string array, so collection scope checks are not a type illusion.
+- One-write-path had a create-overwrite hole: `create` on an existing record could mutate without an expected revision if the idempotency key did not catch it. This is now rejected.
+- Provider local-copy clear/disconnect directly deletes local provider-owned rows by design. The operation-boundary gate now explicitly allowlists that lifecycle exception so future broad direct deletes are visible.

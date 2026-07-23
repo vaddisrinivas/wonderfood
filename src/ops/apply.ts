@@ -258,6 +258,9 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
   }
 
   const current = await readRecord(db, op.record_id);
+  if (current && op.kind === 'create') {
+    return rejectOperation(db, op, current, 'record_already_exists', dryRun);
+  }
   if (current && op.kind !== 'create' && op.expected_revision == null) {
     return rejectOperation(db, op, current, 'expected_revision_required', dryRun);
   }
