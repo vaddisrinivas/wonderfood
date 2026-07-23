@@ -50,7 +50,7 @@ done
 
 "$adb_bin" -s "$serial" shell monkey -p "$package_name" 1 >/dev/null
 sleep 2
-"$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d wonderfood://health-connect >/dev/null
+"$adb_bin" -s "$serial" shell am start -a android.health.connect.action.MANAGE_HEALTH_PERMISSIONS --es android.intent.extra.PACKAGE_NAME "$package_name" >/dev/null
 sleep 2
 "$adb_bin" -s "$serial" exec-out screencap -p >"$evidence_dir/emulatorx-healthconnect-script.png"
 
@@ -77,7 +77,7 @@ for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_
 done
 
 "$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
-"$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d wonderfood:///health-diagnostics "$package_name" >/dev/null
+"$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d wonderfood:///health-diagnostics -n "$package_name/.MainActivity" >/dev/null
 roundtrip_dump=""
 for _ in $(seq 1 30); do
   "$adb_bin" -s "$serial" shell uiautomator dump "$ui_dump_path" >/dev/null 2>&1 || true

@@ -22,6 +22,9 @@ const recoveryTables = [
   'action_events',
   'operations',
   'sync_conflicts',
+  'config_sources',
+  'config_snapshots',
+  'config_conflicts',
   'undo_events',
   'workflow_runs',
   'agent_runs',
@@ -183,6 +186,36 @@ function assert(condition: unknown, message: string): asserts condition {
     created_at: now,
     updated_at: now,
   });
+  sourceProof.tables.get('config_sources')!.push({
+    id: 'roundtrip-config-local',
+    kind: 'local',
+    label: 'Roundtrip local config',
+    location_json: JSON.stringify({ path: 'domains/food.yaml' }),
+    auto_refresh: 0,
+    refresh_minutes: 60,
+    precedence: 1,
+    enabled: 1,
+    created_at: now,
+    updated_at: now,
+  });
+  sourceProof.tables.get('config_snapshots')!.push({
+    source_id: 'roundtrip-config-local',
+    fetched_at: now,
+    content_hash: 'roundtrip-config-hash',
+    etag: null,
+    raw: 'domains:\n  - food',
+    validation_status: 'valid',
+    error_json: null,
+  });
+  sourceProof.tables.get('config_conflicts')!.push({
+    id: 'roundtrip-config-conflict',
+    key: 'activeDomain',
+    sources_json: JSON.stringify(['roundtrip-config-local']),
+    reason: 'Roundtrip config conflict proof.',
+    status: 'needs_review',
+    created_at: now,
+    resolved_at: null,
+  });
 
   const beforeChecksum = canonicalRecordChecksum(sourceProof);
   const snapshot = await exportRecoverySnapshot(sourceDb);
@@ -197,6 +230,9 @@ function assert(condition: unknown, message: string): asserts condition {
   assert(active?.deleted === false, 'active record imported as deleted');
   assert(active?.relations.some((relation) => relation.target_id === 'roundtrip-pantry-yogurt'), 'relation not preserved');
   assert(restoredProof.tables.get('operations')!.length === sourceProof.tables.get('operations')!.length, 'operation ledger not preserved');
+  assert(restoredProof.tables.get('config_sources')!.length === 1, 'config sources not preserved');
+  assert(restoredProof.tables.get('config_snapshots')!.length === 1, 'config snapshots not preserved');
+  assert(restoredProof.tables.get('config_conflicts')!.length === 1, 'config conflicts not preserved');
 
   const outDir = join(process.cwd(), 'app', 'build', 'evidence', 'roundtrip');
   mkdirSync(outDir, { recursive: true });
@@ -208,6 +244,9 @@ function assert(condition: unknown, message: string): asserts condition {
     afterChecksum,
     records: restoredProof.tables.get('records')!.length,
     operations: restoredProof.tables.get('operations')!.length,
+    config_sources: restoredProof.tables.get('config_sources')!.length,
+    config_snapshots: restoredProof.tables.get('config_snapshots')!.length,
+    config_conflicts: restoredProof.tables.get('config_conflicts')!.length,
     tombstone: {
       id: tombstone?.id,
       deleted: tombstone?.deleted,
