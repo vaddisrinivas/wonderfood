@@ -895,3 +895,18 @@
 - Fresh result: `npm run phase9:check:visual-state-matrix` ✅ with `22/22` screenshots; evidence `app/build/evidence/visual-state-matrix/visual-state-matrix.json`.
 - Re-ran `npm run phase9:check:completion-audit` after adding visual-matrix evidence. New rollup: `complete=false`, `5 passed`, `1 partial`, `1 blocked`, `0 missing`.
 - Remaining completion blockers are now sharper: Android/iOS release signing/App Store env is blocked; final visual polish remains partial because native full-state matrix, tablet/foldable review and manual product-grade UI review are not complete.
+
+## 2026-07-23 native visual matrix proof
+
+- Added `scripts/quality/check-native-visual-matrix.sh` and `npm run phase9:check:native-visual-matrix`.
+- The verifier installs the release APK on the active emulator, opens native deep links, checks stable UI labels, and captures screenshot + UI XML evidence for Home, Food, record detail, Chat, Sources, Settings, and Capture.
+- Iterated label anchors to match native text rather than web-only headings:
+  - Food: `LIFEOS / FOOD` + `Green dal + rice`
+  - Record: `Record` + `Green dal + rice`
+  - Chat: `Ask about food records` + `Send`
+  - Sources: `LIFEOS / SOURCES` + `Food authority`
+  - Settings: `LIFEOS / CONNECTIONS` + `Control center`
+  - Capture: `LIFEOS / CAPTURE` + `Save capture`
+- Fresh result: `npm run phase9:check:native-visual-matrix` ✅ with `7/7` native routes; evidence `app/build/evidence/native-visual-matrix/native-visual-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `6 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining visual polish is now narrower: tablet/foldable review and manual product-grade UI review remain open; web visual matrix, Android native visual matrix, and accessibility smoke are proven.
