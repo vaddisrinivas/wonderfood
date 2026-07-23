@@ -9,7 +9,7 @@ export type DirectSyncProvider = Extract<RecordProvider, 'notion' | 'google_shee
 
 export type DirectSyncReceipt = {
   provider: DirectSyncProvider;
-  status: 'synced' | 'blocked' | 'error' | 'cleared' | 'restored';
+  status: 'synced' | 'blocked' | 'error' | 'cleared' | 'restored' | 'disconnected';
   message: string;
   records: number;
   snapshots: number;
@@ -83,6 +83,21 @@ export async function clearProviderLocalCopy(input: {
     observedAt,
     restoreToken: recordCount || snapshotCount ? backup.token : undefined,
     restoreUntil: recordCount || snapshotCount ? backup.restoreUntil : undefined,
+  };
+}
+
+export async function disconnectProviderLocalCopy(input: {
+  db: SQLiteDatabase | null;
+  provider: DirectSyncProvider;
+}): Promise<DirectSyncReceipt> {
+  const clear = await clearProviderLocalCopy(input);
+  if (clear.status === 'blocked' || clear.status === 'error') return clear;
+  return {
+    ...clear,
+    status: 'disconnected',
+    message: clear.records || clear.snapshots
+      ? `Disconnected ${providerDisplayName(input.provider)} in this app and cleared the local copy. Provider data was not changed. You can restore this local copy for 15 minutes.`
+      : `Disconnected ${providerDisplayName(input.provider)} in this app. No local copy was present, and provider data was not changed.`,
   };
 }
 

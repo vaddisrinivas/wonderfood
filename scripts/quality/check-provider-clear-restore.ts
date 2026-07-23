@@ -6,7 +6,7 @@ import { upsertRecord, getRecord } from '../../src/db/records';
 import { linkSnapshotToRecord, upsertProviderLink, upsertSourceSnapshot } from '../../src/db/sources';
 import { applyOperation } from '../../src/ops/apply';
 import { undoOperation } from '../../src/ops/undo';
-import { clearProviderLocalCopy, restoreClearedProviderLocalCopy } from '../../src/providers/provider-local-copy';
+import { clearProviderLocalCopy, disconnectProviderLocalCopy, restoreClearedProviderLocalCopy } from '../../src/providers/provider-local-copy';
 
 type Row = Record<string, any>;
 
@@ -331,6 +331,21 @@ async function count(db: MemoryDb, sql: string, params: string[] = []) {
   assert(undoneRecord?.properties.body === 'A provider-owned row that must survive clear through restore.', 'undo did not restore body');
   assert(proofDb.operations.size >= 7, `expected operation ledger rows, got ${proofDb.operations.size}`);
 
+  const disconnect = await disconnectProviderLocalCopy({ db, provider: 'notion' });
+  assert(disconnect.status === 'disconnected', `disconnect status ${disconnect.status}`);
+  assert(disconnect.restoreToken, 'disconnect receipt missing restore token');
+  assert(disconnect.message.includes('Provider data was not changed'), 'disconnect receipt must state provider data was not changed');
+  const afterDisconnect = {
+    records: await count(proofDb, 'SELECT COUNT(*) AS count FROM records WHERE source_provider = ?', ['notion']),
+    snapshots: await count(proofDb, 'SELECT COUNT(*) AS count FROM source_snapshots WHERE provider = ?', ['notion']),
+    links: await count(proofDb, 'SELECT COUNT(*) AS count FROM provider_links WHERE provider = ?', ['notion']),
+    snapshotRelations: await count(proofDb, 'SELECT COUNT(*) AS count FROM source_snapshot_relations'),
+  };
+  assert(afterDisconnect.records === 0, `records remained after disconnect: ${afterDisconnect.records}`);
+  assert(afterDisconnect.snapshots === 0, `snapshots remained after disconnect: ${afterDisconnect.snapshots}`);
+  assert(afterDisconnect.links === 0, `links remained after disconnect: ${afterDisconnect.links}`);
+  assert(afterDisconnect.snapshotRelations === 0, `snapshot relations remained after disconnect: ${afterDisconnect.snapshotRelations}`);
+
   const evidence = {
     proof: 'provider_clear_restore',
     provider: 'notion',
@@ -356,6 +371,14 @@ async function count(db: MemoryDb, sql: string, params: string[] = []) {
       undo: undo.status,
       operations: proofDb.operations.size,
     },
+    disconnect: {
+      status: disconnect.status,
+      records: disconnect.records,
+      snapshots: disconnect.snapshots,
+      restoreTokenPresent: Boolean(disconnect.restoreToken),
+      providerDataUntouchedCopy: disconnect.message.includes('Provider data was not changed'),
+    },
+    afterDisconnect,
     all_passed: true,
   };
   const evidencePath = join(process.cwd(), 'app', 'build', 'evidence', 'provider-clear-restore-proof.json');

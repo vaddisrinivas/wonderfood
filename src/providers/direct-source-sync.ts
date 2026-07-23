@@ -6,7 +6,7 @@ import { CanonicalRecord } from '@/src/domain/runtime';
 import { upsertRecord } from '@/src/db/records';
 import { linkSnapshotToRecord, upsertProviderLink, upsertSourceSnapshot } from '@/src/db/sources';
 import { LifeOSSettings } from '@/src/settings/lifeos-settings';
-export { clearProviderLocalCopy, restoreClearedProviderLocalCopy } from '@/src/providers/provider-local-copy';
+export { clearProviderLocalCopy, disconnectProviderLocalCopy, restoreClearedProviderLocalCopy } from '@/src/providers/provider-local-copy';
 export type { DirectSyncProvider, DirectSyncReceipt } from '@/src/providers/provider-local-copy';
 import type { DirectSyncProvider, DirectSyncReceipt } from '@/src/providers/provider-local-copy';
 
