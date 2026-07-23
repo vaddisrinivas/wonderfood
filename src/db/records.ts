@@ -1,10 +1,13 @@
 import {
   CanonicalRecord,
+  CanonicalProvenance,
   RecordProvider,
   validateCanonicalRecord,
 } from '@/src/domain/runtime';
-import { loadCatalog, DomainManifest, DomainId } from '@/src/domain/catalog';
+import { getDomainManifest, loadCatalog, DomainManifest, DomainId } from '@/src/domain/catalog';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { applyOperation } from '@/src/ops/apply';
+import type { OperationActor, OperationOrigin } from '@/src/ops/operation';
 
 type SqlRecordRow = {
   id: string;
@@ -20,6 +23,11 @@ type SqlRecordRow = {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  revision: number;
+  schema_version: string;
+  deleted: number;
+  privacy: CanonicalRecord['privacy'];
+  provenance_json: string | null;
 };
 
 type SqlRelationRow = {
@@ -92,12 +100,20 @@ export async function listRecordsByCollections(
 export async function upsertRecord(
   db: SQLiteDatabase,
   manifest: DomainManifest,
-  input: Omit<CanonicalRecord, 'domain' | 'relations'> & {
+  input: Omit<CanonicalRecord, 'domain' | 'relations' | 'revision' | 'schema_version' | 'deleted' | 'privacy' | 'provenance'> & {
     id: string;
     relations?: CanonicalRelationInput[];
     source: CanonicalRecord['source'];
     created_at?: string;
     updated_at?: string;
+    revision?: number;
+    schema_version?: string;
+    deleted?: boolean;
+    privacy?: CanonicalRecord['privacy'];
+    provenance?: CanonicalProvenance | null;
+    operation_origin?: OperationOrigin;
+    operation_actor?: OperationActor;
+    idempotency_key?: string;
   }
 ): Promise<CanonicalRecord> {
   const now = new Date().toISOString();
@@ -114,74 +130,51 @@ export async function upsertRecord(
     'record'
   );
 
-  const recordProperties = JSON.stringify(validated.properties ?? {});
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      `
-        INSERT INTO records (
-          id, domain, collection, title, properties, source_provider, source_external_id, source_url,
-          source_observed_at, source_content_hash, archived_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          domain = excluded.domain,
-          collection = excluded.collection,
-          title = excluded.title,
-          properties = excluded.properties,
-          source_provider = excluded.source_provider,
-          source_external_id = excluded.source_external_id,
-          source_url = excluded.source_url,
-          source_observed_at = excluded.source_observed_at,
-          source_content_hash = excluded.source_content_hash,
-          archived_at = excluded.archived_at,
-          updated_at = excluded.updated_at
-      `,
-      [
-        validated.id,
-        validated.domain,
-        validated.collection,
-        validated.title,
-        recordProperties,
-        validated.source.provider,
-        validated.source.external_id,
-        validated.source.url ?? null,
-        validated.source.observed_at,
-        validated.source.content_hash ?? null,
-        validated.archived_at,
-        validated.created_at ?? now,
-        validated.updated_at,
-      ]
-    );
-
-    await db.runAsync(`DELETE FROM record_relations WHERE from_id = ?`, [validated.id]);
-    for (const relation of validated.relations) {
-      const target = relation.target_id.trim();
-      const nowIso = new Date().toISOString();
-      const targetParts = target.split(':');
-      await db.runAsync(
-        `
-          INSERT INTO record_relations (
-            from_id, collection, name, target_id, target_domain, target_collection, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-        [
-          validated.id,
-          validated.collection,
-          relation.name,
-          target,
-          targetParts[0] || validated.domain,
-          targetParts.length > 1 ? targetParts[1] : validated.collection,
-          nowIso,
-        ]
-      );
-    }
+  const current = await getRecord(db, validated.id);
+  const result = await applyOperation(db, manifest, {
+    op_id: `op-${validated.id}-${Date.now().toString(36)}`,
+    kind: current ? 'update' : 'create',
+    domain: manifest.id,
+    collection: validated.collection,
+    record_id: validated.id,
+    expected_revision: current?.revision,
+    record: validated,
+    actor: input.operation_actor ?? validated.provenance?.actor ?? actorForProvider(validated.source.provider),
+    origin: input.operation_origin ?? originForProvider(validated.source.provider),
+    idempotency_key: input.idempotency_key,
+    confidence: validated.provenance?.confidence ?? null,
+    evidence: validated.provenance?.evidence ?? [],
+    reason: validated.provenance?.reason ?? `Upsert ${validated.title}`,
   });
-
-  return getRecord(db, validated.id) as Promise<CanonicalRecord>;
+  if (result.status === 'rejected') {
+    throw new Error(`Record operation rejected: ${result.reject_reason}`);
+  }
+  const saved = result.record ?? await getRecord(db, validated.id);
+  if (!saved) throw new Error(`Record operation did not return ${validated.id}`);
+  return saved;
 }
 
 export async function archiveRecord(db: SQLiteDatabase, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  await db.runAsync(`UPDATE records SET archived_at = ?, updated_at = ? WHERE id = ?`, [now, now, id]);
+  const current = await getRecord(db, id);
+  if (!current) return;
+  const catalog = loadCatalog();
+  const manifest = current.domain === catalog.activeManifest.id
+    ? catalog.activeManifest
+    : getDomainManifest(catalog.catalog.domains, current.domain) ?? catalog.activeManifest;
+  const result = await applyOperation(db, manifest, {
+    op_id: `op-${id}-archive-${Date.now().toString(36)}`,
+    kind: 'archive',
+    domain: manifest.id,
+    collection: current.collection,
+    record_id: id,
+    expected_revision: current.revision,
+    actor: 'user',
+    origin: 'manual',
+    reason: `Archive ${current.title}`,
+  });
+  if (result.status === 'rejected') {
+    throw new Error(`Archive operation rejected: ${result.reject_reason}`);
+  }
 }
 
 async function inflateRecord(row: SqlRecordRow): Promise<CanonicalRecord> {
@@ -212,7 +205,34 @@ async function inflateRecord(row: SqlRecordRow): Promise<CanonicalRecord> {
     archived_at: row.archived_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    revision: Number(row.revision) || 1,
+    schema_version: row.schema_version || '1.0.0',
+    deleted: Boolean(row.deleted),
+    privacy: row.privacy === 'private' || row.privacy === 'shared' || row.privacy === 'personal' ? row.privacy : 'personal',
+    provenance: parseProvenance(row.provenance_json),
   };
+}
+
+function parseProvenance(value: string | null): CanonicalProvenance | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed as CanonicalProvenance : null;
+  } catch {
+    return null;
+  }
+}
+
+function actorForProvider(provider: RecordProvider): OperationActor {
+  if (provider === 'notion' || provider === 'google_sheets' || provider === 'postgres') return 'sync';
+  if (provider === 'web') return 'api';
+  return 'user';
+}
+
+function originForProvider(provider: RecordProvider): OperationOrigin {
+  if (provider === 'notion' || provider === 'google_sheets' || provider === 'postgres') return 'sync';
+  if (provider === 'web') return 'import';
+  return 'manual';
 }
 
 export async function ensureSeedCollectionCounts(

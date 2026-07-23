@@ -17,6 +17,13 @@ export interface CanonicalSource {
   content_hash: string | null;
 }
 
+export interface CanonicalProvenance {
+  actor: 'user' | 'ai' | 'import' | 'sync' | 'agent' | 'api' | 'workflow';
+  confidence: number | null;
+  evidence: string[];
+  reason: string | null;
+}
+
 export interface CanonicalRecord {
   id: string;
   domain: DomainId;
@@ -28,6 +35,11 @@ export interface CanonicalRecord {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  revision: number;
+  schema_version: string;
+  deleted: boolean;
+  privacy: 'private' | 'personal' | 'shared';
+  provenance: CanonicalProvenance | null;
 }
 
 export interface CanonicalCitation {
@@ -104,20 +116,21 @@ export function normalizeRelations(input: unknown, allowedCollections: Set<strin
       const relationRecord = relation as Record<string, unknown>;
       const name = typeof relationRecord.name === 'string' ? relationRecord.name : '';
       const targetId = typeof relationRecord.target_id === 'string' ? relationRecord.target_id : '';
-    const relationIsValid = name.length > 0 && targetId.length > 0;
-    if (!relationIsValid) {
-      return null;
-    }
-
-    if (targetId.includes(':')) {
-      const [targetDomain, targetCollection] = targetId.split(':');
-      if (targetDomain && targetCollection && !allowedCollections.has(targetCollection)) {
+      const relationIsValid = name.length > 0 && targetId.length > 0;
+      if (!relationIsValid) {
         return null;
       }
-    }
 
-    return { name, target_id: targetId };
-  })
+      const explicitParts = targetId.split(':');
+      if (explicitParts.length >= 2) {
+        const explicitCollection = explicitParts.length >= 3 ? explicitParts[1] : explicitParts[0];
+        if (explicitCollection && !allowedCollections.has(explicitCollection)) {
+          return null;
+        }
+      }
+
+      return { name, target_id: targetId };
+    })
     .filter((relation): relation is CanonicalRelation => relation !== null);
 
   const seen = new Set<string>();
@@ -170,6 +183,11 @@ export function validateCanonicalRecord(
   const relations = normalizeRelations(record.relations, relationIds);
   const source = normalizeSource(record.source);
   const archivedAt = typeof record.archived_at === 'string' ? record.archived_at : null;
+  const revision = typeof record.revision === 'number' && Number.isFinite(record.revision) && record.revision > 0 ? Math.floor(record.revision) : 1;
+  const schemaVersion = typeof record.schema_version === 'string' && record.schema_version.trim() ? record.schema_version.trim() : manifest.schema_version ?? '1.0.0';
+  const deleted = record.deleted === true;
+  const privacy = record.privacy === 'private' || record.privacy === 'shared' || record.privacy === 'personal' ? record.privacy : 'personal';
+  const provenance = normalizeProvenance(record.provenance);
   const createdAt =
     typeof record.created_at === 'string' ? record.created_at : new Date().toISOString();
   const updatedAt =
@@ -196,7 +214,28 @@ export function validateCanonicalRecord(
     archived_at: archivedAt,
     created_at: createdAt,
     updated_at: updatedAt,
+    revision,
+    schema_version: schemaVersion,
+    deleted,
+    privacy,
+    provenance,
   };
+}
+
+function normalizeProvenance(input: unknown): CanonicalProvenance | null {
+  if (!isPlainObject(input)) {
+    return null;
+  }
+  const actor = input.actor;
+  if (actor !== 'user' && actor !== 'ai' && actor !== 'import' && actor !== 'sync' && actor !== 'agent' && actor !== 'api' && actor !== 'workflow') {
+    return null;
+  }
+  const confidence = typeof input.confidence === 'number' && Number.isFinite(input.confidence)
+    ? Math.max(0, Math.min(1, input.confidence))
+    : null;
+  const evidence = Array.isArray(input.evidence) ? input.evidence.filter((item): item is string => typeof item === 'string') : [];
+  const reason = typeof input.reason === 'string' ? input.reason : null;
+  return { actor, confidence, evidence, reason };
 }
 
 export function validateCanonicalRelations(

@@ -1,7 +1,7 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import { CanonicalRecord } from '@/src/domain/runtime';
+import { CanonicalRecord, validateCanonicalRecord } from '@/src/domain/runtime';
 import { getRecord, listRecordsByCollections, listRecordsForDomain } from '@/src/db/records';
 import { getAllProviderLinks } from '@/src/db/sources';
 import { toRecordView, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';
@@ -39,8 +39,10 @@ export function getActiveDomainFeed() {
 }
 
 function sampleRecordsForActiveDomain(): CanonicalRecord[] {
-  const { domainId } = getActiveDomainFeed();
-  return domainId === 'food' ? sampleRecordsAsCanonical(domainId) as CanonicalRecord[] : [];
+  const { domainId, manifest } = getActiveDomainFeed();
+  return domainId === 'food'
+    ? sampleRecordsAsCanonical(domainId).map((record) => validateCanonicalRecord(record, domainId, manifest, 'sample'))
+    : [];
 }
 
 export async function queryDomainCollections(

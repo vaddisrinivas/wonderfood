@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { loadCatalog } from '../../src/domain/catalog';
 import { upsertRecord, getRecord } from '../../src/db/records';
 import { linkSnapshotToRecord, upsertProviderLink, upsertSourceSnapshot } from '../../src/db/sources';
+import { applyOperation } from '../../src/ops/apply';
+import { undoOperation } from '../../src/ops/undo';
 import { clearProviderLocalCopy, restoreClearedProviderLocalCopy } from '../../src/providers/provider-local-copy';
 
 type Row = Record<string, any>;
@@ -14,6 +16,7 @@ class MemoryDb {
   sourceSnapshots = new Map<string, Row>();
   providerLinks = new Map<string, Row>();
   snapshotRelations: Row[] = [];
+  operations = new Map<string, Row>();
 
   async withTransactionAsync(fn: () => Promise<void>) {
     await fn();
@@ -22,8 +25,8 @@ class MemoryDb {
   async runAsync(sql: string, params: any[] = []) {
     const compact = sql.replace(/\s+/g, ' ').trim();
     if (compact.startsWith('INSERT INTO records')) {
-      const [id, domain, collection, title, properties, source_provider, source_external_id, source_url, source_observed_at, source_content_hash, archived_at, created_at, updated_at] = params;
-      this.records.set(id, { id, domain, collection, title, properties, source_provider, source_external_id, source_url, source_observed_at, source_content_hash, archived_at, created_at, updated_at });
+      const [id, domain, collection, title, properties, source_provider, source_external_id, source_url, source_observed_at, source_content_hash, archived_at, created_at, updated_at, revision, schema_version, deleted, privacy, provenance_json] = params;
+      this.records.set(id, { id, domain, collection, title, properties, source_provider, source_external_id, source_url, source_observed_at, source_content_hash, archived_at, created_at, updated_at, revision, schema_version, deleted, privacy, provenance_json });
       return;
     }
     if (compact === 'DELETE FROM record_relations WHERE from_id = ?') {
@@ -52,6 +55,17 @@ class MemoryDb {
       if (!this.snapshotRelations.some((row) => row.snapshot_id === snapshot_id && row.record_id === record_id)) {
         this.snapshotRelations.push({ snapshot_id, record_id });
       }
+      return;
+    }
+    if (compact.startsWith('INSERT INTO operations')) {
+      const [op_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at] = params;
+      this.operations.set(op_id, { op_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at });
+      return;
+    }
+    if (compact === 'UPDATE operations SET status = ? WHERE op_id = ?') {
+      const [status, opId] = params;
+      const row = this.operations.get(opId);
+      if (row) row.status = status;
       return;
     }
     if (compact.startsWith('DELETE FROM record_relations WHERE from_id IN')) {
@@ -86,6 +100,13 @@ class MemoryDb {
     const compact = sql.replace(/\s+/g, ' ').trim();
     if (compact === 'SELECT * FROM records WHERE id = ?') {
       return (this.records.get(params[0]) ?? null) as T | null;
+    }
+    if (compact === 'SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?') {
+      const row = Array.from(this.operations.values()).find((item) => item.idempotency_key === params[0]);
+      return (row ? { op_id: row.op_id, after_json: row.after_json, status: row.status } : null) as T | null;
+    }
+    if (compact === 'SELECT * FROM operations WHERE op_id = ?') {
+      return (this.operations.get(params[0]) ?? null) as T | null;
     }
     if (compact.startsWith('SELECT (SELECT COUNT(*) FROM records WHERE source_provider = ?')) {
       const [provider] = params;
@@ -258,6 +279,57 @@ async function count(db: MemoryDb, sql: string, params: string[] = []) {
   assert(afterRestore.links === before.links, `links not restored: ${afterRestore.links}/${before.links}`);
   assert(afterRestore.snapshotRelations === before.snapshotRelations, `snapshot relations not restored: ${afterRestore.snapshotRelations}/${before.snapshotRelations}`);
   assert(afterRestore.relationCount === 1, `record relation not restored: ${afterRestore.relationCount}`);
+  assert(restoredMeal?.revision === 1, `expected restored revision 1, got ${restoredMeal?.revision}`);
+
+  const revisioned = await applyOperation(db, manifest, {
+    op_id: 'proof-update-revision',
+    kind: 'update',
+    domain: manifest.id,
+    collection: restoredMeal.collection,
+    record_id: restoredMeal.id,
+    expected_revision: restoredMeal.revision,
+    changes: { body: 'Revisioned by operation proof.' },
+    actor: 'user',
+    origin: 'manual',
+    idempotency_key: 'proof-update-revision-idem',
+    reason: 'Operation boundary proof.',
+  });
+  assert(revisioned.status === 'applied', `revisioned status ${revisioned.status}`);
+  assert(revisioned.record?.revision === 2, `expected revision 2, got ${revisioned.record?.revision}`);
+
+  const duplicate = await applyOperation(db, manifest, {
+    op_id: 'proof-update-revision-again',
+    kind: 'update',
+    domain: manifest.id,
+    collection: restoredMeal.collection,
+    record_id: restoredMeal.id,
+    expected_revision: restoredMeal.revision,
+    changes: { body: 'Should not apply twice.' },
+    actor: 'user',
+    origin: 'manual',
+    idempotency_key: 'proof-update-revision-idem',
+  });
+  assert(duplicate.status === 'duplicate', `duplicate status ${duplicate.status}`);
+
+  const conflict = await applyOperation(db, manifest, {
+    op_id: 'proof-stale-revision',
+    kind: 'update',
+    domain: manifest.id,
+    collection: restoredMeal.collection,
+    record_id: restoredMeal.id,
+    expected_revision: 1,
+    changes: { body: 'Stale writer.' },
+    actor: 'user',
+    origin: 'manual',
+  });
+  assert(conflict.status === 'rejected' && conflict.reject_reason === 'revision_conflict', `conflict result ${conflict.status}/${conflict.reject_reason}`);
+
+  const undo = await undoOperation(db, manifest, 'proof-update-revision');
+  assert(undo.status === 'applied' || undo.status === 'duplicate', `undo status ${undo.status}`);
+  const undoneRecord = await getRecord(db, 'notion-restore-meal');
+  assert(undoneRecord?.revision === 3, `expected undo revision 3, got ${undoneRecord?.revision}`);
+  assert(undoneRecord?.properties.body === 'A provider-owned row that must survive clear through restore.', 'undo did not restore body');
+  assert(proofDb.operations.size >= 7, `expected operation ledger rows, got ${proofDb.operations.size}`);
 
   const evidence = {
     proof: 'provider_clear_restore',
@@ -277,6 +349,13 @@ async function count(db: MemoryDb, sql: string, params: string[] = []) {
       snapshots: restore.snapshots,
     },
     afterRestore,
+    operationBoundary: {
+      applied: revisioned.status,
+      duplicate: duplicate.status,
+      conflict: conflict.reject_reason,
+      undo: undo.status,
+      operations: proofDb.operations.size,
+    },
     all_passed: true,
   };
   const evidencePath = join(process.cwd(), 'app', 'build', 'evidence', 'provider-clear-restore-proof.json');

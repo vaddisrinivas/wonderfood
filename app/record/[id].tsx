@@ -76,6 +76,11 @@ function fallbackCanonicalFromView(
     archived_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    revision: 1,
+    schema_version: 'lifeos.domain.v1',
+    deleted: false,
+    privacy: 'personal',
+    provenance: null,
   };
 }
 

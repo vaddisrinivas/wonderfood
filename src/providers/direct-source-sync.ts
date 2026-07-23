@@ -196,6 +196,16 @@ function notionPageToRecord(page: NotionPage, manifest: DomainManifest, observed
     archived_at: null,
     created_at: page.created_time || observedAt,
     updated_at: page.last_edited_time || observedAt,
+    revision: 1,
+    schema_version: manifest.schema_version,
+    deleted: false,
+    privacy: 'personal',
+    provenance: {
+      actor: 'sync',
+      confidence: null,
+      evidence: [page.url || page.id || id],
+      reason: 'Pulled from Notion direct source.',
+    },
   };
 }
 
@@ -234,6 +244,16 @@ function sheetValuesToRecords(values: unknown[][], manifest: DomainManifest, wor
         archived_at: null,
         created_at: observedAt,
         updated_at: observedAt,
+        revision: 1,
+        schema_version: manifest.schema_version,
+        deleted: false,
+        privacy: 'personal',
+        provenance: {
+          actor: 'sync',
+          confidence: null,
+          evidence: [`row:${index + 2}`],
+          reason: 'Pulled from Google Sheets direct source.',
+        },
       } satisfies CanonicalRecord;
     })
     .filter((record) => record.title.trim().length > 0);

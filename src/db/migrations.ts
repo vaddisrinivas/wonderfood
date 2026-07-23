@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 1;
+export const DATABASE_VERSION = 2;
 
 const TABLES = {
   meta: 'meta',
@@ -14,6 +14,7 @@ const TABLES = {
   provider_links: 'provider_links',
   outbox: 'outbox_events',
   actions: 'action_events',
+  operations: 'operations',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
   agent_runs: 'agent_runs',
@@ -255,6 +256,50 @@ const MIGRATIONS: Migration[] = [
         await db.execAsync(`DROP TABLE IF EXISTS ${name}`);
       }
       await db.execAsync('PRAGMA user_version = 0');
+    },
+  },
+  {
+    version: 2,
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE ${TABLES.records} ADD COLUMN revision INTEGER NOT NULL DEFAULT 1`);
+      await db.execAsync(`ALTER TABLE ${TABLES.records} ADD COLUMN schema_version TEXT NOT NULL DEFAULT '1.0.0'`);
+      await db.execAsync(`ALTER TABLE ${TABLES.records} ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`);
+      await db.execAsync(`ALTER TABLE ${TABLES.records} ADD COLUMN privacy TEXT NOT NULL DEFAULT 'personal' CHECK(privacy IN ('private','personal','shared'))`);
+      await db.execAsync(`ALTER TABLE ${TABLES.records} ADD COLUMN provenance_json TEXT`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.operations} (
+          op_id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          collection TEXT NOT NULL,
+          record_id TEXT NOT NULL,
+          expected_revision INTEGER,
+          result_revision INTEGER,
+          actor TEXT NOT NULL CHECK(actor IN ('user','ai','import','sync','agent','api','workflow')),
+          origin TEXT NOT NULL,
+          idempotency_key TEXT,
+          changes_json TEXT,
+          before_json TEXT,
+          after_json TEXT,
+          inverse_op_id TEXT,
+          status TEXT NOT NULL DEFAULT 'applied' CHECK(status IN ('applied','rejected','undone','superseded')),
+          reject_reason TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ${TABLES.operations}_idem_idx
+          ON ${TABLES.operations}(idempotency_key) WHERE idempotency_key IS NOT NULL
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.operations}_record_idx
+          ON ${TABLES.operations}(record_id, created_at)
+      `);
+      await db.execAsync(`PRAGMA user_version = 2`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.operations}`);
+      await db.execAsync(`PRAGMA user_version = 1`);
     },
   },
 ];
