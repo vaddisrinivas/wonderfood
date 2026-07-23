@@ -31,6 +31,17 @@ async function readJson(response: Response) {
 }
 
 try {
+  const verificationResponse = await fetch(`http://127.0.0.1:${port}/providers/notion/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ verification_token: 'secret_test_verification_token' }),
+  });
+  const verification = await readJson(verificationResponse);
+  ensure(verificationResponse.status === 200, 'Notion verification handshake should be acknowledged');
+  ensure(verification.status === 'verification_required', 'Notion verification handshake status should be explicit');
+  ensure(verification.verification_token_present === true, 'Notion verification response must not lose token presence');
+  ensure(!('verification_token' in verification), 'Notion verification response must not echo the token');
+
   const notionBody = JSON.stringify({
     event_type: 'page.update',
     data_source_id: 'missing-config-source',

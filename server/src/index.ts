@@ -409,6 +409,23 @@ const server = createServer(async (req: any, res: any) => {
         return;
       }
 
+      // Notion sends an unsigned one-time verification payload before event
+      // delivery begins. Acknowledge it without echoing or persisting the
+      // token; the operator must store it as the signing secret after copying
+      // it from the Notion connection settings.
+      const verificationToken =
+        typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>).verification_token
+          : undefined;
+      if (typeof verificationToken === 'string' && verificationToken.trim().length > 0) {
+        ok(res, {
+          status: 'verification_required',
+          verification_token_present: true,
+          signature_required_for_events: true,
+        });
+        return;
+      }
+
       const signature = Array.isArray(req.headers['x-notion-signature'])
         ? req.headers['x-notion-signature'][0]
         : req.headers['x-notion-signature'];

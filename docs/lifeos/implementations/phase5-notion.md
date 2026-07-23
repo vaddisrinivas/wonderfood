@@ -28,6 +28,15 @@
 - No synthetic/fake writes in tests.
 - Undo depends on persisted provider delta; no duplicate fake `undo_ready`.
 
+## Webhook verification handshake
+
+`POST /providers/notion/webhook` acknowledges Notion's unsigned one-time
+`verification_token` payload with `verification_required` and a boolean
+presence flag. It never echoes or persists the token. After the operator copies
+the token into `NOTION_WEBHOOK_SIGNING_SECRET` and verifies the subscription in
+Notion connection settings, signed event delivery uses the existing
+refetch-before-canonical-apply path.
+
 ## Evidence
 - `app/build/evidence/phase5-notion-adapter/phase5-notion-adapter-proof.json`
 - `app/build/evidence/phase5-notion-adapter/phase5-notion-unit-proof.json`
