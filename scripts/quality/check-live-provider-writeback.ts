@@ -201,7 +201,62 @@ async function runNotionProof() {
   ensure(createdPageId, 'Notion direct writeback did not return page id.');
   const created = await notionRequest(token, 'GET', `/pages/${createdPageId}`);
   const readBackTitle = pageTitle(created);
-  await notionRequest(token, 'PATCH', `/pages/${createdPageId}`, { in_trash: true });
+  const createdRecord = payload.record;
+  ensure(createdRecord, 'Notion create payload missing record.');
+
+  const updatedRecord = {
+    ...createdRecord,
+    title: `Direct app writeback updated ${stamp}`,
+    source: { ...createdRecord.source, provider: 'notion' as const, external_id: createdPageId },
+    revision: 2,
+    updated_at: new Date().toISOString(),
+  };
+  const updatePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'update_record',
+    op_id: `live-notion-writeback-update-${stamp}`,
+    expected_revision: 1,
+    record: updatedRecord,
+    before: createdRecord,
+    external_id: createdPageId,
+  };
+  const updateEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-notion-update-${stamp}`,
+    action_key: `provider-write:notion:${updatePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(updatePayload),
+  });
+  const updateDelivery = await deliverProviderWriteEvent({ db, event: updateEvent, settings, platform: 'native' });
+  ensure(updateDelivery.status === 'delivered', `Notion update writeback not delivered: ${updateDelivery.status}`);
+  const updated = await notionRequest(token, 'GET', `/pages/${createdPageId}`);
+  const updateReadBackTitle = pageTitle(updated);
+  ensure(updateReadBackTitle === updatedRecord.title, 'Notion update writeback title did not round trip.');
+
+  const archivedAt = new Date().toISOString();
+  const archivePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'archive_record',
+    op_id: `live-notion-writeback-archive-${stamp}`,
+    expected_revision: 2,
+    record: { ...updatedRecord, archived_at: archivedAt, revision: 3, updated_at: archivedAt },
+    before: updatedRecord,
+    external_id: createdPageId,
+  };
+  const archiveEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-notion-archive-${stamp}`,
+    action_key: `provider-write:notion:${archivePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(archivePayload),
+  });
+  const archiveDelivery = await deliverProviderWriteEvent({ db, event: archiveEvent, settings, platform: 'native' });
+  ensure(archiveDelivery.status === 'delivered', `Notion archive writeback not delivered: ${archiveDelivery.status}`);
+  const archived = await notionRequest(token, 'GET', `/pages/${createdPageId}`);
+  const archiveReadBackHidden = Boolean(archived.archived) || Boolean(archived.in_trash);
+  ensure(archiveReadBackHidden, 'Notion archive writeback did not mark page archived or trashed.');
+
+  await notionRequest(token, 'PATCH', `/pages/${createdPageId}`, { in_trash: true }).catch((error) => {
+    if (!String(error instanceof Error ? error.message : error).includes('archived')) throw error;
+  });
   let cleanupDatabaseArchived = false;
   if (dataSource.databaseId) {
     await notionRequest(token, 'PATCH', `/databases/${encodeURIComponent(dataSource.databaseId)}`, { archived: true })
@@ -221,6 +276,11 @@ async function runNotionProof() {
     data_source_id: mask(dataSource.dataSourceId),
     database_id: mask(dataSource.databaseId),
     read_back_title: readBackTitle,
+    update_read_back_title: updateReadBackTitle,
+    archive_read_back_archived: Boolean(archived.archived),
+    archive_read_back_trashed: Boolean(archived.in_trash),
+    update_delivery_status: updateDelivery.status,
+    archive_delivery_status: archiveDelivery.status,
     cleanup_archived_page: true,
     cleanup_database_archived: cleanupDatabaseArchived,
     cleanup_database_left_for_manual_review: Boolean(dataSource.databaseId) && !cleanupDatabaseArchived,
@@ -308,7 +368,7 @@ async function runSheetsProof() {
   await ensureLifeOSCanonicalSheet(token, spreadsheetId);
 
   const db = new MemoryDb() as never;
-  let updatedRange = '';
+  const updatedRanges: string[] = [];
   const payload: ProviderWritePayload = {
     schema_version: 'lifeos.provider-write.v1',
     provider: 'google_sheets',
@@ -357,26 +417,119 @@ async function runSheetsProof() {
       const clone = response.clone();
       if (response.ok) {
         const body = await clone.json().catch(() => null) as { updates?: { updatedRange?: string } } | null;
-        updatedRange = body?.updates?.updatedRange || updatedRange;
+        const nextRange = body?.updates?.updatedRange || '';
+        if (nextRange) updatedRanges.push(nextRange);
       }
       return response;
     },
   });
   ensure(delivery.status === 'delivered', `Sheets direct writeback not delivered: ${delivery.status}`);
-  ensure(updatedRange, 'Sheets append did not return updatedRange.');
-  const encodedRange = encodeURIComponent(updatedRange);
+  ensure(updatedRanges[0], 'Sheets append did not return updatedRange.');
+  const encodedRange = encodeURIComponent(updatedRanges[0]);
   const readBack = await sheetsRequest(token, spreadsheetId, 'GET', `/values/${encodedRange}`);
   const values = Array.isArray(readBack.values) ? readBack.values as unknown[][] : [];
   const readBackFound = values.flat().some((cell) => String(cell).includes(payload.record_id));
-  await sheetsRequest(token, spreadsheetId, 'POST', `/values/${encodedRange}:clear`, {});
+
+  const createdRecord = payload.record;
+  ensure(createdRecord, 'Sheets create payload missing record.');
+  const updatePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'update_record',
+    op_id: `live-sheets-writeback-update-${stamp}`,
+    expected_revision: 1,
+    record: {
+      ...createdRecord,
+      title: `Direct app sheets writeback updated ${stamp}`,
+      revision: 2,
+      updated_at: new Date().toISOString(),
+    },
+    before: createdRecord,
+    external_id: payload.record_id,
+  };
+  const updateEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-sheets-update-${stamp}`,
+    action_key: `provider-write:google_sheets:${updatePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(updatePayload),
+  });
+  const updateDelivery = await deliverProviderWriteEvent({
+    db,
+    event: updateEvent,
+    settings,
+    platform: 'native',
+    fetcher: async (url, init) => {
+      const response = await fetch(url, init);
+      const clone = response.clone();
+      if (response.ok) {
+        const body = await clone.json().catch(() => null) as { updates?: { updatedRange?: string } } | null;
+        const nextRange = body?.updates?.updatedRange || '';
+        if (nextRange) updatedRanges.push(nextRange);
+      }
+      return response;
+    },
+  });
+  ensure(updateDelivery.status === 'delivered', `Sheets update writeback not delivered: ${updateDelivery.status}`);
+
+  const archivedAt = new Date().toISOString();
+  const archivePayload: ProviderWritePayload = {
+    ...payload,
+    operation: 'archive_record',
+    op_id: `live-sheets-writeback-archive-${stamp}`,
+    expected_revision: 2,
+    record: {
+      ...updatePayload.record!,
+      archived_at: archivedAt,
+      revision: 3,
+      updated_at: archivedAt,
+    },
+    before: updatePayload.record,
+    external_id: payload.record_id,
+  };
+  const archiveEvent = await enqueueOutboxEvent(db, {
+    id: `outbox-sheets-archive-${stamp}`,
+    action_key: `provider-write:google_sheets:${archivePayload.op_id}`,
+    domain: 'food',
+    payload_json: JSON.stringify(archivePayload),
+  });
+  const archiveDelivery = await deliverProviderWriteEvent({
+    db,
+    event: archiveEvent,
+    settings,
+    platform: 'native',
+    fetcher: async (url, init) => {
+      const response = await fetch(url, init);
+      const clone = response.clone();
+      if (response.ok) {
+        const body = await clone.json().catch(() => null) as { updates?: { updatedRange?: string } } | null;
+        const nextRange = body?.updates?.updatedRange || '';
+        if (nextRange) updatedRanges.push(nextRange);
+      }
+      return response;
+    },
+  });
+  ensure(archiveDelivery.status === 'delivered', `Sheets archive writeback not delivered: ${archiveDelivery.status}`);
+  const archiveRange = updatedRanges[2] || '';
+  ensure(archiveRange, 'Sheets archive append did not return updatedRange.');
+  const archiveReadBack = await sheetsRequest(token, spreadsheetId, 'GET', `/values/${encodeURIComponent(archiveRange)}`);
+  const archiveValues = Array.isArray(archiveReadBack.values) ? archiveReadBack.values as unknown[][] : [];
+  const archiveReadBackFound = archiveValues.flat().some((cell) => String(cell).toLowerCase() === 'true')
+    && archiveValues.flat().some((cell) => String(cell).includes(archivePayload.op_id));
+  ensure(archiveReadBackFound, 'Sheets archive writeback did not round trip.');
+
+  for (const range of updatedRanges) {
+    await sheetsRequest(token, spreadsheetId, 'POST', `/values/${encodeURIComponent(range)}:clear`, {});
+  }
 
   return {
     provider: 'google_sheets',
     status: 'passed',
     delivery_status: delivery.status,
+    update_delivery_status: updateDelivery.status,
+    archive_delivery_status: archiveDelivery.status,
     spreadsheet_id: mask(spreadsheetId),
-    updated_range: updatedRange.replace(/![A-Z]+[0-9]+:.*/, '!<row>'),
+    updated_ranges: updatedRanges.map((range) => range.replace(/![A-Z]+[0-9]+:.*/, '!<row>')),
     read_back_found: readBackFound,
+    archive_read_back_found: archiveReadBackFound,
     cleanup_cleared_range: true,
   };
 }

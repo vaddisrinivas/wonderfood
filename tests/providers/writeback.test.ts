@@ -134,6 +134,49 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(calls[0].init.headers.authorization).toBe('Bearer test-token');
   });
 
+  it('delivers Notion archive as a trash request against the provider page id', async () => {
+    const db = new MemoryDb();
+    const created = await createRecord(db, 'writeback-deliver-notion-archive-create');
+    const providerRecord = {
+      ...created.record!,
+      source: { ...created.record!.source, provider: 'notion' as const, external_id: 'notion-page-1' },
+    };
+    await applyOperation(db as any, manifest, {
+      op_id: 'writeback-deliver-notion-archive',
+      kind: 'archive',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'writeback-yogurt',
+      expected_revision: providerRecord.revision,
+      actor: 'user',
+      origin: 'manual',
+    });
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-deliver-notion-archive' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued archive writeback');
+    queued.payload.external_id = 'notion-page-1';
+    queued.event.payload_json = JSON.stringify(queued.payload);
+    const calls: Array<{ url: string; init: { method: string; headers: Record<string, string>; body?: string } }> = [];
+
+    const delivered = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async (url, init) => {
+        calls.push({ url, init });
+        return { ok: true, status: 200, text: async () => '{}' };
+      },
+      platform: 'native',
+    });
+
+    expect(delivered.status).toBe('delivered');
+    expect(calls[0].url).toBe('https://api.notion.com/v1/pages/notion-page-1');
+    expect(JSON.parse(calls[0].init.body || '{}')).toEqual({ in_trash: true });
+  });
+
   it('blocks browser delivery and marks failed provider responses', async () => {
     const db = new MemoryDb();
     await createRecord(db, 'writeback-deliver-sheets');

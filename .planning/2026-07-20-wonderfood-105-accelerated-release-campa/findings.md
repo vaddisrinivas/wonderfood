@@ -72,3 +72,9 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - Added evidence now proves invalid/failed remote config keeps the last-good control plane and that workflow run checkpoints survive recovery along with records/config.
 - Static separation now has its own gate: config modules cannot write record tables, and provider/data-sync modules cannot write config tables.
 - Remaining C4 UI is product-critical but should sit on these contracts: add/reorder/disable source, preview diff, accept/undo, show conflicts/errors/freshness, no token display.
+
+## Provider Writeback Findings
+
+- Direct live provider writeback must prove more than create. It now proves create, update, and archive for Notion and Sheets.
+- Notion page archive/trash delivery uses `in_trash: true`; using the older archive field failed live delivery/readback.
+- Sheets direct archive is represented as an appended provider write row with archived=true, then proof cleanup clears the appended proof rows.

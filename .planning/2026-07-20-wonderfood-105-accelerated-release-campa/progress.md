@@ -744,3 +744,20 @@
   - `app/build/evidence/live-workspace/direct_provider_writeback-1784832477.json` — direct Notion/Sheets writeback passed.
 - Updated `docs/lifeos/implementation-ledger.md` Phase 5/6 evidence paths.
 - Still open: standalone provider-authority UX and native visual proof; live scripts prove backend/provider authority slices only.
+
+## 2026-07-23 live provider create/update/archive hardening
+
+- Found that direct live writeback only proved create+cleanup, not update/archive authority.
+- Extended `scripts/quality/check-live-provider-writeback.ts` to prove Notion and Google Sheets create → update → archive delivery.
+- Fixed Notion archive delivery to use `in_trash: true` for page trash/archive on the current API.
+- Added focused unit coverage in `tests/providers/writeback.test.ts` so Notion archive delivery targets the provider page and uses the trash request body.
+- Verified:
+  - `npm run check:provider-writeback` ✅
+  - `npm run typecheck` ✅
+  - `npm run check:control-plane` ✅
+  - `npm run check:live-providers` ✅
+  - `git diff --check` ✅
+- Fresh live evidence:
+  - `app/build/evidence/live-workspace/notion_scenarios-1784832719.json`
+  - `app/build/evidence/live-workspace/google_sheets_scenarios-1784832734.json`
+  - `app/build/evidence/live-workspace/direct_provider_writeback-1784832741.json` — Notion and Sheets create/update/archive delivered; Notion proof artifacts cleaned.

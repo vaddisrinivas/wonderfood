@@ -176,7 +176,7 @@ function buildNotionRequest(payload: ProviderWritePayload, settings: LifeOSSetti
       },
       body: JSON.stringify({
         ...(payload.operation === 'archive_record'
-          ? { archived: true }
+          ? { in_trash: true }
           : { properties: notionProperties(payload.record) }),
       }),
     },
