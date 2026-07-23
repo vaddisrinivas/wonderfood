@@ -77,10 +77,10 @@ export default function SystemScreen() {
           <Card style={[styles.hero, { backgroundColor: theme.colors.ink, borderColor: theme.colors.line }, compact && styles.heroCompact]}>
             <View style={styles.heroCopy}>
               <Pill tone="moss">PORTABLE LIFEOS</Pill>
-              <Text style={[styles.heroTitle, { color: theme.colors.paper }, compact && styles.heroTitleCompact]}>Your app should feel like Notion plus GPT, not a status page.</Text>
+              <Text style={[styles.heroTitle, { color: theme.colors.paper }, compact && styles.heroTitleCompact]}>Control the machinery without living in it.</Text>
               <Text style={[styles.heroBody, { color: theme.colors.mossSoft }, compact && styles.heroBodyCompact]}>
-                Daily work belongs on Home and Domain pages. This deck is only for changing the system: sources,
-                domains, skills, schemas, providers and sync.
+                Your app should feel like Notion plus GPT, not a status page. Daily work belongs on Home and Domain pages.
+                This deck is only for changing sources, domains, skills, schemas, providers and sync.
               </Text>
               <View style={styles.heroActions}>
                 <Link href="/" style={[styles.primaryAction, { backgroundColor: theme.colors.amberSoft, color: theme.colors.ink }]}>Open Home</Link>
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   hero: { minHeight: 292, padding: 24, flexDirection: 'row', alignItems: 'center', gap: 24, backgroundColor: '#202416', overflow: 'hidden' },
   heroCompact: { flexDirection: 'column', alignItems: 'stretch' },
   heroCopy: { flex: 1, minWidth: 0 },
-  heroTitle: { color: '#FFFDF2', fontSize: 34, lineHeight: 38, fontWeight: '900', letterSpacing: -1.4, marginTop: 18, maxWidth: 650 },
+  heroTitle: { color: '#FFFDF2', fontSize: 34, lineHeight: 38, fontWeight: '900', letterSpacing: -1.1, marginTop: 18, maxWidth: 650 },
   heroTitleCompact: { maxWidth: 304, fontSize: 28, lineHeight: 32 },
   heroBody: { color: '#D5D8C8', fontSize: 15, lineHeight: 22, marginTop: 12, maxWidth: 650 },
   heroBodyCompact: { maxWidth: 304, fontSize: 14, lineHeight: 21 },
