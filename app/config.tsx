@@ -41,12 +41,26 @@ const schemaFiles = [
 
 const catalogDomains = catalog.domains as unknown as DomainCatalogEntry[];
 
+type LifeOSProfile = {
+  lifeos: string;
+  profile: string;
+  runtime: {
+    activeDomain: string;
+    enabledDomains: string[];
+    enabledWorkflows: string[];
+    enabledAgents: string[];
+    theme: LifeOSSettings['runtime']['theme'];
+    density: LifeOSSettings['runtime']['density'];
+    surfaceConfig: LifeOSSettings['runtime']['surfaceConfig'];
+  };
+};
+
 function toggle(values: string[], value: string, enabled: boolean) {
   return enabled ? Array.from(new Set([...values, value])) : values.filter((item) => item !== value);
 }
 
-function buildProfile(settings: LifeOSSettings) {
-  return JSON.stringify({
+function buildProfileObject(settings: LifeOSSettings): LifeOSProfile {
+  return {
     lifeos: '2026.7',
     profile: `${settings.runtime.activeDomain}-first`,
     runtime: {
@@ -58,7 +72,105 @@ function buildProfile(settings: LifeOSSettings) {
       density: settings.runtime.density,
       surfaceConfig: settings.runtime.surfaceConfig,
     },
-  }, null, 2);
+  };
+}
+
+function buildJsonProfile(settings: LifeOSSettings) {
+  return JSON.stringify(buildProfileObject(settings), null, 2);
+}
+
+function yamlScalar(value: unknown) {
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return String(value);
+  const text = String(value ?? '');
+  return /^[A-Za-z0-9_./,@ -]+$/.test(text) && text.length > 0 ? text : JSON.stringify(text);
+}
+
+function buildYamlProfile(settings: LifeOSSettings) {
+  const write = (value: unknown, indent = 0): string[] => {
+    const pad = ' '.repeat(indent);
+    if (Array.isArray(value)) {
+      return value.length ? value.map((item) => `${pad}- ${yamlScalar(item)}`) : [`${pad}[]`];
+    }
+    if (value && typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+        if (child && typeof child === 'object' && !Array.isArray(child)) {
+          return [`${pad}${key}:`, ...write(child, indent + 2)];
+        }
+        if (Array.isArray(child)) {
+          return child.length ? [`${pad}${key}:`, ...write(child, indent + 2)] : [`${pad}${key}: []`];
+        }
+        return [`${pad}${key}: ${yamlScalar(child)}`];
+      });
+    }
+    return [`${pad}${yamlScalar(value)}`];
+  };
+  return write(buildProfileObject(settings)).join('\n');
+}
+
+function parseScalar(value: string): unknown {
+  const text = value.trim();
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  if (text === '[]') return [];
+  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text.slice(1, -1);
+    }
+  }
+  return text;
+}
+
+function parseLifeOSYaml(input: string): unknown {
+  const lines = input
+    .split(/\r?\n/)
+    .map((raw) => ({ indent: raw.match(/^ */)?.[0].length ?? 0, text: raw.trim() }))
+    .filter((line) => line.text && !line.text.startsWith('#'));
+
+  const parseBlock = (start: number, indent: number): [unknown, number] => {
+    if (start >= lines.length) return [{}, start];
+    const isArray = lines[start].indent === indent && lines[start].text.startsWith('- ');
+    if (isArray) {
+      const arr: unknown[] = [];
+      let index = start;
+      while (index < lines.length && lines[index].indent === indent && lines[index].text.startsWith('- ')) {
+        arr.push(parseScalar(lines[index].text.slice(2)));
+        index += 1;
+      }
+      return [arr, index];
+    }
+
+    const obj: Record<string, unknown> = {};
+    let index = start;
+    while (index < lines.length && lines[index].indent === indent && !lines[index].text.startsWith('- ')) {
+      const line = lines[index].text;
+      const colon = line.indexOf(':');
+      if (colon < 0) throw new Error(`Invalid YAML line: ${line}`);
+      const key = line.slice(0, colon).trim();
+      const rest = line.slice(colon + 1).trim();
+      if (rest) {
+        obj[key] = parseScalar(rest);
+        index += 1;
+      } else {
+        const [child, next] = parseBlock(index + 1, indent + 2);
+        obj[key] = child;
+        index = next;
+      }
+    }
+    return [obj, index];
+  };
+
+  return parseBlock(0, 0)[0];
+}
+
+function parseProfile(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error('Profile is empty.');
+  return (trimmed.startsWith('{') ? JSON.parse(trimmed) : parseLifeOSYaml(trimmed)) as {
+    runtime?: Partial<LifeOSSettings['runtime']>;
+  };
 }
 
 export default function ConfigStudioScreen() {
@@ -66,14 +178,14 @@ export default function ConfigStudioScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
-  const [profileDraft, setProfileDraft] = useState(buildProfile(defaultLifeOSSettings));
+  const [profileDraft, setProfileDraft] = useState(buildYamlProfile(defaultLifeOSSettings));
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void loadLifeOSSettings().then((loaded) => {
       setSettings(loaded);
-      setProfileDraft(buildProfile(loaded));
+      setProfileDraft(buildYamlProfile(loaded));
     });
   }, []);
 
@@ -109,16 +221,14 @@ export default function ConfigStudioScreen() {
     }));
   };
 
-  const loadCurrentProfile = () => {
-    setProfileDraft(buildProfile(settings));
-    setNotice('Current profile loaded into the editor.');
+  const loadCurrentProfile = (format: 'json' | 'yaml') => {
+    setProfileDraft(format === 'json' ? buildJsonProfile(settings) : buildYamlProfile(settings));
+    setNotice(`Current ${format.toUpperCase()} profile loaded into the editor.`);
   };
 
   const applyProfileDraft = () => {
     try {
-      const parsed = JSON.parse(profileDraft) as {
-        runtime?: Partial<LifeOSSettings['runtime']>;
-      };
+      const parsed = parseProfile(profileDraft);
       if (!parsed.runtime?.surfaceConfig || typeof parsed.runtime.surfaceConfig !== 'object') {
         throw new Error('Profile must include runtime.surfaceConfig.');
       }
@@ -143,7 +253,7 @@ export default function ConfigStudioScreen() {
       }));
       setNotice('Profile applied. Save & activate to persist it.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Profile JSON could not be applied.');
+      setNotice(error instanceof Error ? error.message : 'Profile could not be applied.');
     }
   };
 
@@ -423,7 +533,7 @@ export default function ConfigStudioScreen() {
           <Card tone="plum" style={styles.sectionCard}>
             <Text style={styles.lead}>Copy, edit, paste, and move this LifeOS layout.</Text>
             <Text style={styles.help}>
-              This is the app-editable profile layer behind the Notion/Glance idea: domains, enabled loops, theme, density, section order, visibility and counts.
+              This is the app-editable YAML/JSON profile layer behind the Notion/Glance idea: domains, enabled loops, theme, density, section order, visibility and counts.
             </Text>
             <TextInput
               value={profileDraft}
@@ -434,8 +544,11 @@ export default function ConfigStudioScreen() {
               style={[styles.input, styles.code, styles.profileEditor]}
             />
             <View style={styles.profileActions}>
-              <Pressable accessibilityRole="button" onPress={loadCurrentProfile} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
-                <Text style={styles.openText}>Load current profile</Text>
+              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('yaml')} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
+                <Text style={styles.openText}>Load YAML</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('json')} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
+                <Text style={styles.openText}>Load JSON</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={applyProfileDraft} style={({ pressed }) => [styles.save, pressed && styles.pressed]}>
                 <Text style={styles.saveText}>Apply profile</Text>

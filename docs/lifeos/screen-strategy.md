@@ -195,7 +195,7 @@ settings:
     - sources
 ```
 
-This file should compile into the existing JSON manifests. The app edits the same model through forms. Power users can import/export YAML.
+This file compiles into the same runtime profile as the app forms. Config Studio can export/import the portable profile as YAML or JSON.
 
 Current in-app section IDs:
 
@@ -206,7 +206,7 @@ Current in-app section IDs:
 | Chat | `threads`, `sources`, `messages`, `promptRail`, `context` |
 | Record | `hero`, `nutrition`, `ingredients`, `instructions`, `history`, `editableNote`, `properties`, `relations`, `provenance` |
 
-Home already renders in this order from app settings. The same profile model is the contract for the remaining surfaces and for future YAML import/export.
+Home, Food, Chat, and Record render from this order in app settings. The same profile model is the contract for future arbitrary widgets/views.
 
 ## Implementation order
 

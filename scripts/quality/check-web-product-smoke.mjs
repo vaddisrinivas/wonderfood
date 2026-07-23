@@ -41,7 +41,7 @@ const routes = [
   { name: 'food', path: '/food', must: ['Food workspace', 'Meals', 'Kitchen', 'Shopping'] },
   { name: 'record-green-dal', path: '/record/meal-green-dal', must: ['Nutrition profile', 'Ingredients and availability', 'Connected records'] },
   { name: 'chat', path: '/chat', must: ['Talk to your life', 'Chat cites sources'] },
-  { name: 'config', path: '/config', must: ['Active package contract', 'COLLECTIONS', 'MCP CONTRACT'] },
+  { name: 'config', path: '/config', must: ['Active package contract', 'COLLECTIONS', 'MCP CONTRACT', 'Portable profile', 'Load YAML'] },
   { name: 'settings', path: '/settings', must: ['AI providers', 'Data sources', 'LifeOS behavior'] },
 ];
 
