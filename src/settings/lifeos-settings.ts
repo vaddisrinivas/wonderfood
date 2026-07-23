@@ -66,6 +66,7 @@ export type LifeOSSettings = {
         showHero: boolean;
         showViewTabs: boolean;
         showManifestBlocks: boolean;
+        showCollectionAtlas: boolean;
         dashboardBlocks: string;
         showWidgets: boolean;
         widgets: string;
@@ -146,6 +147,7 @@ const STORAGE_KEY = 'lifeos.settings.v1';
 const listeners = new Set<(settings: LifeOSSettings) => void>();
 const oldFoodSectionOrderDefault = 'hero,tabs,manifest,workspace,attention,widgets,view,package';
 const oldFoodWidgetsDefault = 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings';
+const weakFoodWidgetMarkers = ['Skills and MCP', 'Open profile-configured Food views'];
 const oldCaptureDestinationDefault = 'Writes to Food local graph with no network dependency.';
 
 type SecureStoreModule = {
@@ -238,10 +240,11 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: false,
       },
       food: {
-        sectionOrder: 'tabs,hero,manifest,workspace,attention,widgets,view,package',
+        sectionOrder: 'tabs,hero,manifest,collections,workspace,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
         showManifestBlocks: true,
+        showCollectionAtlas: true,
         dashboardBlocks: '',
         showWidgets: true,
         widgets: 'Ask Food AI|Use pantry, recipes, shopping and nutrition context in one thread.|plum|/chat\nReview sources|See exactly what Notion, Sheets and this device can cite.|blue|/sources',
@@ -409,6 +412,17 @@ function normalizeDefaultOrder(value: unknown, fallback: string, legacy: string)
   return text === legacy ? fallback : text;
 }
 
+function normalizeFoodSectionOrder(value: unknown, fallback: string) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || text === oldFoodSectionOrderDefault || text === 'hero,tabs,widgets,workspace,attention,view,package') {
+    return fallback;
+  }
+  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.includes('collections')) return text;
+  const anchor = parts.includes('manifest') ? parts.indexOf('manifest') : parts.includes('hero') ? parts.indexOf('hero') : 0;
+  return [...parts.slice(0, anchor + 1), 'collections', ...parts.slice(anchor + 1)].join(',');
+}
+
 function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surfaceConfig'] {
   const config = value && typeof value === 'object' ? value as Partial<LifeOSSettings['runtime']['surfaceConfig']> : {};
   const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
@@ -425,15 +439,14 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showControlCard: config.home?.showControlCard !== false,
     },
     food: {
-      sectionOrder: typeof config.food?.sectionOrder === 'string' && config.food.sectionOrder !== oldFoodSectionOrderDefault
-        ? normalizeDefaultOrder(config.food.sectionOrder, defaults.food.sectionOrder, 'hero,tabs,widgets,workspace,attention,view,package')
-        : defaults.food.sectionOrder,
+      sectionOrder: normalizeFoodSectionOrder(config.food?.sectionOrder, defaults.food.sectionOrder),
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
       showManifestBlocks: config.food?.showManifestBlocks !== false,
+      showCollectionAtlas: config.food?.showCollectionAtlas !== false,
       dashboardBlocks: typeof config.food?.dashboardBlocks === 'string' ? config.food.dashboardBlocks : defaults.food.dashboardBlocks,
       showWidgets: config.food?.showWidgets !== false,
-      widgets: typeof config.food?.widgets === 'string' && config.food.widgets !== oldFoodWidgetsDefault ? config.food.widgets : defaults.food.widgets,
+      widgets: typeof config.food?.widgets === 'string' && config.food.widgets !== oldFoodWidgetsDefault && !weakFoodWidgetMarkers.some((marker) => config.food?.widgets.includes(marker)) ? config.food.widgets : defaults.food.widgets,
       showWorkspace: config.food?.showWorkspace !== false,
       showOperatingViews: config.food?.showOperatingViews !== false,
       operatingViewOrder: normalizeOrderString(config.food?.operatingViewOrder, defaults.food.operatingViewOrder),

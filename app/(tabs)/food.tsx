@@ -84,7 +84,7 @@ function countSetting(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-const FOOD_SECTIONS = ['hero', 'tabs', 'manifest', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
+const FOOD_SECTIONS = ['hero', 'tabs', 'manifest', 'collections', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
 type FoodSection = typeof FOOD_SECTIONS[number];
 type FoodWidget = { title: string; detail: string; tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral'; href: string };
 const OPERATING_VIEW_SECTIONS = ['assemblyTable', 'weekPlan', 'pantryTimeline', 'shoppingChecklist'] as const;
@@ -178,6 +178,13 @@ function recordsForBlock(block: DashboardBlock, records: FoodRecordView[]) {
     .slice(0, limit);
 }
 
+function humanizeCollection(collection: string) {
+  return collection
+    .split('_')
+    .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
+    .join(' ');
+}
+
 export default function FoodScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -247,6 +254,13 @@ export default function FoodScreen() {
   const configuredBlocks = parseDashboardBlockOverrides(foodConfig.dashboardBlocks, activeDomainId);
   const manifestBlocks = (configuredBlocks.length ? configuredBlocks : (activeManifest.dashboard_blocks ?? []))
     .filter((block) => block.surface.startsWith(`${activeDomainId}.`));
+  const collectionCounts = records.reduce<Record<string, number>>((counts, record) => {
+    counts[record.collection] = (counts[record.collection] ?? 0) + 1;
+    return counts;
+  }, {});
+  const unplacedCollections = activeManifest.collections.filter((collection) =>
+    !activeManifest.surfaces.some((surface) => surface.collections.includes(collection))
+  );
 
   const toggleShoppingRecord = async (record: FoodRecordView) => {
     const nextStatus = /in cart|bought/i.test(record.status) ? 'To buy' : 'In cart';
@@ -355,6 +369,44 @@ export default function FoodScreen() {
                   records={recordsForBlock(block, records)}
                 />
               ))}
+            </View>
+          </View>
+        ) : null;
+      case 'collections':
+        return active === 'Overview' && foodConfig.showCollectionAtlas ? (
+          <View key={section}>
+            <SectionTitle title={`${domainLabel} collection atlas`} action="Edit schema" href="/config" />
+            <Card style={styles.atlasHero}>
+              <View style={styles.atlasHeroCopy}>
+                <Text style={[styles.atlasKicker, { color: theme.colors.moss }]}>DATA PLANE</Text>
+                <Text style={[styles.atlasTitle, { color: theme.colors.ink }]}>{activeManifest.collections.length} managed collections, {activeManifest.relations.length} relations.</Text>
+                <Text style={[styles.atlasBody, { color: theme.colors.muted }]}>This is the Food graph behind meals, pantry, recipes, shopping, purchases, nutrition, source records and audit history.</Text>
+              </View>
+              <View style={styles.atlasStats}>
+                <CollectionStat label="Records loaded" value={String(records.length)} tone="moss" />
+                <CollectionStat label="Views" value={activeManifest.surfaces.map((surface) => surface.label).join(' · ')} tone="blue" />
+              </View>
+            </Card>
+            <View style={[styles.atlasGrid, compact && styles.boardCompact]}>
+              {activeManifest.surfaces.map((surface, index) => (
+                <CollectionGroup
+                  key={surface.id}
+                  title={surface.label}
+                  subtitle={surface.views?.slice(0, 4).join(' · ') || 'Workspace view'}
+                  collections={surface.collections}
+                  counts={collectionCounts}
+                  tone={index === 0 ? 'moss' : index === 1 ? 'amber' : 'blue'}
+                />
+              ))}
+              {unplacedCollections.length ? (
+                <CollectionGroup
+                  title="Support graph"
+                  subtitle="Shared records used by every Food view"
+                  collections={unplacedCollections}
+                  counts={collectionCounts}
+                  tone="plum"
+                />
+              ) : null}
             </View>
           </View>
         ) : null;
@@ -612,6 +664,48 @@ function AssemblyCell({ label, title, detail, tone }: {
   );
 }
 
+function CollectionStat({ label, value, tone }: { label: string; value: string; tone: 'moss' | 'amber' | 'blue' | 'plum' }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.collectionStat, commandToneStyle(tone, theme.colors)]}>
+      <Text style={[styles.collectionStatValue, { color: theme.colors.ink }]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.collectionStatLabel, { color: theme.colors.muted }]}>{label}</Text>
+    </View>
+  );
+}
+
+function CollectionGroup({ title, subtitle, collections, counts, tone }: {
+  title: string;
+  subtitle: string;
+  collections: string[];
+  counts: Record<string, number>;
+  tone: 'moss' | 'amber' | 'blue' | 'plum';
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <Card tone={tone} style={styles.collectionGroup}>
+      <View style={styles.collectionGroupHead}>
+        <View style={styles.collectionGroupCopy}>
+          <Text style={[styles.collectionGroupTitle, { color: theme.colors.ink }]}>{title}</Text>
+          <Text style={[styles.collectionGroupSubtitle, { color: theme.colors.muted }]}>{subtitle}</Text>
+        </View>
+        <Pill tone={tone}>{collections.length} collections</Pill>
+      </View>
+      <View style={styles.collectionChips}>
+        {collections.map((collection) => {
+          const count = counts[collection] ?? 0;
+          return (
+            <View key={collection} style={[styles.collectionChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+              <Text style={[styles.collectionChipName, { color: theme.colors.ink }]}>{humanizeCollection(collection)}</Text>
+              <Text style={[styles.collectionChipCount, { color: count ? theme.colors.moss : theme.colors.muted }]}>{count ? `${count}` : '—'}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </Card>
+  );
+}
+
 function MealWeekPlan({ records }: { records: FoodRecordView[] }) {
   const theme = useLifeOSTheme();
   const days = ['Thu', 'Fri', 'Sat', 'Sun'];
@@ -823,6 +917,25 @@ const styles = StyleSheet.create({
   widgetTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' },
   widgetDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
   widgetRoute: { color: colors.moss, fontSize: 11, fontWeight: '900', marginTop: 14 },
+  atlasHero: { marginBottom: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'stretch' },
+  atlasHeroCopy: { flex: 1, minWidth: 260 },
+  atlasKicker: { color: colors.moss, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  atlasTitle: { color: colors.ink, fontSize: 22, lineHeight: 27, fontWeight: '900', marginTop: 10 },
+  atlasBody: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 8 },
+  atlasStats: { flexBasis: 300, flexGrow: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  atlasGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  collectionStat: { flexGrow: 1, flexBasis: 130, minHeight: 82, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 13, justifyContent: 'center' },
+  collectionStatValue: { color: colors.ink, fontSize: 18, fontWeight: '900' },
+  collectionStatLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 5 },
+  collectionGroup: { flexGrow: 1, flexBasis: 360, minHeight: 210, borderRadius: radius.lg },
+  collectionGroupHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 14 },
+  collectionGroupCopy: { flex: 1, minWidth: 0 },
+  collectionGroupTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
+  collectionGroupSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  collectionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  collectionChip: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collectionChipName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  collectionChipCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   manifestBlockPress: { flexGrow: 1, flexBasis: 280 },
   manifestBlock: { minHeight: 198, padding: 20, borderRadius: radius.lg },

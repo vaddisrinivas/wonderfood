@@ -46,7 +46,7 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food operating board', 'TONIGHT OPERATING TABLE', 'Cook decision, pantry state, shopping gap, next move', 'Meals', 'Kitchen', 'Shopping', 'Review before anything writes', 'Food can be customized'],
+    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food collection atlas', '29 managed collections', '43 relations', 'Support graph', 'Food operating board', 'TONIGHT OPERATING TABLE', 'Cook decision, pantry state, shopping gap, next move', 'Meals', 'Kitchen', 'Shopping', 'Review before anything writes', 'Food can be customized'],
     forbidden: ['0 food records', 'Record not found'],
   },
   {

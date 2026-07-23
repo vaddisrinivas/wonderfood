@@ -202,7 +202,7 @@ Current in-app section IDs:
 | Surface | `sectionOrder` values |
 |---|---|
 | Home | `now`, `review`, `lifeSpaces`, `recent`, `sourceTrust`, `control` |
-| Food | `hero`, `tabs`, `widgets`, `workspace`, `attention`, `view`, `package` |
+| Food | `hero`, `tabs`, `manifest`, `collections`, `widgets`, `workspace`, `attention`, `view`, `package` |
 | Chat | `threads`, `sources`, `messages`, `promptRail`, `context` |
 | Record | `hero`, `nutrition`, `ingredients`, `instructions`, `history`, `editableNote`, `properties`, `relations`, `provenance` |
 
