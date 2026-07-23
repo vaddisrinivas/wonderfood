@@ -8,7 +8,7 @@ import { useLifeOSDatabase } from '@/src/db/provider';
 import { getDomainRecord, getDomainRecordCanonical } from '@/src/domain/queries';
 import { loadCatalog } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
-import { upsertRecord } from '@/src/db/records';
+import { getRecordsByIds, upsertRecord } from '@/src/db/records';
 
 type FoodDetail = {
   kind: 'meal' | 'recipe' | 'inventory' | 'shopping' | 'generic';
@@ -281,6 +281,7 @@ export default function RecordScreen() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [saved, setSaved] = useState({ title: '', body: '' });
+  const [linkedRecords, setLinkedRecords] = useState<Record<string, CanonicalRecord>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -308,6 +309,14 @@ export default function RecordScreen() {
       }
 
       setRecord(canonical);
+      if (db && canonical.relations.length) {
+        const linked = await getRecordsByIds(db, canonical.relations.map((relation) => relation.target_id));
+        if (!cancelled) {
+          setLinkedRecords(Object.fromEntries(linked.map((item) => [item.id, item])));
+        }
+      } else if (!cancelled) {
+        setLinkedRecords({});
+      }
       setTitle(canonical.title);
       setBody(String(canonical.properties.body ?? ''));
       setSaved({ title: canonical.title, body: String(canonical.properties.body ?? '') });
@@ -489,21 +498,37 @@ export default function RecordScreen() {
             {dirty ? <ActionButton label="Undo" quiet onPress={handleUndo} /> : null}
           </View>
           <SectionTitle title="Connected records" />
-          <Card style={styles.listCard}>
+          <View style={styles.relationGrid}>
             {relations.length ? (
-              relations.map((relation) => (
-                <Row
-                  key={`${relation.name}:${relation.target_id}`}
-                  icon="◒"
-                  title={relation.name}
-                  detail={relation.target_id}
-                  href={{ pathname: '/record/[id]', params: { id: relation.target_id } }}
-                />
-              ))
+              relations.map((relation) => {
+                const linked = linkedRecords[relation.target_id];
+                const relationTone = linked ? toTone(linked.properties.tone) : 'neutral';
+                return (
+                  <Pressable
+                    key={`${relation.name}:${relation.target_id}`}
+                    accessibilityRole="link"
+                    onPress={() => router.push(`/record/${relation.target_id}`)}
+                    style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
+                  >
+                    <View style={styles.relationTop}>
+                      <Text style={styles.relationName}>{relation.name}</Text>
+                      <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
+                    </View>
+                    <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
+                    <Text style={styles.relationDetail}>
+                      {linked
+                        ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
+                        : 'Linked record not loaded in this local graph yet.'}
+                    </Text>
+                  </Pressable>
+                );
+              })
             ) : (
-              <Text style={sharedStyles.muted}>No linked records yet.</Text>
+              <Card style={styles.emptyRelationCard}>
+                <Text style={sharedStyles.muted}>No linked records yet.</Text>
+              </Card>
             )}
-          </Card>
+          </View>
           <SectionTitle title="Provenance" />
           <Card>
             <Row icon="S" title={sourceLabel} detail="Canonical source" />
@@ -544,6 +569,13 @@ const styles = StyleSheet.create({
   factLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
   factValue: { color: colors.ink, fontSize: 12, fontWeight: '800', flex: 1, textAlign: 'right' },
   variation: { color: colors.ink, fontSize: 13, lineHeight: 20, marginTop: 4 },
+  relationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  relationCard: { flexGrow: 1, flexBasis: 240, minHeight: 128, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 14 },
+  relationTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' },
+  relationName: { color: colors.moss, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  relationTitle: { color: colors.ink, fontSize: 17, fontWeight: '900', marginTop: 18 },
+  relationDetail: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  emptyRelationCard: { flex: 1 },
   close: { alignSelf: 'center', padding: 18, marginTop: 20 },
   closeText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   emptyTitle: { color: colors.ink, marginTop: 22, fontSize: 16, fontWeight: '800' },

@@ -44,6 +44,20 @@ export async function getRecord(db: SQLiteDatabase, id: string): Promise<Canonic
   return { ...record, relations };
 }
 
+export async function getRecordsByIds(db: SQLiteDatabase, ids: string[]): Promise<CanonicalRecord[]> {
+  const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+  if (!uniqueIds.length) return [];
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = await db.getAllAsync<SqlRecordRow>(
+    `SELECT * FROM records WHERE id IN (${placeholders}) AND archived_at IS NULL`,
+    uniqueIds
+  );
+  return Promise.all(rows.map(async (row) => ({
+    ...(await inflateRecord(row)),
+    relations: await getRelationsForRecord(db, row.id),
+  })));
+}
+
 export async function listRecordsForDomain(
   db: SQLiteDatabase,
   domainId: DomainId,
