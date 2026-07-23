@@ -40,6 +40,7 @@
     "typecheck": "tsc --noEmit",
     "config:validate": "node scripts/validate-domain-config.mjs",
     "check:food-schema-depth": "node scripts/quality/check-food-schema-depth.mjs",
+    "generate:data-plane-template": "node scripts/quality/generate-data-plane-artifacts.mjs",
     "check:data-plane-template": "node scripts/quality/check-data-plane-template.mjs",
     "doctor": "npx --yes expo-doctor",
     "export:web": "expo export --platform web --output-dir dist/web",

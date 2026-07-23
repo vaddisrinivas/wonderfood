@@ -11,8 +11,15 @@ Source file:
 
 - `packages/domain-config/templates/lifeos-data-plane-template.v1.json`
 
+Generated import artifacts:
+
+- `packages/domain-config/templates/generated/notion-import.md`
+- `packages/domain-config/templates/generated/template-summary.json`
+- `packages/domain-config/templates/generated/sheets/*.csv`
+
 Validation:
 
+- `npm run generate:data-plane-template`
 - `npm run check:data-plane-template`
 
 ## Product promise
@@ -108,4 +115,18 @@ The template covers all active Food collections:
 - attachment, audit_event, source_record
 
 If the Food manifest changes, `npm run check:data-plane-template` must fail
-until the Notion/Sheets template coverage is updated.
+until the Notion/Sheets template coverage and generated import artifacts are
+updated.
+
+## Generated artifacts
+
+`notion-import.md` is the Notion build/import checklist: Today page, page tree,
+database jobs, relation views, buttons and duplication-health checks.
+
+`generated/sheets/*.csv` is the workbook starter pack. It includes:
+
+- one setup `Home` tab
+- one canonical `Records` tab with one starter row per Food collection
+- one `Relations` edge-list tab with one row per Food relation
+- domain tabs for Kitchen, Recipes, Meals, Shopping, Purchases, Household and Sources
+- one `Schema` registry tab proving every collection has a Notion and Sheets home

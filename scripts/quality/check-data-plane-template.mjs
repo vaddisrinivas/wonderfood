@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
@@ -9,6 +8,8 @@ const read = (path) => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 const food = read('packages/domain-config/domains/food.v1.json');
 const template = read('packages/domain-config/templates/lifeos-data-plane-template.v1.json');
 const schemaPath = resolve(root, 'packages/domain-config/templates', template.$schema ?? '');
+const generatedDir = resolve(root, 'packages/domain-config/templates/generated');
+const generatedSheetsDir = resolve(generatedDir, 'sheets');
 
 function fail(message) {
   console.error(`Data-plane template invalid: ${message}`);
@@ -65,4 +66,52 @@ for (const name of ['Plan dinner from pantry', 'Add receipt', 'Log cooked', 'Bui
   if (!buttonNames.has(name)) fail(`missing Notion button model: ${name}`);
 }
 
-console.log(`Data-plane template valid: ${food.collections.length} Food collections mapped to ${notionDatabaseNames.size} Notion databases and ${sheetTabNames.size} Sheets tabs.`);
+const notionImportPath = resolve(generatedDir, 'notion-import.md');
+const summaryPath = resolve(generatedDir, 'template-summary.json');
+if (!existsSync(notionImportPath)) fail('missing generated Notion import artifact; run npm run generate:data-plane-template');
+if (!existsSync(summaryPath)) fail('missing generated template summary; run npm run generate:data-plane-template');
+
+const notionImport = readFileSync(notionImportPath, 'utf8');
+for (const database of template.notion?.databases ?? []) {
+  if (!notionImport.includes(`### ${database.name}`)) fail(`generated Notion import missing database: ${database.name}`);
+}
+for (const button of template.notion?.buttons ?? []) {
+  if (!notionImport.includes(`**${button.name}**`)) fail(`generated Notion import missing button: ${button.name}`);
+}
+
+const summary = read('packages/domain-config/templates/generated/template-summary.json');
+if (summary.template_id !== template.id) fail('generated summary template_id mismatch');
+if (summary.food_collections !== food.collections.length) fail('generated summary Food collection count mismatch');
+if (summary.notion_databases !== notionDatabaseNames.size) fail('generated summary Notion database count mismatch');
+if (summary.sheets_tabs !== sheetTabNames.size) fail('generated summary Sheets tab count mismatch');
+
+function csvName(tabName) {
+  return `${tabName.toLowerCase().replaceAll(' ', '-')}.csv`;
+}
+
+function csvRows(filePath) {
+  return readFileSync(filePath, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => line.split(','));
+}
+
+for (const tab of template.sheets?.tabs ?? []) {
+  const file = resolve(generatedSheetsDir, csvName(tab.name));
+  if (!existsSync(file)) fail(`missing generated Sheets CSV: ${csvName(tab.name)}`);
+  const rows = csvRows(file);
+  if (rows.length < 2) fail(`generated Sheets CSV has no rows: ${csvName(tab.name)}`);
+  const header = rows[0].join(',');
+  if (header !== tab.columns.join(',')) fail(`generated Sheets CSV header drift: ${csvName(tab.name)}`);
+}
+
+const recordsRows = csvRows(resolve(generatedSheetsDir, 'records.csv'));
+if (recordsRows.length !== food.collections.length + 1) fail('generated Records CSV must include one starter row per Food collection');
+
+const schemaRows = csvRows(resolve(generatedSheetsDir, 'schema.csv'));
+if (schemaRows.length !== food.collections.length + 1) fail('generated Schema CSV must include one registry row per Food collection');
+
+const relationRows = csvRows(resolve(generatedSheetsDir, 'relations.csv'));
+if (relationRows.length !== food.relations.length + 1) fail('generated Relations CSV must include one edge row per Food relation');
+
+console.log(`Data-plane template valid: ${food.collections.length} Food collections mapped to ${notionDatabaseNames.size} Notion databases, ${sheetTabNames.size} Sheets tabs, and generated import artifacts.`);
