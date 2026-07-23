@@ -8,7 +8,7 @@ import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
-import { colors } from '@/src/theme';
+import { colors, useLifeOSTheme } from '@/src/theme';
 
 function countSetting(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
@@ -34,6 +34,7 @@ export default function TodayScreen() {
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
 
@@ -73,10 +74,10 @@ export default function TodayScreen() {
           <Card key={section} tone="moss" style={styles.nowCard}>
             <View style={styles.nowHeader}>
               <Pill tone="moss">{catalog.activeManifest.label.toUpperCase()} ACTIVE</Pill>
-              <Text style={styles.nowDate}>{todayLabel}</Text>
+              <Text style={[styles.nowDate, { color: theme.colors.muted }]}>{todayLabel}</Text>
             </View>
-            <Text style={[styles.nowTitle, compact && styles.nowTitleCompact]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
-            <Text style={styles.nowBody}>
+            <Text style={[styles.nowTitle, compact && styles.nowTitleCompact, { color: theme.colors.ink }]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
+            <Text style={[styles.nowBody, { color: theme.colors.ink }]}>
               {firstRecord?.body || firstRecord?.meta || 'Start with a meal, receipt, pantry item or question. Home should show daily work, not internal machinery.'}
             </Text>
             <View style={styles.nowActions}>
@@ -100,8 +101,8 @@ export default function TodayScreen() {
                 />
               )) : (
                 <View style={styles.emptyReview}>
-                  <Text style={styles.emptyReviewTitle}>No review items yet</Text>
-                  <Text style={styles.emptyReviewBody}>Receipts, source conflicts and AI proposals will land here before anything writes to your graph.</Text>
+                  <Text style={[styles.emptyReviewTitle, { color: theme.colors.ink }]}>No review items yet</Text>
+                  <Text style={[styles.emptyReviewBody, { color: theme.colors.muted }]}>Receipts, source conflicts and AI proposals will land here before anything writes to your graph.</Text>
                 </View>
               )}
             </Card>
@@ -115,18 +116,18 @@ export default function TodayScreen() {
               <Link href="/(tabs)/food" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
                   <Card tone="moss" style={styles.spaceCard}>
-                    <Text style={styles.spaceGlyph}>F</Text>
-                    <Text style={styles.spaceTitle}>{catalog.activeManifest.label}</Text>
-                    <Text style={styles.spaceBody}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active food graph.` : 'Kitchen, meals, recipes and shopping render from config.'}</Text>
+                    <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>F</Text>
+                    <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>{catalog.activeManifest.label}</Text>
+                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active food graph.` : 'Kitchen, meals, recipes and shopping render from config.'}</Text>
                   </Card>
                 </Pressable>
               </Link>
               <Link href="/config" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
                   <Card tone="plum" style={styles.spaceCard}>
-                    <Text style={styles.spaceGlyph}>+</Text>
-                    <Text style={styles.spaceTitle}>Add a domain</Text>
-                    <Text style={styles.spaceBody}>Health, Plants or any future package should arrive by config, not app rebuild.</Text>
+                    <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>+</Text>
+                    <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Add a domain</Text>
+                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Health, Plants or any future package should arrive by config, not app rebuild.</Text>
                   </Card>
                 </Pressable>
               </Link>
@@ -158,14 +159,14 @@ export default function TodayScreen() {
             <SectionTitle title="Source trust" />
             <View style={sharedStyles.grid}>
               <Card tone="blue" style={styles.trustCard}>
-                <Text style={styles.trustTitle}>Notion and Sheets are optional homes</Text>
-                <Text style={sharedStyles.muted}>The app can run local-first, then pull chosen providers into one source-backed graph.</Text>
-                <Link href="/sources" style={styles.cardLink}>Open trust center →</Link>
+                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>Notion and Sheets are optional homes</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>The app can run local-first, then pull chosen providers into one source-backed graph.</Text>
+                <Link href="/sources" style={[styles.cardLink, { color: theme.colors.ink }]}>Open trust center →</Link>
               </Card>
               <Card tone="amber" style={styles.trustCard}>
-                <Text style={styles.trustTitle}>{secondRecord?.title ?? 'Chat needs citations'}</Text>
-                <Text style={sharedStyles.muted}>{secondRecord?.meta ?? 'Assistant answers should show tables, records and exact source cards.'}</Text>
-                <Link href="/chat" style={styles.cardLink}>Open Chat →</Link>
+                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>{secondRecord?.title ?? 'Chat needs citations'}</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{secondRecord?.meta ?? 'Assistant answers should show tables, records and exact source cards.'}</Text>
+                <Link href="/chat" style={[styles.cardLink, { color: theme.colors.ink }]}>Open Chat →</Link>
               </Card>
             </View>
           </View>
@@ -176,12 +177,12 @@ export default function TodayScreen() {
             <SectionTitle title="Control lives in Settings" />
             <Card style={styles.controlCard}>
               <View style={styles.controlCopy}>
-                <Text style={styles.controlTitle}>Providers, domains, skills, schemas, screens and MCP are editable from the app.</Text>
-                <Text style={sharedStyles.muted}>Settings holds the machinery. Home stays useful.</Text>
+                <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Providers, domains, skills, schemas, screens and MCP are editable from the app.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Settings holds the machinery. Home stays useful.</Text>
               </View>
               <View style={styles.controlActions}>
-                <Link href="/settings" style={styles.controlLink}>Settings</Link>
-                <Link href="/config" style={styles.controlLinkQuiet}>Config</Link>
+                  <Link href="/settings" style={[styles.controlLink, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>Settings</Link>
+                  <Link href="/config" style={[styles.controlLinkQuiet, { borderColor: theme.colors.line, color: theme.colors.ink }]}>Config</Link>
               </View>
             </Card>
           </View>
@@ -196,11 +197,11 @@ export default function TodayScreen() {
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         <View style={[styles.content, { width: contentWidth }]}>
           <View style={styles.topbar}>
-            <View><Text style={styles.brand}>LIFEOS / HOME</Text><Text style={styles.date}>{todayLabel}</Text></View>
+            <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / HOME</Text><Text style={[styles.date, { color: theme.colors.muted }]}>{todayLabel}</Text></View>
             <View style={styles.topActions}>
-              <Link href="/search" asChild><Pressable><Text style={styles.topIcon}>⌕</Text></Pressable></Link>
-              <Link href="/capture" asChild><Pressable><Text style={styles.topIcon}>＋</Text></Pressable></Link>
-              <Link href="/settings" asChild><Pressable><Text style={styles.avatar}>SV</Text></Pressable></Link>
+              <Link href="/search" asChild><Pressable><Text style={[styles.topIcon, { color: theme.colors.ink }]}>⌕</Text></Pressable></Link>
+              <Link href="/capture" asChild><Pressable><Text style={[styles.topIcon, { color: theme.colors.ink }]}>＋</Text></Pressable></Link>
+              <Link href="/settings" asChild><Pressable><Text style={[styles.avatar, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>SV</Text></Pressable></Link>
             </View>
           </View>
 
