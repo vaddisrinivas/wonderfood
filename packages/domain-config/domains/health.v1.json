@@ -10,6 +10,64 @@
     { "id": "health.plans", "label": "Plans", "views": ["active", "review"], "collections": ["health_goal", "health_plan"] }
   ],
   "collections": ["health_observation", "health_measurement", "health_goal", "health_plan", "health_note", "source_record"],
+  "visual_identity": {
+    "domain": { "emoji": "♡", "accent": "plum" },
+    "surfaces": {
+      "health.overview": { "emoji": "🫀", "accent": "plum" },
+      "health.journal": { "emoji": "📓", "accent": "blue" },
+      "health.plans": { "emoji": "🎯", "accent": "moss" }
+    },
+    "collections": {
+      "health_observation": { "emoji": "🩺", "accent": "plum" },
+      "health_measurement": { "emoji": "📈", "accent": "blue" },
+      "health_goal": { "emoji": "🎯", "accent": "moss" },
+      "health_plan": { "emoji": "🗺️", "accent": "moss" },
+      "health_note": { "emoji": "📝", "accent": "amber" },
+      "source_record": { "emoji": "🔗", "accent": "neutral" }
+    },
+    "statuses": {
+      "active": { "emoji": "✅", "accent": "moss" },
+      "review": { "emoji": "👀", "accent": "amber" },
+      "attention": { "emoji": "❗", "accent": "plum" },
+      "synced": { "emoji": "🔄", "accent": "blue" }
+    },
+    "actions": {
+      "home": { "emoji": "⌂", "accent": "moss" },
+      "add_record": { "emoji": "＋", "accent": "moss" },
+      "capture": { "emoji": "＋", "accent": "moss" },
+      "ask_with_collection": { "emoji": "✦", "accent": "plum" },
+      "chat": { "emoji": "✦", "accent": "plum" },
+      "search": { "emoji": "⌕", "accent": "blue" },
+      "open_sources": { "emoji": "🔗", "accent": "neutral" },
+      "settings": { "emoji": "⚙", "accent": "neutral" },
+      "add_domain": { "emoji": "＋", "accent": "plum" },
+      "review": { "emoji": "👀", "accent": "amber" },
+      "refresh": { "emoji": "↻", "accent": "blue" },
+      "capture_note": { "emoji": "📝", "accent": "neutral" },
+      "capture_food": { "emoji": "♡", "accent": "plum" },
+      "capture_photo": { "emoji": "▧", "accent": "blue" },
+      "capture_receipt": { "emoji": "🧾", "accent": "plum" },
+      "capture_voice": { "emoji": "◖", "accent": "amber" },
+      "capture_link": { "emoji": "⌁", "accent": "blue" }
+    },
+    "sources": {
+      "notion": { "emoji": "◨", "accent": "neutral" },
+      "google_sheets": { "emoji": "▦", "accent": "moss" },
+      "sqlite": { "emoji": "▣", "accent": "blue" },
+      "postgres": { "emoji": "⬢", "accent": "plum" },
+      "web": { "emoji": "🌐", "accent": "blue" },
+      "health_connect": { "emoji": "🩺", "accent": "plum" },
+      "user": { "emoji": "🙂", "accent": "moss" }
+    },
+    "skills": {
+      "health": { "emoji": "♡", "accent": "plum" },
+      "source_verifier": { "emoji": "🔎", "accent": "blue" }
+    },
+    "agents": {
+      "health_brain": { "emoji": "✦", "accent": "plum" },
+      "source_steward": { "emoji": "🔗", "accent": "blue" }
+    }
+  },
   "dashboard_blocks": [
     {
       "id": "health:today",
@@ -18,6 +76,7 @@
       "subtitle": "Observations, measurements and notes that need attention.",
       "kind": "spotlight",
       "tone": "plum",
+      "size": "standard",
       "query": { "collections": ["health_observation", "health_measurement", "health_note"], "match": "today|sleep|steps|heart|symptom|note", "limit": 1 },
       "href": "/chat"
     },
@@ -28,6 +87,7 @@
       "subtitle": "Active goals, plans and trend checkpoints.",
       "kind": "list",
       "tone": "moss",
+      "size": "wide",
       "query": { "collections": ["health_goal", "health_plan"], "match": "active|goal|plan|review", "limit": 4 },
       "href": "/config"
     },
@@ -38,6 +98,7 @@
       "subtitle": "Health Connect, Notion, Sheets and local records feed one graph.",
       "kind": "action",
       "tone": "blue",
+      "size": "compact",
       "query": { "collections": ["source_record"], "match": "health|connect|notion|sheets", "limit": 3 },
       "href": "/sources"
     }

@@ -92,7 +92,18 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / HEALTH', 'Run your health workspace.', 'Health sources', 'Overview', 'Journal', 'Plans'],
+    must: ['LIFEOS / HEALTH', '♡', 'Run your health workspace.', 'Health sources', 'Overview', 'Journal', 'Plans'],
+  },
+  {
+    name: 'plants-active-workspace',
+    path: '/food',
+    localSettings: {
+      runtime: {
+        activeDomain: 'plants',
+        enabledDomains: ['food', 'plants'],
+      },
+    },
+    must: ['LIFEOS / PLANTS', '🌿', 'Run your plants workspace.', 'Plants sources', 'Overview', 'Journal', 'Supplies'],
   },
   {
     name: 'record-green-dal',
