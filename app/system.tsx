@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { Card, Page, Pill, SectionTitle } from '@/src/components/ui';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 
 type Tone = 'moss' | 'amber' | 'plum' | 'blue';
@@ -48,15 +48,16 @@ const homeModel = [
   ['Settings', 'All providers, domains, skills, schemas, MCP and sync editable in-app.'],
 ] as const;
 
-function toneSoft(tone: Tone) {
-  return { moss: colors.mossSoft, amber: colors.amberSoft, plum: colors.plumSoft, blue: colors.blueSoft }[tone];
+function toneSoft(tone: Tone, palette = colors) {
+  return { moss: palette.mossSoft, amber: palette.amberSoft, plum: palette.plumSoft, blue: palette.blueSoft }[tone];
 }
 
-function toneInk(tone: Tone) {
-  return { moss: colors.moss, amber: colors.amber, plum: colors.plum, blue: colors.blue }[tone];
+function toneInk(tone: Tone, palette = colors) {
+  return { moss: palette.moss, amber: palette.amber, plum: palette.plum, blue: palette.blue }[tone];
 }
 
 export default function SystemScreen() {
+  const theme = useLifeOSTheme();
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const contentWidth = compact ? Math.max(width - 36, 280) : '100%';
@@ -67,29 +68,29 @@ export default function SystemScreen() {
         <View style={[styles.content, { width: contentWidth }]}>
           <View style={styles.topbar}>
             <View>
-              <Text style={styles.brand}>LIFEOS / CONTROL DECK</Text>
-              <Text style={styles.context}>Advanced settings, not your daily home</Text>
+              <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONTROL DECK</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>Advanced settings, not your daily home</Text>
             </View>
-            <Link href="/settings" style={styles.settingsLink}>Settings</Link>
+            <Link href="/settings" style={[styles.settingsLink, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>Settings</Link>
           </View>
 
-          <Card style={[styles.hero, compact && styles.heroCompact]}>
+          <Card style={[styles.hero, { backgroundColor: theme.colors.ink, borderColor: theme.colors.line }, compact && styles.heroCompact]}>
             <View style={styles.heroCopy}>
               <Pill tone="moss">PORTABLE LIFEOS</Pill>
-              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>Your app should feel like Notion plus GPT, not a status page.</Text>
-              <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+              <Text style={[styles.heroTitle, { color: theme.colors.paper }, compact && styles.heroTitleCompact]}>Your app should feel like Notion plus GPT, not a status page.</Text>
+              <Text style={[styles.heroBody, { color: theme.colors.mossSoft }, compact && styles.heroBodyCompact]}>
                 Daily work belongs on Home and Domain pages. This deck is only for changing the system: sources,
                 domains, skills, schemas, providers and sync.
               </Text>
               <View style={styles.heroActions}>
-                <Link href="/" style={styles.primaryAction}>Open Home</Link>
-                <Link href="/(tabs)/food" style={styles.secondaryAction}>Open Food</Link>
+                <Link href="/" style={[styles.primaryAction, { backgroundColor: theme.colors.amberSoft, color: theme.colors.ink }]}>Open Home</Link>
+                <Link href="/(tabs)/food" style={[styles.secondaryAction, { borderColor: theme.colors.line, color: theme.colors.paper }]}>Open Food</Link>
               </View>
             </View>
             <View style={[styles.stackGraphic, compact && styles.stackGraphicCompact]} accessible accessibilityLabel="LifeOS stack: Home, Domain, Chat, Sources and Settings">
               {homeModel.map(([name], index) => (
-                <View key={name} style={[styles.stackLayer, { transform: [{ translateY: index * -6 }] }]}>
-                  <Text style={styles.stackLayerText}>{name}</Text>
+                <View key={name} style={[styles.stackLayer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, transform: [{ translateY: index * -6 }] }]}>
+                  <Text style={[styles.stackLayerText, { color: theme.colors.ink }]}>{name}</Text>
                 </View>
               ))}
             </View>
@@ -98,11 +99,11 @@ export default function SystemScreen() {
           <SectionTitle title="Screen model" />
           <Card style={styles.modelCard}>
             {homeModel.map(([name, detail], index) => (
-              <View key={name} style={[styles.modelRow, index === 0 && styles.modelRowFirst]}>
-                <Text style={styles.modelNumber}>{String(index + 1).padStart(2, '0')}</Text>
+              <View key={name} style={[styles.modelRow, { borderTopColor: theme.colors.line }, index === 0 && styles.modelRowFirst]}>
+                <Text style={[styles.modelNumber, { color: theme.colors.moss }]}>{String(index + 1).padStart(2, '0')}</Text>
                 <View style={styles.modelCopy}>
-                  <Text style={styles.modelTitle}>{name}</Text>
-                  <Text style={[styles.modelDetail, compact && styles.modelDetailCompact]}>{detail}</Text>
+                  <Text style={[styles.modelTitle, { color: theme.colors.ink }]}>{name}</Text>
+                  <Text style={[styles.modelDetail, { color: theme.colors.muted }, compact && styles.modelDetailCompact]}>{detail}</Text>
                 </View>
               </View>
             ))}
@@ -117,14 +118,14 @@ export default function SystemScreen() {
                   <Pressable accessibilityRole="button" style={({ pressed }) => [styles.domainPress, pressed && styles.pressed]}>
                     <Card tone={domain.tone} style={styles.domainCard}>
                       <View style={styles.domainTop}>
-                        <View style={[styles.domainGlyph, { backgroundColor: toneInk(domain.tone) }]}>
-                          <Text style={styles.domainGlyphText}>{domain.glyph}</Text>
+                        <View style={[styles.domainGlyph, { backgroundColor: toneInk(domain.tone, theme.colors) }]}>
+                          <Text style={[styles.domainGlyphText, { color: theme.colors.paper }]}>{domain.glyph}</Text>
                         </View>
                         <Pill tone={domain.tone}>{status.toUpperCase()}</Pill>
                       </View>
-                      <Text style={styles.domainTitle}>{domain.title}</Text>
-                      <Text style={[styles.domainDetail, compact && styles.domainDetailCompact]}>{domain.detail}</Text>
-                      <Text style={[styles.domainLink, { color: toneInk(domain.tone) }]}>Open or configure →</Text>
+                      <Text style={[styles.domainTitle, { color: theme.colors.ink }]}>{domain.title}</Text>
+                      <Text style={[styles.domainDetail, { color: theme.colors.muted }, compact && styles.domainDetailCompact]}>{domain.detail}</Text>
+                      <Text style={[styles.domainLink, { color: toneInk(domain.tone, theme.colors) }]}>Open or configure →</Text>
                     </Card>
                   </Pressable>
                 </Link>
@@ -137,10 +138,10 @@ export default function SystemScreen() {
             {controlTiles.map(([title, detail, action, href, tone]) => (
               <Link key={title} href={href} asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.tilePress, pressed && styles.pressed]}>
-                  <View style={[styles.controlTile, { backgroundColor: toneSoft(tone as Tone) }]}>
-                    <Text style={[styles.tileKicker, { color: toneInk(tone as Tone) }]}>{title}</Text>
-                    <Text style={[styles.tileDetail, compact && styles.tileDetailCompact]}>{detail}</Text>
-                    <Text style={styles.tileAction}>{action} →</Text>
+                  <View style={[styles.controlTile, { backgroundColor: toneSoft(tone as Tone, theme.colors), borderColor: theme.colors.line }]}>
+                    <Text style={[styles.tileKicker, { color: toneInk(tone as Tone, theme.colors) }]}>{title}</Text>
+                    <Text style={[styles.tileDetail, { color: theme.colors.ink }, compact && styles.tileDetailCompact]}>{detail}</Text>
+                    <Text style={[styles.tileAction, { color: theme.colors.ink }]}>{action} →</Text>
                   </View>
                 </Pressable>
               </Link>
@@ -150,18 +151,18 @@ export default function SystemScreen() {
           <SectionTitle title="Glance-style config, LifeOS-grade model" />
           <Card style={styles.yamlCard}>
             <View style={styles.yamlText}>
-              <Text style={styles.yamlTitle}>Borrow the YAML idea. Do not become YAML-first.</Text>
-              <Text style={styles.yamlBody}>
+              <Text style={[styles.yamlTitle, { color: theme.colors.ink }]}>Borrow the YAML idea. Do not become YAML-first.</Text>
+              <Text style={[styles.yamlBody, { color: theme.colors.muted }]}>
                 A portable LifeOS profile can describe pages, sections and widgets like Glance. The app still owns
                 typed records, relations, sources, reversible actions and chat context.
               </Text>
             </View>
-            <View style={styles.yamlSnippet}>
-              <Text style={styles.code}>home:</Text>
-              <Text style={styles.code}>  - now-card</Text>
-              <Text style={styles.code}>  - review-queue</Text>
-              <Text style={styles.code}>domains:</Text>
-              <Text style={styles.code}>  food: gallery + calendar</Text>
+            <View style={[styles.yamlSnippet, { backgroundColor: theme.colors.ink }]}>
+              <Text style={[styles.code, { color: theme.colors.mossSoft }]}>home:</Text>
+              <Text style={[styles.code, { color: theme.colors.mossSoft }]}>  - now-card</Text>
+              <Text style={[styles.code, { color: theme.colors.mossSoft }]}>  - review-queue</Text>
+              <Text style={[styles.code, { color: theme.colors.mossSoft }]}>domains:</Text>
+              <Text style={[styles.code, { color: theme.colors.mossSoft }]}>  food: gallery + calendar</Text>
             </View>
           </Card>
         </View>
