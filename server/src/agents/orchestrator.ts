@@ -192,6 +192,8 @@ Rules:
 - When a source is present, answer from its Facts block; do not claim that no source exists.
 - Reply with concise, actionable guidance.
 - Prefer plain language; when useful, use rows with fields: meal, use, next.
+- When rows are useful, return one JSON object only with this shape: {"title":"...","intro":"...","rows":[{"meal":"...","use":"...","next":"..."}]}. Do not wrap it in Markdown or repeat the intro.
+- Keep the intro to one or two short paragraphs. Never duplicate a sentence or bullet list.
 - Only include citations for items drawn from concrete sources.
 - If no sources exist, state that explicitly and ask a clarifying follow-up.
 
