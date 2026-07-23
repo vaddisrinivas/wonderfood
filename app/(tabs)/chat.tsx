@@ -140,6 +140,9 @@ export default function ChatScreen() {
   const workspaceSections = chatSections.filter((section) => WORKSPACE_CHAT_SECTIONS.has(section));
 
   useEffect(() => {
+    if (!activeThread?.messages.some((message) => message.role === 'user')) {
+      return undefined;
+    }
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     return () => clearTimeout(timer);
   }, [activeThread?.messages.length]);
@@ -368,18 +371,10 @@ export default function ChatScreen() {
           </View>
         );
       case 'promptRail':
-        return chatConfig.promptRail && isWide ? (
-          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
+        return chatConfig.promptRail ? (
+          <View key={section} style={styles.promptRail}>
             {promptBank.map((prompt) => (
               <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-                <Text style={[styles.promptText, { color: theme.colors.ink }]}>{prompt}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : chatConfig.promptRail ? (
-          <View key={section} style={styles.promptRailMobile}>
-            {promptBank.slice(0, 3).map((prompt) => (
-              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChipMobile, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
                 <Text style={[styles.promptText, { color: theme.colors.ink }]}>{prompt}</Text>
               </Pressable>
             ))}
@@ -412,6 +407,23 @@ export default function ChatScreen() {
               </Pressable>
             </View>
             <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle={`Hearth reasons over ${domainLabel} records and keeps source cards close to the answer.`} />
+            <View style={styles.capabilityGrid}>
+              <Card tone="moss" style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{sourceRecords.length}</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Sources in context</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Chat cites sources, opens records, and keeps answers tied to exact graph items.</Text>
+              </Card>
+              <Card tone={mode === 'direct' ? 'plum' : 'blue'} style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{mode === 'direct' ? 'AI' : 'Local'}</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Model route</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>{mode === 'direct' ? 'Direct provider keys from Settings.' : 'No provider key yet; source briefing still works locally.'}</Text>
+              </Card>
+              <Card tone="amber" style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>MCP</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Same contract</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>App chat, skills and external clients share schemas, sources and reversible actions.</Text>
+              </Card>
+            </View>
 
             {warnings.length ? <Card style={[styles.modeNote, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>{warnings.map((item) => <Text key={item} style={[styles.modeText, { color: theme.colors.muted }]}>{item}</Text>)}</Card> : null}
 
@@ -587,6 +599,11 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.64 },
   workspace: { gap: 12 },
   workspaceWide: { flexDirection: 'row', alignItems: 'stretch' },
+  capabilityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+  capabilityCard: { flexGrow: 1, flexBasis: 230, minHeight: 142 },
+  capabilityNumber: { color: colors.ink, fontSize: 24, lineHeight: 28, fontWeight: '900', letterSpacing: -0.6 },
+  capabilityTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', marginTop: 9 },
+  capabilityBody: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
   threadPanel: { padding: 10 },
   threadPanelWide: { width: 242, minHeight: 580 },
   threadPanelMobile: { paddingVertical: 9 },
@@ -654,8 +671,8 @@ const styles = StyleSheet.create({
   sourcePillTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   sourcePillMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
   sourceEmpty: { color: colors.muted, fontSize: 12, paddingVertical: 8 },
-  promptRail: { gap: 8, paddingBottom: 10 },
-  promptChip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 8 },
+  promptRail: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  promptChip: { minHeight: 42, maxWidth: 250, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 9, justifyContent: 'center' },
   promptRailMobile: { gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   promptChipMobile: { borderRadius: 13, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 10 },
   promptText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
