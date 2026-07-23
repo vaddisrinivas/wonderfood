@@ -733,3 +733,14 @@
   - `npm run typecheck` ✅
   - `git diff --check` ✅
 - Still open after this hard slice: C4 Config Sources UX, provider/device Undo across every adapter, full Notion/Sheets authority UX, final visual polish, signed Android/iOS release.
+
+## 2026-07-23 fresh live provider authority proof
+
+- Ran live provider checks through `agent-env` without printing secrets.
+- Verified `npm run check:live-providers` ✅.
+- Fresh evidence:
+  - `app/build/evidence/live-workspace/notion_scenarios-1784832454.json` — all scenarios passed, scenario page trashed.
+  - `app/build/evidence/live-workspace/google_sheets_scenarios-1784832468.json` — all scenarios passed.
+  - `app/build/evidence/live-workspace/direct_provider_writeback-1784832477.json` — direct Notion/Sheets writeback passed.
+- Updated `docs/lifeos/implementation-ledger.md` Phase 5/6 evidence paths.
+- Still open: standalone provider-authority UX and native visual proof; live scripts prove backend/provider authority slices only.
