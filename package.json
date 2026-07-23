@@ -95,7 +95,8 @@
     "check:writer-boundary": "vitest run tests/ops/writer-boundary.test.ts",
     "check:migrations": "vitest run tests/db/migrations.test.ts",
     "check:control-plane-c0": "vitest run tests/db/migrations.test.ts",
-    "check:control-plane-c1": "vitest run tests/config/fetchers.test.ts"
+    "check:control-plane-c1": "vitest run tests/config/fetchers.test.ts",
+    "check:control-plane-c2": "vitest run tests/config/runtime.test.ts"
   },
   "private": true,
   "expo": {
