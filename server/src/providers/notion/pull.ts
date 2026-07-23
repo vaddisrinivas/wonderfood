@@ -82,6 +82,53 @@ function propertyToText(value: unknown): string {
   return '';
 }
 
+const FOOD_DETAIL_KEYS = ['Food detail', 'food_detail', 'Food Detail', 'Detail JSON', 'detail_json'];
+const RELATION_KEYS = ['Relations', 'relations', 'Related records', 'related_records'];
+
+function readFirstTextProperty(properties: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = propertyToText(properties[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function parseJsonProperty(properties: Record<string, unknown>, keys: string[]) {
+  const value = readFirstTextProperty(properties, keys);
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRelationProperty(properties: Record<string, unknown>) {
+  const value = readFirstTextProperty(properties, RELATION_KEYS);
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((relation) => {
+          if (!relation || typeof relation !== 'object') return null;
+          const record = relation as Record<string, unknown>;
+          const name = typeof record.name === 'string' ? record.name.trim() : '';
+          const targetId = typeof record.target_id === 'string' ? record.target_id.trim() : '';
+          return name && targetId ? { name, target_id: targetId } : null;
+        })
+        .filter((relation): relation is { name: string; target_id: string } => relation !== null);
+    }
+  } catch {
+    // fallback below
+  }
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((target_id) => ({ name: 'supports', target_id }));
+}
+
 function toArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -283,6 +330,7 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
 
     const filtered = {
       ...properties,
+      food_detail: parseJsonProperty(properties, FOOD_DETAIL_KEYS),
       notion: {
         domain: properties['LifeOS Domain'] ?? properties['Lifeos Domain'] ?? properties.Domain ?? properties['domain'] ?? undefined,
         collection: properties['LifeOS Collection'] ?? properties['Lifeos Collection'] ?? properties.Collection ?? properties['collection'] ?? undefined,
@@ -290,6 +338,10 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
         data_source_id: config.dataSourceId,
       },
     };
+    if (filtered.food_detail === undefined) {
+      delete filtered.food_detail;
+    }
+    const relations = parseRelationProperty(properties);
     const unsupportedProperties = Object.entries(properties).reduce<Record<string, unknown>>((acc, [key, value]) => {
       if (key === 'Name' || key === 'notion' || key === 'Domain' || key === 'Collection' || key === 'LifeOS Domain' || key === 'LifeOS Collection') {
         return acc;
@@ -305,6 +357,7 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
         collection: mapped.collection,
         title,
         properties: filtered,
+        relations,
       }),
       source: buildNotionSourceSnapshot({
         candidate,

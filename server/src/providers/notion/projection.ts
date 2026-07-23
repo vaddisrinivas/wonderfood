@@ -15,6 +15,7 @@ export function toNotionCanonicalProjection(input: {
   collection?: string;
   title?: string;
   properties?: NotionPropertyMap;
+  relations?: Array<{ name: string; target_id: string }>;
 }) {
   return {
     id: String(input.id || '').trim(),
@@ -22,8 +23,21 @@ export function toNotionCanonicalProjection(input: {
     collection: String(input.collection || 'recipe').trim(),
     title: String(input.title || '').trim(),
     properties: sanitizeNotionProperties(input.properties),
-    relations: [],
+    relations: normalizeRelations(input.relations),
   } satisfies NotionCanonicalProjection;
+}
+
+function normalizeRelations(input: unknown): Array<{ name: string; target_id: string }> {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((relation) => {
+      if (!relation || typeof relation !== 'object') return null;
+      const record = relation as Record<string, unknown>;
+      const name = typeof record.name === 'string' ? record.name.trim() : '';
+      const targetId = typeof record.target_id === 'string' ? record.target_id.trim() : '';
+      return name && targetId ? { name, target_id: targetId } : null;
+    })
+    .filter((relation): relation is { name: string; target_id: string } => relation !== null);
 }
 
 function sanitizeNotionProperties(properties: NotionPropertyMap | undefined) {

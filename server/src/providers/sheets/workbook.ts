@@ -51,6 +51,8 @@ export const WELL_KNOWN_RUNTIME_COLUMNS = [
   'domain',
   'collection',
   'properties',
+  'food_detail',
+  'relations',
   'archived',
   'external_id',
 ] as const;

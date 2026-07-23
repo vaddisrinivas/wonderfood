@@ -27,6 +27,7 @@ export function toSheetsCanonicalProjection(input: {
   collection?: string;
   title?: string;
   properties?: Record<string, unknown>;
+  relations?: Array<{ name: string; target_id: string }>;
   archived?: boolean;
   version?: number;
   updatedAt?: string;
@@ -38,12 +39,25 @@ export function toSheetsCanonicalProjection(input: {
     collection: String(input.collection || 'recipe').trim(),
     title: String(input.title || '').trim(),
     properties: input.properties ?? {},
-    relations: [],
+    relations: normalizeRelations(input.relations),
     archived: Boolean(input.archived),
     version: typeof input.version === 'number' && Number.isFinite(input.version) ? input.version : 1,
     updated_at: typeof input.updatedAt === 'string' && input.updatedAt.trim().length > 0 ? input.updatedAt.trim() : new Date().toISOString(),
     source: input.source,
   } satisfies SheetsRecordProjection;
+}
+
+function normalizeRelations(input: unknown): Array<{ name: string; target_id: string }> {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((relation) => {
+      if (!relation || typeof relation !== 'object') return null;
+      const record = relation as Record<string, unknown>;
+      const name = typeof record.name === 'string' ? record.name.trim() : '';
+      const targetId = typeof record.target_id === 'string' ? record.target_id.trim() : '';
+      return name && targetId ? { name, target_id: targetId } : null;
+    })
+    .filter((relation): relation is { name: string; target_id: string } => relation !== null);
 }
 
 function toFallbackSource(id: string) {

@@ -10,6 +10,7 @@ type SheetsRecord = {
   collection: string;
   title: string;
   properties?: Record<string, unknown>;
+  relations?: Array<{ name: string; target_id: string }>;
   archived?: boolean;
   version?: number;
   expectedVersion?: number;
@@ -47,6 +48,8 @@ type SourceCellMap = {
   domain: number;
   collection: number;
   properties: number;
+  foodDetail: number;
+  relations: number;
   archived: number;
   version: number;
   updatedAt: number;
@@ -135,6 +138,8 @@ function buildColumnIndexes(header: string[]): SourceCellMap {
     domain: normalized.indexOf('domain'),
     collection: normalized.indexOf('collection'),
     properties: normalized.indexOf('properties'),
+    foodDetail: normalized.indexOf('food_detail'),
+    relations: normalized.indexOf('relations'),
     archived: normalized.indexOf('archived'),
     version: normalized.indexOf('version'),
     updatedAt: normalized.indexOf('updated_at'),
@@ -224,6 +229,7 @@ function parseManagedTargetValue(input: {
     collection: string;
     title: string;
     properties: Record<string, unknown>;
+    relations?: Array<{ name: string; target_id: string }>;
     archived: boolean;
     source: Record<string, unknown>;
     externalId: string;
@@ -251,6 +257,8 @@ function parseManagedTargetValue(input: {
     [indexes.domain]: input.record.domain,
     [indexes.collection]: input.record.collection,
     [indexes.properties]: JSON.stringify(input.record.properties),
+    [indexes.foodDetail]: JSON.stringify(input.record.properties.food_detail ?? {}),
+    [indexes.relations]: JSON.stringify(input.record.relations ?? []),
     [indexes.archived]: input.record.archived ? 'true' : 'false',
     [indexes.version]: String(targetVersion),
     [indexes.updatedAt]: now,
@@ -608,6 +616,7 @@ export async function writeSheetsRecord(input: {
     collection: input.record.collection || 'recipe',
     title: input.record.title || id,
     properties: input.record.properties ?? {},
+    relations: input.record.relations ?? [],
     archived: input.operation === 'archive_record' ? true : parseBool(input.record.archived),
     source: {
       ...(input.record.source ?? {}),

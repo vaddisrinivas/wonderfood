@@ -2,7 +2,7 @@ import { Link, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { ActionButton, Card, Page, Pill, Row, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { loadCatalog } from '@/src/domain/catalog';
 import { getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
@@ -43,7 +43,7 @@ export default function FoodScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
-  const contentWidth = compact ? Math.max(width - 36, 280) : '100%';
+  const contentWidth = compact ? Math.max(width - 32, 280) : Math.max(width - 128, 900);
   const { activeManifest } = loadCatalog();
   const surfaceCatalog = useMemo(() => buildSurfaceCatalog(activeManifest), [activeManifest]);
   const views = surfaceCatalog.tabs;
@@ -83,7 +83,10 @@ export default function FoodScreen() {
   const kitchenItem = pickByNeed(records, 'pantry', 1);
   const shoppingItem = pickByNeed(records, 'shopping', 2);
   const activeCopy = viewCopy[active] ?? viewCopy.Overview;
-  const reviewRows = records.slice(0, 2);
+  const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, 4);
+  const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, 4);
+  const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, 4);
+  const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, 3);
 
   return (
     <Page>
@@ -101,22 +104,29 @@ export default function FoodScreen() {
             </View>
           </View>
 
-          <Card tone="moss" style={styles.hero}>
-            <View style={styles.heroHeader}>
-              <Pill tone="moss">TONIGHT</Pill>
-              <Text style={styles.heroMeta}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
+          <View style={[styles.dashboard, compact && styles.dashboardCompact]}>
+            <Card tone="moss" style={styles.hero}>
+              <View style={styles.heroHeader}>
+                <Pill tone="moss">TONIGHT</Pill>
+                <Text style={styles.heroMeta}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
+              </View>
+              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
+                {todayMeal?.title ?? 'Decide dinner from what you have.'}
+              </Text>
+              <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+                {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
+              </Text>
+              <View style={styles.heroActions}>
+                <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
+                <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
+              </View>
+            </Card>
+
+            <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
+              <FeatureCard tone="amber" label="Use soon" item={kitchenItem} fallbackTitle="Nothing urgent" fallbackBody="Use-soon pantry items will appear here." />
+              <FeatureCard tone="blue" label="Shopping" item={shoppingItem} fallbackTitle="No shopping pressure" fallbackBody="Missing ingredients and receipt items will appear here." />
             </View>
-            <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
-              {todayMeal?.title ?? 'Decide dinner from what you have.'}
-            </Text>
-            <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
-              {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
-            </Text>
-            <View style={styles.heroActions}>
-              <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
-              <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
-            </View>
-          </Card>
+          </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
             {views.map((view) => (
@@ -134,60 +144,46 @@ export default function FoodScreen() {
 
           {active === 'Overview' ? (
             <>
-              <SectionTitle title="Food today" />
-              <View style={sharedStyles.grid}>
-                <FeatureCard tone="amber" label="Use soon" item={kitchenItem} fallbackTitle="Nothing urgent" fallbackBody="Use-soon pantry items will appear here." />
-                <FeatureCard tone="blue" label="Shopping" item={shoppingItem} fallbackTitle="No shopping pressure" fallbackBody="Missing ingredients and receipt items will appear here." />
+              <SectionTitle title="Food workspace" action="Ask" href="/chat" />
+              <View style={[styles.board, compact && styles.boardCompact]}>
+                <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
+                <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
+                <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
               </View>
 
-              <SectionTitle title="Review before writing" />
-              <Card style={styles.reviewCard}>
+              <SectionTitle title="Needs attention" />
+              <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
                 {reviewRows.length ? reviewRows.map((row) => (
-                  <Row
-                    key={row.id}
-                    icon="!"
-                    title={row.title}
-                    detail={row.meta || `${row.collection} · needs review`}
-                    href={{ pathname: '/record/[id]', params: { id: row.id } }}
-                  />
+                  <MiniRecord key={row.id} record={row} />
                 )) : (
-                  <View style={styles.emptyBlock}>
-                    <Text style={styles.emptyTitle}>No food reviews pending</Text>
-                    <Text style={styles.emptyBody}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
-                  </View>
+                  <Card tone="moss" style={styles.emptyCard}>
+                    <Text style={styles.emptyTitle}>Nothing needs review</Text>
+                    <Text style={sharedStyles.muted}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
+                  </Card>
                 )}
-              </Card>
+              </View>
             </>
           ) : null}
 
-          <SectionTitle title={activeCopy.title} action="Ask" href="/chat" />
-          <Text style={styles.viewSubtitle}>{activeCopy.subtitle}</Text>
-          {loading ? <Text style={styles.loading}>Loading food records...</Text> : null}
+          {active !== 'Overview' ? (
+            <>
+              <SectionTitle title={activeCopy.title} action="Ask" href="/chat" />
+              <Text style={styles.viewSubtitle}>{activeCopy.subtitle}</Text>
+              {loading ? <Text style={styles.loading}>Loading food records...</Text> : null}
 
-          <View style={styles.records}>
-            {shown.length ? shown.map((record) => (
-              <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
-                <Pressable style={({ pressed }) => [styles.record, pressed && styles.pressed]}>
-                  <View style={styles.recordIcon}><Text style={styles.recordIconText}>{record.collection.slice(0, 1).toUpperCase()}</Text></View>
-                  <View style={styles.recordCopy}>
-                    <View style={styles.recordTop}>
-                      <Text style={styles.recordTitle}>{record.title}</Text>
-                      <Pill tone={record.tone}>{record.status}</Pill>
-                    </View>
-                    <Text style={styles.recordMeta}>{record.meta}</Text>
-                    <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
-                    <Text style={styles.recordSource}>{record.source}</Text>
-                  </View>
-                </Pressable>
-              </Link>
-            )) : (
-              <Card tone="moss" style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>{activeCopy.empty}</Text>
-                <Text style={sharedStyles.muted}>Use capture, Sources, or Food AI. No config page required.</Text>
-                <Link href="/capture" style={styles.cardLink}>Capture food →</Link>
-              </Card>
-            )}
-          </View>
+              <View style={styles.records}>
+                {shown.length ? shown.map((record) => (
+                  <RecordListItem key={record.id} record={record} />
+                )) : (
+                  <Card tone="moss" style={styles.emptyCard}>
+                    <Text style={styles.emptyTitle}>{activeCopy.empty}</Text>
+                    <Text style={sharedStyles.muted}>Use capture, Sources, or Food AI. No config page required.</Text>
+                    <Link href="/capture" style={styles.cardLink}>Capture food →</Link>
+                  </Card>
+                )}
+              </View>
+            </>
+          ) : null}
 
           <Card style={styles.configCard}>
             <View style={styles.configCopy}>
@@ -199,6 +195,58 @@ export default function FoodScreen() {
         </View>
       </ScrollView>
     </Page>
+  );
+}
+
+function RecordColumn({ title, subtitle, records, empty }: {
+  title: string;
+  subtitle: string;
+  records: FoodRecordView[];
+  empty: string;
+}) {
+  return (
+    <Card style={styles.column}>
+      <Text style={styles.columnTitle}>{title}</Text>
+      <Text style={styles.columnSubtitle}>{subtitle}</Text>
+      <View style={styles.columnRecords}>
+        {records.length ? records.map((record) => <MiniRecord key={record.id} record={record} />) : (
+          <Text style={styles.emptyBody}>{empty}</Text>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+function MiniRecord({ record }: { record: FoodRecordView }) {
+  return (
+    <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.miniRecord, pressed && styles.pressed]}>
+        <View style={styles.miniTop}>
+          <Text style={styles.miniTitle} numberOfLines={1}>{record.title}</Text>
+          <Pill tone={record.tone}>{record.status}</Pill>
+        </View>
+        <Text style={styles.recordMeta} numberOfLines={1}>{record.meta}</Text>
+        <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
+      </Pressable>
+    </Link>
+  );
+}
+
+function RecordListItem({ record }: { record: FoodRecordView }) {
+  return (
+    <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+      <Pressable style={({ pressed }) => [styles.record, pressed && styles.pressed]}>
+        <View style={styles.recordIcon}><Text style={styles.recordIconText}>{record.collection.slice(0, 1).toUpperCase()}</Text></View>
+        <View style={styles.recordCopy}>
+          <View style={styles.recordTop}>
+            <Text style={styles.recordTitle}>{record.title}</Text>
+            <Pill tone={record.tone}>{record.status}</Pill>
+          </View>
+          <Text style={styles.recordMeta}>{record.meta}</Text>
+          <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
+        </View>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -223,7 +271,7 @@ function FeatureCard({ tone, label, item, fallbackTitle, fallbackBody }: {
 }
 
 const styles = StyleSheet.create({
-  content: { alignSelf: 'center', maxWidth: 1080, paddingBottom: 44 },
+  content: { alignSelf: 'center', maxWidth: 1480, paddingBottom: 140 },
   topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   date: { color: colors.muted, fontSize: 12, marginTop: 3 },
@@ -231,7 +279,9 @@ const styles = StyleSheet.create({
   topIcon: { color: colors.ink, fontSize: 26 },
   capture: { color: '#FFF', backgroundColor: colors.ink, borderRadius: 99, overflow: 'hidden', paddingHorizontal: 13, paddingVertical: 8, fontWeight: '800', fontSize: 12 },
   avatar: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', textAlign: 'center', lineHeight: 32, backgroundColor: colors.ink, color: '#FFF', fontWeight: '800', fontSize: 11 },
-  hero: { minHeight: 236, padding: 22, overflow: 'hidden' },
+  dashboard: { flexDirection: 'row', gap: 16, alignItems: 'stretch' },
+  dashboardCompact: { flexDirection: 'column' },
+  hero: { flex: 1, minHeight: 260, padding: 28, overflow: 'hidden' },
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   heroMeta: { color: colors.muted, fontSize: 12, fontWeight: '800' },
   heroTitle: { color: colors.ink, fontSize: 32, lineHeight: 36, fontWeight: '900', letterSpacing: -1.1, marginTop: 22, maxWidth: 680 },
@@ -239,16 +289,28 @@ const styles = StyleSheet.create({
   heroBody: { color: colors.ink, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 700 },
   heroBodyCompact: { maxWidth: 310 },
   heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 20 },
+  todayRail: { width: 320, gap: 12 },
+  todayRailCompact: { width: '100%' },
   segments: { backgroundColor: '#EAE9E0', padding: 4, borderRadius: radius.pill, marginTop: 18, marginBottom: 20 },
   segment: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill },
   segmentActive: { backgroundColor: colors.paper },
   segmentText: { color: colors.muted, fontSize: 13, fontWeight: '800' },
   segmentTextActive: { color: colors.ink },
-  featurePress: { flexGrow: 1, flexBasis: 260 },
-  featureCard: { minHeight: 148 },
+  featurePress: { flexGrow: 1 },
+  featureCard: { minHeight: 124 },
   featureLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   featureTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },
   featureBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  board: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
+  boardCompact: { flexDirection: 'column' },
+  column: { flex: 1, minHeight: 320 },
+  columnTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
+  columnSubtitle: { color: colors.muted, fontSize: 12, marginTop: 4, marginBottom: 12 },
+  columnRecords: { gap: 10 },
+  miniRecord: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.line, backgroundColor: '#FEFEFA', borderRadius: 16, padding: 12 },
+  miniTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  miniTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', flex: 1 },
+  attentionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   reviewCard: { paddingVertical: 0 },
   emptyBlock: { paddingVertical: 20 },
   emptyTitle: { color: colors.ink, fontWeight: '900', fontSize: 15, marginBottom: 5 },

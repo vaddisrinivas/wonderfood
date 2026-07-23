@@ -130,6 +130,22 @@ function withMockNotionFetch(pageId = 'notion-page-1', dataSourceId = 'notion-so
               'LifeOS Domain': 'food',
               'LifeOS Collection': 'recipe',
               UnsupportedField: 'kept',
+              'Food detail': {
+                rich_text: [{
+                  plain_text: JSON.stringify({
+                    nutrition: [['Protein', '~24 g']],
+                    ingredients: [{ name: 'Moong dal', amount: '1 cup', state: 'available' }],
+                    instructions: ['Simmer dal.'],
+                    logs: [['Planned', 'Dinner']],
+                    variations: ['Add spinach'],
+                  }),
+                }],
+              },
+              Relations: {
+                rich_text: [{
+                  plain_text: JSON.stringify([{ name: 'plans', target_id: 'shopping-spinach' }]),
+                }],
+              },
             },
             created_time: '2026-01-01T00:00:00.000Z',
             last_edited_time: '2026-01-01T01:00:00.000Z',
@@ -295,6 +311,8 @@ function hasUnsupportedField(value: Record<string, unknown>) {
   createParentType = createParent && typeof createParent.type === 'string' ? createParent.type : null;
 
   const unsupportedFromPull = (pullResult.source_snapshots?.[0] as { unsupported?: Record<string, unknown> } | undefined)?.unsupported ?? {};
+  const pulledRecord = pullResult.records[0] as { properties?: Record<string, unknown>; relations?: Array<{ name: string; target_id: string }> } | undefined;
+  const pulledFoodDetail = pulledRecord?.properties?.food_detail as { nutrition?: unknown[] } | undefined;
   const createHeader = createCall ? headerValue(createCall.headers, 'notion-version') : '';
 
   const evidence: AdapterEvidence = {
@@ -317,6 +335,8 @@ function hasUnsupportedField(value: Record<string, unknown>) {
       pull_status: pullResult.status,
       pull_records: pullResult.records.length,
       pull_unsupported_preserved: hasUnsupportedField(unsupportedFromPull || {}),
+      pull_food_detail_preserved: Array.isArray(pulledFoodDetail?.nutrition),
+      pull_relations_preserved: pulledRecord?.relations?.[0]?.target_id,
       sync_status: syncResult.status,
       sync_duplicate_status: syncDuplicateResult.status,
       sync_replay_duplicate: replay.duplicate,
@@ -360,6 +380,8 @@ function hasUnsupportedField(value: Record<string, unknown>) {
   ensure(pullResult.status === 'ready', 'Pull must succeed in adapter check');
   ensure(pullResult.records.length === 1, 'Pull should return one record in check path');
   ensure(hasUnsupportedField(unsupportedFromPull), 'Pull should preserve unsupported fields');
+  ensure(Array.isArray(pulledFoodDetail?.nutrition), 'Pull should parse Food detail JSON into food_detail');
+  ensure(pulledRecord?.relations?.[0]?.target_id === 'shopping-spinach', 'Pull should parse Relations into canonical relations');
 
   ensure(syncResult.status === 'synced', 'Sync should return synced for first webhook event');
   ensure(syncDuplicateResult.status === 'duplicate', 'Sync should de-duplicate duplicate webhook event');

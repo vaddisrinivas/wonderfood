@@ -51,6 +51,8 @@ type SourceCellMap = {
   domain: number;
   collection: number;
   properties: number;
+  foodDetail: number;
+  relations: number;
   archived: number;
   version: number;
   updatedAt: number;
@@ -106,6 +108,33 @@ function parseJsonCell(value: string) {
   }
 }
 
+function parseRelationsCell(value: string) {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((relation) => {
+          if (!relation || typeof relation !== 'object') return null;
+          const record = relation as Record<string, unknown>;
+          const name = typeof record.name === 'string' ? record.name.trim() : '';
+          const targetId = typeof record.target_id === 'string' ? record.target_id.trim() : '';
+          return name && targetId ? { name, target_id: targetId } : null;
+        })
+        .filter((relation): relation is { name: string; target_id: string } => relation !== null);
+    }
+  } catch {
+    // fallback below
+  }
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((target_id) => ({ name: 'supports', target_id }));
+}
+
 function buildColumnIndexes(header: string[]): SourceCellMap {
   const normalized = header.map((name) => toText(name).toLowerCase());
   return {
@@ -115,6 +144,8 @@ function buildColumnIndexes(header: string[]): SourceCellMap {
     domain: normalized.indexOf('domain'),
     collection: normalized.indexOf('collection'),
     properties: normalized.indexOf('properties'),
+    foodDetail: normalized.indexOf('food_detail'),
+    relations: normalized.indexOf('relations'),
     archived: normalized.indexOf('archived'),
     version: normalized.indexOf('version'),
     updatedAt: normalized.indexOf('updated_at'),
@@ -390,17 +421,26 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
       provider_fields: unsupported,
     } satisfies SourceSnapshot;
 
-    const sourceCell = normalizeRowValue(knownIndexes, row, 'properties');
-    const parsedProperties = normalizeCellValue(sourceCell)
-      ? parseJsonCell(sourceCell)
+    const propertiesCell = normalizeRowValue(knownIndexes, row, 'properties');
+    const foodDetailCell = normalizeRowValue(knownIndexes, row, 'foodDetail');
+    const parsedProperties = normalizeCellValue(propertiesCell)
+      ? parseJsonCell(propertiesCell)
       : {};
+    const foodDetail = normalizeCellValue(foodDetailCell)
+      ? parseJsonCell(foodDetailCell)
+      : (parsedProperties as Record<string, unknown>).food_detail;
+    const propertiesWithDetail = foodDetail && typeof foodDetail === 'object'
+      ? { ...(parsedProperties as Record<string, unknown>), food_detail: foodDetail }
+      : parsedProperties;
+    const relations = parseRelationsCell(normalizeRowValue(knownIndexes, row, 'relations'));
 
     const projection = toSheetsCanonicalProjection({
       id: candidateId,
       domain: rowDomain,
       collection: rowCollection,
       title: normalizeRowValue(knownIndexes, row, 'title') || normalizeRowValue(knownIndexes, row, 'id') || candidateId,
-      properties: parsedProperties,
+      properties: propertiesWithDetail,
+      relations,
       archived: asBoolean(normalizeRowValue(knownIndexes, row, 'archived')),
       version: parseNumber(normalizeRowValue(knownIndexes, row, 'version')),
       updatedAt: normalizeRowValue(knownIndexes, row, 'updatedAt'),
