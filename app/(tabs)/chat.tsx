@@ -21,7 +21,7 @@ import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
-import { loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
+import { loadLifeOSSettings, usableAiProfiles, useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 type MessageSourceMode = 'server' | 'direct' | 'offline';
 
@@ -46,7 +46,9 @@ export default function ChatScreen() {
   const isWide = width >= 820;
   const router = useRouter();
   const db = useLifeOSDatabase();
-  const { activeDomainId } = loadCatalog();
+  const settings = useLifeOSSettingsSnapshot();
+  const { activeDomainId, activeManifest } = loadCatalog();
+  const domainLabel = activeManifest.label;
   const scrollRef = useRef<ScrollView>(null);
 
   const [threads, setThreads] = useState<ChatThread[]>(seedThreads);
@@ -75,7 +77,7 @@ export default function ChatScreen() {
       } else {
         const baseThread: ChatThread = {
           id: 'thread-empty',
-          title: 'Food context',
+          title: `${domainLabel} context`,
           detail: nextMode === 'direct' ? 'Direct model ready' : seedModeNotice.detail,
           messages: seedThreads[0].messages,
         };
@@ -89,7 +91,7 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [db, domainLabel]);
 
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
 
@@ -104,7 +106,7 @@ export default function ChatScreen() {
       id,
       title: 'New conversation',
       detail: mode === 'direct' ? 'Direct model' : 'Local only',
-      messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'Food context is on. I can help with meals, recipes, shopping, and source-backed actions.' }],
+      messages: [{ id: `${id}-welcome`, role: 'assistant', text: `${domainLabel} context is on. I can help with records, sources, and next actions.` }],
     };
 
     setThreads((current) => [thread, ...current]);
@@ -273,13 +275,13 @@ export default function ChatScreen() {
             <View style={styles.topbar}>
               <View>
                 <Text style={styles.brand}>LIFEOS / CHAT</Text>
-                <Text style={styles.date}>Food context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
+                <Text style={styles.date}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, pressed && styles.pressed]}>
                 <Text style={styles.newThreadText}>＋ New thread</Text>
               </Pressable>
             </View>
-            <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle="Hearth reasons over your Food records and keeps source cards close to the answer." />
+            <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle={`Hearth reasons over ${domainLabel} records and keeps source cards close to the answer.`} />
 
             {warnings.length ? <Card style={styles.modeNote}>{warnings.map((item) => <Text key={item} style={styles.modeText}>{item}</Text>)}</Card> : null}
 
@@ -295,13 +297,13 @@ export default function ChatScreen() {
                     </Pressable>;
                   })}
                 </ScrollView>
-                {isWide ? <View style={styles.threadFoot}><Pill tone="moss">Food context on</Pill><Text style={styles.threadFootText}>Chat cites sources it reads.</Text></View> : null}
+                {isWide ? <View style={styles.threadFoot}><Pill tone="moss">{domainLabel} context on</Pill><Text style={styles.threadFootText}>Chat cites sources it reads.</Text></View> : null}
               </Card>
 
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
                   <View style={styles.assistantMark}><Text style={styles.assistantMarkText}>✦</Text></View>
-                  <View style={styles.chatHeaderCopy}><Text style={styles.chatTitle}>{activeThread.title}</Text><Text style={styles.chatDetail}>Hearth · Food workspace available</Text></View>
+                  <View style={styles.chatHeaderCopy}><Text style={styles.chatTitle}>{activeThread.title}</Text><Text style={styles.chatDetail}>Hearth · {domainLabel} workspace available</Text></View>
                   <Pressable accessibilityRole="button" onPress={() => router.push('/settings')}>
                     <Pill tone={mode === 'direct' ? 'plum' : 'blue'}>
                       {mode === 'direct' ? 'Direct' : 'Set up AI'}
@@ -322,7 +324,7 @@ export default function ChatScreen() {
                       accessibilityLabel="Chat message"
                       value={draft}
                       onChangeText={setDraft}
-                      placeholder="Ask about meals, the kitchen, or your grocery run…"
+                      placeholder={`Ask about ${domainLabel.toLowerCase()} records, sources, or next actions...`}
                       placeholderTextColor={colors.muted}
                       multiline
                       style={styles.input}
@@ -334,7 +336,7 @@ export default function ChatScreen() {
                     </Pressable>
                     {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><Text style={styles.sendText}>Retry</Text></Pressable> : null}
                   </View>
-                  <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses Kitchen, Meals, Recipes, Shopping, and their sources.</Text><Text style={styles.shortcut}>⌘ ↵</Text></View>
+                  <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses enabled domains, skill instructions, and available source records.</Text><Text style={styles.shortcut}>{settings.runtime.webSearch ? 'web on' : 'web off'}</Text></View>
                 </View>
               </Card>
             </View>
@@ -342,7 +344,7 @@ export default function ChatScreen() {
             <Card tone="blue" style={styles.contextCard}>
               <View style={styles.contextIcon}><Text>⌁</Text></View>
               <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · open conversation resume in order · citations inline when available.</Text></View>
-              <ActionButton label="Open Food" quiet onPress={() => router.push('/food')} />
+              <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
             </Card>
           </View>
         </ScrollView>
@@ -356,13 +358,14 @@ function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () =>
   const answerRows = message.answer;
   const citations = answerRows?.citations?.length ? ensureCitations(answerRows.citations) : [];
   const hasUndo = assistant && message.actionReceipt?.status === 'completed' && (message.actionReceipt.record_ids?.length ?? 0) > 0;
+  const visibleText = answerRows?.intro || message.text;
 
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
       {assistant ? <View style={styles.smallMark}><Text style={styles.smallMarkText}>✦</Text></View> : null}
       <View style={[styles.messageBlock, !assistant && styles.userMessageBlock]}>
         <Text style={styles.messageByline}>{assistant ? 'Hearth' : 'You'}</Text>
-        <View style={[styles.bubble, !assistant && styles.userBubble]}><Text style={[styles.bubbleText, !assistant && styles.userBubbleText]}>{message.text}</Text></View>
+        <View style={[styles.bubble, !assistant && styles.userBubble]}><Text style={[styles.bubbleText, !assistant && styles.userBubbleText]}>{visibleText}</Text></View>
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
         {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
         {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" onPress={onUndo} style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}><Text style={styles.undoButtonText}>Undo</Text></Pressable>}
@@ -375,21 +378,41 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
   return (
     <View style={styles.answer}>
       <Text style={styles.answerTitle}>{answer.title}</Text>
-      <Text style={styles.answerIntro}>{answer.intro}</Text>
-      <View style={styles.table} accessibilityLabel="Structured meal plan">
-        <View style={[styles.tableRow, styles.tableHeader]}><Text style={[styles.tableCell, styles.tableMeal, styles.tableHeaderText]}>WHEN</Text><Text style={[styles.tableCell, styles.tableUse, styles.tableHeaderText]}>USE</Text><Text style={[styles.tableCell, styles.tableNext, styles.tableHeaderText]}>NEXT</Text></View>
-        {answer.rows.map((row) => <View key={`${row.meal}-${row.use}`} style={styles.tableRow}><Text style={[styles.tableCell, styles.tableMeal]}>{row.meal}</Text><Text style={[styles.tableCell, styles.tableUse]}>{row.use}</Text><Text style={[styles.tableCell, styles.tableNext]}>{row.next}</Text></View>)}
-      </View>
+      {answer.rows.length ? (
+        <View style={styles.table} accessibilityLabel="Structured answer table">
+          <View style={[styles.tableRow, styles.tableHeader]}>
+            {(answer.columns?.length ? answer.columns : ['When', 'Use', 'Next']).map((column) => (
+              <Text key={column} style={[styles.tableCell, styles.tableHeaderText]}>{column.toUpperCase()}</Text>
+            ))}
+          </View>
+          {answer.rows.map((row, index) => {
+            const cells = row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? ''];
+            return (
+              <View key={`${index}-${cells.join('|')}`} style={styles.tableRow}>
+                {cells.map((cell, cellIndex) => <Text key={`${cellIndex}-${cell}`} style={styles.tableCell}>{cell}</Text>)}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 function CitationChip({ citation }: { citation: Citation }) {
   return (
-    <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(citation.href); }} style={({ pressed }) => [styles.citation, styles[`citation${citation.tone[0].toUpperCase()}${citation.tone.slice(1)}` as 'citationMoss'], pressed && styles.pressed]}>
+    <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(citation.href); }} style={({ pressed }) => [styles.citation, citationToneStyle(citation.tone), pressed && styles.pressed]}>
       <Text style={styles.citationLabel}>{citation.label}</Text><Text numberOfLines={1} style={styles.citationDetail}>{citation.detail} ↗</Text>
     </Pressable>
   );
+}
+
+function citationToneStyle(tone: Citation['tone']) {
+  if (tone === 'blue') return styles.citationBlue;
+  if (tone === 'amber') return styles.citationAmber;
+  if (tone === 'plum') return styles.citationPlum;
+  if (tone === 'neutral') return styles.citationNeutral;
+  return styles.citationMoss;
 }
 
 const styles = StyleSheet.create({
@@ -441,20 +464,18 @@ const styles = StyleSheet.create({
   userBubbleText: { color: '#FFF' },
   answer: { minWidth: 0, marginTop: 9, borderWidth: 1, borderColor: '#CBD8D0', backgroundColor: '#F9FCF8', borderRadius: 14, padding: 12 },
   answerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  answerIntro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4, marginBottom: 12 },
   table: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, overflow: 'hidden' },
   tableRow: { minWidth: 0, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.paper },
   tableHeader: { borderTopWidth: 0, backgroundColor: '#ECEEE7' },
-  tableCell: { minWidth: 0, flexShrink: 1, color: colors.ink, fontSize: 11, lineHeight: 15, padding: 8 },
-  tableMeal: { flex: 1.1, fontWeight: '700' },
-  tableUse: { flex: 1 },
-  tableNext: { flex: 1.2 },
+  tableCell: { minWidth: 0, flex: 1, flexShrink: 1, color: colors.ink, fontSize: 11, lineHeight: 15, padding: 8 },
   tableHeaderText: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   citationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   citation: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6, maxWidth: 166 },
   citationMoss: { backgroundColor: colors.mossSoft },
   citationBlue: { backgroundColor: colors.blueSoft },
   citationAmber: { backgroundColor: colors.amberSoft },
+  citationPlum: { backgroundColor: colors.plumSoft },
+  citationNeutral: { backgroundColor: '#ECEBE3' },
   citationLabel: { color: colors.ink, fontSize: 10, fontWeight: '900' },
   citationDetail: { color: colors.muted, fontSize: 10, marginTop: 1 },
   composerWrap: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, padding: 12, backgroundColor: '#FEFEFA' },

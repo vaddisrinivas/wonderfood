@@ -4,6 +4,8 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
 import { sendDirectModelMessage } from '@/src/chat/direct-provider';
 import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
+import { listRecordsForDomain } from '@/src/db/records';
+import type { CanonicalRecord } from '@/src/domain/runtime';
 // Keep citations user-controlled to avoid fabricated defaults when model fallback is in effect.
 
 export type ServerResponseMessage = {
@@ -292,11 +294,13 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
 
   const threadAfterUser = await getConversation(db, conversationId);
   const messagesSoFar = threadAfterUser?.messages ?? [];
+  const sourceRecords = await listRecordsForDomain(db, domainId).catch(() => [] as CanonicalRecord[]);
 
   if (!configuredServerUrl && directProfiles.length) {
     const direct = await tryDirectProviders({
       profiles: directProfiles,
       domainId,
+      records: sourceRecords,
       messages: messagesSoFar.slice(-20).map((message) => ({
         role: message.role,
         content: message.body,
@@ -304,12 +308,14 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     });
     if (direct.text) {
       const answerId = nowId('asst');
+      const answer = makeDirectAnswer(direct.text, direct.provider, sourceRecords);
       await appendMessage(db, {
         id: answerId,
         conversation_id: conversationId,
         role: 'assistant',
         sort_index: nextSortIndex + 1,
         body: direct.text,
+        answer_payload: { answer },
       });
       const updated = await getConversation(db, conversationId);
       return {
@@ -322,7 +328,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
           detail: direct.provider || 'Direct provider',
           messages: updated?.messages.map(dbMessageToChat) ?? [
             ...messagesSoFar.map(dbMessageToChat),
-            { id: answerId, role: 'assistant', text: direct.text },
+            { id: answerId, role: 'assistant', text: direct.text, answer },
           ],
         },
       };
@@ -479,14 +485,18 @@ async function tryDirectProviders(input: {
   profiles: AiProviderProfile[];
   domainId: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  records?: CanonicalRecord[];
 }): Promise<{ text: string; provider?: string; warnings: string[] }> {
   const warnings: string[] = [];
+  const sourceContext = buildDirectSourceContext(input.records ?? []);
   const system = {
     role: 'system' as const,
     content:
       `You are Hearth, the LifeOS assistant for the ${input.domainId} domain. ` +
       'Use the conversation context, state uncertainty plainly, never invent source claims, and keep answers useful and concise. ' +
-      'When records or source excerpts are absent, say what information is missing.',
+      'When records or source excerpts are absent, say what information is missing. ' +
+      'When a table would help, use a compact Markdown table.' +
+      sourceContext,
   };
 
   for (const profile of input.profiles) {
@@ -507,6 +517,66 @@ async function tryDirectProviders(input: {
   }
 
   return { text: '', warnings };
+}
+
+function buildDirectSourceContext(records: CanonicalRecord[]): string {
+  const relevant = records.slice(0, 8);
+  if (!relevant.length) {
+    return '\n\nNo local source records are currently loaded for this domain.';
+  }
+  const lines = relevant.map((record, index) => {
+    const body = Object.entries(record.properties)
+      .slice(0, 8)
+      .map(([key, value]) => `${key}: ${String(value)}`)
+      .join('; ');
+    return `${index + 1}. ${record.title} [${record.source.provider}:${record.source.external_id}] ${body}`;
+  });
+  return `\n\nLocal LifeOS source excerpts:\n${lines.join('\n')}`;
+}
+
+function makeDirectAnswer(text: string, provider: string | undefined, records: CanonicalRecord[]): ChatAnswer {
+  const table = parseMarkdownTable(text);
+  const intro = table.intro || text;
+  return {
+    title: provider ? `Answer from ${provider}` : 'LifeOS answer',
+    intro,
+    columns: table.columns,
+    rows: table.rows,
+    citations: records.slice(0, 5).map((record, index) => ({
+      label: `${record.source.provider} · ${record.title}`,
+      detail: record.source.external_id || record.collection,
+      href: record.source.url || `wonderfood://record/${record.id}`,
+      tone: (['moss', 'blue', 'amber', 'plum'] as const)[index % 4],
+    })),
+  };
+}
+
+function parseMarkdownTable(text: string): { intro: string; columns?: string[]; rows: Array<{ cells: string[] }> } {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  const tableStart = lines.findIndex((line, index) => {
+    const next = lines[index + 1] ?? '';
+    return line.includes('|') && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(next);
+  });
+  if (tableStart < 0) return { intro: text.trim(), rows: [] };
+
+  const parseRow = (line: string) =>
+    line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+
+  const columns = parseRow(lines[tableStart]);
+  const rows: Array<{ cells: string[] }> = [];
+  for (const line of lines.slice(tableStart + 2)) {
+    if (!line.includes('|')) break;
+    const cells = parseRow(line);
+    if (cells.length) rows.push({ cells });
+  }
+
+  const intro = lines.slice(0, tableStart).join('\n') || text.replace(/\|.*\|/g, '').trim();
+  return { intro, columns, rows };
 }
 
 async function sendToServer(payload: {

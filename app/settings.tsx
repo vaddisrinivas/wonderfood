@@ -16,6 +16,12 @@ import { Link } from 'expo-router';
 import { testDirectModelProfile } from '@/src/chat/direct-provider';
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import {
+  HealthConnectStatus,
+  getLifeOSHealthStatus,
+  openLifeOSHealthSettings,
+  requestLifeOSHealthPermissions,
+} from '@/src/health/connect';
+import {
   AiProviderKind,
   AiProviderProfile,
   LifeOSSettings,
@@ -50,6 +56,7 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [testing, setTesting] = useState<AiProviderProfile['id'] | null>(null);
+  const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +65,16 @@ export default function SettingsScreen() {
         setSettings(value);
         setLoading(false);
       }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getLifeOSHealthStatus().then((value) => {
+      if (!cancelled) setHealthStatus(value);
     });
     return () => {
       cancelled = true;
@@ -169,6 +186,42 @@ export default function SettingsScreen() {
             </View>
 
             <SectionTitle title="Data sources" />
+            <Card tone="plum" style={styles.healthCard}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchCopy}>
+                  <Text style={styles.cardTitle}>Android Health Connect</Text>
+                  <Text style={styles.cardBody}>{healthStatus?.message ?? 'Checking Health Connect...'}</Text>
+                </View>
+                <Pill tone={healthStatus?.availability === 'available' ? 'moss' : 'blue'}>
+                  {Platform.OS === 'android' ? `${healthStatus?.granted.length ?? 0} scopes` : 'Android only'}
+                </Pill>
+              </View>
+              <View style={styles.healthActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    const next = await requestLifeOSHealthPermissions();
+                    setHealthStatus(next);
+                    setNotice(next.message);
+                  }}
+                  style={({ pressed }) => [styles.configButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.configButtonText}>Grant permissions</Text>
+                  <Text style={styles.configButtonArrow}>→</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    const opened = await openLifeOSHealthSettings();
+                    setNotice(opened ? 'Opened Health Connect settings.' : 'Health Connect settings are available on Android only.');
+                  }}
+                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.secondaryButtonText}>Open system settings</Text>
+                </Pressable>
+              </View>
+            </Card>
+
             <View style={[styles.providerGrid, compact && styles.stack]}>
               <SourceCard
                 title="Notion"
@@ -389,6 +442,10 @@ const styles = StyleSheet.create({
   arrow: { color: colors.muted, fontSize: 15 },
   providerGrid: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   stack: { flexDirection: 'column' },
+  healthCard: { padding: 20, marginBottom: 12 },
+  healthActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
+  secondaryButton: { minHeight: 50, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   providerColumn: { flex: 1, minWidth: 280 },
   providerCard: { height: '100%', padding: 20 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },

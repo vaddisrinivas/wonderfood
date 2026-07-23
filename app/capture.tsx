@@ -35,7 +35,7 @@ export default function CaptureScreen() {
       return;
     }
 
-    if (!hasLocalGraph) {
+    if (!db) {
       setSaved(true);
       return;
     }

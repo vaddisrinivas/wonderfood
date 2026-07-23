@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 export type AiProviderKind = 'openai_compatible' | 'azure_openai' | 'anthropic';
@@ -54,6 +55,7 @@ export type LifeOSSettings = {
 };
 
 const STORAGE_KEY = 'lifeos.settings.v1';
+const listeners = new Set<(settings: LifeOSSettings) => void>();
 
 export const defaultLifeOSSettings: LifeOSSettings = {
   ai: {
@@ -215,7 +217,33 @@ export async function loadLifeOSSettings(): Promise<LifeOSSettings> {
 export async function saveLifeOSSettings(settings: LifeOSSettings): Promise<LifeOSSettings> {
   const normalized = normalizeSettings(settings);
   await writeRaw(JSON.stringify(normalized));
+  listeners.forEach((listener) => listener(normalized));
   return normalized;
+}
+
+export function subscribeLifeOSSettings(listener: (settings: LifeOSSettings) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function useLifeOSSettingsSnapshot(): LifeOSSettings {
+  const [settings, setSettings] = useState(defaultLifeOSSettings);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadLifeOSSettings().then((value) => {
+      if (!cancelled) setSettings(value);
+    });
+    const unsubscribe = subscribeLifeOSSettings(setSettings);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  return settings;
 }
 
 export function usableAiProfiles(settings: LifeOSSettings): AiProviderProfile[] {

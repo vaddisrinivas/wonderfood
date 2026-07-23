@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { colors } from '@/src/theme';
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { setActiveDomainOverride } from '@/src/domain/catalog';
-import { loadLifeOSSettings } from '@/src/settings/lifeos-settings';
+import { loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
 
 function HeaderActions() {
   return (
@@ -28,8 +28,12 @@ export default function RootLayout() {
       setActiveDomainOverride(settings.runtime.activeDomain);
       setSettingsReady(true);
     });
+    const unsubscribe = subscribeLifeOSSettings((settings) => {
+      setActiveDomainOverride(settings.runtime.activeDomain);
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

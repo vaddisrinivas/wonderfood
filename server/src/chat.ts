@@ -4,7 +4,7 @@ import { ensureCitations } from '@/src/chat/citations';
 import { getConversation } from './chat-storage';
 import { ActionEvent } from './mcp/state';
 
-export type ChatCitationTone = 'moss' | 'blue' | 'amber';
+export type ChatCitationTone = 'moss' | 'blue' | 'amber' | 'plum' | 'neutral';
 
 export type ChatStructuredAnswer = {
   title: string;

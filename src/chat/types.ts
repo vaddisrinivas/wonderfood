@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 
 export type ChatRole = 'assistant' | 'user';
 
-export type CitationTone = 'moss' | 'blue' | 'amber';
+export type CitationTone = 'moss' | 'blue' | 'amber' | 'plum' | 'neutral';
 
 export type ChatCitation = {
   label: string;
@@ -12,14 +12,16 @@ export type ChatCitation = {
 };
 
 export type ChatAnswerRow = {
-  meal: string;
-  use: string;
-  next: string;
+  meal?: string;
+  use?: string;
+  next?: string;
+  cells?: string[];
 };
 
 export type ChatAnswer = {
   title: string;
   intro: string;
+  columns?: string[];
   rows: ChatAnswerRow[];
   citations: ChatCitation[];
 };
