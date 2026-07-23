@@ -524,6 +524,7 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Hero" detail="Show tonight/use-soon command area." value={settings.runtime.surfaceConfig.food.showHero} onValueChange={(showHero) => updateSurfaceConfig('food', { showHero })} />
                 <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
                 <ToggleRow title="Manifest dashboard blocks" detail="Render cards declared by the active domain package." value={settings.runtime.surfaceConfig.food.showManifestBlocks} onValueChange={(showManifestBlocks) => updateSurfaceConfig('food', { showManifestBlocks })} />
+                <Field label="Dashboard blocks" value={settings.runtime.surfaceConfig.food.dashboardBlocks} onChangeText={(dashboardBlocks) => updateSurfaceConfig('food', { dashboardBlocks })} placeholder="Leave empty to use manifest. Or one per line: id|title|subtitle|kind|tone|collections|match|limit|href" multiline />
                 <ToggleRow title="Profile widgets" detail="Show custom cards defined by profile." value={settings.runtime.surfaceConfig.food.showWidgets} onValueChange={(showWidgets) => updateSurfaceConfig('food', { showWidgets })} />
                 <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
                 <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />
@@ -686,7 +687,7 @@ function SurfaceConfigCard({ title, children }: { title: string; children: React
   );
 }
 
-function Field(props: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean }) {
+function Field(props: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; multiline?: boolean }) {
   const theme = useLifeOSTheme();
   return (
     <View style={styles.smallField}>
@@ -694,6 +695,7 @@ function Field(props: { label: string; value: string; onChangeText: (value: stri
       <TextInput
         value={props.value}
         onChangeText={props.onChangeText}
+        placeholder={props.placeholder}
         multiline={props.multiline}
         textAlignVertical={props.multiline ? 'top' : undefined}
         placeholderTextColor={theme.colors.muted}

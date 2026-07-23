@@ -66,6 +66,7 @@ export type LifeOSSettings = {
         showHero: boolean;
         showViewTabs: boolean;
         showManifestBlocks: boolean;
+        dashboardBlocks: string;
         showWidgets: boolean;
         widgets: string;
         showWorkspace: boolean;
@@ -214,6 +215,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showHero: true,
         showViewTabs: true,
         showManifestBlocks: true,
+        dashboardBlocks: '',
         showWidgets: true,
         widgets: 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings',
         showWorkspace: true,
@@ -376,6 +378,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
       showManifestBlocks: config.food?.showManifestBlocks !== false,
+      dashboardBlocks: typeof config.food?.dashboardBlocks === 'string' ? config.food.dashboardBlocks : defaults.food.dashboardBlocks,
       showWidgets: config.food?.showWidgets !== false,
       widgets: typeof config.food?.widgets === 'string' ? config.food.widgets : defaults.food.widgets,
       showWorkspace: config.food?.showWorkspace !== false,

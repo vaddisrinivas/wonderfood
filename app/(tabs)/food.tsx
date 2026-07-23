@@ -81,6 +81,41 @@ function parseFoodWidgets(value: string): FoodWidget[] {
     });
 }
 
+function parseDashboardBlockOverrides(value: string): DashboardBlock[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [
+        id,
+        title,
+        subtitle,
+        kind = 'list',
+        tone = 'neutral',
+        collections = '',
+        match = '',
+        limit = '3',
+        href = '/config',
+      ] = line.split('|').map((part) => part.trim());
+      const parsedLimit = Number.parseInt(limit, 10);
+      return {
+        id: id || `food:custom-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        surface: 'food.overview',
+        title: title || 'Custom dashboard block',
+        subtitle: subtitle || 'Configured from the app profile.',
+        kind: kind === 'spotlight' || kind === 'metric' || kind === 'action' ? kind : 'list',
+        tone: tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue' ? tone : 'neutral',
+        query: {
+          collections: collections ? collections.split(',').map((item) => item.trim()).filter(Boolean) : undefined,
+          match: match || undefined,
+          limit: Number.isFinite(parsedLimit) ? Math.max(0, Math.min(20, parsedLimit)) : 3,
+        },
+        href: href.startsWith('/') ? href : '/config',
+      } satisfies DashboardBlock;
+    });
+}
+
 function recordsForBlock(block: DashboardBlock, records: FoodRecordView[]) {
   const collections = new Set(block.query.collections ?? []);
   const matcher = block.query.match ? new RegExp(block.query.match, 'i') : null;
@@ -149,7 +184,9 @@ export default function FoodScreen() {
   const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
   const widgets = parseFoodWidgets(foodConfig.widgets);
-  const manifestBlocks = (activeManifest.dashboard_blocks ?? []).filter((block) => block.surface.startsWith('food.'));
+  const configuredBlocks = parseDashboardBlockOverrides(foodConfig.dashboardBlocks);
+  const manifestBlocks = (configuredBlocks.length ? configuredBlocks : (activeManifest.dashboard_blocks ?? []))
+    .filter((block) => block.surface.startsWith('food.'));
 
   const toggleShoppingRecord = async (record: FoodRecordView) => {
     const nextStatus = /in cart|bought/i.test(record.status) ? 'To buy' : 'In cart';

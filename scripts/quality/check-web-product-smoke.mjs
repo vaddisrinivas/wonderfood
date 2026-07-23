@@ -48,6 +48,20 @@ const routes = [
     must: ['Package dashboard', 'Tonight decision', 'Nutrition lens', 'Shopping gaps', 'Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food is the active package'],
   },
   {
+    name: 'food-configured-dashboard',
+    path: '/food',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          food: {
+            dashboardBlocks: 'food:chef|Chef board|Custom app-edited block.|action|plum|recipe|chicken|1|/chat',
+          },
+        },
+      },
+    },
+    must: ['Package dashboard', 'Chef board', 'Custom app-edited block.', 'food.overview · food:chef'],
+  },
+  {
     name: 'record-green-dal',
     path: '/record/meal-green-dal',
     must: [
@@ -159,6 +173,11 @@ for (const viewport of viewports) {
       if (message.type() === 'error') consoleErrors.push(message.text());
     });
     try {
+      await page.goto(`${baseUrl}/_sitemap`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.evaluate((settings) => {
+        localStorage.removeItem('lifeos.settings.v1');
+        if (settings) localStorage.setItem('lifeos.settings.v1', JSON.stringify(settings));
+      }, route.localSettings ?? null);
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
       const text = await page.locator('body').innerText({ timeout: 8000 });
       result.missing = route.must.filter((needle) => !text.includes(needle));
