@@ -2,21 +2,13 @@ import { Platform } from 'react-native';
 import { SQLiteDatabase } from 'expo-sqlite';
 
 import { DomainManifest } from '@/src/domain/catalog';
-import { CanonicalRecord, RecordProvider } from '@/src/domain/runtime';
+import { CanonicalRecord } from '@/src/domain/runtime';
 import { upsertRecord } from '@/src/db/records';
 import { linkSnapshotToRecord, upsertProviderLink, upsertSourceSnapshot } from '@/src/db/sources';
 import { LifeOSSettings } from '@/src/settings/lifeos-settings';
-
-export type DirectSyncProvider = Extract<RecordProvider, 'notion' | 'google_sheets'>;
-
-export type DirectSyncReceipt = {
-  provider: DirectSyncProvider;
-  status: 'synced' | 'blocked' | 'error' | 'cleared';
-  message: string;
-  records: number;
-  snapshots: number;
-  observedAt: string;
-};
+export { clearProviderLocalCopy, restoreClearedProviderLocalCopy } from '@/src/providers/provider-local-copy';
+export type { DirectSyncProvider, DirectSyncReceipt } from '@/src/providers/provider-local-copy';
+import type { DirectSyncProvider, DirectSyncReceipt } from '@/src/providers/provider-local-copy';
 
 type NotionPage = {
   id?: string;
@@ -173,56 +165,6 @@ export async function syncSheetsDirect(input: {
   } catch (err) {
     return error('google_sheets', err instanceof Error ? err.message : 'Sheets sync failed.', observedAt);
   }
-}
-
-export async function clearProviderLocalCopy(input: {
-  db: SQLiteDatabase | null;
-  provider: DirectSyncProvider;
-}): Promise<DirectSyncReceipt> {
-  const observedAt = new Date().toISOString();
-  if (!input.db) return blocked(input.provider, 'Local graph is not ready yet.', observedAt);
-
-  const before = await input.db.getFirstAsync<{ records: number; snapshots: number }>(
-    `
-      SELECT
-        (SELECT COUNT(*) FROM records WHERE source_provider = ?) AS records,
-        (SELECT COUNT(*) FROM source_snapshots WHERE provider = ?) AS snapshots
-    `,
-    [input.provider, input.provider],
-  );
-  const recordCount = before?.records ?? 0;
-  const snapshotCount = before?.snapshots ?? 0;
-
-  await input.db.withTransactionAsync(async () => {
-    await input.db!.runAsync(
-      `
-        DELETE FROM record_relations
-        WHERE from_id IN (SELECT id FROM records WHERE source_provider = ?)
-           OR target_id IN (SELECT id FROM records WHERE source_provider = ?)
-      `,
-      [input.provider, input.provider],
-    );
-    await input.db!.runAsync(
-      `
-        DELETE FROM source_snapshot_relations
-        WHERE snapshot_id IN (SELECT id FROM source_snapshots WHERE provider = ?)
-           OR record_id IN (SELECT id FROM records WHERE source_provider = ?)
-      `,
-      [input.provider, input.provider],
-    );
-    await input.db!.runAsync('DELETE FROM source_snapshots WHERE provider = ?', [input.provider]);
-    await input.db!.runAsync('DELETE FROM provider_links WHERE provider = ?', [input.provider]);
-    await input.db!.runAsync('DELETE FROM records WHERE source_provider = ?', [input.provider]);
-  });
-
-  return {
-    provider: input.provider,
-    status: 'cleared',
-    message: `Cleared the local ${providerDisplayName(input.provider)} copy. Provider data was not changed.`,
-    records: recordCount,
-    snapshots: snapshotCount,
-    observedAt,
-  };
 }
 
 function notionPageToRecord(page: NotionPage, manifest: DomainManifest, observedAt: string): CanonicalRecord {

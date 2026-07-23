@@ -6,7 +6,7 @@ import { Card, Page, PageHeader, Pill, SectionTitle, VisualMark, sharedStyles } 
 import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
-import { DirectSyncReceipt, clearProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
+import { DirectSyncReceipt, clearProviderLocalCopy, restoreClearedProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { mergeVisualIdentity, visualAccent, visualGlyph } from '@/src/domain/visual-identity';
@@ -168,6 +168,14 @@ export default function SourcesScreen() {
   const clearLocalProvider = async (provider: DirectSyncReceipt['provider']) => {
     setSyncing(provider);
     const result = await clearProviderLocalCopy({ db, provider });
+    setReceipts([result]);
+    await refreshRows();
+    setSyncing(null);
+  };
+
+  const restoreLocalProvider = async (receipt: DirectSyncReceipt) => {
+    setSyncing(receipt.provider);
+    const result = await restoreClearedProviderLocalCopy({ db, restoreToken: receipt.restoreToken });
     setReceipts([result]);
     await refreshRows();
     setSyncing(null);
@@ -416,6 +424,11 @@ export default function SourcesScreen() {
                     <View style={styles.receiptCopy}>
                       <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
                       <Text style={styles.receiptMessage}>{receipt.message}</Text>
+                      {receipt.status === 'cleared' && receipt.restoreToken ? (
+                        <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void restoreLocalProvider(receipt)} style={({ pressed }) => [styles.restoreAction, pressed && styles.pressed]}>
+                          <Text style={styles.restoreActionText}>{syncing === receipt.provider ? 'Restoring…' : 'Restore local copy'}</Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                     <Text style={styles.receiptCount}>{receipt.status === 'cleared' ? `${receipt.records} cleared` : `${receipt.records} records`}</Text>
                   </View>
@@ -494,6 +507,8 @@ const styles = StyleSheet.create({
   receiptCopy: { flex: 1, minWidth: 0 },
   receiptTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', textTransform: 'capitalize' },
   receiptMessage: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  restoreAction: { alignSelf: 'flex-start', minHeight: 34, borderRadius: radius.pill, backgroundColor: colors.mossSoft, paddingHorizontal: 12, marginTop: 9, justifyContent: 'center' },
+  restoreActionText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   receiptCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   sourceCell: { minWidth: 280, flexGrow: 1, flexBasis: '47%' },

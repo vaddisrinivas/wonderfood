@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { RecordProvider } from '@/src/domain/runtime';
 
 export type ProviderLink = {

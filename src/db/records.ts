@@ -4,7 +4,7 @@ import {
   validateCanonicalRecord,
 } from '@/src/domain/runtime';
 import { loadCatalog, DomainManifest, DomainId } from '@/src/domain/catalog';
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 type SqlRecordRow = {
   id: string;
