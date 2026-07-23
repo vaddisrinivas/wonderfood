@@ -3,10 +3,26 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { HealthConnectRoundTripProof, runLifeOSHealthRoundTripProof } from '@/src/health/connect';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { useLifeOSTheme } from '@/src/theme';
+
+const HEALTH_SECTIONS = ['hero', 'status', 'details'] as const;
+type HealthSection = typeof HEALTH_SECTIONS[number];
+
+function orderedSections(value: string, defaults: readonly HealthSection[]) {
+  const allowed = new Set(defaults);
+  const requested = value
+    .split(',')
+    .map((section) => section.trim())
+    .filter((section): section is HealthSection => allowed.has(section as HealthSection));
+  const missing = defaults.filter((section) => !requested.includes(section));
+  return [...requested, ...missing];
+}
 
 export default function HealthDiagnosticsScreen() {
   const theme = useLifeOSTheme();
+  const settings = useLifeOSSettingsSnapshot();
+  const healthConfig = settings.runtime.surfaceConfig.health;
   const [check, setCheck] = useState<HealthConnectRoundTripProof | null>(null);
 
   useEffect(() => {
@@ -20,17 +36,22 @@ export default function HealthDiagnosticsScreen() {
   }, []);
 
   const passed = check?.status === 'passed';
+  const sections = orderedSections(healthConfig.sectionOrder, HEALTH_SECTIONS);
 
-  return (
-    <Page>
-      <ScrollView contentInsetAdjustmentBehavior="automatic">
-        <View style={sharedStyles.content}>
+  const renderSection = (section: HealthSection) => {
+    switch (section) {
+      case 'hero':
+        return healthConfig.showHero ? (
           <PageHeader
+            key={section}
             eyebrow="LIFEOS / HEALTH CONNECT"
             title="Health Connect status"
             subtitle="Checks whether LifeOS can write, read and remove a tiny temporary hydration entry without keeping health data."
           />
-          <Card tone={passed ? 'moss' : 'plum'} style={styles.card}>
+        ) : null;
+      case 'status':
+        return healthConfig.showStatusCard ? (
+          <Card key={section} tone={passed ? 'moss' : 'plum'} style={styles.card}>
             <View style={styles.row}>
               <Pill tone={passed ? 'moss' : 'plum'}>{check ? check.status.toUpperCase() : 'RUNNING'}</Pill>
               <Text style={[styles.kicker, { color: theme.colors.muted }]}>local device check</Text>
@@ -38,19 +59,36 @@ export default function HealthDiagnosticsScreen() {
             <Text style={[styles.title, { color: theme.colors.ink }]}>
               {check?.message ?? 'Checking Health Connect write/read/delete access…'}
             </Text>
-            {check ? (
-              <View style={styles.grid}>
+          </Card>
+        ) : null;
+      case 'details':
+        return healthConfig.showDetails && check ? (
+          <Card key={section} style={styles.card}>
+            <Text style={[styles.kicker, { color: theme.colors.muted }]}>device receipt</Text>
+            <View style={styles.grid}>
+              {healthConfig.showTechnicalReceipt ? (
                 <Text style={[styles.machineLine, { color: theme.colors.moss }]}>
                   {`HC_ROUNDTRIP status=${check.status} before=${check.readBeforeDelete} after=${check.readAfterDelete}`}
                 </Text>
-                <Fact label="Temporary record" value={check.clientRecordId} />
-                <Fact label="Inserted rows" value={String(check.insertedIds.length)} />
-                <Fact label="Before cleanup" value={String(check.readBeforeDelete)} />
-                <Fact label="After cleanup" value={String(check.readAfterDelete)} />
-                <Fact label="Checked at" value={check.observedAt} />
-              </View>
-            ) : null}
+              ) : null}
+              <Fact label="Temporary record" value={check.clientRecordId} />
+              <Fact label="Inserted rows" value={String(check.insertedIds.length)} />
+              <Fact label="Before cleanup" value={String(check.readBeforeDelete)} />
+              <Fact label="After cleanup" value={String(check.readAfterDelete)} />
+              <Fact label="Checked at" value={check.observedAt} />
+            </View>
           </Card>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Page>
+      <ScrollView contentInsetAdjustmentBehavior="automatic">
+        <View style={sharedStyles.content}>
+          {sections.map(renderSection)}
         </View>
       </ScrollView>
     </Page>

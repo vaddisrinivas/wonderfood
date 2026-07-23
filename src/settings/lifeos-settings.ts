@@ -129,6 +129,13 @@ export type LifeOSSettings = {
         showPolicy: boolean;
         showConfigLink: boolean;
       };
+      health: {
+        sectionOrder: string;
+        showHero: boolean;
+        showStatusCard: boolean;
+        showTechnicalReceipt: boolean;
+        showDetails: boolean;
+      };
     };
   };
 };
@@ -292,6 +299,13 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showSyncPlan: true,
         showPolicy: true,
         showConfigLink: true,
+      },
+      health: {
+        sectionOrder: 'hero,status,details',
+        showHero: true,
+        showStatusCard: true,
+        showTechnicalReceipt: true,
+        showDetails: true,
       },
     },
   },
@@ -470,6 +484,13 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showSyncPlan: config.sources?.showSyncPlan !== false,
       showPolicy: config.sources?.showPolicy !== false,
       showConfigLink: config.sources?.showConfigLink !== false,
+    },
+    health: {
+      sectionOrder: normalizeOrderString(config.health?.sectionOrder, defaults.health.sectionOrder),
+      showHero: config.health?.showHero !== false,
+      showStatusCard: config.health?.showStatusCard !== false,
+      showTechnicalReceipt: config.health?.showTechnicalReceipt !== false,
+      showDetails: config.health?.showDetails !== false,
     },
   };
 }

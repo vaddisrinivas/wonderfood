@@ -193,6 +193,7 @@ const routes = [
       'Capture',
       'Result cards',
       'Destination hint',
+      'Health Connect',
       'Portable profile',
       'Load YAML',
       'Apply profile',
@@ -220,6 +221,25 @@ const routes = [
     path: '/health-diagnostics',
     must: ['LIFEOS / HEALTH CONNECT', 'Health Connect status', 'write, read and remove', 'TEMPORARY RECORD', 'CHECKED AT'],
     forbidden: ['round-trip proof', 'native evidence', 'clientRecordId', 'insertedIds', 'readBeforeDelete', 'readAfterDelete'],
+  },
+  {
+    name: 'health-diagnostics-configured',
+    path: '/health-diagnostics',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          health: {
+            sectionOrder: 'details,status',
+            showHero: false,
+            showStatusCard: true,
+            showTechnicalReceipt: false,
+            showDetails: true,
+          },
+        },
+      },
+    },
+    must: ['Health Connect check runs on Android.', 'TEMPORARY RECORD', 'LOCAL DEVICE CHECK'],
+    forbidden: ['LIFEOS / HEALTH CONNECT', 'HC_ROUNDTRIP'],
   },
   {
     name: 'search',
