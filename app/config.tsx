@@ -539,7 +539,9 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Source strip" detail="Show source chips above chat." value={settings.runtime.surfaceConfig.chat.showSources} onValueChange={(showSources) => updateSurfaceConfig('chat', { showSources })} />
                 <Field label="Source chips" value={settings.runtime.surfaceConfig.chat.sourceLimit} onChangeText={(sourceLimit) => updateSurfaceConfig('chat', { sourceLimit })} />
                 <ToggleRow title="Prompt rail" detail="Show suggested prompts above composer." value={settings.runtime.surfaceConfig.chat.promptRail} onValueChange={(promptRail) => updateSurfaceConfig('chat', { promptRail })} />
+                <Field label="Prompt presets" value={settings.runtime.surfaceConfig.chat.promptPresets} onChangeText={(promptPresets) => updateSurfaceConfig('chat', { promptPresets })} placeholder="One chat starter per line" multiline />
                 <ToggleRow title="Context card" detail="Show what the assistant can see." value={settings.runtime.surfaceConfig.chat.showContextCard} onValueChange={(showContextCard) => updateSurfaceConfig('chat', { showContextCard })} />
+                <Field label="Composer context note" value={settings.runtime.surfaceConfig.chat.contextNote} onChangeText={(contextNote) => updateSurfaceConfig('chat', { contextNote })} multiline />
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Record">
                 <Field label="Section order" value={settings.runtime.surfaceConfig.record.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('record', { sectionOrder })} />

@@ -44,12 +44,12 @@ const seedModeNotice = {
   detail: 'No model key yet. Hearth still answers from local LifeOS records and shows citations.',
 };
 
-const promptBank = [
-  'What can I cook tonight from what I already have?',
-  'Show a table of available vs missing ingredients.',
-  'What should I buy for green dal and tandoori chicken?',
-  'Summarize nutrition and previous cooking notes.',
-];
+function parsePromptPresets(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((prompt) => prompt.trim())
+    .filter(Boolean);
+}
 
 function countSetting(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
@@ -138,6 +138,7 @@ export default function ChatScreen() {
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
   const chatConfig = settings.runtime.surfaceConfig.chat;
   const sourceLimit = countSetting(chatConfig.sourceLimit, 8);
+  const promptBank = parsePromptPresets(chatConfig.promptPresets);
   const chatSections = orderedChatSections(chatConfig.sectionOrder);
   const workspaceSections = chatSections.filter((section) => WORKSPACE_CHAT_SECTIONS.has(section));
 
@@ -404,7 +405,7 @@ export default function ChatScreen() {
           </View>
         );
       case 'promptRail':
-        return chatConfig.promptRail ? (
+        return chatConfig.promptRail && promptBank.length ? (
           <View key={section} style={styles.promptRail}>
             {promptBank.map((prompt) => (
               <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
@@ -496,7 +497,7 @@ export default function ChatScreen() {
                     {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, { backgroundColor: theme.colors.moss }, pressed && styles.pressed]}><Text style={[styles.sendText, { color: theme.colors.paper }]}>Retry</Text></Pressable> : null}
                   </View>
                   <View style={styles.composerFoot}>
-                    <Text style={[styles.composerHint, { color: theme.colors.muted }]}>Uses enabled domains, skill instructions, source records, and model keys stored in app settings.</Text>
+                    <Text style={[styles.composerHint, { color: theme.colors.muted }]}>{chatConfig.contextNote}</Text>
                     <Text style={[styles.shortcut, { color: theme.colors.muted }]}>{activeRunId ? 'running' : settings.runtime.webSearch ? 'web on' : 'web off'}</Text>
                   </View>
                 </View>

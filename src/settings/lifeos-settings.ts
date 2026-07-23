@@ -81,7 +81,9 @@ export type LifeOSSettings = {
         showSources: boolean;
         sourceLimit: string;
         promptRail: boolean;
+        promptPresets: string;
         showContextCard: boolean;
+        contextNote: string;
       };
       record: {
         sectionOrder: string;
@@ -230,7 +232,9 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showSources: true,
         sourceLimit: '8',
         promptRail: true,
+        promptPresets: 'What can I cook tonight from what I already have?\nShow a table of available vs missing ingredients.\nWhat should I buy for green dal and tandoori chicken?\nSummarize nutrition and previous cooking notes.',
         showContextCard: true,
+        contextNote: 'Uses enabled domains, skill instructions, source records, and model keys stored in app settings.',
       },
       record: {
         sectionOrder: 'hero,nutrition,ingredients,instructions,history,editableNote,properties,relations,provenance',
@@ -393,7 +397,9 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showSources: config.chat?.showSources !== false,
       sourceLimit: normalizePositiveString(config.chat?.sourceLimit, defaults.chat.sourceLimit),
       promptRail: config.chat?.promptRail !== false,
+      promptPresets: typeof config.chat?.promptPresets === 'string' ? config.chat.promptPresets : defaults.chat.promptPresets,
       showContextCard: config.chat?.showContextCard !== false,
+      contextNote: typeof config.chat?.contextNote === 'string' ? config.chat.contextNote : defaults.chat.contextNote,
     },
     record: {
       sectionOrder: normalizeOrderString(config.record?.sectionOrder, defaults.record.sectionOrder),

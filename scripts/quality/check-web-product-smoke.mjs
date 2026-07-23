@@ -84,6 +84,21 @@ const routes = [
     must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Source evidence', 'Undo', 'Open source'],
   },
   {
+    name: 'chat-configured-prompts',
+    path: '/chat',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          chat: {
+            promptPresets: 'Plan a protein dinner from pantry\nCompare recipe nutrition with sources',
+            contextNote: 'Custom chat context note from app settings.',
+          },
+        },
+      },
+    },
+    must: ['Plan a protein dinner from pantry', 'Compare recipe nutrition with sources', 'Custom chat context note from app settings.'],
+  },
+  {
     name: 'sources',
     path: '/sources',
     must: ['LIFEOS / SOURCES', 'Your data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Local device replica', 'What Chat can cite'],
@@ -98,6 +113,8 @@ const routes = [
       'Screen composition',
       'Every main screen gets runtime knobs',
       'Manifest Dashboard Blocks',
+      'Prompt presets',
+      'Composer context note',
       'Search',
       'Capture',
       'Result cards',
