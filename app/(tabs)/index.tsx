@@ -8,7 +8,7 @@ import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
-import { colors, useLifeOSTheme } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 function countSetting(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
@@ -17,6 +17,10 @@ function countSetting(value: string, fallback: number) {
 
 const HOME_SECTIONS = ['now', 'review', 'lifeSpaces', 'recent', 'sourceTrust', 'control'] as const;
 type HomeSection = typeof HOME_SECTIONS[number];
+
+function pickRecord(records: DomainRecordViewModel[], pattern: RegExp, fallbackIndex: number) {
+  return records.find((item) => pattern.test(`${item.collection} ${item.status} ${item.meta} ${item.title} ${item.body}`)) ?? records[fallbackIndex];
+}
 
 function orderedSections(value: string, defaults: readonly HomeSection[]) {
   const allowed = new Set(defaults);
@@ -61,8 +65,11 @@ export default function TodayScreen() {
   const reviewRows = records.slice(1, 1 + reviewLimit);
   const recentRows = records.slice(0, recentLimit);
   const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-  const firstRecord = rhythmRows[0];
-  const secondRecord = rhythmRows[1];
+  const dinnerRecord = pickRecord(records, /\b(meal|dinner|tonight|planned)\b/i, 0);
+  const riskRecord = pickRecord(records, /\b(use soon|pantry|expire|inventory|yogurt)\b/i, 1);
+  const shoppingRecord = pickRecord(records, /\b(shopping|buy|to buy|missing)\b/i, 2);
+  const firstRecord = dinnerRecord ?? rhythmRows[0];
+  const secondRecord = riskRecord ?? rhythmRows[1];
   const compact = width < 760;
   const contentWidth = compact ? Math.max(width - 36, 280) : '100%';
   const homeSections = orderedSections(homeConfig.sectionOrder, HOME_SECTIONS);
@@ -83,6 +90,12 @@ export default function TodayScreen() {
             <View style={styles.nowActions}>
               <ActionButton label={firstRecord ? 'Open now card' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
               <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
+            </View>
+            <View style={styles.commandDeck}>
+              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? 'Pick dinner'} detail={dinnerRecord?.meta ?? 'Choose from Food graph'} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
+              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No use-soon risk'} detail={riskRecord?.meta ?? 'Pantry looks calm'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
+              <HomeCommandCard label="Shopping gap" title={shoppingRecord?.title ?? 'Nothing to buy'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
+              <HomeCommandCard label="Assistant" title="Ask AI" detail="Use sources, tables, receipts" tone="plum" href="/chat" />
             </View>
           </Card>
         ) : null;
@@ -212,6 +225,32 @@ export default function TodayScreen() {
   );
 }
 
+function HomeCommandCard({ label, title, detail, tone, href }: {
+  label: string;
+  title: string;
+  detail: string;
+  tone: 'moss' | 'amber' | 'blue' | 'plum';
+  href: string;
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <Link href={href as never} asChild>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.commandCard, commandToneStyle(tone, theme.colors), pressed && styles.pressed]}>
+        <Text style={[styles.commandLabel, { color: theme.colors.muted }]}>{label}</Text>
+        <Text style={[styles.commandTitle, { color: theme.colors.ink }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.commandDetail, { color: theme.colors.muted }]} numberOfLines={1}>{detail}</Text>
+      </Pressable>
+    </Link>
+  );
+}
+
+function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof colors) {
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft, borderColor: themed.line };
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft, borderColor: themed.line };
+  if (tone === 'plum') return { backgroundColor: themed.plumSoft, borderColor: themed.line };
+  return { backgroundColor: themed.mossSoft, borderColor: themed.line };
+}
+
 const styles = StyleSheet.create({
   content: { alignSelf: 'center', maxWidth: 1080, paddingBottom: 44 },
   topbar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
@@ -227,6 +266,11 @@ const styles = StyleSheet.create({
   nowTitleCompact: { fontSize: 25, lineHeight: 30, maxWidth: 300 },
   nowBody: { color: colors.ink, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 680 },
   nowActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 20 },
+  commandDeck: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
+  commandCard: { flexGrow: 1, flexBasis: 190, minHeight: 88, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12, justifyContent: 'center' },
+  commandLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  commandTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', marginTop: 8 },
+  commandDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   reviewCard: { paddingVertical: 0 },
   emptyReview: { paddingVertical: 20 },
   emptyReviewTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
