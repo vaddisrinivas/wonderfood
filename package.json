@@ -94,7 +94,8 @@
     "phase6:check": "npm run test:server:sheets && npm run contract:provider:sheets && npm run phase6:check:sheets-adapter && npm run test:server:webhook-ingress",
     "check:writer-boundary": "vitest run tests/ops/writer-boundary.test.ts",
     "check:migrations": "vitest run tests/db/migrations.test.ts",
-    "check:control-plane-c0": "vitest run tests/db/migrations.test.ts"
+    "check:control-plane-c0": "vitest run tests/db/migrations.test.ts",
+    "check:control-plane-c1": "vitest run tests/config/fetchers.test.ts"
   },
   "private": true,
   "expo": {
