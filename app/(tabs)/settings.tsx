@@ -30,7 +30,7 @@ import {
   providerLabel,
   saveLifeOSSettings,
 } from '@/src/settings/lifeos-settings';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 const providerOptions: Array<{ id: AiProviderKind; label: string }> = [
   { id: 'openai_compatible', label: 'OpenAI-compatible' },
@@ -51,6 +51,7 @@ function defaultsFor(provider: AiProviderKind) {
 export default function SettingsScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 760;
+  const theme = useLifeOSTheme();
   const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -136,8 +137,8 @@ export default function SettingsScreen() {
           <View style={sharedStyles.content}>
             <View style={styles.contextBar}>
               <View>
-                <Text style={styles.brand}>LIFEOS / CONNECTIONS</Text>
-                <Text style={styles.context}>Your providers · your credentials · your choice</Text>
+                <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONNECTIONS</Text>
+                <Text style={[styles.context, { color: theme.colors.muted }]}>Your providers · your credentials · your choice</Text>
               </View>
               <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
                 {settings.ai.primary.enabled ? 'AI READY' : 'LOCAL FIRST'}
@@ -151,14 +152,14 @@ export default function SettingsScreen() {
             />
 
             <Card tone="moss" style={styles.principleCard}>
-              <Text style={styles.principleKicker}>PORTABLE BY DESIGN</Text>
-              <Text style={styles.principleTitle}>Direct on device. Fallback when needed.</Text>
-              <Text style={styles.principleBody}>
+              <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE BY DESIGN</Text>
+              <Text style={[styles.principleTitle, { color: theme.colors.ink }]}>Direct on device. Fallback when needed.</Text>
+              <Text style={[styles.principleBody, { color: theme.colors.muted }]}>
                 The app tries Primary, then Fallback, then stays local. Direct tokens stay on this device; no shared public endpoint, Mac service, or hidden build-time config.
               </Text>
               <View style={styles.flow}>
-                <Pill tone="moss">Primary</Pill><Text style={styles.arrow}>→</Text>
-                <Pill tone="plum">Fallback</Pill><Text style={styles.arrow}>→</Text>
+                <Pill tone="moss">Primary</Pill><Text style={[styles.arrow, { color: theme.colors.muted }]}>→</Text>
+                <Pill tone="plum">Fallback</Pill><Text style={[styles.arrow, { color: theme.colors.muted }]}>→</Text>
                 <Pill tone="blue">Local</Pill>
               </View>
             </Card>
@@ -189,8 +190,8 @@ export default function SettingsScreen() {
             <Card tone="plum" style={styles.healthCard}>
               <View style={styles.switchRow}>
                 <View style={styles.switchCopy}>
-                  <Text style={styles.cardTitle}>Android Health Connect</Text>
-                  <Text style={styles.cardBody}>{healthStatus?.message ?? 'Checking Health Connect...'}</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Android Health Connect</Text>
+                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{healthStatus?.message ?? 'Checking Health Connect...'}</Text>
                 </View>
                 <Pill tone={healthStatus?.availability === 'available' ? 'moss' : 'blue'}>
                   {Platform.OS === 'android' ? `${healthStatus?.granted.length ?? 0} scopes` : 'Android only'}
@@ -204,10 +205,10 @@ export default function SettingsScreen() {
                     setHealthStatus(next);
                     setNotice(next.message);
                   }}
-                  style={({ pressed }) => [styles.configButton, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}
                 >
-                  <Text style={styles.configButtonText}>Grant permissions</Text>
-                  <Text style={styles.configButtonArrow}>→</Text>
+                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Grant permissions</Text>
+                  <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -215,9 +216,9 @@ export default function SettingsScreen() {
                     const opened = await openLifeOSHealthSettings();
                     setNotice(opened ? 'Opened Health Connect settings.' : 'Health Connect settings are available on Android only.');
                   }}
-                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}
                 >
-                  <Text style={styles.secondaryButtonText}>Open system settings</Text>
+                  <Text style={[styles.secondaryButtonText, { color: theme.colors.ink }]}>Open system settings</Text>
                 </Pressable>
               </View>
             </Card>
@@ -269,36 +270,36 @@ export default function SettingsScreen() {
             <Card style={styles.connectorCard}>
               <View style={styles.switchRow}>
                 <View style={styles.switchCopy}>
-                  <Text style={styles.cardTitle}>Packages, skills, agents and schemas</Text>
-                  <Text style={styles.cardBody}>Choose active domains, edit skill instructions, enable workflows and agents, and validate schema overrides.</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Packages, skills, agents and schemas</Text>
+                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Choose active domains, edit skill instructions, enable workflows and agents, and validate schema overrides.</Text>
                 </View>
                 <Pill tone="plum">CONFIG STUDIO</Pill>
               </View>
               <Link href="/config" asChild>
-                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.configButton, pressed && styles.pressed]}>
-                  <Text style={styles.configButtonText}>Open Config Studio</Text>
-                  <Text style={styles.configButtonArrow}>→</Text>
+                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Open Config Studio</Text>
+                  <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
                 </Pressable>
               </Link>
             </Card>
 
             <Card tone="blue" style={styles.securityCard}>
-              <Text style={styles.securityTitle}>{Platform.OS === 'web' ? 'Browser storage notice' : 'Device-secured credentials'}</Text>
-              <Text style={styles.securityBody}>
+              <Text style={[styles.securityTitle, { color: theme.colors.blue }]}>{Platform.OS === 'web' ? 'Browser storage notice' : 'Device-secured credentials'}</Text>
+              <Text style={[styles.securityBody, { color: theme.colors.muted }]}>
                 {Platform.OS === 'web'
                   ? 'Web saves credentials only in this browser. For sensitive keys, prefer Android/iOS encrypted storage.'
                   : 'Provider keys are stored with the operating system secure store and are not bundled into the app or committed to the repository.'}
               </Text>
             </Card>
 
-            {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+            {notice ? <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.colors.moss }]}>{notice}</Text> : null}
             <Pressable
               accessibilityRole="button"
               disabled={loading || saving}
               onPress={() => void save()}
-              style={({ pressed }) => [styles.save, (loading || saving) && styles.disabled, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.save, { backgroundColor: theme.colors.ink }, (loading || saving) && styles.disabled, pressed && styles.pressed]}
             >
-              <Text style={styles.saveText}>{saving ? 'Saving…' : loading ? 'Loading…' : 'Save connections'}</Text>
+              <Text style={[styles.saveText, { color: theme.colors.paper }]}>{saving ? 'Saving…' : loading ? 'Loading…' : 'Save connections'}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -316,6 +317,7 @@ function ProviderCard(props: {
   onTest: () => void;
   testing: boolean;
 }) {
+  const theme = useLifeOSTheme();
   const { profile } = props;
   const usable = profile.enabled && Boolean(profile.baseUrl && profile.apiKey && profile.model);
   return (
@@ -323,14 +325,14 @@ function ProviderCard(props: {
       <Card style={styles.providerCard}>
         <View style={styles.switchRow}>
           <View style={styles.switchCopy}>
-            <Text style={styles.cardTitle}>{props.title}</Text>
-            <Text style={styles.cardBody}>{props.subtitle}</Text>
+            <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>{props.title}</Text>
+            <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{props.subtitle}</Text>
           </View>
           <Switch
             value={profile.enabled}
             onValueChange={(enabled) => props.onChange({ enabled })}
-            trackColor={{ false: colors.line, true: colors.mossSoft }}
-            thumbColor={profile.enabled ? colors.moss : colors.muted}
+            trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
+            thumbColor={profile.enabled ? theme.colors.moss : theme.colors.muted}
           />
         </View>
 
@@ -342,9 +344,9 @@ function ProviderCard(props: {
                 key={option.id}
                 accessibilityRole="button"
                 onPress={() => props.onChoose(option.id)}
-                style={[styles.providerChoice, selected && styles.providerChoiceSelected]}
+                style={[styles.providerChoice, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, selected && styles.providerChoiceSelected, selected && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
               >
-                <Text style={[styles.providerChoiceText, selected && styles.providerChoiceTextSelected]}>{option.label}</Text>
+                <Text style={[styles.providerChoiceText, { color: theme.colors.muted }, selected && styles.providerChoiceTextSelected, selected && { color: theme.colors.paper }]}>{option.label}</Text>
               </Pressable>
             );
           })}
@@ -362,14 +364,14 @@ function ProviderCard(props: {
         ) : null}
 
         <View style={styles.providerFooter}>
-          <Text style={styles.providerStatus}>{usable ? providerLabel(profile) : profile.enabled ? 'Finish required fields' : 'Off'}</Text>
+          <Text style={[styles.providerStatus, { color: theme.colors.muted }]}>{usable ? providerLabel(profile) : profile.enabled ? 'Finish required fields' : 'Off'}</Text>
           <Pressable
             accessibilityRole="button"
             disabled={!usable || props.testing}
             onPress={props.onTest}
-            style={({ pressed }) => [styles.test, (!usable || props.testing) && styles.disabled, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.test, { backgroundColor: theme.colors.mossSoft }, (!usable || props.testing) && styles.disabled, pressed && styles.pressed]}
           >
-            <Text style={styles.testText}>{props.testing ? 'Testing…' : 'Test'}</Text>
+            <Text style={[styles.testText, { color: theme.colors.moss }]}>{props.testing ? 'Testing…' : 'Test'}</Text>
           </Pressable>
         </View>
       </Card>
@@ -384,19 +386,20 @@ function SourceCard(props: {
   onEnabled: (enabled: boolean) => void;
   children: React.ReactNode;
 }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.providerColumn}>
       <Card style={styles.providerCard}>
         <View style={styles.switchRow}>
           <View style={styles.switchCopy}>
-            <Text style={styles.cardTitle}>{props.title}</Text>
-            <Text style={styles.cardBody}>{props.detail}</Text>
+            <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>{props.title}</Text>
+            <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{props.detail}</Text>
           </View>
           <Switch
             value={props.enabled}
             onValueChange={props.onEnabled}
-            trackColor={{ false: colors.line, true: colors.mossSoft }}
-            thumbColor={props.enabled ? colors.moss : colors.muted}
+            trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
+            thumbColor={props.enabled ? theme.colors.moss : theme.colors.muted}
           />
         </View>
         {props.enabled ? <View style={styles.fields}>{props.children}</View> : null}
@@ -412,18 +415,19 @@ function Field(props: {
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
 }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{props.label}</Text>
       <TextInput
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={theme.colors.muted}
         secureTextEntry={props.secureTextEntry}
         autoCapitalize="none"
         autoCorrect={false}
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
       />
     </View>
   );
