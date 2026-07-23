@@ -113,6 +113,10 @@ function getFoodDetail(record: CanonicalRecord): FoodDetail {
   return inferFoodDetail(record);
 }
 
+function hasStructuredFoodDetail(record: CanonicalRecord): boolean {
+  return isFoodDetail(record.properties.food_detail);
+}
+
 function inferFoodDetail(record: CanonicalRecord): FoodDetail {
   const text = `${record.title} ${record.collection} ${asText(record.properties.meta)} ${asText(record.properties.body)}`.toLowerCase();
   const isDal = text.includes('dal') || text.includes('rice');
@@ -339,6 +343,7 @@ export default function RecordScreen() {
   const status = record ? String(record.properties.status ?? 'Active') : 'Active';
   const relations = record?.relations ?? [];
   const foodDetail = record ? getFoodDetail(record) : null;
+  const structuredFoodDetail = record ? hasStructuredFoodDetail(record) : false;
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -420,6 +425,15 @@ export default function RecordScreen() {
           <Text style={styles.meta}>{meta}</Text>
           {foodDetail ? (
             <>
+              {!structuredFoodDetail ? (
+                <Card tone="amber" style={styles.dataWarning}>
+                  <Text style={styles.warningTitle}>Rich Food detail missing from source</Text>
+                  <Text style={styles.warningBody}>
+                    Showing inferred recipe detail from title/body. Add `food_detail` and `relations` in Notion, Sheets or SQLite to get full trusted nutrition, pantry state, shopping state, logs and variations.
+                  </Text>
+                </Card>
+              ) : null}
+
               <View style={styles.quickActions}>
                 <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
                 <ActionButton label={foodDetail.kind === 'recipe' || foodDetail.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => {}} />
@@ -551,6 +565,9 @@ const styles = StyleSheet.create({
   editor: { minHeight: 150, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, color: colors.ink, fontSize: 15, lineHeight: 23 },
   actions: { flexDirection: 'row', gap: 9, marginTop: 12 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
+  dataWarning: { marginTop: 18 },
+  warningTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  warningBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
   nutritionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   nutritionCard: { flexGrow: 1, flexBasis: 130, minHeight: 92 },
   nutritionValue: { color: colors.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },

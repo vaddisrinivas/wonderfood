@@ -17,12 +17,30 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
     return;
   }
 
-  const existing = await db.getFirstAsync<{ total: number }>('SELECT COUNT(*) as total FROM records');
-  if (existing?.total && existing.total > 0) return;
-
   const createdAt = new Date().toISOString();
 
   for (const sample of foodRecords) {
+    const existing = await db.getFirstAsync<{ properties: string; source_external_id: string }>(
+      'SELECT properties, source_external_id FROM records WHERE id = ?',
+      [sample.id]
+    );
+    if (existing) {
+      let properties: Record<string, unknown> = {};
+      try {
+        const parsed = JSON.parse(existing.properties);
+        if (parsed && typeof parsed === 'object') {
+          properties = parsed as Record<string, unknown>;
+        }
+      } catch {
+        properties = {};
+      }
+      const isBundledSample = existing.source_external_id.startsWith('sample-');
+      const hasRichFoodDetail = Boolean(properties.food_detail);
+      if (!isBundledSample && hasRichFoodDetail) {
+        continue;
+      }
+    }
+
     const manifest = catalog.activeManifest;
     await upsertRecord(
       db,
