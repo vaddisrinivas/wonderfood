@@ -797,3 +797,14 @@
   - `npm run typecheck` ✅
   - `git diff --check` ✅
 - Re-ran `npm run check:product` after the precedence fix: PASS ✅ (`16 passed / 59 tests`, web/Android/iOS exports, chat send/rollback/cross-surface proofs).
+
+## 2026-07-23 native/release evidence refresh
+
+- Ran native/release gates after the product/config hardening:
+  - `npm run phase8:check:health-connect` ✅
+  - `npm run phase8:check:android-release-artifacts` ✅
+  - `npm run check:native-emulator` ✅ — emulator-5554 API 34 Health Connect permission + write/read/delete round trip.
+- Fresh signed-release check:
+  - `npm run phase8:check:android-release-signed` ❌ — APK is debug-signed.
+- Verified without printing secret values that `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, and `APPLE_TEAM_ID` are still missing.
+- Phase 8 remains in progress: native Health Connect proof is good; signed Android/Play and iOS/TestFlight remain blocked by missing credentials plus remaining native capture/share/background-sync/release-matrix work.
