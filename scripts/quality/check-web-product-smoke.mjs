@@ -216,6 +216,12 @@ const routes = [
     must: ['AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
   },
   {
+    name: 'health-diagnostics',
+    path: '/health-diagnostics',
+    must: ['LIFEOS / HEALTH CONNECT', 'Health Connect status', 'write, read and remove', 'TEMPORARY RECORD', 'CHECKED AT'],
+    forbidden: ['round-trip proof', 'native evidence', 'clientRecordId', 'insertedIds', 'readBeforeDelete', 'readAfterDelete'],
+  },
+  {
     name: 'search',
     path: '/search',
     must: ['LIFEOS / SEARCH', 'Search Food.', 'Quick actions', 'Ask Food AI', 'Create Food record'],

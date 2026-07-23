@@ -7,47 +7,47 @@ import { useLifeOSTheme } from '@/src/theme';
 
 export default function HealthDiagnosticsScreen() {
   const theme = useLifeOSTheme();
-  const [proof, setProof] = useState<HealthConnectRoundTripProof | null>(null);
+  const [check, setCheck] = useState<HealthConnectRoundTripProof | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void runLifeOSHealthRoundTripProof().then((next) => {
-      if (!cancelled) setProof(next);
+      if (!cancelled) setCheck(next);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const passed = proof?.status === 'passed';
+  const passed = check?.status === 'passed';
 
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         <View style={sharedStyles.content}>
           <PageHeader
-            eyebrow="LIFEOS / HEALTH DIAGNOSTICS"
-            title="Health Connect round trip"
-            subtitle="Disposable Hydration record: write, read, delete, verify gone."
+            eyebrow="LIFEOS / HEALTH CONNECT"
+            title="Health Connect status"
+            subtitle="Checks whether LifeOS can write, read and remove a tiny temporary hydration entry without keeping health data."
           />
           <Card tone={passed ? 'moss' : 'plum'} style={styles.card}>
             <View style={styles.row}>
-              <Pill tone={passed ? 'moss' : 'plum'}>{proof ? proof.status.toUpperCase() : 'RUNNING'}</Pill>
-              <Text style={[styles.kicker, { color: theme.colors.muted }]}>native evidence</Text>
+              <Pill tone={passed ? 'moss' : 'plum'}>{check ? check.status.toUpperCase() : 'RUNNING'}</Pill>
+              <Text style={[styles.kicker, { color: theme.colors.muted }]}>local device check</Text>
             </View>
             <Text style={[styles.title, { color: theme.colors.ink }]}>
-              {proof?.message ?? 'Running Health Connect write/read/delete proof…'}
+              {check?.message ?? 'Checking Health Connect write/read/delete access…'}
             </Text>
-            {proof ? (
+            {check ? (
               <View style={styles.grid}>
                 <Text style={[styles.machineLine, { color: theme.colors.moss }]}>
-                  {`HC_ROUNDTRIP status=${proof.status} before=${proof.readBeforeDelete} after=${proof.readAfterDelete}`}
+                  {`HC_ROUNDTRIP status=${check.status} before=${check.readBeforeDelete} after=${check.readAfterDelete}`}
                 </Text>
-                <Fact label="clientRecordId" value={proof.clientRecordId} />
-                <Fact label="insertedIds" value={String(proof.insertedIds.length)} />
-                <Fact label="readBeforeDelete" value={String(proof.readBeforeDelete)} />
-                <Fact label="readAfterDelete" value={String(proof.readAfterDelete)} />
-                <Fact label="observedAt" value={proof.observedAt} />
+                <Fact label="Temporary record" value={check.clientRecordId} />
+                <Fact label="Inserted rows" value={String(check.insertedIds.length)} />
+                <Fact label="Before cleanup" value={String(check.readBeforeDelete)} />
+                <Fact label="After cleanup" value={String(check.readAfterDelete)} />
+                <Fact label="Checked at" value={check.observedAt} />
               </View>
             ) : null}
           </Card>

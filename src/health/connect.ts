@@ -230,11 +230,11 @@ export async function readLifeOSHealthSnapshot(
 
 export async function runLifeOSHealthRoundTripProof(): Promise<HealthConnectRoundTripProof> {
   const observedAt = new Date().toISOString();
-  const clientRecordId = `lifeos-health-proof-${Date.now()}`;
+  const clientRecordId = `lifeos-health-check-${Date.now()}`;
   if (Platform.OS !== 'android') {
     return {
       status: 'unsupported',
-      message: 'Health Connect round-trip proof is Android only.',
+      message: 'Health Connect check runs on Android.',
       clientRecordId,
       insertedIds: [],
       readBeforeDelete: 0,
@@ -276,8 +276,8 @@ export async function runLifeOSHealthRoundTripProof(): Promise<HealthConnectRoun
     return {
       status: passed ? 'passed' : 'failed',
       message: passed
-        ? 'Health Connect write → read → delete round trip passed.'
-        : 'Health Connect round trip did not prove read/delete.',
+        ? 'Health Connect write → read → delete check passed.'
+        : 'Health Connect check could not verify read/delete cleanup.',
       clientRecordId,
       insertedIds,
       readBeforeDelete: before.length,
@@ -287,7 +287,7 @@ export async function runLifeOSHealthRoundTripProof(): Promise<HealthConnectRoun
   } catch (error) {
     return {
       status: 'failed',
-      message: error instanceof Error ? error.message : 'Health Connect round trip failed.',
+      message: error instanceof Error ? error.message : 'Health Connect check failed.',
       clientRecordId,
       insertedIds: [],
       readBeforeDelete: 0,
