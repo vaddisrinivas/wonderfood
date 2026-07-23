@@ -7,16 +7,14 @@ import { useLifeOSDatabase } from '@/src/db/provider';
 import { searchDomainRecords } from '@/src/domain/queries';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
-
-const commands = [
-  { id: 'ask', title: 'Ask LifeOS', detail: 'Search Notion, Sheets, local data and the web', href: '/(tabs)/chat' as const, icon: '✦' },
-  { id: 'capture', title: 'Create a record', detail: 'Note, meal, pantry item, task or link', href: '/capture' as const, icon: '＋' },
-  { id: 'settings', title: 'Open Settings', detail: 'Providers, domains, skills, MCP and sources', href: '/settings' as const, icon: '⚙' },
-];
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 
 export default function SearchScreen() {
   const theme = useLifeOSTheme();
   const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const catalog = loadCatalog();
+  const domainLabel = catalog.activeManifest.label;
   const [query, setQuery] = useState('');
   const db = useLifeOSDatabase();
   const [results, setResults] = useState<DomainRecordViewModel[]>([]);
@@ -46,10 +44,15 @@ export default function SearchScreen() {
     return () => {
       cancelled = true;
     };
-  }, [db, query]);
+  }, [db, query, settings.runtime.activeDomain]);
 
   const hasQuery = query.trim().length > 0;
   const visibleResults = results.slice(0, resultLimit);
+  const commands = [
+    { id: 'ask', title: `Ask ${domainLabel} AI`, detail: `Search ${domainLabel} sources, local data and the web`, href: '/(tabs)/chat' as const, icon: '✦' },
+    { id: 'capture', title: `Create ${domainLabel} record`, detail: `Note, observation, task, source, photo or link`, href: '/capture' as const, icon: '＋' },
+    { id: 'settings', title: 'Open Settings', detail: 'Providers, domains, skills, MCP and sources', href: '/settings' as const, icon: '⚙' },
+  ];
 
   const renderSection = (section: SearchSection) => {
     switch (section) {
@@ -57,10 +60,10 @@ export default function SearchScreen() {
         return searchConfig.showHero ? (
           <View key={section}>
             <View style={styles.contextBar}>
-              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / SEARCH</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Records, commands and source-backed answers</Text></View>
+              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / SEARCH</Text><Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} records, commands and source-backed answers</Text></View>
               <Pill tone={hasQuery ? 'moss' : 'blue'}>{hasQuery ? 'Searching' : 'Ready'}</Pill>
             </View>
-            <PageHeader eyebrow="Find or act" title="Search everything." subtitle="Find local records first. If nothing exact exists, jump into Chat with context instead of staring at a blank result page." />
+            <PageHeader eyebrow="Find or act" title={`Search ${domainLabel}.`} subtitle={`Find ${domainLabel} records first. If nothing exact exists, jump into Chat with context instead of staring at a blank result page.`} />
           </View>
         ) : null;
       case 'quickActions':
@@ -100,7 +103,7 @@ export default function SearchScreen() {
                     </Link>;
                   })
                 ) : (
-                  <View style={styles.empty}><Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing exact yet</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{searchConfig.emptyHint}</Text><Link href="/(tabs)/chat" style={[styles.ask, { color: theme.colors.moss }]}>Ask with AI →</Link></View>
+                  <View style={styles.empty}><Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing exact yet</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{searchConfig.emptyHint.replace(/\bFood\b/g, domainLabel)}</Text><Link href="/(tabs)/chat" style={[styles.ask, { color: theme.colors.moss }]}>{`Ask ${domainLabel} AI →`}</Link></View>
                 )
               )}
             </Card>
@@ -114,7 +117,7 @@ export default function SearchScreen() {
   return <Page><View style={sharedStyles.content}>
     <ScrollView keyboardShouldPersistTaps="handled">
       {sections.includes('hero') ? renderSection('hero') : null}
-      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search food, sources, settings, commands…" placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder={`Search ${domainLabel.toLowerCase()}, sources, settings, commands…`} placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
       {sections.filter((section) => section !== 'hero').map(renderSection)}
     </ScrollView>
   </View></Page>;

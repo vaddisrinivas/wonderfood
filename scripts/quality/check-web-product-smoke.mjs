@@ -155,7 +155,18 @@ const routes = [
   {
     name: 'search',
     path: '/search',
-    must: ['LIFEOS / SEARCH', 'Search everything', 'Quick actions', 'Ask LifeOS', 'Create a record'],
+    must: ['LIFEOS / SEARCH', 'Search Food.', 'Quick actions', 'Ask Food AI', 'Create Food record'],
+  },
+  {
+    name: 'search-health-active',
+    path: '/search',
+    localSettings: {
+      runtime: {
+        activeDomain: 'health',
+        enabledDomains: ['food', 'health'],
+      },
+    },
+    must: ['LIFEOS / SEARCH', 'Search Health.', 'Health records, commands', 'Ask Health AI', 'Create Health record'],
   },
   {
     name: 'capture',
