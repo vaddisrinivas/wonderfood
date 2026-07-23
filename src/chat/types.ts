@@ -23,6 +23,15 @@ export type ChatAnswer = {
   intro: string;
   columns?: string[];
   rows: ChatAnswerRow[];
+  recordCards?: Array<{
+    id: string;
+    title: string;
+    collection: string;
+    status: string;
+    detail: string;
+    source: string;
+    bullets?: string[];
+  }>;
   citations: ChatCitation[];
 };
 

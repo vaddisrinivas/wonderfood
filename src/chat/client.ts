@@ -337,7 +337,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   }
 
   if (!configuredServerUrl) {
-    const answer = makeOfflineAnswer(text);
+    const answer = makeOfflineAnswer(text, sourceRecords);
     const answerId = nowId('asst');
     await appendMessage(db, {
       id: answerId,
@@ -392,7 +392,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     });
 
   if (!serverResult) {
-    const fallback = makeOfflineAnswer(text);
+    const fallback = makeOfflineAnswer(text, sourceRecords);
     const fallbackId = nowId('asst');
     await appendMessage(db, {
       id: fallbackId,
@@ -424,7 +424,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     };
   }
 
-  const fallback = makeOfflineAnswer(text);
+  const fallback = makeOfflineAnswer(text, sourceRecords);
   const latest = serverResult.messages.at(-1) ?? {
     id: nowId('asst'),
     role: 'assistant',
@@ -537,12 +537,14 @@ function buildDirectSourceContext(records: CanonicalRecord[]): string {
 function makeDirectAnswer(text: string, provider: string | undefined, records: CanonicalRecord[]): ChatAnswer {
   const table = parseMarkdownTable(text);
   const intro = table.intro || text;
+  const selectedRecords = pickRelevantRecords(text, records);
   return {
     title: provider ? `Answer from ${provider}` : 'LifeOS answer',
     intro,
     columns: table.columns,
     rows: table.rows,
-    citations: records.slice(0, 5).map((record, index) => ({
+    recordCards: selectedRecords.map(recordToAnswerCard),
+    citations: selectedRecords.slice(0, 5).map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
       detail: record.source.external_id || record.collection,
       href: record.source.url || `wonderfood://record/${record.id}`,
@@ -861,16 +863,95 @@ export async function undoServerAction(input: {
   }
 }
 
-function makeOfflineAnswer(input: string): ChatAnswer {
+function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): ChatAnswer {
   const lower = input.toLowerCase();
   const isShopping = lower.includes('shop') || lower.includes('buy') || lower.includes('grocery');
-  const hasConstraintWords = lower.includes('yogurt') || lower.includes('expire');
-  const kind = isShopping ? 'request' : hasConstraintWords ? 'check' : 'request';
+  const isRecipe = lower.includes('recipe') || lower.includes('cook') || lower.includes('ingredient') || lower.includes('nutrition');
+  const selectedRecords = pickRelevantRecords(input, records);
+  const rows = selectedRecords.slice(0, 5).map((record) => {
+    const detail = readFoodDetail(record);
+    const missing = detail.ingredients.filter((item) => item.state === 'needed' || item.state === 'shopping').map((item) => item.name).join(', ') || 'none visible';
+    const available = detail.ingredients.filter((item) => item.state === 'available').map((item) => item.name).join(', ') || 'not captured';
+    return {
+      cells: [
+        record.title,
+        available,
+        missing,
+      ],
+    };
+  });
 
   return {
-    title: `Offline ${kind}`,
-    intro: 'Live model unavailable. Response is local and not source-grounded.',
-    rows: [],
-    citations: [],
+    title: selectedRecords.length ? 'Local LifeOS answer' : `Offline ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
+    intro: selectedRecords.length
+      ? 'I found this in your local Food graph. This is source-grounded locally; connect a model for deeper reasoning or web lookup.'
+      : 'No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.',
+    columns: rows.length ? ['Record', 'Available', 'Missing / shopping'] : undefined,
+    rows,
+    recordCards: selectedRecords.map(recordToAnswerCard),
+    citations: selectedRecords.slice(0, 5).map((record, index) => ({
+      label: `${record.source.provider} · ${record.title}`,
+      detail: record.source.external_id || record.collection,
+      href: record.source.url || `wonderfood://record/${record.id}`,
+      tone: (['moss', 'blue', 'amber', 'plum'] as const)[index % 4],
+    })),
+  };
+}
+
+function pickRelevantRecords(query: string, records: CanonicalRecord[]) {
+  const lower = query.toLowerCase();
+  const tokens = lower.split(/[^a-z0-9]+/).filter((token) => token.length > 2);
+  const scored = records.map((record) => {
+    const text = `${record.title} ${record.collection} ${JSON.stringify(record.properties)}`.toLowerCase();
+    const score = tokens.reduce((sum, token) => sum + (text.includes(token) ? 2 : 0), 0)
+      + (/recipe|cook|ingredient|nutrition/.test(lower) && ['recipe', 'meal_plan', 'meal_log'].includes(record.collection) ? 2 : 0)
+      + (/shop|buy|grocery/.test(lower) && ['shopping_item', 'purchase'].includes(record.collection) ? 3 : 0);
+    return { record, score };
+  });
+  const ranked = scored
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .map((item) => item.record);
+  return (ranked.length ? ranked : records).slice(0, 4);
+}
+
+type FoodDetail = {
+  nutrition: Array<[string, string]>;
+  ingredients: Array<{ name: string; amount: string; state: string }>;
+  instructions: string[];
+  logs: Array<[string, string]>;
+  variations: string[];
+};
+
+function readFoodDetail(record: CanonicalRecord): FoodDetail {
+  const raw = record.properties.food_detail;
+  if (raw && typeof raw === 'object') {
+    const detail = raw as Partial<FoodDetail>;
+    return {
+      nutrition: Array.isArray(detail.nutrition) ? detail.nutrition : [],
+      ingredients: Array.isArray(detail.ingredients) ? detail.ingredients : [],
+      instructions: Array.isArray(detail.instructions) ? detail.instructions : [],
+      logs: Array.isArray(detail.logs) ? detail.logs : [],
+      variations: Array.isArray(detail.variations) ? detail.variations : [],
+    };
+  }
+  return { nutrition: [], ingredients: [], instructions: [], logs: [], variations: [] };
+}
+
+function recordToAnswerCard(record: CanonicalRecord): NonNullable<ChatAnswer['recordCards']>[number] {
+  const detail = readFoodDetail(record);
+  const bullets = [
+    detail.nutrition.slice(0, 3).map(([label, value]) => `${label}: ${value}`).join(' · '),
+    detail.ingredients.filter((item) => item.state === 'available').slice(0, 3).map((item) => item.name).join(', '),
+    detail.instructions[0],
+  ].filter(Boolean);
+  return {
+    id: record.id,
+    title: record.title,
+    collection: record.collection,
+    status: String(record.properties.status ?? 'Active'),
+    detail: String(record.properties.meta ?? record.properties.body ?? record.collection),
+    source: `${record.source.provider} · ${record.source.external_id}`,
+    bullets,
   };
 }

@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
@@ -395,6 +395,25 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
           })}
         </View>
       ) : null}
+      {answer.recordCards?.length ? (
+        <View style={styles.recordCards}>
+          {answer.recordCards.map((record) => (
+            <Link key={record.id} href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+              <Pressable accessibilityRole="link" style={({ pressed }) => [styles.answerRecord, pressed && styles.pressed]}>
+                <View style={styles.answerRecordTop}>
+                  <Text style={styles.answerRecordTitle} numberOfLines={1}>{record.title}</Text>
+                  <Pill tone="moss">{record.status}</Pill>
+                </View>
+                <Text style={styles.answerRecordMeta} numberOfLines={1}>{record.collection} · {record.detail}</Text>
+                {record.bullets?.slice(0, 3).map((bullet) => (
+                  <Text key={bullet} style={styles.answerRecordBullet} numberOfLines={2}>• {bullet}</Text>
+                ))}
+                <Text style={styles.answerRecordSource} numberOfLines={1}>{record.source}</Text>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -469,6 +488,13 @@ const styles = StyleSheet.create({
   tableHeader: { borderTopWidth: 0, backgroundColor: '#ECEEE7' },
   tableCell: { minWidth: 0, flex: 1, flexShrink: 1, color: colors.ink, fontSize: 11, lineHeight: 15, padding: 8 },
   tableHeaderText: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
+  recordCards: { marginTop: 10, gap: 8 },
+  answerRecord: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: 12, padding: 10 },
+  answerRecordTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  answerRecordTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', flex: 1 },
+  answerRecordMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },
+  answerRecordBullet: { color: colors.ink, fontSize: 12, lineHeight: 17, marginTop: 6 },
+  answerRecordSource: { color: colors.moss, fontSize: 10, fontWeight: '800', marginTop: 8 },
   citationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   citation: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6, maxWidth: 166 },
   citationMoss: { backgroundColor: colors.mossSoft },
