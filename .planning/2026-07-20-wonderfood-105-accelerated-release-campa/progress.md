@@ -869,3 +869,7 @@
   - `git diff --check` ✅
 - Verified integrated gate: `NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run check:product` ✅ with `16` Vitest files / `65` tests plus config/control/schema/template/web/accessibility/roundtrip/sync/provider/workflow/export/chat gates.
 - Refreshed `npm run phase8:check:release-readiness` as an audit: `release_ready=false`; current blockers include stale Android release artifacts for the pre-commit build, debug-signed APK, unsigned AAB, Android signing env missing, and iOS release env missing.
+- After committing `7b38fd7`, refreshed release artifacts/readiness:
+  - `npm run phase8:check:android-release-artifacts` ✅ — artifacts current for `7b38fd7`, APK debug-signed, AAB unsigned.
+  - `npm run phase8:check:release-readiness` ✅ as audit — `release_ready=false`; blockers now exclude stale artifacts and remain `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
+- Refreshed live Notion/Sheets standalone authority after `7b38fd7` with private env and Homebrew Node path: `npm run check:provider-standalone-authority` ✅. Evidence: `app/build/evidence/live-workspace/provider-standalone-authority-1784835678/provider-standalone-authority-proof.json`, `all_authority_checks_passed=true`.
