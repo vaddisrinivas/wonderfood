@@ -349,6 +349,10 @@ update_range(f"'Shopping'!{col_name(archived_col)}{shopping_next_row}", [["TRUE"
 archived_rows = batch_get([f"'Shopping'!A1:{shopping_end_col}1000"]).get("valueRanges", [{}])[0].get("values", [])
 archive_visible = any(len(row) > archived_col and len(row) > shopping_headers.index("_wf_id") and row[shopping_headers.index("_wf_id")] == scenario_identifier and row[archived_col] == "TRUE" for row in archived_rows[1:])
 
+update_range(f"'Shopping'!{col_name(archived_col)}{shopping_next_row}", [["FALSE"]])
+undo_rows = batch_get([f"'Shopping'!A1:{shopping_end_col}1000"]).get("valueRanges", [{}])[0].get("values", [])
+undo_archive_visible = any(len(row) > archived_col and len(row) > shopping_headers.index("_wf_id") and row[shopping_headers.index("_wf_id")] == scenario_identifier and row[archived_col] == "FALSE" for row in undo_rows[1:])
+
 repair_cell = "'Shopping'!" + col_name(status_col) + "1"
 update_range(repair_cell, [["Status broken"]])
 broken_headers = table("Shopping")[0]
@@ -368,6 +372,7 @@ payload = {
     "live_edit_row": edited,
     "live_conflict_input_read_back": conflict_read_back,
     "live_archive_status_read_back": archive_visible,
+    "live_undo_archive_read_back": undo_archive_visible,
     "retry_wrapper_exercised": forced_retry_used and retry_attempts >= 2,
     "repair_header_damage_detected": repair_needed,
     "repair_header_restored": repair_verified,

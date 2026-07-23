@@ -439,6 +439,18 @@ archived_shopping = request(
 )
 archive_read_back = bool(archived_shopping.get("in_trash"))
 
+request(
+    "PATCH",
+    "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
+    {"in_trash": False},
+)
+undo_shopping = request(
+    "GET",
+    "/pages/" + urllib.parse.quote(created_shopping["id"], safe=""),
+    retry=False,
+)
+undo_archive_read_back = not bool(undo_shopping.get("in_trash"))
+
 repair_path = "/databases/" + urllib.parse.quote(shopping_db, safe="")
 database_before_repair = request("GET", repair_path, retry=False)
 repair_detected = bool(database_before_repair)
@@ -467,6 +479,7 @@ payload = {
     "app_edit_read_back": live_app_edit_read_back,
     "conflict_input_read_back": notion_edit_pull_read_back,
     "archive_read_back": archive_read_back,
+    "undo_archive_read_back": undo_archive_read_back,
     "retry_wrapper_exercised": forced_retry_used and retry_attempts >= 2,
     "repair_detected": repair_detected,
     "repair_verified": repair_verified,
@@ -482,6 +495,7 @@ required_checks = [
     "app_edit_read_back",
     "conflict_input_read_back",
     "archive_read_back",
+    "undo_archive_read_back",
 ]
 
 missing = [key for key in required_checks if not payload.get(key)]
