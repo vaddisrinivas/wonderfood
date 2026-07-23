@@ -446,7 +446,7 @@ export default function ChatScreen() {
             {chatConfig.showContextCard ? (
               <Card tone="blue" style={styles.contextCard}>
                 <View style={styles.contextIcon}><Text>⌁</Text></View>
-                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
+                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · Chat cites sources · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
                 <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
               </Card>
             ) : null}

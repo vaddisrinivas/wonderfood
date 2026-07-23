@@ -100,35 +100,50 @@ const browser = await chromium.launch({
   ...(executablePath ? { executablePath } : {}),
 });
 
-const page = await browser.newPage({ viewport: { width: 1500, height: 1100 }, deviceScaleFactor: 1 });
 const results = [];
 
-for (const route of routes) {
-  const url = `${baseUrl}${route.path}`;
-  const result = {
-    name: route.name,
-    url,
-    ok: false,
-    missing: [],
-    screenshot: join(outDir, `${route.name}.png`),
-    consoleErrors: [],
-  };
-  const consoleErrors = [];
-  page.removeAllListeners('console');
-  page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
-  });
-  try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
-    const text = await page.locator('body').innerText({ timeout: 8000 });
-    result.missing = route.must.filter((needle) => !text.includes(needle));
-    result.consoleErrors = consoleErrors;
-    await page.screenshot({ path: result.screenshot, fullPage: true });
-    result.ok = result.missing.length === 0 && consoleErrors.length === 0;
-  } catch (error) {
-    result.error = error instanceof Error ? error.message : String(error);
+const viewports = [
+  { label: 'desktop', width: 1500, height: 1100 },
+  { label: 'mobile', width: 390, height: 900 },
+];
+
+for (const viewport of viewports) {
+  const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
+  for (const route of routes) {
+    const url = `${baseUrl}${route.path}`;
+    const result = {
+      name: `${route.name}-${viewport.label}`,
+      route: route.name,
+      viewport,
+      url,
+      ok: false,
+      missing: [],
+      screenshot: join(outDir, `${route.name}-${viewport.label}.png`),
+      consoleErrors: [],
+      horizontalOverflow: null,
+    };
+    const consoleErrors = [];
+    page.removeAllListeners('console');
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    try {
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+      const text = await page.locator('body').innerText({ timeout: 8000 });
+      result.missing = route.must.filter((needle) => !text.includes(needle));
+      result.consoleErrors = consoleErrors;
+      result.horizontalOverflow = await page.evaluate(() => {
+        const root = document.scrollingElement || document.documentElement;
+        return Math.max(0, root.scrollWidth - window.innerWidth);
+      });
+      await page.screenshot({ path: result.screenshot, fullPage: true });
+      result.ok = result.missing.length === 0 && consoleErrors.length === 0 && result.horizontalOverflow <= 2;
+    } catch (error) {
+      result.error = error instanceof Error ? error.message : String(error);
+    }
+    results.push(result);
   }
-  results.push(result);
+  await page.close();
 }
 
 await browser.close();
