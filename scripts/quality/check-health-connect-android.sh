@@ -9,6 +9,7 @@ for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_
   grep -q "android.permission.health.${permission}" "$manifest"
 done
 grep -q 'com.google.android.apps.healthdata' "$manifest"
+grep -q 'com.google.android.healthconnect.controller' "$manifest"
 grep -q 'react-native-health-connect' "$root_dir/package.json"
 grep -q 'HealthConnectPermissionDelegate.setPermissionDelegate' "$root_dir/android/app/src/main/java/com/wonderfood/app/MainActivity.kt"
 test -f "$root_dir/src/health/connect.ts"
