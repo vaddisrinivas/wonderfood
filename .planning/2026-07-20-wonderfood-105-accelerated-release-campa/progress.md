@@ -919,3 +919,15 @@
 - Fresh result: `npm run phase9:check:responsive-visual-matrix` ✅ with `28/28` screenshots and no horizontal overflow; evidence `app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json`.
 - Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `7 passed`, `1 partial`, `1 blocked`, `0 missing`.
 - Remaining visual polish is now manual/product-grade review only; web, native Android and responsive tablet/foldable matrices are all proven.
+
+## 2026-07-23 performance budget proof
+
+- Added `scripts/quality/check-performance-budget.mjs` and `npm run phase9:check:performance-budget`.
+- The verifier checks current exported bundle sizes:
+  - web entry <= 2.2 MB
+  - web worker <= 300 KB
+  - Android Hermes bundle <= 4.5 MB
+  - iOS Hermes bundle <= 4.5 MB
+- Fresh result: `npm run phase9:check:performance-budget` ✅; evidence `app/build/evidence/performance/performance-budget.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `8 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining non-release polish is now manual/product-grade UI review; release remains blocked by signing/App Store env.
