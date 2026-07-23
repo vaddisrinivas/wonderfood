@@ -371,9 +371,9 @@ export default function ConfigStudioScreen() {
               <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Swap the domain without rebuilding the app shell.</Text>
             </Card>
             <Card tone="blue" style={styles.summaryCard}>
-              <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>6</Text>
+              <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>{screenBlueprints.length}</Text>
               <Text style={[styles.summaryTitle, { color: theme.colors.ink }]}>Configurable screens</Text>
-              <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Home, Food, Chat, Search, Capture and Record are runtime-tunable.</Text>
+              <Text style={[styles.summaryBody, { color: theme.colors.muted }]}>Home, Workspace, Chat, Record, Search, Capture, Sources and Health Connect are runtime-tunable.</Text>
             </Card>
             <Card tone="plum" style={styles.summaryCard}>
               <Text style={[styles.summaryNumber, { color: theme.colors.ink }]}>{agentRegistry.agents.length}</Text>
