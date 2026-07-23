@@ -834,3 +834,15 @@
   - `npm run check:live-provider-writeback` ✅ through `agent-env`, evidence `app/build/evidence/live-workspace/direct_provider_writeback-1784834264.json`.
   - `npm run check:provider-standalone-authority` ✅, evidence `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.json`.
   - `npm run check:product` ✅ after the restore fix — full Vitest suite `16` files / `61` tests, config/control/schema/template/web/accessibility/roundtrip/sync/provider/chat/export gates all passed.
+
+## 2026-07-23 release readiness audit
+
+- Added `scripts/quality/check-release-readiness.mjs` and `npm run phase8:check:release-readiness`.
+- The audit writes `app/build/evidence/release-readiness.json` and records only missing variable names / boolean file checks, never secret values.
+- Refreshed current release evidence:
+  - `npm run phase8:check:android-release-artifacts` ✅ — APK/AAB exist, Health Connect permissions present; APK is debug-signed and AAB unsigned.
+  - `npm run check:ios-export` ✅ — iOS export bundle and assets exist.
+  - `npm run phase8:check:release-readiness` ✅ as an audit, with `release_ready=false`.
+- Current blockers in the evidence: `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
+- Missing Android release env names: `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`.
+- Missing Apple release env names: `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, `APPLE_TEAM_ID`.
