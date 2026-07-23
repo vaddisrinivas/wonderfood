@@ -121,10 +121,23 @@ export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceR
 
   const links = await getAllProviderLinks(db);
   const mapped = links.map(mapSourceRowFromLink);
-  if (mapped.length > 0) {
-    return mapped;
-  }
+  const { domainId } = getActiveDomainFeed();
+  const records = await listRecordsForDomain(db, domainId);
+  if (!records.length) return mapped;
 
-  return [];
+  const latest = records
+    .map((record) => record.updated_at || record.created_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  const localRow = {
+    name: 'sqlite',
+    status: 'Local ready',
+    freshness: latest ? `Updated ${new Date(latest).toLocaleDateString()}` : 'Seeded local graph',
+    workspace: `${records.length} local records`,
+  };
+
+  return mapped.some((row) => row.name.toLowerCase() === 'sqlite') ? mapped : [localRow, ...mapped];
 }
 export type { DomainRecordViewModel };

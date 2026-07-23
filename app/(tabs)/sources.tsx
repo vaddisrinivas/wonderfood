@@ -41,10 +41,10 @@ const sourceMeta: Record<string, { icon: string; tone: Tone; role: string; summa
   sqlite: {
     icon: '▣',
     tone: 'plum' as Tone,
-    role: 'Planned device replica',
+    role: 'Local device replica',
     summary: 'Fast offline graph, outbox, source snapshots and recovery.',
     scope: 'Encrypted · on device',
-    action: 'Adapter implementation next',
+    action: 'Inspect local graph',
     href: null,
   },
   postgres: {

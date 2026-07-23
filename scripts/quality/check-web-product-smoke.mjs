@@ -72,7 +72,7 @@ const routes = [
   {
     name: 'sources',
     path: '/sources',
-    must: ['LIFEOS / SOURCES', 'Your data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'What Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Your data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Local device replica', 'What Chat can cite'],
   },
   {
     name: 'config',
