@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { DashboardBlock } from '@/src/domain/catalog';
 import { loadCatalog } from '@/src/domain/catalog';
 import { getDomainRecordCanonical, getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
@@ -46,7 +47,7 @@ function countSetting(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-const FOOD_SECTIONS = ['hero', 'tabs', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
+const FOOD_SECTIONS = ['hero', 'tabs', 'manifest', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
 type FoodSection = typeof FOOD_SECTIONS[number];
 type FoodWidget = { title: string; detail: string; tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral'; href: string };
 
@@ -78,6 +79,19 @@ function parseFoodWidgets(value: string): FoodWidget[] {
         href: href.startsWith('/') ? href : '/config',
       };
     });
+}
+
+function recordsForBlock(block: DashboardBlock, records: FoodRecordView[]) {
+  const collections = new Set(block.query.collections ?? []);
+  const matcher = block.query.match ? new RegExp(block.query.match, 'i') : null;
+  const limit = block.query.limit ?? 3;
+  return records
+    .filter((record) => {
+      const collectionMatch = collections.size === 0 || collections.has(record.collection);
+      const textMatch = !matcher || matcher.test(`${record.collection} ${record.status} ${record.meta} ${record.title} ${record.body}`);
+      return collectionMatch && textMatch;
+    })
+    .slice(0, limit);
 }
 
 export default function FoodScreen() {
@@ -135,6 +149,7 @@ export default function FoodScreen() {
   const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
   const widgets = parseFoodWidgets(foodConfig.widgets);
+  const manifestBlocks = (activeManifest.dashboard_blocks ?? []).filter((block) => block.surface.startsWith('food.'));
 
   const toggleShoppingRecord = async (record: FoodRecordView) => {
     const nextStatus = /in cart|bought/i.test(record.status) ? 'To buy' : 'In cart';
@@ -225,6 +240,21 @@ export default function FoodScreen() {
             </View>
           </View>
         ) : null;
+      case 'manifest':
+        return active === 'Overview' && foodConfig.showManifestBlocks && manifestBlocks.length ? (
+          <View key={section}>
+            <SectionTitle title="Package dashboard" action="Edit package" href="/config" />
+            <View style={[styles.manifestGrid, compact && styles.boardCompact]}>
+              {manifestBlocks.map((block) => (
+                <ManifestDashboardBlock
+                  key={block.id}
+                  block={block}
+                  records={recordsForBlock(block, records)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null;
       case 'workspace':
         return active === 'Overview' && foodConfig.showWorkspace ? (
           <View key={section}>
@@ -308,6 +338,44 @@ export default function FoodScreen() {
         </View>
       </ScrollView>
     </Page>
+  );
+}
+
+function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; records: FoodRecordView[] }) {
+  const theme = useLifeOSTheme();
+  const primary = records[0];
+  const href = primary ? { pathname: '/record/[id]', params: { id: primary.id } } : block.href;
+  const metricValue = block.kind === 'metric'
+    ? records.length
+      ? records.map((record) => record.title).slice(0, 2).join(' + ')
+      : 'No records yet'
+    : primary?.title ?? (block.kind === 'action' ? 'Open workspace' : 'Awaiting data');
+  return (
+    <Link href={href as never} asChild>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.manifestBlockPress, pressed && styles.pressed]}>
+        <Card tone={block.tone === 'neutral' ? undefined : block.tone} style={styles.manifestBlock}>
+          <View style={styles.manifestBlockTop}>
+            <Text style={[styles.manifestBlockKind, { color: theme.colors.muted }]}>{block.kind.toUpperCase()}</Text>
+            <Pill tone={block.tone}>{records.length ? `${records.length} hit${records.length === 1 ? '' : 's'}` : 'config'}</Pill>
+          </View>
+          <Text style={[styles.manifestBlockTitle, { color: theme.colors.ink }]}>{block.title}</Text>
+          <Text style={[styles.manifestBlockSubtitle, { color: theme.colors.muted }]}>{block.subtitle}</Text>
+          <Text style={[styles.manifestBlockValue, { color: theme.colors.ink }]} numberOfLines={block.kind === 'list' ? 1 : 2}>{metricValue}</Text>
+          {block.kind === 'list' ? (
+            <View style={styles.manifestBlockList}>
+              {(records.length ? records : []).slice(0, 3).map((record) => (
+                <View key={record.id} style={[styles.manifestBlockRow, { borderTopColor: theme.colors.line }]}>
+                  <Text style={[styles.manifestBlockDot, { color: theme.colors.moss }]}>•</Text>
+                  <Text style={[styles.manifestBlockRowText, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
+                </View>
+              ))}
+              {!records.length ? <Text style={[styles.manifestBlockEmpty, { color: theme.colors.muted }]}>Add matching records or edit the block query.</Text> : null}
+            </View>
+          ) : null}
+          <Text style={[styles.manifestBlockRoute, { color: theme.colors.moss }]}>{block.surface} · {block.id}</Text>
+        </Card>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -556,6 +624,20 @@ const styles = StyleSheet.create({
   widgetTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' },
   widgetDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
   widgetRoute: { color: colors.moss, fontSize: 11, fontWeight: '900', marginTop: 14 },
+  manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  manifestBlockPress: { flexGrow: 1, flexBasis: 260 },
+  manifestBlock: { minHeight: 188, padding: 18 },
+  manifestBlockTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  manifestBlockKind: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  manifestBlockTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },
+  manifestBlockSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  manifestBlockValue: { color: colors.ink, fontSize: 15, lineHeight: 21, fontWeight: '800', marginTop: 14 },
+  manifestBlockList: { marginTop: 8 },
+  manifestBlockRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  manifestBlockDot: { color: colors.moss, fontSize: 16, fontWeight: '900' },
+  manifestBlockRowText: { color: colors.ink, fontSize: 12, fontWeight: '800', flex: 1 },
+  manifestBlockEmpty: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
+  manifestBlockRoute: { color: colors.moss, fontSize: 10, fontWeight: '900', marginTop: 'auto', paddingTop: 14 },
   board: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   boardCompact: { flexDirection: 'column' },
   column: { flex: 1, minHeight: 320 },

@@ -25,6 +25,32 @@
       },
       "additionalProperties": false
     },
+    "dashboard_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "surface", "title", "kind", "tone", "query", "href"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_:-]*$" },
+          "surface": { "type": "string" },
+          "title": { "type": "string", "minLength": 1 },
+          "subtitle": { "type": "string" },
+          "kind": { "enum": ["spotlight", "metric", "list", "action"] },
+          "tone": { "enum": ["neutral", "moss", "amber", "plum", "blue"] },
+          "query": {
+            "type": "object",
+            "properties": {
+              "collections": { "type": "array", "items": { "type": "string" } },
+              "match": { "type": "string" },
+              "limit": { "type": "integer", "minimum": 0, "maximum": 20 }
+            },
+            "additionalProperties": false
+          },
+          "href": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
     "mcp": { "type": "object", "required": ["resources", "tools"] }
   },
   "additionalProperties": false

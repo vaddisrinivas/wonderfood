@@ -45,7 +45,7 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food is the active package'],
+    must: ['Package dashboard', 'Tonight decision', 'Nutrition lens', 'Shopping gaps', 'Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food is the active package'],
   },
   {
     name: 'record-green-dal',
@@ -83,6 +83,7 @@ const routes = [
       'MCP contract',
       'Screen composition',
       'Every main screen gets runtime knobs',
+      'Manifest Dashboard Blocks',
       'Search',
       'Capture',
       'Result cards',

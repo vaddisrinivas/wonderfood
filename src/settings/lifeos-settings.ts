@@ -65,6 +65,7 @@ export type LifeOSSettings = {
         sectionOrder: string;
         showHero: boolean;
         showViewTabs: boolean;
+        showManifestBlocks: boolean;
         showWidgets: boolean;
         widgets: string;
         showWorkspace: boolean;
@@ -209,9 +210,10 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: true,
       },
       food: {
-        sectionOrder: 'hero,tabs,workspace,attention,widgets,view,package',
+        sectionOrder: 'hero,tabs,manifest,workspace,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
+        showManifestBlocks: true,
         showWidgets: true,
         widgets: 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings',
         showWorkspace: true,
@@ -373,6 +375,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       sectionOrder: normalizeDefaultOrder(config.food?.sectionOrder, defaults.food.sectionOrder, 'hero,tabs,widgets,workspace,attention,view,package'),
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
+      showManifestBlocks: config.food?.showManifestBlocks !== false,
       showWidgets: config.food?.showWidgets !== false,
       widgets: typeof config.food?.widgets === 'string' ? config.food.widgets : defaults.food.widgets,
       showWorkspace: config.food?.showWorkspace !== false,

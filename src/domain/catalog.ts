@@ -17,6 +17,24 @@ export type Surface = {
   collections: string[];
 };
 
+export type DashboardBlockKind = 'spotlight' | 'metric' | 'list' | 'action';
+export type DashboardBlockTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
+
+export type DashboardBlock = {
+  id: string;
+  surface: string;
+  title: string;
+  subtitle?: string;
+  kind: DashboardBlockKind;
+  tone: DashboardBlockTone;
+  query: {
+    collections?: string[];
+    match?: string;
+    limit?: number;
+  };
+  href: string;
+};
+
 export type ManifestRelation = {
   from: string;
   to: string;
@@ -34,6 +52,7 @@ export interface DomainManifest {
   skills: string[];
   workflows: string[];
   data_homes: string[];
+  dashboard_blocks?: DashboardBlock[];
   rich_detail_schema?: string;
   provider_template_fields?: {
     required?: string[];
@@ -117,6 +136,48 @@ function parseObjectArray(value: unknown, path: string): Record<string, unknown>
   return values as Record<string, unknown>[];
 }
 
+function parseOptionalStringArray(value: unknown, path: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  return parseStringArray(value, path);
+}
+
+function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | undefined {
+  if (value === undefined) return undefined;
+  const blocks = parseObjectArray(value, path);
+  return blocks.map((block, index) => {
+    const kind = block.kind;
+    const tone = block.tone;
+    const query = isObject(block.query) ? block.query : {};
+    assertCondition(
+      kind === 'spotlight' || kind === 'metric' || kind === 'list' || kind === 'action',
+      `Invalid kind at ${path}[${index}].kind`
+    );
+    assertCondition(
+      tone === 'neutral' || tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue',
+      `Invalid tone at ${path}[${index}].tone`
+    );
+    const parsedKind = kind as DashboardBlockKind;
+    const parsedTone = tone as DashboardBlockTone;
+    const limit = typeof query.limit === 'number' && Number.isFinite(query.limit)
+      ? Math.max(0, Math.min(20, Math.floor(query.limit)))
+      : undefined;
+    return {
+      id: parseString(block.id, `${path}[${index}].id`),
+      surface: parseString(block.surface, `${path}[${index}].surface`),
+      title: parseString(block.title, `${path}[${index}].title`),
+      subtitle: typeof block.subtitle === 'string' ? block.subtitle : undefined,
+      kind: parsedKind,
+      tone: parsedTone,
+      query: {
+        collections: parseOptionalStringArray(query.collections, `${path}[${index}].query.collections`),
+        match: typeof query.match === 'string' ? query.match : undefined,
+        limit,
+      },
+      href: typeof block.href === 'string' && block.href.trim() ? block.href : '/config',
+    };
+  });
+}
+
 function parseDomainManifest(value: unknown, path: string): DomainManifest {
   assertCondition(isObject(value), `Expected object at ${path}`);
   const raw = value as Record<string, unknown>;
@@ -165,6 +226,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     skills: parseStringArray(raw.skills, `${path}.skills`),
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
+    dashboard_blocks: parseDashboardBlocks(raw.dashboard_blocks, `${path}.dashboard_blocks`),
     rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
     provider_template_fields: parsedProviderTemplateFields,
     mcp: {

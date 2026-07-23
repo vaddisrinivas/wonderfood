@@ -50,6 +50,58 @@
     "rich_detail_json": ["Food detail", "food_detail", "Food Detail", "Detail JSON", "detail_json"],
     "relations_json": ["Relations", "relations", "Related records", "related_records"]
   },
+  "dashboard_blocks": [
+    {
+      "id": "food:tonight",
+      "surface": "food.overview",
+      "title": "Tonight decision",
+      "subtitle": "Meal plan, recipe and next cooking step.",
+      "kind": "spotlight",
+      "tone": "moss",
+      "query": { "collections": ["meal_plan", "recipe"], "match": "planned|tonight|dinner|high protein", "limit": 1 },
+      "href": "/chat"
+    },
+    {
+      "id": "food:nutrition",
+      "surface": "food.overview",
+      "title": "Nutrition lens",
+      "subtitle": "Protein, calories, fiber and serving context from rich detail.",
+      "kind": "metric",
+      "tone": "plum",
+      "query": { "collections": ["recipe", "meal_plan", "nutrition_observation"], "match": "protein|nutrition|fiber|calorie", "limit": 2 },
+      "href": "/search"
+    },
+    {
+      "id": "food:use-soon",
+      "surface": "food.kitchen",
+      "title": "Use-first queue",
+      "subtitle": "Food most likely to expire or unlock a planned meal.",
+      "kind": "list",
+      "tone": "amber",
+      "query": { "collections": ["inventory", "ingredient"], "match": "use soon|expire|pantry|available|yogurt", "limit": 4 },
+      "href": "/capture"
+    },
+    {
+      "id": "food:shopping",
+      "surface": "food.shopping",
+      "title": "Shopping gaps",
+      "subtitle": "Needed, in cart, bought and why each item exists.",
+      "kind": "list",
+      "tone": "blue",
+      "query": { "collections": ["shopping_item", "purchase_line", "purchase"], "match": "to buy|shopping|needed|missing", "limit": 4 },
+      "href": "/capture"
+    },
+    {
+      "id": "food:sources",
+      "surface": "food.overview",
+      "title": "Source trust",
+      "subtitle": "Notion, Sheets, SQLite and Postgres feed one canonical graph.",
+      "kind": "action",
+      "tone": "neutral",
+      "query": { "collections": ["source_record"], "match": "notion|sheets|sqlite|postgres", "limit": 3 },
+      "href": "/sources"
+    }
+  ],
   "relations": [
     { "from": "inventory", "to": "ingredient", "name": "represents" },
     { "from": "recipe", "to": "ingredient", "name": "uses" },
