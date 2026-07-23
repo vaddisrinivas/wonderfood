@@ -9,7 +9,7 @@ import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 type FoodRecordView = DomainRecordViewModel;
 
@@ -86,6 +86,7 @@ export default function FoodScreen() {
   const contentWidth = compact ? Math.max(width - 32, 280) : Math.max(width - 128, 900);
   const { activeManifest } = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
   const surfaceCatalog = useMemo(() => buildSurfaceCatalog(activeManifest), [activeManifest]);
   const views = surfaceCatalog.tabs;
   const defaultTab = views[0] ?? 'Overview';
@@ -142,12 +143,12 @@ export default function FoodScreen() {
             <Card tone="moss" style={styles.hero}>
               <View style={styles.heroHeader}>
                 <Pill tone="moss">TONIGHT</Pill>
-                <Text style={styles.heroMeta}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
+                <Text style={[styles.heroMeta, { color: theme.colors.muted }]}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
               </View>
-              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
+              <Text style={[styles.heroTitle, { color: theme.colors.ink }, compact && styles.heroTitleCompact]}>
                 {todayMeal?.title ?? 'Decide dinner from what you have.'}
               </Text>
-              <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+              <Text style={[styles.heroBody, { color: theme.colors.ink }, compact && styles.heroBodyCompact]}>
                 {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
               </Text>
               <View style={styles.heroActions}>
@@ -164,16 +165,16 @@ export default function FoodScreen() {
         ) : null;
       case 'tabs':
         return foodConfig.showViewTabs ? (
-          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
+          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.segments, { backgroundColor: theme.colors.canvas }]}>
             {views.map((view) => (
               <Pressable
                 key={view}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active === view }}
                 onPress={() => setActive(view)}
-                style={[styles.segment, active === view && styles.segmentActive]}
+                style={[styles.segment, active === view && styles.segmentActive, active === view && { backgroundColor: theme.colors.paper }]}
               >
-                <Text style={[styles.segmentText, active === view && styles.segmentTextActive]}>{view}</Text>
+                <Text style={[styles.segmentText, { color: active === view ? theme.colors.ink : theme.colors.muted }]}>{view}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -186,9 +187,9 @@ export default function FoodScreen() {
               {widgets.map((widget) => (
                 <Pressable key={`${widget.title}-${widget.href}`} accessibilityRole="button" onPress={() => router.push(widget.href as never)} style={({ pressed }) => [styles.widgetPress, pressed && styles.pressed]}>
                   <Card tone={widget.tone === 'neutral' ? undefined : widget.tone} style={styles.widgetCard}>
-                    <Text style={styles.widgetTitle}>{widget.title}</Text>
-                    <Text style={styles.widgetDetail}>{widget.detail}</Text>
-                    <Text style={styles.widgetRoute}>{widget.href}</Text>
+                    <Text style={[styles.widgetTitle, { color: theme.colors.ink }]}>{widget.title}</Text>
+                    <Text style={[styles.widgetDetail, { color: theme.colors.muted }]}>{widget.detail}</Text>
+                    <Text style={[styles.widgetRoute, { color: theme.colors.moss }]}>{widget.href}</Text>
                   </Card>
                 </Pressable>
               ))}
@@ -215,8 +216,8 @@ export default function FoodScreen() {
                 <MiniRecord key={row.id} record={row} />
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
-                  <Text style={styles.emptyTitle}>Nothing needs review</Text>
-                  <Text style={sharedStyles.muted}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
+                  <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing needs review</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
                 </Card>
               )}
             </View>
@@ -226,17 +227,17 @@ export default function FoodScreen() {
         return active !== 'Overview' ? (
           <View key={section}>
             <SectionTitle title={activeCopy.title} action="Ask" href="/chat" />
-            <Text style={styles.viewSubtitle}>{activeCopy.subtitle}</Text>
-            {loading ? <Text style={styles.loading}>Loading food records...</Text> : null}
+            <Text style={[styles.viewSubtitle, { color: theme.colors.muted }]}>{activeCopy.subtitle}</Text>
+            {loading ? <Text style={[styles.loading, { color: theme.colors.muted }]}>Loading food records...</Text> : null}
 
-            <View style={styles.records}>
+            <View style={[styles.records, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
               {shown.length ? shown.map((record) => (
                 <RecordListItem key={record.id} record={record} />
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
-                  <Text style={styles.emptyTitle}>{activeCopy.empty}</Text>
-                  <Text style={sharedStyles.muted}>Use capture, Sources, or Food AI. No config page required.</Text>
-                  <Link href="/capture" style={styles.cardLink}>Capture food →</Link>
+                  <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>{activeCopy.empty}</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Use capture, Sources, or Food AI. No config page required.</Text>
+                  <Link href="/capture" style={[styles.cardLink, { color: theme.colors.moss }]}>Capture food →</Link>
                 </Card>
               )}
             </View>
@@ -246,10 +247,10 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={styles.configTitle}>Food is the active package</Text>
-              <Text style={sharedStyles.muted}>Views come from config, but the workspace stays about dinner, pantry and shopping.</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Food is the active package</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views come from config, but the workspace stays about dinner, pantry and shopping.</Text>
             </View>
-            <Link href="/config" style={styles.configLink}>Edit package</Link>
+            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Edit package</Link>
           </Card>
         ) : null;
       default:
@@ -263,13 +264,13 @@ export default function FoodScreen() {
         <View style={[styles.content, { width: contentWidth }]}>
           <View style={styles.topbar}>
             <View>
-              <Text style={styles.brand}>LIFEOS / FOOD</Text>
-              <Text style={styles.date}>Kitchen, meals, recipes, shopping</Text>
+              <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / FOOD</Text>
+              <Text style={[styles.date, { color: theme.colors.muted }]}>Kitchen, meals, recipes, shopping</Text>
             </View>
             <View style={styles.topActions}>
-              <Link href="/search" style={styles.topIcon}>⌕</Link>
-              <Link href="/capture" style={styles.capture}>＋ Add</Link>
-              <Link href="/settings" style={styles.avatar}>SV</Link>
+              <Link href="/search" style={[styles.topIcon, { color: theme.colors.ink }]}>⌕</Link>
+              <Link href="/capture" style={[styles.capture, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>＋ Add</Link>
+              <Link href="/settings" style={[styles.avatar, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>SV</Link>
             </View>
           </View>
 
@@ -286,13 +287,14 @@ function RecordColumn({ title, subtitle, records, empty }: {
   records: FoodRecordView[];
   empty: string;
 }) {
+  const theme = useLifeOSTheme();
   return (
     <Card style={styles.column}>
-      <Text style={styles.columnTitle}>{title}</Text>
-      <Text style={styles.columnSubtitle}>{subtitle}</Text>
+      <Text style={[styles.columnTitle, { color: theme.colors.ink }]}>{title}</Text>
+      <Text style={[styles.columnSubtitle, { color: theme.colors.muted }]}>{subtitle}</Text>
       <View style={styles.columnRecords}>
         {records.length ? records.map((record) => <MiniRecord key={record.id} record={record} />) : (
-          <Text style={styles.emptyBody}>{empty}</Text>
+          <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>{empty}</Text>
         )}
       </View>
     </Card>
@@ -300,32 +302,34 @@ function RecordColumn({ title, subtitle, records, empty }: {
 }
 
 function MiniRecord({ record }: { record: FoodRecordView }) {
+  const theme = useLifeOSTheme();
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
-      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.miniRecord, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.miniRecord, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
         <View style={styles.miniTop}>
-          <Text style={styles.miniTitle} numberOfLines={1}>{record.title}</Text>
+          <Text style={[styles.miniTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
           <Pill tone={record.tone}>{record.status}</Pill>
         </View>
-        <Text style={styles.recordMeta} numberOfLines={1}>{record.meta}</Text>
-        <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
+        <Text style={[styles.recordMeta, { color: theme.colors.muted }]} numberOfLines={1}>{record.meta}</Text>
+        <Text style={[styles.recordBody, { color: theme.colors.ink }]} numberOfLines={2}>{record.body}</Text>
       </Pressable>
     </Link>
   );
 }
 
 function RecordListItem({ record }: { record: FoodRecordView }) {
+  const theme = useLifeOSTheme();
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
-      <Pressable style={({ pressed }) => [styles.record, pressed && styles.pressed]}>
-        <View style={styles.recordIcon}><Text style={styles.recordIconText}>{record.collection.slice(0, 1).toUpperCase()}</Text></View>
+      <Pressable style={({ pressed }) => [styles.record, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
+        <View style={[styles.recordIcon, { backgroundColor: theme.colors.canvas }]}><Text style={[styles.recordIconText, { color: theme.colors.moss }]}>{record.collection.slice(0, 1).toUpperCase()}</Text></View>
         <View style={styles.recordCopy}>
           <View style={styles.recordTop}>
-            <Text style={styles.recordTitle}>{record.title}</Text>
+            <Text style={[styles.recordTitle, { color: theme.colors.ink }]}>{record.title}</Text>
             <Pill tone={record.tone}>{record.status}</Pill>
           </View>
-          <Text style={styles.recordMeta}>{record.meta}</Text>
-          <Text style={styles.recordBody} numberOfLines={2}>{record.body}</Text>
+          <Text style={[styles.recordMeta, { color: theme.colors.muted }]}>{record.meta}</Text>
+          <Text style={[styles.recordBody, { color: theme.colors.ink }]} numberOfLines={2}>{record.body}</Text>
         </View>
       </Pressable>
     </Link>
@@ -339,13 +343,14 @@ function FeatureCard({ tone, label, item, fallbackTitle, fallbackBody }: {
   fallbackTitle: string;
   fallbackBody: string;
 }) {
+  const theme = useLifeOSTheme();
   return (
     <Link href={item ? { pathname: '/record/[id]', params: { id: item.id } } : '/capture'} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.featurePress, pressed && styles.pressed]}>
         <Card tone={tone} style={styles.featureCard}>
-          <Text style={styles.featureLabel}>{label}</Text>
-          <Text style={styles.featureTitle}>{item?.title ?? fallbackTitle}</Text>
-          <Text style={styles.featureBody}>{item?.meta || item?.body || fallbackBody}</Text>
+          <Text style={[styles.featureLabel, { color: theme.colors.muted }]}>{label}</Text>
+          <Text style={[styles.featureTitle, { color: theme.colors.ink }]}>{item?.title ?? fallbackTitle}</Text>
+          <Text style={[styles.featureBody, { color: theme.colors.muted }]}>{item?.meta || item?.body || fallbackBody}</Text>
         </Card>
       </Pressable>
     </Link>
