@@ -4,10 +4,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 
 import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { loadCatalog } from '@/src/domain/catalog';
-import { getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
+import { getDomainRecordCanonical, getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
@@ -135,6 +136,28 @@ export default function FoodScreen() {
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
   const widgets = parseFoodWidgets(foodConfig.widgets);
 
+  const toggleShoppingRecord = async (record: FoodRecordView) => {
+    const nextStatus = /in cart|bought/i.test(record.status) ? 'To buy' : 'In cart';
+    const nextTone: FoodRecordView['tone'] = nextStatus === 'In cart' ? 'moss' : 'blue';
+    setRecords((current) => current.map((item) => item.id === record.id ? { ...item, status: nextStatus, tone: nextTone } : item));
+    if (!db) {
+      return;
+    }
+    const canonical = await getDomainRecordCanonical(db, record.id);
+    if (!canonical) {
+      return;
+    }
+    await upsertRecord(db, activeManifest, {
+      ...canonical,
+      properties: {
+        ...canonical.properties,
+        status: nextStatus,
+        tone: nextTone,
+      },
+      updated_at: new Date().toISOString(),
+    });
+  };
+
   const renderFoodSection = (section: FoodSection) => {
     switch (section) {
       case 'hero':
@@ -211,7 +234,7 @@ export default function FoodScreen() {
               <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
               <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
             </View>
-            <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} />
+            <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} onToggleShopping={toggleShoppingRecord} />
           </View>
         ) : null;
       case 'attention':
@@ -308,17 +331,18 @@ function RecordColumn({ title, subtitle, records, empty }: {
   );
 }
 
-function FoodOperatingViews({ meals, kitchen, shopping, compact }: {
+function FoodOperatingViews({ meals, kitchen, shopping, compact, onToggleShopping }: {
   meals: FoodRecordView[];
   kitchen: FoodRecordView[];
   shopping: FoodRecordView[];
   compact: boolean;
+  onToggleShopping: (record: FoodRecordView) => void;
 }) {
   return (
     <View style={[styles.operatingViews, compact && styles.operatingViewsCompact]}>
       <MealWeekPlan records={meals} />
       <PantryTimeline records={kitchen} />
-      <ShoppingChecklist records={shopping} />
+      <ShoppingChecklist records={shopping} onToggle={onToggleShopping} />
     </View>
   );
 }
@@ -374,7 +398,7 @@ function PantryTimeline({ records }: { records: FoodRecordView[] }) {
   );
 }
 
-function ShoppingChecklist({ records }: { records: FoodRecordView[] }) {
+function ShoppingChecklist({ records, onToggle }: { records: FoodRecordView[]; onToggle: (record: FoodRecordView) => void }) {
   const theme = useLifeOSTheme();
   return (
     <Card tone="blue" style={styles.operatingCard}>
@@ -382,15 +406,21 @@ function ShoppingChecklist({ records }: { records: FoodRecordView[] }) {
       <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Buy with reasons</Text>
       <View style={styles.checkRows}>
         {records.length ? records.map((record) => (
-          <Link key={record.id} href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: false }} style={({ pressed }) => [styles.checkRow, { borderTopColor: theme.colors.line }, pressed && styles.pressed]}>
-              <View style={[styles.checkBox, { borderColor: theme.colors.moss }]} />
-              <View style={styles.weekCopy}>
-                <Text style={[styles.weekTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
-                <Text style={[styles.weekDetail, { color: theme.colors.muted }]} numberOfLines={1}>{record.body || record.meta}</Text>
+          <View key={record.id} style={[styles.checkRow, { borderTopColor: theme.colors.line }]}>
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: /in cart|bought/i.test(record.status) }} onPress={() => onToggle(record)} style={({ pressed }) => [styles.checkTap, pressed && styles.pressed]}>
+              <View style={[styles.checkBox, /in cart|bought/i.test(record.status) && styles.checkBoxDone, { borderColor: theme.colors.moss, backgroundColor: /in cart|bought/i.test(record.status) ? theme.colors.mossSoft : theme.colors.paper }]}>
+                {/in cart|bought/i.test(record.status) ? <Text style={[styles.checkMark, { color: theme.colors.moss }]}>✓</Text> : null}
               </View>
             </Pressable>
-          </Link>
+            <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.checkCopy, pressed && styles.pressed]}>
+              <View style={styles.weekCopy}>
+                <Text style={[styles.weekTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
+                <Text style={[styles.weekDetail, { color: theme.colors.muted }]} numberOfLines={1}>{record.status} · {record.body || record.meta}</Text>
+              </View>
+              </Pressable>
+            </Link>
+          </View>
         )) : (
           <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>Nothing to buy.</Text>
         )}
@@ -548,7 +578,11 @@ const styles = StyleSheet.create({
   timelineDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
   checkRows: { gap: 0 },
   checkRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  checkTap: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -12 },
+  checkCopy: { flex: 1, minHeight: 44, justifyContent: 'center' },
   checkBox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: colors.moss, backgroundColor: colors.paper },
+  checkBoxDone: { alignItems: 'center', justifyContent: 'center' },
+  checkMark: { color: colors.moss, fontSize: 12, fontWeight: '900', lineHeight: 16 },
   miniRecord: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.line, backgroundColor: '#FEFEFA', borderRadius: 16, padding: 12 },
   miniTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   miniTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', flex: 1 },
