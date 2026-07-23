@@ -82,6 +82,7 @@
     "phase8:check:android-release-signed": "REQUIRE_RELEASE_SIGNING=1 ./scripts/quality/check-android-release-artifacts.sh",
     "phase8:check:release-readiness": "node scripts/quality/check-release-readiness.mjs",
     "phase9:check:native-visual-matrix": "./scripts/quality/check-native-visual-matrix.sh",
+    "phase9:check:responsive-visual-matrix": "node scripts/quality/check-responsive-visual-matrix.mjs",
     "phase9:check:visual-state-matrix": "node scripts/quality/check-visual-state-matrix.mjs",
     "phase9:check:completion-audit": "node scripts/quality/check-lifeos-completion-audit.mjs",
     "test:server:notion": "./server/node_modules/.bin/tsx server/test/notion/unit-notion-adapter.ts",

@@ -62,6 +62,7 @@ const accessibility = readJson('app/build/evidence/accessibility/accessibility-s
 const webProduct = readJson('app/build/evidence/web-product-smoke/web-product-smoke.json');
 const visualMatrix = readJson('app/build/evidence/visual-state-matrix/visual-state-matrix.json');
 const nativeVisualMatrix = readJson('app/build/evidence/native-visual-matrix/native-visual-matrix.json');
+const responsiveVisualMatrix = readJson('app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json');
 const androidArtifacts = readJson('app/build/evidence/android-release-artifacts.json');
 const iosExport = readJson('app/build/evidence/ios-export.json');
 
@@ -71,6 +72,7 @@ const releaseReady = release?.release_ready === true;
 const visualSmokePassed = accessibility?.pass === true && webProduct?.pass === true;
 const visualMatrixPassed = visualMatrix?.status === 'passed';
 const nativeVisualMatrixPassed = nativeVisualMatrix?.status === 'passed';
+const responsiveVisualMatrixPassed = responsiveVisualMatrix?.status === 'passed';
 const androidArtifactsCurrent = androidArtifacts?.git_head === head;
 
 const items = [
@@ -110,18 +112,26 @@ const items = [
     nativeVisualMatrixPassed ? [] : ['Run phase9:check:native-visual-matrix on an Android emulator with the release APK.'],
   ),
   item(
+    'responsive_visual_state_matrix',
+    'Tablet/foldable responsive visual matrix',
+    responsiveVisualMatrixPassed ? 'passed' : 'missing',
+    'app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json',
+    responsiveVisualMatrixPassed ? [] : ['Run phase9:check:responsive-visual-matrix against tablet/foldable viewports.'],
+  ),
+  item(
     'final_visual_accessibility_polish',
     'Final visual/accessibility polish',
-    visualSmokePassed && visualMatrixPassed && nativeVisualMatrixPassed ? 'partial' : 'missing',
+    visualSmokePassed && visualMatrixPassed && nativeVisualMatrixPassed && responsiveVisualMatrixPassed ? 'partial' : 'missing',
     {
       web_product: 'app/build/evidence/web-product-smoke/web-product-smoke.json',
       accessibility: 'app/build/evidence/accessibility/accessibility-smoke.json',
       visual_matrix: 'app/build/evidence/visual-state-matrix/visual-state-matrix.json',
       native_visual_matrix: 'app/build/evidence/native-visual-matrix/native-visual-matrix.json',
+      responsive_visual_matrix: 'app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json',
     },
     visualSmokePassed
       ? [
-        'Web/native visual matrices and accessibility smoke pass, but tablet/foldable review and manual product-grade UI review are still not complete.',
+        'Web/native/responsive visual matrices and accessibility smoke pass, but manual product-grade UI review is still not complete.',
       ]
       : ['Run/fix check:web-product and check:accessibility-smoke.'],
   ),

@@ -910,3 +910,12 @@
 - Fresh result: `npm run phase9:check:native-visual-matrix` ✅ with `7/7` native routes; evidence `app/build/evidence/native-visual-matrix/native-visual-matrix.json`.
 - Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `6 passed`, `1 partial`, `1 blocked`, `0 missing`.
 - Remaining visual polish is now narrower: tablet/foldable review and manual product-grade UI review remain open; web visual matrix, Android native visual matrix, and accessibility smoke are proven.
+
+## 2026-07-23 tablet/foldable responsive visual matrix proof
+
+- Added `scripts/quality/check-responsive-visual-matrix.mjs` and `npm run phase9:check:responsive-visual-matrix`.
+- The verifier captures Home, Food, record detail, Chat, Sources, Config and Settings across four viewports: tablet portrait, tablet landscape, foldable portrait, foldable landscape.
+- First run found a brittle record-title assertion: the responsive record page hides `Green dal + rice` while still showing the meal-plan metadata and nutrition detail. Updated the anchor to `Meal plan · Meal plan · Thursday dinner` + `Nutrition profile`.
+- Fresh result: `npm run phase9:check:responsive-visual-matrix` ✅ with `28/28` screenshots and no horizontal overflow; evidence `app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `7 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining visual polish is now manual/product-grade review only; web, native Android and responsive tablet/foldable matrices are all proven.
