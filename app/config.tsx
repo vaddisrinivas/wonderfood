@@ -317,6 +317,7 @@ export default function ConfigStudioScreen() {
             <Text style={styles.help}>These settings control section visibility and card counts without changing app code. Domain manifests still own the schema and collections.</Text>
             <View style={styles.surfaceGrid}>
               <SurfaceConfigCard title="Home">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.home.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('home', { sectionOrder })} />
                 <ToggleRow title="Now card" detail="Show the primary daily card." value={settings.runtime.surfaceConfig.home.showNowCard} onValueChange={(showNowCard) => updateSurfaceConfig('home', { showNowCard })} />
                 <ToggleRow title="Review queue" detail="Show items that need attention." value={settings.runtime.surfaceConfig.home.showReviewQueue} onValueChange={(showReviewQueue) => updateSurfaceConfig('home', { showReviewQueue })} />
                 <Field label="Review cards" value={settings.runtime.surfaceConfig.home.reviewLimit} onChangeText={(reviewLimit) => updateSurfaceConfig('home', { reviewLimit })} />
@@ -327,6 +328,7 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Control card" detail="Show Settings/Config entry point." value={settings.runtime.surfaceConfig.home.showControlCard} onValueChange={(showControlCard) => updateSurfaceConfig('home', { showControlCard })} />
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Food">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.food.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('food', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show tonight/use-soon command area." value={settings.runtime.surfaceConfig.food.showHero} onValueChange={(showHero) => updateSurfaceConfig('food', { showHero })} />
                 <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
                 <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />
@@ -336,6 +338,7 @@ export default function ConfigStudioScreen() {
                 <Field label="Attention cards" value={settings.runtime.surfaceConfig.food.attentionLimit} onChangeText={(attentionLimit) => updateSurfaceConfig('food', { attentionLimit })} />
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Chat">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.chat.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('chat', { sectionOrder })} />
                 <ToggleRow title="Thread rail" detail="Show conversation list." value={settings.runtime.surfaceConfig.chat.showThreads} onValueChange={(showThreads) => updateSurfaceConfig('chat', { showThreads })} />
                 <ToggleRow title="Source strip" detail="Show source chips above chat." value={settings.runtime.surfaceConfig.chat.showSources} onValueChange={(showSources) => updateSurfaceConfig('chat', { showSources })} />
                 <Field label="Source chips" value={settings.runtime.surfaceConfig.chat.sourceLimit} onChangeText={(sourceLimit) => updateSurfaceConfig('chat', { sourceLimit })} />
@@ -343,6 +346,7 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Context card" detail="Show what the assistant can see." value={settings.runtime.surfaceConfig.chat.showContextCard} onValueChange={(showContextCard) => updateSurfaceConfig('chat', { showContextCard })} />
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Record">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.record.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('record', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show title/status/action header." value={settings.runtime.surfaceConfig.record.showHero} onValueChange={(showHero) => updateSurfaceConfig('record', { showHero })} />
                 <ToggleRow title="Nutrition" detail="Show nutrition cards." value={settings.runtime.surfaceConfig.record.showNutrition} onValueChange={(showNutrition) => updateSurfaceConfig('record', { showNutrition })} />
                 <ToggleRow title="Ingredients" detail="Show availability board." value={settings.runtime.surfaceConfig.record.showIngredients} onValueChange={(showIngredients) => updateSurfaceConfig('record', { showIngredients })} />

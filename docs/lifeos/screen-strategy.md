@@ -197,6 +197,17 @@ settings:
 
 This file should compile into the existing JSON manifests. The app edits the same model through forms. Power users can import/export YAML.
 
+Current in-app section IDs:
+
+| Surface | `sectionOrder` values |
+|---|---|
+| Home | `now`, `review`, `lifeSpaces`, `recent`, `sourceTrust`, `control` |
+| Food | `hero`, `tabs`, `workspace`, `attention`, `view`, `package` |
+| Chat | `threads`, `sources`, `messages`, `promptRail`, `context` |
+| Record | `hero`, `nutrition`, `ingredients`, `instructions`, `history`, `editableNote`, `properties`, `relations`, `provenance` |
+
+Home already renders in this order from app settings. The same profile model is the contract for the remaining surfaces and for future YAML import/export.
+
 ## Implementation order
 
 1. Replace current System route with Settings/Control Deck language and actions.

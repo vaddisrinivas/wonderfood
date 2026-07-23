@@ -51,6 +51,7 @@ export type LifeOSSettings = {
     density: 'comfortable' | 'compact';
     surfaceConfig: {
       home: {
+        sectionOrder: string;
         showNowCard: boolean;
         showReviewQueue: boolean;
         reviewLimit: string;
@@ -61,6 +62,7 @@ export type LifeOSSettings = {
         showControlCard: boolean;
       };
       food: {
+        sectionOrder: string;
         showHero: boolean;
         showViewTabs: boolean;
         showWorkspace: boolean;
@@ -70,6 +72,7 @@ export type LifeOSSettings = {
         attentionLimit: string;
       };
       chat: {
+        sectionOrder: string;
         showThreads: boolean;
         showSources: boolean;
         sourceLimit: string;
@@ -77,6 +80,7 @@ export type LifeOSSettings = {
         showContextCard: boolean;
       };
       record: {
+        sectionOrder: string;
         showHero: boolean;
         showNutrition: boolean;
         showIngredients: boolean;
@@ -174,6 +178,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     density: 'comfortable',
     surfaceConfig: {
       home: {
+        sectionOrder: 'now,review,lifeSpaces,recent,sourceTrust,control',
         showNowCard: true,
         showReviewQueue: true,
         reviewLimit: '2',
@@ -184,6 +189,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: true,
       },
       food: {
+        sectionOrder: 'hero,tabs,workspace,attention,view,package',
         showHero: true,
         showViewTabs: true,
         showWorkspace: true,
@@ -193,6 +199,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         attentionLimit: '3',
       },
       chat: {
+        sectionOrder: 'threads,sources,messages,promptRail,context',
         showThreads: true,
         showSources: true,
         sourceLimit: '8',
@@ -200,6 +207,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showContextCard: true,
       },
       record: {
+        sectionOrder: 'hero,nutrition,ingredients,instructions,history,editableNote,properties,relations,provenance',
         showHero: true,
         showNutrition: true,
         showIngredients: true,
@@ -296,11 +304,17 @@ function normalizePositiveString(value: unknown, fallback: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : fallback;
 }
 
+function normalizeOrderString(value: unknown, fallback: string) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text.length ? text : fallback;
+}
+
 function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surfaceConfig'] {
   const config = value && typeof value === 'object' ? value as Partial<LifeOSSettings['runtime']['surfaceConfig']> : {};
   const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
   return {
     home: {
+      sectionOrder: normalizeOrderString(config.home?.sectionOrder, defaults.home.sectionOrder),
       showNowCard: config.home?.showNowCard !== false,
       showReviewQueue: config.home?.showReviewQueue !== false,
       reviewLimit: normalizePositiveString(config.home?.reviewLimit, defaults.home.reviewLimit),
@@ -311,6 +325,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showControlCard: config.home?.showControlCard !== false,
     },
     food: {
+      sectionOrder: normalizeOrderString(config.food?.sectionOrder, defaults.food.sectionOrder),
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
       showWorkspace: config.food?.showWorkspace !== false,
@@ -320,6 +335,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       attentionLimit: normalizePositiveString(config.food?.attentionLimit, defaults.food.attentionLimit),
     },
     chat: {
+      sectionOrder: normalizeOrderString(config.chat?.sectionOrder, defaults.chat.sectionOrder),
       showThreads: config.chat?.showThreads !== false,
       showSources: config.chat?.showSources !== false,
       sourceLimit: normalizePositiveString(config.chat?.sourceLimit, defaults.chat.sourceLimit),
@@ -327,6 +343,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showContextCard: config.chat?.showContextCard !== false,
     },
     record: {
+      sectionOrder: normalizeOrderString(config.record?.sectionOrder, defaults.record.sectionOrder),
       showHero: config.record?.showHero !== false,
       showNutrition: config.record?.showNutrition !== false,
       showIngredients: config.record?.showIngredients !== false,
