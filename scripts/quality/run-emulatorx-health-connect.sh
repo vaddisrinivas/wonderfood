@@ -54,6 +54,20 @@ sleep 2
 sleep 2
 "$adb_bin" -s "$serial" exec-out screencap -p >"$evidence_dir/emulatorx-healthconnect-script.png"
 
+ui_dump_path="/sdcard/lifeos-emulatorx-window.xml"
+"$adb_bin" -s "$serial" shell uiautomator dump "$ui_dump_path" >/dev/null 2>&1 || true
+ui_dump="$("$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
+if grep -Eq "isn.t responding|Application Not Responding|aerr_close|aerr_wait" <<<"$ui_dump"; then
+  echo "emulatorx check: Android ANR dialog visible" >&2
+  exit 1
+fi
+for label in "WonderFood LifeOS" "Allow all" "Nutrition" "Hydration" "Steps" "Weight" "Active calories burned"; do
+  grep -q "text=\"$label\"" <<<"$ui_dump" || {
+    echo "emulatorx check: Health Connect settings missing visible label: $label" >&2
+    exit 1
+  }
+done
+
 grants="$("$adb_bin" -s "$serial" shell dumpsys package "$package_name" | grep -E 'android.permission.health.(READ_NUTRITION|READ_HYDRATION|READ_STEPS|READ_ACTIVE_CALORIES_BURNED|READ_WEIGHT): granted=true' | tr -d '\r' || true)"
 for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_BURNED READ_WEIGHT; do
   grep -q "android.permission.health.$permission: granted=true" <<<"$grants" || {
