@@ -218,12 +218,12 @@ export default function SourcesScreen() {
               <Text style={styles.emptyTitle}>No sources connected in this session</Text>
               <Text style={styles.emptyBody}>
                 {hasDb
-                  ? 'Adapter links are not loaded yet. Connect Notion and/or Sheets in System to begin sync capture.'
-                  : 'LifeOS loaded without a local graph yet. Open SQLite and add your first authority in System.'}
+                  ? 'Adapter links are not loaded yet. Connect Notion and/or Sheets in Settings to begin sync capture.'
+                  : 'LifeOS loaded without a local graph yet. Add your first authority in Settings.'}
               </Text>
-              <Link href="/system" asChild>
+              <Link href="/settings" asChild>
                 <Pressable style={styles.openSystem}>
-                  <Text style={styles.openSystemText}>Open system</Text>
+                  <Text style={styles.openSystemText}>Open Settings</Text>
                   <Text style={styles.openSystemArrow}>→</Text>
                 </Pressable>
               </Link>
@@ -327,12 +327,12 @@ export default function SourcesScreen() {
             </View>
           </View>
 
-          <Link href="/system" asChild>
+          <Link href="/config" asChild>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.systemAction, pressed ? styles.pressed : null]}>
               <View>
-                <Text style={styles.systemActionEyebrow}>SYSTEM MAP</Text>
+                <Text style={styles.systemActionEyebrow}>CONFIG MAP</Text>
                 <Text style={styles.systemActionTitle}>See domains, skills and agents</Text>
-                <Text style={styles.systemActionBody}>Understand what uses these sources and how the platform grows.</Text>
+                <Text style={styles.systemActionBody}>Edit the packages and schemas that decide how sources become LifeOS pages.</Text>
               </View>
               <Text style={styles.systemActionArrow}>→</Text>
             </Pressable>

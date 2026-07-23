@@ -21,5 +21,11 @@ const css = `
 body {
   background-color: #F5F4EC;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 `;

@@ -256,7 +256,7 @@ export default function SettingsScreen() {
               </SourceCard>
               <SourceCard
                 title="MCP"
-                detail="Use the same skills, schemas and tools from external AI clients."
+                detail="Same LifeOS contract by default: app chat, agents and external AI clients use one skill/schema/tool surface."
                 enabled={settings.mcp.enabled}
                 onEnabled={(enabled) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, enabled } }))}
               >

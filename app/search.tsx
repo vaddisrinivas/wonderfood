@@ -10,7 +10,7 @@ import { colors, radius } from '@/src/theme';
 const commands = [
   { id: 'ask', title: 'Ask LifeOS', detail: 'Search Notion, Sheets, local data and the web', href: '/(tabs)/chat' as const, icon: '✦' },
   { id: 'capture', title: 'Create a record', detail: 'Note, meal, pantry item, task or link', href: '/capture' as const, icon: '＋' },
-  { id: 'system', title: 'Open system', detail: 'Sources, skills, MCP, agents and domains', href: '/system' as const, icon: '⌘' },
+  { id: 'settings', title: 'Open Settings', detail: 'Providers, domains, skills, MCP and sources', href: '/settings' as const, icon: '⚙' },
 ];
 
 export default function SearchScreen() {

@@ -13,7 +13,7 @@ function HeaderActions() {
     <View style={styles.actions}>
       <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={styles.icon}>⌕</Text></Pressable></Link>
       <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={styles.icon}>＋</Text></Pressable></Link>
-      <Link href="/system" asChild><Pressable accessibilityLabel="System settings"><Text style={styles.avatar}>SV</Text></Pressable></Link>
+      <Link href="/settings" asChild><Pressable accessibilityLabel="Settings"><Text style={styles.avatar}>SV</Text></Pressable></Link>
     </View>
   );
 }
@@ -58,9 +58,7 @@ export default function RootLayout() {
           <Stack.Screen name="search" options={{ title: 'Search', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="capture" options={{ title: 'Quick capture', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="system" options={{ title: 'LifeOS system', headerRight: undefined }} />
-          <Stack.Screen name="settings" options={{ title: 'Connections', headerRight: undefined }} />
           <Stack.Screen name="config" options={{ title: 'Config Studio', headerRight: undefined }} />
-          <Stack.Screen name="sources" options={{ title: 'Sources & sync', headerRight: undefined }} />
           <Stack.Screen name="+not-found" options={{ title: 'Not found', headerRight: undefined }} />
         </Stack>
       </>

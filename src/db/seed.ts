@@ -32,6 +32,8 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
         title: sample.title,
         collection: sample.meta.includes('Recipe') || sample.meta.includes('Dining')
           ? 'recipe'
+          : sample.meta.includes('Meal plan')
+            ? 'meal_plan'
           : sample.meta.includes('Shopping')
             ? 'shopping_item'
             : 'inventory',

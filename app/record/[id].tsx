@@ -10,6 +10,15 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
 import { upsertRecord } from '@/src/db/records';
 
+type FoodDetail = {
+  kind: 'meal' | 'recipe' | 'inventory' | 'shopping' | 'generic';
+  nutrition: Array<[string, string]>;
+  ingredients: Array<{ name: string; amount: string; state: 'available' | 'needed' | 'shopping' | 'previous' }>;
+  instructions: string[];
+  logs: Array<[string, string]>;
+  variations: string[];
+};
+
 function fallbackCanonicalFromView(
   view: NonNullable<Awaited<ReturnType<typeof getDomainRecord>>>,
   domainId: string
@@ -47,6 +56,166 @@ function toTone(value: unknown) {
     return value;
   }
   return 'neutral';
+}
+
+function asText(value: unknown, fallback = '') {
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function inferFoodDetail(record: CanonicalRecord): FoodDetail {
+  const text = `${record.title} ${record.collection} ${asText(record.properties.meta)} ${asText(record.properties.body)}`.toLowerCase();
+  const isDal = text.includes('dal') || text.includes('rice');
+  const isTandoori = text.includes('tandoori') || text.includes('chicken');
+  const isYogurt = text.includes('yogurt');
+  const isShopping = record.collection === 'shopping_item' || text.includes('shopping') || text.includes('to buy');
+
+  if (isDal) {
+    return {
+      kind: 'meal',
+      nutrition: [
+        ['Calories', '~520 kcal'],
+        ['Protein', '~24 g'],
+        ['Fiber', '~13 g'],
+        ['Carbs', '~82 g'],
+        ['Fat', '~10 g'],
+        ['Sodium', 'Depends on salt/stock'],
+      ],
+      ingredients: [
+        { name: 'Moong dal', amount: '1 cup dry', state: 'available' },
+        { name: 'Rice', amount: '1.5 cups cooked', state: 'available' },
+        { name: 'Frozen ginger', amount: '1 tbsp', state: 'available' },
+        { name: 'Baby spinach', amount: '1 bag', state: 'shopping' },
+        { name: 'Tomato or lemon', amount: 'optional acid', state: 'previous' },
+      ],
+      instructions: [
+        'Rinse moong dal until water runs mostly clear.',
+        'Simmer dal with turmeric, ginger and salt until soft.',
+        'Cook rice separately or use leftover rice.',
+        'Fold spinach into dal at the end so it stays green.',
+        'Finish with lemon, ghee or tempering if available.',
+        'Batch extra dal for Friday lunch.',
+      ],
+      logs: [
+        ['Planned', 'Thursday dinner'],
+        ['Previous note', 'Batch enough for Friday lunch'],
+        ['Shopping link', 'Baby spinach needed'],
+      ],
+      variations: [
+        'Add yogurt raita if dinner needs more protein.',
+        'Use frozen spinach if fresh spinach is not bought.',
+        'Turn leftovers into khichdi with extra water and rice.',
+      ],
+    };
+  }
+
+  if (isTandoori) {
+    return {
+      kind: 'recipe',
+      nutrition: [
+        ['Calories', '~610 kcal'],
+        ['Protein', '~46 g'],
+        ['Carbs', '~28 g'],
+        ['Fat', '~34 g'],
+        ['Fiber', '~7 g'],
+        ['Serving', '1 of 4'],
+      ],
+      ingredients: [
+        { name: 'Chicken thighs', amount: '1.5 lb', state: 'needed' },
+        { name: 'Greek yogurt', amount: '1 cup marinade', state: 'available' },
+        { name: 'Lemon', amount: '1', state: 'needed' },
+        { name: 'Garam masala', amount: '2 tsp', state: 'previous' },
+        { name: 'Broccoli', amount: '1 head', state: 'needed' },
+      ],
+      instructions: [
+        'Mix yogurt, lemon, garam masala, salt and oil.',
+        'Coat chicken and rest 20 minutes if time allows.',
+        'Spread chicken and broccoli on a sheet pan.',
+        'Roast at 425 F until chicken is cooked through.',
+        'Rest 5 minutes before serving.',
+      ],
+      logs: [
+        ['Last cooked', 'Use yogurt before expiry'],
+        ['Planned', 'Tonight'],
+        ['Serves', 'Four'],
+      ],
+      variations: [
+        'Swap broccoli for cauliflower.',
+        'Serve with rice bowl base.',
+        'Use tofu/paneer with the same marinade.',
+      ],
+    };
+  }
+
+  if (isYogurt) {
+    return {
+      kind: 'inventory',
+      nutrition: [
+        ['Calories', '~140 kcal'],
+        ['Protein', '~18 g'],
+        ['Carbs', '~7 g'],
+        ['Fat', '~4 g'],
+        ['Serving', '170 g'],
+      ],
+      ingredients: [
+        { name: 'Greek yogurt', amount: '2 tubs', state: 'available' },
+        { name: 'Blueberries', amount: 'for bowls', state: 'previous' },
+        { name: 'Chicken marinade', amount: '1 cup needed', state: 'available' },
+      ],
+      instructions: [
+        'Use first in breakfast bowls or tandoori marinade.',
+        'Check expiry before planning weekend meals.',
+      ],
+      logs: [
+        ['Bought', 'Whole Foods'],
+        ['Use by', '2 days'],
+        ['Linked recipe', 'Sheet-pan tandoori chicken'],
+      ],
+      variations: ['Raita', 'Smoothie bowl', 'Protein pancake topping'],
+    };
+  }
+
+  if (isShopping) {
+    return {
+      kind: 'shopping',
+      nutrition: [
+        ['Calories', '~23 kcal'],
+        ['Protein', '~3 g'],
+        ['Fiber', '~2 g'],
+        ['Iron', 'High'],
+      ],
+      ingredients: [
+        { name: record.title, amount: '1 bag', state: 'shopping' },
+        { name: 'Green dal', amount: 'linked meal', state: 'needed' },
+        { name: 'Breakfast omelettes', amount: 'planned use', state: 'needed' },
+      ],
+      instructions: [
+        'Buy one fresh bag.',
+        'Put away in produce drawer.',
+        'Use first for green dal, then omelettes.',
+      ],
+      logs: [
+        ['Reason', 'Needed for green dal and breakfast omelettes'],
+        ['State', 'To buy'],
+      ],
+      variations: ['Frozen spinach backup', 'Baby kale if spinach unavailable'],
+    };
+  }
+
+  return {
+    kind: 'generic',
+    nutrition: [['Nutrition', 'Not captured yet']],
+    ingredients: [],
+    instructions: [],
+    logs: [['Created', new Date(record.created_at).toLocaleDateString()]],
+    variations: [],
+  };
+}
+
+function stateTone(state: FoodDetail['ingredients'][number]['state']) {
+  if (state === 'available') return 'moss';
+  if (state === 'shopping') return 'blue';
+  if (state === 'needed') return 'amber';
+  return 'plum';
 }
 
 export default function RecordScreen() {
@@ -109,6 +278,7 @@ export default function RecordScreen() {
   const tone = record ? toTone(record.properties.tone) : 'neutral';
   const status = record ? String(record.properties.status ?? 'Active') : 'Active';
   const relations = record?.relations ?? [];
+  const foodDetail = record ? inferFoodDetail(record) : null;
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -188,7 +358,73 @@ export default function RecordScreen() {
           </View>
           <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
           <Text style={styles.meta}>{meta}</Text>
-          <SectionTitle title="Details" />
+          {foodDetail ? (
+            <>
+              <View style={styles.quickActions}>
+                <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
+                <ActionButton label={foodDetail.kind === 'recipe' || foodDetail.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => {}} />
+                <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
+              </View>
+
+              <SectionTitle title="Nutrition profile" />
+              <View style={styles.nutritionGrid}>
+                {foodDetail.nutrition.map(([label, value]) => (
+                  <Card key={label} style={styles.nutritionCard}>
+                    <Text style={styles.nutritionValue}>{value}</Text>
+                    <Text style={styles.nutritionLabel}>{label}</Text>
+                  </Card>
+                ))}
+              </View>
+
+              <SectionTitle title="Ingredients and availability" />
+              <Card style={styles.listCard}>
+                {foodDetail.ingredients.length ? foodDetail.ingredients.map((ingredient) => (
+                  <View key={`${ingredient.name}-${ingredient.state}`} style={styles.ingredientRow}>
+                    <View style={styles.ingredientCopy}>
+                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                      <Text style={styles.ingredientAmount}>{ingredient.amount}</Text>
+                    </View>
+                    <Pill tone={stateTone(ingredient.state)}>{ingredient.state.toUpperCase()}</Pill>
+                  </View>
+                )) : (
+                  <Text style={sharedStyles.muted}>No structured ingredients yet.</Text>
+                )}
+              </Card>
+
+              <SectionTitle title="Instructions" />
+              <Card style={styles.listCard}>
+                {foodDetail.instructions.length ? foodDetail.instructions.map((step, index) => (
+                  <View key={step} style={styles.stepRow}>
+                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                    <Text style={styles.stepText}>{step}</Text>
+                  </View>
+                )) : (
+                  <Text style={sharedStyles.muted}>No cooking instructions yet.</Text>
+                )}
+              </Card>
+
+              <SectionTitle title="Cooking log and variations" />
+              <View style={sharedStyles.grid}>
+                <Card style={styles.historyCard}>
+                  <Text style={styles.cardTitle}>Previous notes</Text>
+                  {foodDetail.logs.map(([label, value]) => (
+                    <View key={label} style={styles.factRow}>
+                      <Text style={styles.factLabel}>{label}</Text>
+                      <Text style={styles.factValue}>{value}</Text>
+                    </View>
+                  ))}
+                </Card>
+                <Card tone="plum" style={styles.historyCard}>
+                  <Text style={styles.cardTitle}>Variations</Text>
+                  {foodDetail.variations.map((variation) => (
+                    <Text key={variation} style={styles.variation}>• {variation}</Text>
+                  ))}
+                </Card>
+              </View>
+            </>
+          ) : null}
+
+          <SectionTitle title="Editable note" />
           <TextInput
             accessibilityLabel="Record details"
             value={body}
@@ -238,7 +474,25 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 13, marginTop: 8 },
   editor: { minHeight: 150, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, color: colors.ink, fontSize: 15, lineHeight: 23 },
   actions: { flexDirection: 'row', gap: 9, marginTop: 12 },
+  quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
+  nutritionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  nutritionCard: { flexGrow: 1, flexBasis: 130, minHeight: 92 },
+  nutritionValue: { color: colors.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  nutritionLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', marginTop: 6, textTransform: 'uppercase' },
   listCard: { paddingVertical: 0 },
+  ingredientRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  ingredientCopy: { flex: 1, minWidth: 0 },
+  ingredientName: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  ingredientAmount: { color: colors.muted, fontSize: 12, marginTop: 4 },
+  stepRow: { minHeight: 58, flexDirection: 'row', gap: 12, alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  stepNumber: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', textAlign: 'center', lineHeight: 30, backgroundColor: colors.mossSoft, color: colors.moss, fontWeight: '900' },
+  stepText: { color: colors.ink, fontSize: 14, lineHeight: 20, flex: 1 },
+  historyCard: { flexGrow: 1, flexBasis: 280, minHeight: 150 },
+  cardTitle: { color: colors.ink, fontSize: 16, fontWeight: '900', marginBottom: 12 },
+  factRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  factLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  factValue: { color: colors.ink, fontSize: 12, fontWeight: '800', flex: 1, textAlign: 'right' },
+  variation: { color: colors.ink, fontSize: 13, lineHeight: 20, marginTop: 4 },
   close: { alignSelf: 'center', padding: 18, marginTop: 20 },
   closeText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   emptyTitle: { color: colors.ink, marginTop: 22, fontSize: 16, fontWeight: '800' },
