@@ -57,7 +57,7 @@ function orderedSections(value: string) {
 
 export default function CaptureScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string; targetRecordId?: string }>();
+  const params = useLocalSearchParams<{ type?: string; targetRecordId?: string; note?: string }>();
   const db = useLifeOSDatabase();
   const theme = useLifeOSTheme();
   const settings = useLifeOSSettingsSnapshot();
@@ -88,6 +88,13 @@ export default function CaptureScreen() {
       ?? captureTypes.find(([name]) => name === catalog.activeManifest.label)?.[0];
     if (configured) setType(configured);
   }, [captureConfig.defaultType, captureTypes, catalog.activeManifest.label, params.type]);
+
+  useEffect(() => {
+    const note = typeof params.note === 'string' ? params.note : '';
+    if (note && !value) {
+      setValue(note);
+    }
+  }, [params.note, value]);
 
   const pickPhoto = async (source: 'camera' | 'library') => {
     setNotice('');

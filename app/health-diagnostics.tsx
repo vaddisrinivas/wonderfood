@@ -19,6 +19,17 @@ function orderedSections(value: string, defaults: readonly HealthSection[]) {
   return [...requested, ...missing];
 }
 
+function friendlyCheckedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export default function HealthDiagnosticsScreen() {
   const theme = useLifeOSTheme();
   const settings = useLifeOSSettingsSnapshot();
@@ -36,6 +47,7 @@ export default function HealthDiagnosticsScreen() {
   }, []);
 
   const passed = check?.status === 'passed';
+  const cleanedUp = (check?.readAfterDelete ?? 0) === 0;
   const sections = orderedSections(healthConfig.sectionOrder, HEALTH_SECTIONS);
 
   const renderSection = (section: HealthSection) => {
@@ -45,8 +57,8 @@ export default function HealthDiagnosticsScreen() {
           <PageHeader
             key={section}
             eyebrow="LIFEOS / HEALTH CONNECT"
-            title="Health Connect status"
-            subtitle="Checks whether LifeOS can write, read and remove a tiny temporary hydration entry without keeping health data."
+            title="Health data access"
+            subtitle="Use steps, hydration, nutrition, calories and weight as context for LifeOS. You stay in control of permissions."
           />
         ) : null;
       case 'status':
@@ -57,25 +69,40 @@ export default function HealthDiagnosticsScreen() {
               <Text style={[styles.kicker, { color: theme.colors.muted }]}>local device check</Text>
             </View>
             <Text style={[styles.title, { color: theme.colors.ink }]}>
-              {check?.message ?? 'Checking Health Connect write/read/delete access…'}
+              {check ? (passed ? 'Health Connect is ready for LifeOS.' : check.message) : 'Checking Health Connect access…'}
+            </Text>
+            <Text style={[styles.body, { color: theme.colors.muted }]}>
+              {passed
+                ? 'LifeOS can read allowed health context and clean up its own temporary test entry.'
+                : 'Open Health Connect permissions if you want Health to join your Food, planning and recovery context.'}
             </Text>
           </Card>
         ) : null;
       case 'details':
         return healthConfig.showDetails && check ? (
           <Card key={section} style={styles.card}>
-            <Text style={[styles.kicker, { color: theme.colors.muted }]}>device receipt</Text>
+            <Text style={[styles.kicker, { color: theme.colors.muted }]}>what this means</Text>
             <View style={styles.grid}>
+              <Fact label="Available to LifeOS" value="Hydration, nutrition, steps, calories and weight if you grant them." />
+              <Fact
+                label="Privacy"
+                value={
+                  passed
+                    ? (cleanedUp ? 'Temporary test data was removed after verification.' : 'Temporary check cleanup needs attention.')
+                    : 'No health data was read or stored by this check.'
+                }
+              />
+              <Fact label="Last checked" value={friendlyCheckedAt(check.observedAt)} />
+              <Fact label="Next step" value={passed ? 'Use Health as an optional domain context in Chat and Sources.' : 'Grant Health Connect permissions from Settings.'} />
               {healthConfig.showTechnicalReceipt ? (
-                <Text style={[styles.machineLine, { color: theme.colors.moss }]}>
-                  {`HC_ROUNDTRIP status=${check.status} before=${check.readBeforeDelete} after=${check.readAfterDelete}`}
-                </Text>
+                <View style={[styles.technicalBox, { borderColor: theme.colors.line, backgroundColor: theme.colors.canvas }]}>
+                  <Text style={[styles.kicker, { color: theme.colors.muted }]}>technical receipt</Text>
+                  <Fact label="Temporary test ID" value={check.clientRecordId} />
+                  <Fact label="Rows written" value={String(check.insertedIds.length)} />
+                  <Fact label="Read before cleanup" value={String(check.readBeforeDelete)} />
+                  <Fact label="Read after cleanup" value={String(check.readAfterDelete)} />
+                </View>
               ) : null}
-              <Fact label="Temporary record" value={check.clientRecordId} />
-              <Fact label="Inserted rows" value={String(check.insertedIds.length)} />
-              <Fact label="Before cleanup" value={String(check.readBeforeDelete)} />
-              <Fact label="After cleanup" value={String(check.readAfterDelete)} />
-              <Fact label="Checked at" value={check.observedAt} />
             </View>
           </Card>
         ) : null;
@@ -110,9 +137,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   kicker: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
   title: { fontSize: 24, fontWeight: '900', lineHeight: 30 },
+  body: { fontSize: 14, lineHeight: 21 },
   grid: { gap: 10 },
   fact: { gap: 4 },
-  machineLine: { fontSize: 13, fontWeight: '900' },
+  technicalBox: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   factLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
-  factValue: { fontSize: 14, fontWeight: '800' },
+  factValue: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
 });

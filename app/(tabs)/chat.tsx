@@ -318,6 +318,30 @@ export default function ChatScreen() {
     }
   };
 
+  const copyAnswerText = async (message: MessageRow) => {
+    const text = answerPlainText(message);
+    if (!text) {
+      setWarnings(['Nothing to copy on this message.']);
+      return;
+    }
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      setWarnings(['Copied answer text.']);
+      return;
+    }
+    setWarnings(['Copy is available on web in this build. Use Save to capture on phone.']);
+  };
+
+  const saveAnswerToCapture = (message: MessageRow) => {
+    const text = answerPlainText(message);
+    router.push({ pathname: '/capture', params: { type: 'Note', note: text ? `Saved from LifeOS Chat\n\n${text}` : 'Saved from LifeOS Chat' } });
+  };
+
+  const draftFollowUp = (message: MessageRow) => {
+    const title = message.answer?.title || 'that answer';
+    setDraft(`Go deeper on ${title}. Show sources, tradeoffs, and next actions.`);
+  };
+
   const setMessageReceipt = (threadId: string, messageId: string, updater: (message: ChatMessage) => ChatMessage) => {
     setThreads((current) =>
       current.map((thread) =>
@@ -415,7 +439,17 @@ export default function ChatScreen() {
         return (
           <View key={section} style={styles.messages}>
             {activeThread.messages.map((message: MessageRow) => (
-              <MessageBubble key={message.id} message={message} undoing={undoingActionId === message.actionReceipt?.id} onUndo={() => void undoMessageAction(activeThread.id, message)} />
+              <MessageBubble
+                key={message.id}
+                message={message}
+                undoing={undoingActionId === message.actionReceipt?.id}
+                onUndo={() => void undoMessageAction(activeThread.id, message)}
+                onCopy={() => { void copyAnswerText(message); }}
+                onSave={() => saveAnswerToCapture(message)}
+                onFollowUp={() => draftFollowUp(message)}
+                onRegenerate={() => { void retryLatest(); }}
+                onOpenSources={() => router.push('/sources')}
+              />
             ))}
           </View>
         );
@@ -550,7 +584,35 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message, undoing, onUndo }: { message: MessageRow; undoing: boolean; onUndo: () => void }) {
+function answerPlainText(message: MessageRow) {
+  const answer = message.answer;
+  if (!answer) return message.text;
+  const lines = [answer.title, answer.intro].filter(Boolean);
+  if (answer.columns?.length && answer.rows.length) {
+    lines.push(answer.columns.join(' | '));
+    for (const row of answer.rows) {
+      lines.push((row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? '']).join(' | '));
+    }
+  }
+  for (const card of answer.recordCards ?? []) {
+    lines.push(`${card.title}: ${card.detail}`);
+  }
+  for (const source of answer.sourceCards ?? []) {
+    lines.push(`Source ${source.label}: ${source.quote}`);
+  }
+  return lines.join('\n').trim();
+}
+
+function MessageBubble({ message, undoing, onUndo, onCopy, onSave, onFollowUp, onRegenerate, onOpenSources }: {
+  message: MessageRow;
+  undoing: boolean;
+  onUndo: () => void;
+  onCopy: () => void;
+  onSave: () => void;
+  onFollowUp: () => void;
+  onRegenerate: () => void;
+  onOpenSources: () => void;
+}) {
   const theme = useLifeOSTheme();
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
@@ -567,9 +629,27 @@ function MessageBubble({ message, undoing, onUndo }: { message: MessageRow; undo
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
         {assistant && message.actionReceipt ? <ActionReceiptCard receipt={message.actionReceipt} /> : null}
         {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
-        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" disabled={undoing} onPress={onUndo} style={({ pressed }) => [styles.undoButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.moss }, undoing && styles.sendDisabled, pressed && styles.pressed]}><Text style={[styles.undoButtonText, { color: theme.colors.ink }]}>{undoing ? 'Undoing…' : 'Undo'}</Text></Pressable>}
+        {assistant ? (
+          <View style={styles.messageTools}>
+            <ToolButton label="Copy" onPress={onCopy} />
+            <ToolButton label="Save" onPress={onSave} />
+            <ToolButton label="Follow-up" onPress={onFollowUp} />
+            <ToolButton label="Sources" onPress={onOpenSources} />
+            <ToolButton label="Regenerate" onPress={onRegenerate} />
+            {hasUndo ? <ToolButton label={undoing ? 'Undoing…' : 'Undo'} disabled={undoing} onPress={onUndo} /> : null}
+          </View>
+        ) : null}
       </View>
     </View>
+  );
+}
+
+function ToolButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const theme = useLifeOSTheme();
+  return (
+    <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.toolButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, disabled && styles.sendDisabled, pressed && styles.pressed]}>
+      <Text style={[styles.toolButtonText, { color: theme.colors.ink }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -604,6 +684,7 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
   return (
     <View style={[styles.answer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
       <Text style={[styles.answerTitle, { color: theme.colors.ink }]}>{answer.title}</Text>
+      {rows.length ? <Text style={[styles.answerTableLabel, { color: theme.colors.muted }]}>Answer table</Text> : null}
       {rows.length && compact ? (
         <View style={styles.mobileAnswerRows} accessibilityLabel="Structured answer cards">
           {rows.map((cells, index) => (
@@ -779,6 +860,7 @@ const styles = StyleSheet.create({
   userBubbleText: { color: '#FFF' },
   answer: { minWidth: 0, marginTop: 9, borderWidth: 1, borderColor: '#CBD8D0', backgroundColor: '#F9FCF8', borderRadius: 14, padding: 12 },
   answerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  answerTableLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.9, textTransform: 'uppercase', marginTop: 10 },
   mobileAnswerRows: { marginTop: 10, gap: 8 },
   answerRowCard: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   answerRowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingVertical: 8 },
@@ -817,6 +899,9 @@ const styles = StyleSheet.create({
   receiptTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   receiptMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 5 },
   receiptId: { color: colors.moss, fontSize: 10, fontWeight: '900', marginTop: 6 },
+  messageTools: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 10 },
+  toolButton: { minHeight: 34, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 8, justifyContent: 'center' },
+  toolButtonText: { color: colors.ink, fontSize: 11, fontWeight: '900' },
   composerWrap: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, padding: 12, backgroundColor: '#FEFEFA' },
   sourceStrip: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FBFBF4' },
   sourceStripTitle: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 7 },

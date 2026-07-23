@@ -118,7 +118,7 @@ const routes = [
   {
     name: 'chat',
     path: '/chat',
-    must: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.', 'Sources in context', 'Assistant route', 'Undo', 'THREADS'],
+    must: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.', 'Sources in context', 'Assistant route', 'Undo', 'THREADS', 'ANSWER TABLE', 'Source evidence', 'Copy', 'Save', 'Follow-up', 'Sources', 'Regenerate'],
   },
   {
     name: 'chat-configured-prompts',
@@ -230,7 +230,7 @@ const routes = [
   {
     name: 'health-diagnostics',
     path: '/health-diagnostics',
-    must: ['LIFEOS / HEALTH CONNECT', 'Health Connect status', 'write, read and remove', 'TEMPORARY RECORD', 'CHECKED AT'],
+    must: ['LIFEOS / HEALTH CONNECT', 'Health data access', 'You stay in control of permissions.', 'WHAT THIS MEANS', 'AVAILABLE TO LIFEOS', 'PRIVACY', 'LAST CHECKED', 'NEXT STEP'],
     forbidden: ['round-trip proof', 'native evidence', 'clientRecordId', 'insertedIds', 'readBeforeDelete', 'readAfterDelete'],
   },
   {
@@ -249,7 +249,7 @@ const routes = [
         },
       },
     },
-    must: ['Health Connect check runs on Android.', 'TEMPORARY RECORD', 'LOCAL DEVICE CHECK'],
+    must: ['AVAILABLE TO LIFEOS', 'PRIVACY', 'LOCAL DEVICE CHECK'],
     forbidden: ['LIFEOS / HEALTH CONNECT', 'HC_ROUNDTRIP'],
   },
   {
