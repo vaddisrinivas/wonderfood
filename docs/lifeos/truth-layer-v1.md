@@ -10,6 +10,7 @@ The app may look like Notion, Sheets, chat, or a native dashboard, but records m
 6. `undoOperation()` applies a generated inverse operation and marks the original operation `undone`.
 7. AI and agent proposals pass through `src/ai/runtime.ts`, which rejects raw SQL/CRUD/command channels and checks declared `{domain, collections, ops}` capabilities before `applyOperation()`.
 8. Dry-run calls use the same validation path and return before/after diffs without writing records, relations, or ledger rows.
+9. User, sync and AI write paths must preserve their actor/origin in the operation ledger.
 
 Canonical records now carry:
 
@@ -27,5 +28,6 @@ Proof gates:
 
 - `npm run check:provider-clear-restore`
 - `npm run check:ai-runtime`
+- `npm run check:writer-boundary`
 
-Those gates prove provider clear/restore/disconnect, operation revision, stale-write rejection, idempotency, local undo, AI capability rejection, and dry-run without writes.
+Those gates prove provider clear/restore/disconnect, operation revision, stale-write rejection, idempotency, local undo, AI capability rejection, dry-run without writes, and user/sync/AI writer attribution.
