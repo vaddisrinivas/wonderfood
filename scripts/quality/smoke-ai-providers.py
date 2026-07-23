@@ -107,6 +107,9 @@ def test_anthropic(working: list[dict], api_key: str | None) -> None:
             },
         )
         last = f"{model} status {status}"
+        if isinstance(status, int) and "credit balance is too low" in text.lower():
+            print(f"Anthropic\tBLOCKED_BILLING\t{last}")
+            return
         if isinstance(status, int) and 200 <= status < 300 and "ok" in text.lower():
             print(f"Anthropic\tOK\t{last}")
             working.append(
