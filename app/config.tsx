@@ -442,6 +442,9 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Behavior & appearance" />
           <Card style={styles.sectionCard}>
+            <Text style={styles.help}>
+              Density is applied across shared app components. Theme is saved in the portable profile; full dark/system rendering needs the semantic-token visual pass.
+            </Text>
             <ToggleRow
               title="Automatic sync"
               detail="Pull enabled sources on your chosen cadence."
