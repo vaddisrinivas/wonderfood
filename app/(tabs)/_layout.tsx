@@ -39,7 +39,7 @@ export default function TabLayout() {
       <Tabs.Screen name="food" options={{ title: domain.label, headerShown: false }} />
       <Tabs.Screen name="chat" options={{ title: 'Chat', headerShown: false }} />
       <Tabs.Screen name="sources" options={{ title: 'Sources', headerShown: false }} />
-      <Tabs.Screen name="settings" options={{ title: 'Set', headerShown: false }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings', headerShown: false }} />
     </Tabs>
   );
 }
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   tabBarCompact: { height: 62, paddingTop: 4, paddingBottom: 5 },
   tabItem: { minWidth: 0, paddingHorizontal: 0 },
   tabItemCompact: { paddingVertical: 0 },
-  tabLabel: { fontSize: 8, fontWeight: '800' },
+  tabLabel: { fontSize: 8, fontWeight: '800', minWidth: 54, textAlign: 'center' },
   tabLabelCompact: { fontSize: 7 },
   tabIcon: { fontSize: 17, fontWeight: '800', height: 23 },
 });
