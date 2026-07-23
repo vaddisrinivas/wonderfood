@@ -211,9 +211,13 @@ function parseStructuredModel(inputText: string, modelText: string): ChatStructu
       Array.isArray(parsed.rows)
     ) {
       return {
-        title: String(parsed.title ?? 'LifeOS response'),
-        intro: String(parsed.intro ?? ''),
-        rows: parsed.rows.slice(0, 3),
+        title: cleanMarkdown(String(parsed.title ?? 'LifeOS response')),
+        intro: cleanMarkdownBlock(String(parsed.intro ?? '')),
+        rows: dedupeRows(parsed.rows.slice(0, 12).map((row: { meal?: unknown; use?: unknown; next?: unknown }) => ({
+          meal: cleanMarkdown(String(row.meal ?? '—')),
+          use: cleanMarkdown(String(row.use ?? '—')),
+          next: cleanMarkdown(String(row.next ?? '—')),
+        }))),
         citations: Array.isArray(parsed.citations) ? ensureCitations(parsed.citations) : toCitationsFromSnapshots([]),
       };
     }
@@ -222,6 +226,140 @@ function parseStructuredModel(inputText: string, modelText: string): ChatStructu
   }
 
   return undefined;
+}
+
+/**
+ * Keep the API contract structured even when a model ignores the JSON hint and
+ * answers in ordinary Markdown. The client can then render a calm answer card
+ * instead of exposing pipes, heading markers, and emphasis syntax.
+ */
+function parseMarkdownModel(modelText: string, citations: ChatStructuredAnswer['citations']): ChatStructuredAnswer | undefined {
+  const source = modelText.trim();
+  if (!source) {
+    return undefined;
+  }
+
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const titleLine = lines.find((line) => /^\s{0,3}#{1,3}\s+\S/.test(line));
+  const title = titleLine
+    ? titleLine.replace(/^\s{0,3}#{1,3}\s+/, '').replace(/[\*_`]/g, '').trim()
+    : 'LifeOS response';
+
+  const rows: ChatStructuredAnswer['rows'] = [];
+  const prose: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const current = lines[index]?.trim() ?? '';
+    const next = lines[index + 1]?.trim() ?? '';
+    if (current.includes('|') && /^\|?\s*:?-{3,}/.test(next)) {
+      index += 2;
+      while (index < lines.length) {
+        const row = lines[index]?.trim() ?? '';
+        if (!row || !row.includes('|')) {
+          break;
+        }
+        const cells = row
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((cell) => cleanMarkdown(cell));
+        if (cells.some(Boolean)) {
+          rows.push({
+            meal: cells[0] || '—',
+            use: cells[1] || '—',
+            next: cells[2] || '—',
+          });
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (!/^\s{0,3}#{1,3}\s+\S/.test(current)) {
+      const cleaned = cleanMarkdown(current);
+      if (cleaned) {
+        prose.push(cleaned);
+      }
+    }
+    index += 1;
+  }
+
+  const intro = cleanMarkdownBlock(prose.join('\n').trim());
+  if (!rows.length && !citations.length && !intro) {
+    return undefined;
+  }
+  return { title, intro, rows: dedupeRows(rows.slice(0, 12)), citations };
+}
+
+function cleanMarkdown(value: string): string {
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/[`*_~]/g, '')
+    .replace(/^\s*[-*+]\s+/, '• ')
+    .replace(/^\s*\d+[.)]\s+/, '• ')
+    .replace(/^\s{0,3}#{1,6}\s+/, '')
+    .trim();
+}
+
+function cleanMarkdownBlock(value: string): string {
+  const lines = value
+    .replace(/([.!?])(?=[A-Z][A-Za-z][^.!?\n]{2,50}\n?•)/g, '$1\n')
+    .replace(/([.!?])(?=(?:Here(?:’|'|)s|Here are|For|Tomato|Nutrition)\b)/g, '$1\n')
+    .replace(/\s*#{1,6}\s+/g, '\n')
+    .split('\n')
+    .map((line) => cleanMarkdown(line))
+    .filter(Boolean)
+    .filter((line, index, values) => values.indexOf(line) === index);
+  const firstSignature = lines[0]
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5)
+    .join(' ');
+  const repeatedStart = firstSignature
+    ? lines.findIndex((line, index) => index > 0 && line.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().startsWith(firstSignature))
+    : -1;
+  const cleaned = (repeatedStart > 0 ? lines.slice(0, repeatedStart) : lines).join('\n');
+  return dedupeRepeatedText(cleaned);
+}
+
+function dedupeRows(rows: ChatStructuredAnswer['rows']): ChatStructuredAnswer['rows'] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.meal}\u0000${row.use}\u0000${row.next}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeRepeatedText(value: string): string {
+  const text = value.trim();
+  if (text.length > 40) {
+    for (let split = 20; split <= text.length - 20; split += 1) {
+      const left = text.slice(0, split).trim();
+      const right = text.slice(split).trim();
+      if (left === right) {
+        return left;
+      }
+    }
+  }
+  if (text.length > 1 && text.length % 2 === 0) {
+    const midpoint = text.length / 2;
+    const left = text.slice(0, midpoint).trim();
+    const right = text.slice(midpoint).trim();
+    if (left && left === right) {
+      return left;
+    }
+  }
+  return value;
 }
 
 export async function handleServerChat(input: {
@@ -302,10 +440,17 @@ export async function handleServerChat(input: {
   const modelAnswer =
     orchestrated.policy.allowed && orchestrated.ai.status === 'ok'
       ? parseStructuredModel(inputText, orchestrated.ai.text)
+        ?? parseMarkdownModel(orchestrated.ai.text, ensureCitations(sourceCitations))
       : undefined;
   if (modelAnswer && sourceCitations.length > 0) {
     modelAnswer.citations = ensureCitations(sourceCitations);
   }
+
+  // The mobile surface presents the full modelAnswer in its answer card. Keep
+  // the chat bubble as a short hand-off so the same prose is not printed twice.
+  const displayText = modelAnswer
+    ? (modelAnswer.rows.length || modelAnswer.citations.length ? 'Here’s the answer.' : modelAnswer.intro || finalText)
+    : finalText;
 
   const actionReceipt = orchestrated.action
     ? ({
@@ -330,7 +475,7 @@ export async function handleServerChat(input: {
   const responseMessage: ServerChatMessage = {
     id: `server-${Date.now()}-asst`,
     role: 'assistant',
-    text: finalText,
+    text: displayText,
     answer: orchestrated.status === 'clarification'
       ? {
           title: 'Clarification required',

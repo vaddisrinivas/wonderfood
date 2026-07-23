@@ -26,7 +26,18 @@ export function ensureCitations(items: ChatCitation[] | null | undefined): ChatC
     return [];
   }
 
-  return items.filter((item) => item.label && item.detail && item.href);
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (!item.label || !item.detail || !item.href) {
+      return false;
+    }
+    const key = `${item.label}\u0000${item.href}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 export function citationLabel(citation: ChatCitation): string {
