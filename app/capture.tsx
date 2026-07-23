@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
@@ -21,6 +21,7 @@ export default function CaptureScreen() {
   const router = useRouter();
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
+  const theme = useLifeOSTheme();
 
   const [type, setType] = useState<CaptureType>('Note');
   const [value, setValue] = useState('');
@@ -82,10 +83,14 @@ export default function CaptureScreen() {
     <Page>
       <ScrollView keyboardShouldPersistTaps="handled">
         <View style={sharedStyles.content}>
+          <View style={styles.contextBar}>
+            <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CAPTURE</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Fast inbox · source preserved</Text></View>
+            <Pill tone="moss">{catalog.activeManifest.label} graph</Pill>
+          </View>
           <PageHeader
-            eyebrow="Inbox first, organize later"
+            eyebrow="Inbox first"
             title="Capture anything."
-            subtitle="LifeOS will classify it, connect related records and preserve the original source."
+            subtitle="Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to meals, pantry, shopping or any future domain."
           />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.types}>
             {types.map(([name, icon]) => (
@@ -97,17 +102,17 @@ export default function CaptureScreen() {
                   setType(name);
                   setSaved(false);
                 }}
-                style={[styles.type, type === name && styles.typeActive]}
+                style={[styles.type, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, type === name && [styles.typeActive, { backgroundColor: theme.colors.ink }]]}
               >
                 <Text>{icon}</Text>
-                <Text style={[styles.typeText, type === name && styles.typeTextActive]}>{name}</Text>
+                <Text style={[styles.typeText, { color: theme.colors.ink }, type === name && { color: theme.colors.paper }]}>{name}</Text>
               </Pressable>
             ))}
           </ScrollView>
           <Card style={styles.editorCard}>
             <View style={styles.editorTop}>
               <Pill tone="moss">{type.toUpperCase()}</Pill>
-              <Text style={styles.destination}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : 'Food inbox (preview)'}</Text>
+              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : 'Food inbox (preview)'}</Text>
             </View>
             <TextInput
               value={value}
@@ -118,17 +123,21 @@ export default function CaptureScreen() {
               multiline
               autoFocus
               placeholder={type === 'Food' ? 'Add 2 avocados and yogurt to shopping…' : 'Type, paste, dictate or scan…'}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
+              placeholderTextColor={theme.colors.muted}
+              style={[styles.input, { color: theme.colors.ink }]}
               textAlignVertical="top"
             />
-            <View style={styles.attachments}>
-              <Text style={styles.attachment}>▧ Photo</Text>
-              <Text style={styles.attachment}>⌁ Link</Text>
-              <Text style={styles.attachment}>◖ Record</Text>
+            <View style={[styles.attachments, { borderTopColor: theme.colors.line }]}>
+              <Text style={[styles.attachment, { color: theme.colors.muted }]}>▧ Photo</Text>
+              <Text style={[styles.attachment, { color: theme.colors.muted }]}>⌁ Link</Text>
+              <Text style={[styles.attachment, { color: theme.colors.muted }]}>◖ Record</Text>
             </View>
           </Card>
-          <Text style={styles.hint}>
+          <Card tone="blue" style={styles.routeCard}>
+            <Text style={[styles.routeTitle, { color: theme.colors.ink }]}>What happens next</Text>
+            <Text style={[styles.routeBody, { color: theme.colors.muted }]}>Classify → preserve source → link relations → show in Chat citations.</Text>
+          </Card>
+          <Text style={[styles.hint, { color: theme.colors.muted }]}>
             {hasLocalGraph
               ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
               : 'No local graph yet. Capture is kept in-session for this phase.'}
@@ -150,8 +159,11 @@ export default function CaptureScreen() {
 }
 
 const styles = StyleSheet.create({
+  contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  context: { color: colors.muted, fontSize: 12, marginTop: 3 },
   types: { gap: 9, marginBottom: 15 },
-  type: { minWidth: 76, paddingHorizontal: 14, paddingVertical: 11, borderRadius: radius.pill, backgroundColor: '#E9E8DF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  type: { minWidth: 76, paddingHorizontal: 14, paddingVertical: 11, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: '#E9E8DF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   typeActive: { backgroundColor: colors.ink },
   typeText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   typeTextActive: { color: '#FFF' },
@@ -161,6 +173,9 @@ const styles = StyleSheet.create({
   input: { flex: 1, minHeight: 150, color: colors.ink, fontSize: 18, lineHeight: 27, paddingVertical: 18 },
   attachments: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: 13, flexDirection: 'row', gap: 18 },
   attachment: { color: colors.muted, fontSize: 12, fontWeight: '700' },
+  routeCard: { marginTop: 12 },
+  routeTitle: { color: colors.ink, fontSize: 14, fontWeight: '900' },
+  routeBody: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   hint: { color: colors.muted, fontSize: 11, lineHeight: 17, margin: 12 },
   success: { marginTop: 6 },
   successTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 4 },

@@ -105,6 +105,16 @@ const routes = [
     path: '/settings',
     must: ['AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
   },
+  {
+    name: 'search',
+    path: '/search',
+    must: ['LIFEOS / SEARCH', 'Search everything', 'Quick actions', 'Ask LifeOS', 'Create a record'],
+  },
+  {
+    name: 'capture',
+    path: '/capture',
+    must: ['LIFEOS / CAPTURE', 'Capture anything', 'INBOX FIRST', 'Food graph', 'Save capture'],
+  },
 ];
 
 const { chromium } = requirePlaywright();
