@@ -8,7 +8,7 @@ import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog } from '@/src/domain/catalog';
 import { DirectSyncReceipt, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 type SourceRow = {
   name: string;
@@ -77,16 +77,17 @@ const recentSync = [
   ['03', 'SQLite replica', 'Persists records, source snapshots and chat citations on device'],
 ] as const;
 
-function toneColor(tone: Tone) {
+function toneColor(tone: Tone, palette = colors) {
   return {
-    moss: colors.moss,
-    amber: colors.amber,
-    plum: colors.plum,
-    blue: colors.blue,
+    moss: palette.moss,
+    amber: palette.amber,
+    plum: palette.plum,
+    blue: palette.blue,
   }[tone];
 }
 
 export default function SourcesScreen() {
+  const theme = useLifeOSTheme();
   const { width } = useWindowDimensions();
   const compact = width < 720;
   const db = useLifeOSDatabase();
@@ -146,10 +147,10 @@ export default function SourcesScreen() {
         <View style={sharedStyles.content}>
           <View style={styles.contextBar}>
             <View>
-              <Text style={styles.brand}>LIFEOS / SOURCES</Text>
-              <Text style={styles.context}>Authority, sync and citation health</Text>
+              <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / SOURCES</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>Authority, sync and citation health</Text>
             </View>
-            <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
+            <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
           </View>
 
           <PageHeader
@@ -161,37 +162,37 @@ export default function SourcesScreen() {
           <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
             <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
               <Pill tone="blue">DIRECT SYNC READY</Pill>
-              <Text style={styles.loopTitle}>Pull your sources into one local graph.</Text>
-              <Text style={styles.loopBody}>
+              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull your sources into one local graph.</Text>
+              <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
                 Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server.
               </Text>
               <View style={styles.syncActions}>
-                <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, syncing && styles.disabled, pressed && styles.pressed]}>
-                  <Text style={styles.primarySyncText}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
+                <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
+                  <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
                 </Pressable>
                 <Link href="/settings" asChild>
-                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, pressed && styles.pressed]}>
-                    <Text style={styles.secondarySyncText}>Connections</Text>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.secondarySyncText, { color: theme.colors.ink }]}>Connections</Text>
                   </Pressable>
                 </Link>
               </View>
             </View>
             <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
-              <View style={styles.flowNode}><Text style={styles.flowNodeLabel}>Your source</Text><Text style={styles.flowNodeRole}>Optional</Text></View>
-              <Text style={styles.flowArrow}>→</Text>
-              <View style={[styles.flowNode, styles.flowNodeCore]}><Text style={styles.flowNodeCoreLabel}>LifeOS</Text><Text style={styles.flowNodeCoreRole}>Graph</Text></View>
-              <Text style={styles.flowArrow}>→</Text>
+              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
+              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
+              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>LifeOS</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
+              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
               <View style={styles.flowDestinations}>
-                <Text style={styles.flowDestination}>SQLite · local</Text>
-                <Text style={styles.flowDestination}>Providers · optional</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>SQLite · local</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
               </View>
             </View>
           </Card>
 
           <View style={styles.metrics}>
-            <Card style={styles.metric}><Text style={styles.metricValue}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={styles.metricLabel}>sources known</Text><Text style={styles.metricFoot}>Configured homes and links</Text></Card>
-            <Card style={styles.metric}><Text style={styles.metricValue}>{configuredCount}</Text><Text style={styles.metricLabel}>enabled settings</Text><Text style={styles.metricFoot}>Editable in app</Text></Card>
-            <Card style={styles.metric}><Text style={styles.metricValue}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={styles.metricLabel}>last pull rows</Text><Text style={styles.metricFoot}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
+            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>sources known</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Configured homes and links</Text></Card>
+            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{configuredCount}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>enabled settings</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Editable in app</Text></Card>
+            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull rows</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
           </View>
 
           {receipts.length ? (
@@ -241,15 +242,15 @@ export default function SourcesScreen() {
                 <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
                     <View style={styles.sourceTop}>
-                      <View style={[styles.sourceIcon, { backgroundColor: toneColor(meta.tone) }]}><Text style={styles.sourceIconText}>{meta.icon}</Text></View>
+                      <View style={[styles.sourceIcon, { backgroundColor: toneColor(meta.tone, theme.colors) }]}><Text style={[styles.sourceIconText, { color: theme.colors.paper }]}>{meta.icon}</Text></View>
                       <Pill tone={isReady ? 'amber' : meta.tone}>{sourceRow.status.toUpperCase()}</Pill>
                     </View>
-                    <Text style={styles.sourceName}>{sourceRow.name}</Text>
-                    <Text style={styles.sourceRole}>{meta.role} · {sourceRow.workspace}</Text>
-                    <Text style={styles.sourceSummary}>{meta.summary}</Text>
+                    <Text style={[styles.sourceName, { color: theme.colors.ink }]}>{sourceRow.name}</Text>
+                    <Text style={[styles.sourceRole, { color: theme.colors.moss }]}>{meta.role} · {sourceRow.workspace}</Text>
+                    <Text style={[styles.sourceSummary, { color: theme.colors.muted }]}>{meta.summary}</Text>
                     <View style={styles.sourceFacts}>
-                      <View><Text style={styles.factLabel}>FRESHNESS</Text><Text style={styles.factValue}>{sourceRow.freshness}</Text></View>
-                      <View><Text style={styles.factLabel}>SCOPE</Text><Text style={styles.factValue}>{meta.scope}</Text></View>
+                      <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>FRESHNESS</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{sourceRow.freshness}</Text></View>
+                      <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>SCOPE</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{meta.scope}</Text></View>
                     </View>
                     <Pressable
                       accessibilityRole={meta.href ? 'link' : 'button'}
@@ -259,10 +260,10 @@ export default function SourcesScreen() {
                         else if (normalized === 'google_sheets') void runSync('google_sheets');
                         else if (meta.href) void Linking.openURL(meta.href);
                       }}
-                      style={styles.sourceActionRow}
+                      style={[styles.sourceActionRow, { borderTopColor: theme.colors.line }]}
                     >
-                      <Text style={styles.sourceAction}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull now' : meta.action}</Text>
-                      <Text style={styles.sourceActionArrow}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
+                      <Text style={[styles.sourceAction, { color: theme.colors.ink }]}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull now' : meta.action}</Text>
+                      <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
                     </Pressable>
                   </Card>
                 </View>
