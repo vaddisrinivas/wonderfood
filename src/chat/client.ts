@@ -203,8 +203,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
         conversationId,
         thread: {
           id: conversationId,
-          title: 'Food context · local demo',
-          detail: 'Offline fallback',
+          title: 'Food context · local briefing',
+          detail: 'Local source answer',
           messages: [
             { id: userId, role: 'user', text },
             {
@@ -215,7 +215,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
             },
           ],
         },
-        warnings: ['No local database in this environment; using offline structured draft only.'],
+        warnings: ['No local database in this environment; using a local structured answer.'],
       };
     }
 
@@ -249,8 +249,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
         serverError: 'Server unavailable in this environment.',
         thread: {
           id: conversationId,
-          title: 'Food context · local demo',
-          detail: 'Server fallback',
+          title: 'Food context · local briefing',
+          detail: 'Local source answer',
           messages: [
             { id: userId, role: 'user', text },
             {
@@ -445,11 +445,11 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       mode: 'offline',
       conversationId,
       serverError: 'Live endpoint unavailable; this answer is local and capped.',
-      warnings: ['Live mode unavailable; using capped offline fallback.'],
+      warnings: ['Live endpoint unavailable; using a local source-backed answer.'],
       thread: {
         id: conversationId,
         title: threadAfterUser?.title || 'Conversation',
-        detail: threadAfterUser?.detail || 'Fallback',
+        detail: threadAfterUser?.detail || 'Local source answer',
         messages: [
           ...messagesSoFar.map(dbMessageToChat),
           {
