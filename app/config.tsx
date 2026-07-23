@@ -15,6 +15,7 @@ import agentRegistry from '@/packages/domain-config/agents/registry.v1.json';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
+import { mergeVisualIdentity, parseVisualIdentityOverrides, visualGlyph } from '@/src/domain/visual-identity';
 import {
   LifeOSSettings,
   defaultLifeOSSettings,
@@ -108,6 +109,7 @@ type LifeOSProfile = {
     enabledDomains: string[];
     enabledWorkflows: string[];
     enabledAgents: string[];
+    visualIdentityOverrides: string;
     theme: LifeOSSettings['runtime']['theme'];
     density: LifeOSSettings['runtime']['density'];
     surfaceConfig: LifeOSSettings['runtime']['surfaceConfig'];
@@ -127,6 +129,7 @@ function buildProfileObject(settings: LifeOSSettings): LifeOSProfile {
       enabledDomains: settings.runtime.enabledDomains,
       enabledWorkflows: settings.runtime.enabledWorkflows,
       enabledAgents: settings.runtime.enabledAgents,
+      visualIdentityOverrides: settings.runtime.visualIdentityOverrides,
       theme: settings.runtime.theme,
       density: settings.runtime.density,
       surfaceConfig: settings.runtime.surfaceConfig,
@@ -257,6 +260,10 @@ export default function ConfigStudioScreen() {
     () => getDomainManifest(catalogDomains, settings.runtime.activeDomain),
     [settings.runtime.activeDomain],
   );
+  const activeVisualIdentity = useMemo(
+    () => activeManifest ? mergeVisualIdentity(activeManifest, settings.runtime.visualIdentityOverrides) : undefined,
+    [activeManifest, settings.runtime.visualIdentityOverrides],
+  );
 
   const updateRuntime = (patch: Partial<LifeOSSettings['runtime']>) => {
     setSettings((current) => ({ ...current, runtime: { ...current.runtime, ...patch } }));
@@ -301,6 +308,7 @@ export default function ConfigStudioScreen() {
           enabledDomains: Array.isArray(runtime.enabledDomains) ? runtime.enabledDomains.filter((item): item is string => typeof item === 'string') : current.runtime.enabledDomains,
           enabledWorkflows: Array.isArray(runtime.enabledWorkflows) ? runtime.enabledWorkflows.filter((item): item is string => typeof item === 'string') : current.runtime.enabledWorkflows,
           enabledAgents: Array.isArray(runtime.enabledAgents) ? runtime.enabledAgents.filter((item): item is string => typeof item === 'string') : current.runtime.enabledAgents,
+          visualIdentityOverrides: typeof runtime.visualIdentityOverrides === 'string' ? runtime.visualIdentityOverrides : current.runtime.visualIdentityOverrides,
           theme: runtime.theme === 'light' || runtime.theme === 'dark' || runtime.theme === 'system' ? runtime.theme : current.runtime.theme,
           density: runtime.density === 'compact' || runtime.density === 'comfortable' ? runtime.density : current.runtime.density,
           surfaceConfig: {
@@ -321,6 +329,26 @@ export default function ConfigStudioScreen() {
     }
   };
 
+  const loadVisualStarter = () => {
+    const current = parseVisualIdentityOverrides(settings.runtime.visualIdentityOverrides);
+    const starter = {
+      ...current,
+      collections: {
+        ...(current.collections ?? {}),
+        recipe: { emoji: '👨‍🍳', accent: 'amber' },
+        meal_plan: { emoji: '🍽️', accent: 'moss' },
+        shopping_item: { emoji: '🛍️', accent: 'blue' },
+      },
+      actions: {
+        ...(current.actions ?? {}),
+        add_record: { emoji: '＋', accent: 'moss' },
+        ask_with_collection: { emoji: '✦', accent: 'plum' },
+      },
+    };
+    updateRuntime({ visualIdentityOverrides: JSON.stringify(starter, null, 2) });
+    setNotice('Visual starter loaded. Save & activate to persist it.');
+  };
+
   const save = async () => {
     setNotice('');
     setSaving(true);
@@ -328,6 +356,10 @@ export default function ConfigStudioScreen() {
       const parsed = JSON.parse(settings.runtime.schemaOverrides);
       if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
         throw new Error('Advanced schema overrides must be a JSON object.');
+      }
+      const visualParsed = JSON.parse(settings.runtime.visualIdentityOverrides);
+      if (!visualParsed || Array.isArray(visualParsed) || typeof visualParsed !== 'object') {
+        throw new Error('Visual identity overrides must be a JSON object.');
       }
       const enabledDomains = settings.runtime.enabledDomains.includes(settings.runtime.activeDomain)
         ? settings.runtime.enabledDomains
@@ -497,6 +529,36 @@ export default function ConfigStudioScreen() {
                   ]} tone="plum" limit={12} />
                 </Card>
               </View>
+            </>
+          ) : null}
+
+          {activeManifest && activeVisualIdentity ? (
+            <>
+              <SectionTitle title="Visual identity editor" />
+              <Card tone="amber" style={styles.sectionCard}>
+                <Text style={[styles.lead, { color: theme.colors.ink }]}>Icons, emojis, images and accents are runtime config.</Text>
+                <Text style={[styles.help, { color: theme.colors.muted }]}>These tokens can drive app cards, Notion icons/covers, Sheets symbols, source badges, skills and agents. Edit JSON here; no rebuild required.</Text>
+                <View style={styles.visualPreviewGrid}>
+                  <VisualPreview title="Collections" values={activeManifest.collections.slice(0, 12).map((collection) => `${visualGlyph(activeVisualIdentity.collections?.[collection], '•')} ${collection}`)} />
+                  <VisualPreview title="Actions" values={Object.entries(activeVisualIdentity.actions ?? {}).map(([key, token]) => `${visualGlyph(token, '•')} ${key}`)} />
+                  <VisualPreview title="Sources" values={Object.entries(activeVisualIdentity.sources ?? {}).map(([key, token]) => `${visualGlyph(token, '•')} ${key}`)} />
+                </View>
+                <Field
+                  label="Visual identity overrides"
+                  value={settings.runtime.visualIdentityOverrides}
+                  onChangeText={(visualIdentityOverrides) => updateRuntime({ visualIdentityOverrides })}
+                  placeholder='{ "collections": { "recipe": { "emoji": "👨‍🍳", "accent": "amber" } } }'
+                  multiline
+                />
+                <View style={styles.profileActions}>
+                  <Pressable accessibilityRole="button" onPress={loadVisualStarter} style={({ pressed }) => [styles.open, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.openText, { color: theme.colors.ink }]}>Load starter icons</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => updateRuntime({ visualIdentityOverrides: '{}' })} style={({ pressed }) => [styles.open, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.openText, { color: theme.colors.ink }]}>Reset overrides</Text>
+                  </Pressable>
+                </View>
+              </Card>
             </>
           ) : null}
 
@@ -784,6 +846,18 @@ function ToggleRow(props: { title: string; detail: string; value: boolean; onVal
   );
 }
 
+function VisualPreview({ title, values }: { title: string; values: string[] }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.visualPreview, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+      <Text style={[styles.visualPreviewTitle, { color: theme.colors.ink }]}>{title}</Text>
+      <View style={styles.visualPreviewChips}>
+        {values.length ? values.slice(0, 12).map((value) => <Pill key={value} tone="neutral">{value}</Pill>) : <Text style={[styles.help, { color: theme.colors.muted }]}>No tokens yet.</Text>}
+      </View>
+    </View>
+  );
+}
+
 function ChoiceField(props: { label: string; value: string; choices: string[]; onChange: (value: string) => void }) {
   const theme = useLifeOSTheme();
   return (
@@ -893,6 +967,10 @@ const styles = StyleSheet.create({
   sectionCard: { padding: 20 },
   lead: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   help: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  visualPreviewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16, marginBottom: 16 },
+  visualPreview: { flexGrow: 1, flexBasis: 240, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 12 },
+  visualPreviewTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
+  visualPreviewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   fields: { gap: 18, marginTop: 18 },
   field: { gap: 7 },
   fieldHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },

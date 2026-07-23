@@ -44,6 +44,7 @@ export type LifeOSSettings = {
     enabledAgents: string[];
     skillInstructions: Record<string, string>;
     schemaOverrides: string;
+    visualIdentityOverrides: string;
     automaticSync: boolean;
     syncMinutes: string;
     webSearch: boolean;
@@ -222,6 +223,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     enabledAgents: [],
     skillInstructions: {},
     schemaOverrides: '{}',
+    visualIdentityOverrides: '{}',
     automaticSync: false,
     syncMinutes: '30',
     webSearch: true,
@@ -386,6 +388,7 @@ function normalizeSettings(input: Partial<LifeOSSettings> | null): LifeOSSetting
       enabledAgents: strings(runtime?.enabledAgents, []),
       skillInstructions,
       schemaOverrides: typeof runtime?.schemaOverrides === 'string' ? runtime.schemaOverrides : '{}',
+      visualIdentityOverrides: typeof runtime?.visualIdentityOverrides === 'string' ? runtime.visualIdentityOverrides : '{}',
       automaticSync: Boolean(runtime?.automaticSync),
       syncMinutes: typeof runtime?.syncMinutes === 'string' ? runtime.syncMinutes.trim() || '30' : '30',
       webSearch: runtime?.webSearch !== false,

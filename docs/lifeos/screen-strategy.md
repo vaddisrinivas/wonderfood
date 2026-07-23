@@ -80,6 +80,7 @@ Every domain gets the same structure:
 - Domain packages own visual identity for domains, surfaces, collections, statuses, actions, sources, skills and agents.
 - Every token can carry `emoji`, `icon`, optional `image_url` and accent tone.
 - UI must read these tokens first and fall back only when config is missing.
+- App settings can override bundled tokens through `runtime.visualIdentityOverrides`, so personal icon/image choices do not require a rebuild.
 - Notion template icons/covers and Sheets dashboard symbols should use the same token map.
 
 ## Home page

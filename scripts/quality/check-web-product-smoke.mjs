@@ -105,6 +105,17 @@ const routes = [
     forbidden: ['Collection not found', 'Record not found'],
   },
   {
+    name: 'collection-configured-visuals',
+    path: '/collection/recipe',
+    localSettings: {
+      runtime: {
+        visualIdentityOverrides: '{"collections":{"recipe":{"emoji":"🧪","accent":"plum"}},"actions":{"add_record":{"emoji":"🍱","accent":"moss"}}}',
+      },
+    },
+    must: ['LIFEOS / FOOD COLLECTION', '🧪', '🍱 Add record', 'Visual identity', 'Emoji/icon fallback is active'],
+    forbidden: ['Collection not found', 'Record not found'],
+  },
+  {
     name: 'record-configured-order',
     path: '/record/meal-green-dal',
     localSettings: {
@@ -214,6 +225,9 @@ const routes = [
       'Sources',
       'Citation cards',
       'Manifest Dashboard Blocks',
+      'Visual identity editor',
+      'Icons, emojis, images and accents are runtime config.',
+      'Load starter icons',
       'operating views',
       'Operating view order',
       'Prompt presets',

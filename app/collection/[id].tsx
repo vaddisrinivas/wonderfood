@@ -6,6 +6,7 @@ import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/sr
 import { loadCatalog, setActiveDomainOverride, VisualToken } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
+import { mergeVisualIdentity, visualAccent, visualGlyph, VisualAccent } from '@/src/domain/visual-identity';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
@@ -25,15 +26,7 @@ function relationLabel(name: string) {
   return name.replaceAll('_', ' ');
 }
 
-function visualGlyph(token: VisualToken | undefined, fallback: string) {
-  return token?.emoji || token?.icon || fallback;
-}
-
-function visualAccent(token: VisualToken | undefined): 'moss' | 'amber' | 'blue' | 'plum' | 'neutral' {
-  return token?.accent ?? 'neutral';
-}
-
-function softForAccent(accent: 'moss' | 'amber' | 'blue' | 'plum' | 'neutral', palette = colors) {
+function softForAccent(accent: VisualAccent, palette = colors) {
   if (accent === 'moss') return palette.mossSoft;
   if (accent === 'amber') return palette.amberSoft;
   if (accent === 'blue') return palette.blueSoft;
@@ -41,7 +34,7 @@ function softForAccent(accent: 'moss' | 'amber' | 'blue' | 'plum' | 'neutral', p
   return palette.canvas;
 }
 
-function inkForAccent(accent: 'moss' | 'amber' | 'blue' | 'plum' | 'neutral', palette = colors) {
+function inkForAccent(accent: VisualAccent, palette = colors) {
   if (accent === 'moss') return palette.moss;
   if (accent === 'amber') return palette.amber;
   if (accent === 'blue') return palette.blue;
@@ -67,6 +60,7 @@ export default function CollectionScreen() {
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeDomainId, activeManifest } = loadCatalog();
+  const visualIdentity = useMemo(() => mergeVisualIdentity(activeManifest, settings.runtime.visualIdentityOverrides), [activeManifest, settings.runtime.visualIdentityOverrides]);
   const db = useLifeOSDatabase();
   const collectionId = String(id ?? '');
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
@@ -104,7 +98,7 @@ export default function CollectionScreen() {
   }, {}), [collectionRecords]);
   const reviewRecords = collectionRecords.filter((record) => /review|need|buy|planned|use|open|tonight/i.test(`${record.status} ${record.meta} ${record.body}`));
   const collectionTitle = humanizeCollection(collectionId || 'collection');
-  const collectionVisual = activeManifest.visual_identity?.collections?.[collectionId];
+  const collectionVisual = visualIdentity.collections?.[collectionId];
   const collectionGlyph = visualGlyph(collectionVisual, collectionId.slice(0, 1).toUpperCase());
   const collectionAccent = visualAccent(collectionVisual);
   const searchable = query.trim().toLowerCase();
@@ -157,8 +151,8 @@ export default function CollectionScreen() {
                 </Text>
               </View>
               <View style={styles.heroActions}>
-                <ActionButton label={`${visualGlyph(activeManifest.visual_identity?.actions?.add_record, '＋')} Add record`} onPress={() => router.push({ pathname: '/capture', params: { collection: collectionId } })} />
-                <ActionButton label={`${visualGlyph(activeManifest.visual_identity?.actions?.ask_with_collection, '✦')} Ask with collection`} quiet onPress={() => router.push('/chat')} />
+                <ActionButton label={`${visualGlyph(visualIdentity.actions?.add_record, '＋')} Add record`} onPress={() => router.push({ pathname: '/capture', params: { collection: collectionId } })} />
+                <ActionButton label={`${visualGlyph(visualIdentity.actions?.ask_with_collection, '✦')} Ask with collection`} quiet onPress={() => router.push('/chat')} />
               </View>
             </View>
             <View style={[styles.statGrid, compact && styles.stack]}>
@@ -230,11 +224,11 @@ export default function CollectionScreen() {
               <Card style={styles.recordsCard}>
                 {loading ? <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>Loading records…</Text> : null}
                 {!loading && visibleRecords.length && viewMode === 'list' ? visibleRecords.map((record) => (
-                  <RecordRow key={record.id} record={record} visual={activeManifest.visual_identity?.collections?.[record.collection]} />
+                  <RecordRow key={record.id} record={record} visual={visualIdentity.collections?.[record.collection]} />
                 )) : null}
                 {!loading && visibleRecords.length && viewMode === 'board' ? (
                   <View style={styles.board}>
-                    {visibleRecords.map((record) => <BoardCard key={record.id} record={record} visual={activeManifest.visual_identity?.collections?.[record.collection]} />)}
+                    {visibleRecords.map((record) => <BoardCard key={record.id} record={record} visual={visualIdentity.collections?.[record.collection]} />)}
                   </View>
                 ) : null}
                 {!loading && visibleRecords.length && viewMode === 'table' ? <RecordTable records={visibleRecords} /> : null}
@@ -290,7 +284,7 @@ export default function CollectionScreen() {
                   <Card style={styles.sourceCard}>
                     {Object.entries(sourceCounts).length ? Object.entries(sourceCounts).map(([source, count], index) => (
                       <View key={source} style={[styles.sourceRow, { borderBottomColor: theme.colors.line }]}>
-                        <Pill tone={pillToneForVisual(activeManifest.visual_identity?.sources?.[source], index)}>{visualGlyph(activeManifest.visual_identity?.sources?.[source], String(count))} {count}</Pill>
+                        <Pill tone={pillToneForVisual(visualIdentity.sources?.[source], index)}>{visualGlyph(visualIdentity.sources?.[source], String(count))} {count}</Pill>
                         <View style={styles.relationCopy}>
                           <Text style={[styles.relationTitle, { color: theme.colors.ink }]}>{source}</Text>
                           <Text style={[styles.relationDetail, { color: theme.colors.muted }]}>Citable records in this collection</Text>

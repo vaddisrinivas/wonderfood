@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { DashboardBlock, loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { DashboardBlock, loadCatalog, setActiveDomainOverride, VisualToken } from '@/src/domain/catalog';
 import { getDomainRecordCanonical, getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
+import { mergeVisualIdentity, visualAccent, visualGlyph, VisualAccent } from '@/src/domain/visual-identity';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
@@ -114,6 +115,22 @@ function toWidgetTone(value: string): FoodWidget['tone'] {
   return value === 'moss' || value === 'blue' || value === 'amber' || value === 'plum' || value === 'neutral' ? value : 'neutral';
 }
 
+function softForAccent(accent: VisualAccent, themed = colors) {
+  if (accent === 'moss') return themed.mossSoft;
+  if (accent === 'amber') return themed.amberSoft;
+  if (accent === 'blue') return themed.blueSoft;
+  if (accent === 'plum') return themed.plumSoft;
+  return themed.canvas;
+}
+
+function inkForAccent(accent: VisualAccent, themed = colors) {
+  if (accent === 'moss') return themed.moss;
+  if (accent === 'amber') return themed.amber;
+  if (accent === 'blue') return themed.blue;
+  if (accent === 'plum') return themed.plum;
+  return themed.ink;
+}
+
 function parseFoodWidgets(value: string): FoodWidget[] {
   return value
     .split(/\r?\n/)
@@ -193,6 +210,7 @@ export default function FoodScreen() {
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeDomainId, activeManifest } = loadCatalog();
+  const visualIdentity = useMemo(() => mergeVisualIdentity(activeManifest, settings.runtime.visualIdentityOverrides), [activeManifest, settings.runtime.visualIdentityOverrides]);
   const domainLabel = activeManifest.label;
   const isFoodDomain = activeDomainId === 'food';
   const theme = useLifeOSTheme();
@@ -395,6 +413,7 @@ export default function FoodScreen() {
                   subtitle={surface.views?.slice(0, 4).join(' · ') || 'Workspace view'}
                   collections={surface.collections}
                   counts={collectionCounts}
+                  visuals={visualIdentity.collections ?? {}}
                   tone={index === 0 ? 'moss' : index === 1 ? 'amber' : 'blue'}
                 />
               ))}
@@ -404,6 +423,7 @@ export default function FoodScreen() {
                   subtitle="Shared records used by every Food view"
                   collections={unplacedCollections}
                   counts={collectionCounts}
+                  visuals={visualIdentity.collections ?? {}}
                   tone="plum"
                 />
               ) : null}
@@ -417,12 +437,12 @@ export default function FoodScreen() {
             <View style={[styles.board, compact && styles.boardCompact]}>
               {isFoodDomain ? (
                 <>
-                  <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
-                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or pull source updates." />
-                  <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
+                  <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} visuals={visualIdentity.collections ?? {}} empty="Plan dinner from pantry." />
+                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} visuals={visualIdentity.collections ?? {}} empty="Add pantry or pull source updates." />
+                  <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} visuals={visualIdentity.collections ?? {}} empty="No shopping pressure." />
                 </>
               ) : surfaceColumns.map((surface) => (
-                <RecordColumn key={surface.id} title={surface.title} subtitle={surface.subtitle} records={surface.records} empty={surface.empty} />
+                <RecordColumn key={surface.id} title={surface.title} subtitle={surface.subtitle} records={surface.records} visuals={visualIdentity.collections ?? {}} empty={surface.empty} />
               ))}
             </View>
             {isFoodDomain && foodConfig.showOperatingViews ? (
@@ -462,7 +482,7 @@ export default function FoodScreen() {
 
             <View style={[styles.records, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
               {shown.length ? shown.map((record) => (
-                <RecordListItem key={record.id} record={record} />
+                <RecordListItem key={record.id} record={record} visual={visualIdentity.collections?.[record.collection]} />
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>{activeCopy.empty}</Text>
@@ -549,10 +569,11 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   );
 }
 
-function RecordColumn({ title, subtitle, records, empty }: {
+function RecordColumn({ title, subtitle, records, visuals, empty }: {
   title: string;
   subtitle: string;
   records: FoodRecordView[];
+  visuals: Record<string, VisualToken>;
   empty: string;
 }) {
   const theme = useLifeOSTheme();
@@ -561,7 +582,7 @@ function RecordColumn({ title, subtitle, records, empty }: {
       <Text style={[styles.columnTitle, { color: theme.colors.ink }]}>{title}</Text>
       <Text style={[styles.columnSubtitle, { color: theme.colors.muted }]}>{subtitle}</Text>
       <View style={styles.columnRecords}>
-        {records.length ? records.map((record) => <MiniRecord key={record.id} record={record} />) : (
+        {records.length ? records.map((record) => <MiniRecord key={record.id} record={record} visual={visuals[record.collection]} />) : (
           <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>{empty}</Text>
         )}
       </View>
@@ -674,11 +695,12 @@ function CollectionStat({ label, value, tone }: { label: string; value: string; 
   );
 }
 
-function CollectionGroup({ title, subtitle, collections, counts, tone }: {
+function CollectionGroup({ title, subtitle, collections, counts, visuals, tone }: {
   title: string;
   subtitle: string;
   collections: string[];
   counts: Record<string, number>;
+  visuals: Record<string, VisualToken>;
   tone: 'moss' | 'amber' | 'blue' | 'plum';
 }) {
   const theme = useLifeOSTheme();
@@ -694,9 +716,12 @@ function CollectionGroup({ title, subtitle, collections, counts, tone }: {
       <View style={styles.collectionChips}>
         {collections.map((collection) => {
           const count = counts[collection] ?? 0;
+          const token = visuals[collection];
+          const accent = visualAccent(token);
           return (
             <Link key={collection} href={{ pathname: '/collection/[id]', params: { id: collection } }} asChild>
               <Pressable accessibilityRole="button" style={({ pressed }) => [styles.collectionChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.collectionChipGlyph, { backgroundColor: softForAccent(accent, theme.colors), color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(token, collection.slice(0, 1).toUpperCase())}</Text>
                 <Text style={[styles.collectionChipName, { color: theme.colors.ink }]}>{humanizeCollection(collection)}</Text>
                 <Text style={[styles.collectionChipCount, { color: count ? theme.colors.moss : theme.colors.muted }]}>{count ? `${count}` : '—'}</Text>
               </Pressable>
@@ -790,11 +815,13 @@ function ShoppingChecklist({ records, onToggle }: { records: FoodRecordView[]; o
   );
 }
 
-function MiniRecord({ record }: { record: FoodRecordView }) {
+function MiniRecord({ record, visual }: { record: FoodRecordView; visual?: VisualToken }) {
   const theme = useLifeOSTheme();
+  const accent = visualAccent(visual);
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.miniRecord, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+        <View style={[styles.miniGlyph, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.miniGlyphText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
         <View style={styles.miniTop}>
           <Text style={[styles.miniTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
           <Pill tone={record.tone}>{record.status}</Pill>
@@ -806,12 +833,13 @@ function MiniRecord({ record }: { record: FoodRecordView }) {
   );
 }
 
-function RecordListItem({ record }: { record: FoodRecordView }) {
+function RecordListItem({ record, visual }: { record: FoodRecordView; visual?: VisualToken }) {
   const theme = useLifeOSTheme();
+  const accent = visualAccent(visual);
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.record, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
-        <View style={[styles.recordIcon, { backgroundColor: theme.colors.canvas }]}><Text style={[styles.recordIconText, { color: theme.colors.moss }]}>{record.collection.slice(0, 1).toUpperCase()}</Text></View>
+        <View style={[styles.recordIcon, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.recordIconText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
         <View style={styles.recordCopy}>
           <View style={styles.recordTop}>
             <Text style={[styles.recordTitle, { color: theme.colors.ink }]}>{record.title}</Text>
@@ -936,6 +964,7 @@ const styles = StyleSheet.create({
   collectionGroupSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   collectionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   collectionChip: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collectionChipGlyph: { minWidth: 25, height: 25, borderRadius: 10, overflow: 'hidden', textAlign: 'center', lineHeight: 25, fontSize: 13, fontWeight: '900' },
   collectionChipName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   collectionChipCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
@@ -995,6 +1024,8 @@ const styles = StyleSheet.create({
   checkBoxDone: { alignItems: 'center', justifyContent: 'center' },
   checkMark: { color: colors.moss, fontSize: 12, fontWeight: '900', lineHeight: 16 },
   miniRecord: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.line, backgroundColor: '#FEFEFA', borderRadius: 16, padding: 12 },
+  miniGlyph: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  miniGlyphText: { fontSize: 17, fontWeight: '900' },
   miniTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   miniTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', flex: 1 },
   attentionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
