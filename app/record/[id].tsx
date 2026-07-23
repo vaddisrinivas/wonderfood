@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, Row, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { getDomainRecord, getDomainRecordCanonical } from '@/src/domain/queries';
 import { loadCatalog } from '@/src/domain/catalog';
@@ -302,6 +302,7 @@ export default function RecordScreen() {
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
 
   const [record, setRecord] = useState<CanonicalRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -466,7 +467,7 @@ export default function RecordScreen() {
       <Page>
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
-            <Text style={styles.loading}>Loading record…</Text>
+            <Text style={[styles.loading, { color: theme.colors.muted }]}>Loading record…</Text>
           </View>
         </ScrollView>
       </Page>
@@ -478,10 +479,10 @@ export default function RecordScreen() {
       <Page>
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
-            <Text style={styles.emptyTitle}>Record not found</Text>
-            <Text style={styles.emptyBody}>This record is not in the current domain graph.</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Record not found</Text>
+            <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>This record is not in the current domain graph.</Text>
             <Pressable onPress={() => router.back()} style={styles.close}>
-              <Text style={styles.closeText}>Close</Text>
+              <Text style={[styles.closeText, { color: theme.colors.muted }]}>Close</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -498,11 +499,11 @@ export default function RecordScreen() {
       <Card key="hero" tone={tone === 'neutral' ? undefined : tone} style={styles.hero}>
         <View style={styles.statusRow}>
           <Pill tone={tone}>{status}</Pill>
-          <Text style={styles.sync}>Updated {updatedAt}</Text>
+          <Text style={[styles.sync, { color: theme.colors.muted }]}>Updated {updatedAt}</Text>
         </View>
-        <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
-        <Text style={styles.meta}>{record.collection} · {meta}</Text>
-        <Text style={styles.heroBody}>{body || 'No note yet.'}</Text>
+        <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={[styles.title, { color: theme.colors.ink }]} multiline />
+        <Text style={[styles.meta, { color: theme.colors.muted }]}>{record.collection} · {meta}</Text>
+        <Text style={[styles.heroBody, { color: theme.colors.ink }]}>{body || 'No note yet.'}</Text>
         <View style={styles.quickActions}>
           <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
           <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
@@ -521,8 +522,8 @@ export default function RecordScreen() {
             <View style={styles.nutritionGrid}>
               {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
                 <Card key={label} style={styles.nutritionCard}>
-                  <Text style={styles.nutritionValue}>{value}</Text>
-                  <Text style={styles.nutritionLabel}>{label}</Text>
+                  <Text style={[styles.nutritionValue, { color: theme.colors.ink }]}>{value}</Text>
+                  <Text style={[styles.nutritionLabel, { color: theme.colors.muted }]}>{label}</Text>
                 </Card>
               ))}
             </View>
@@ -546,12 +547,12 @@ export default function RecordScreen() {
             <SectionTitle title="Instructions" />
             <Card style={styles.listCard}>
               {foodDetail.instructions.length ? foodDetail.instructions.map((step, index) => (
-                <View key={step} style={styles.stepRow}>
-                  <Text style={styles.stepNumber}>{index + 1}</Text>
-                  <Text style={styles.stepText}>{step}</Text>
+                <View key={step} style={[styles.stepRow, { borderBottomColor: theme.colors.line }]}>
+                  <Text style={[styles.stepNumber, { backgroundColor: theme.colors.mossSoft, color: theme.colors.moss }]}>{index + 1}</Text>
+                  <Text style={[styles.stepText, { color: theme.colors.ink }]}>{step}</Text>
                 </View>
               )) : (
-                <Text style={sharedStyles.muted}>No cooking instructions yet.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>No cooking instructions yet.</Text>
               )}
             </Card>
           </View>
@@ -562,18 +563,18 @@ export default function RecordScreen() {
             <SectionTitle title="Cooking log and variations" />
             <View style={sharedStyles.grid}>
               <Card style={styles.historyCard}>
-                <Text style={styles.cardTitle}>Previous notes</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Previous notes</Text>
                 {foodDetail.logs.map(([label, value]) => (
-                  <View key={label} style={styles.factRow}>
-                    <Text style={styles.factLabel}>{label}</Text>
-                    <Text style={styles.factValue}>{value}</Text>
+                  <View key={label} style={[styles.factRow, { borderTopColor: theme.colors.line }]}>
+                    <Text style={[styles.factLabel, { color: theme.colors.muted }]}>{label}</Text>
+                    <Text style={[styles.factValue, { color: theme.colors.ink }]}>{value}</Text>
                   </View>
                 ))}
               </Card>
               <Card tone="plum" style={styles.historyCard}>
-                <Text style={styles.cardTitle}>Variations</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Variations</Text>
                 {foodDetail.variations.map((variation) => (
-                  <Text key={variation} style={styles.variation}>• {variation}</Text>
+                  <Text key={variation} style={[styles.variation, { color: theme.colors.ink }]}>• {variation}</Text>
                 ))}
               </Card>
             </View>
@@ -587,7 +588,7 @@ export default function RecordScreen() {
               accessibilityLabel="Record details"
               value={body}
               onChangeText={setBody}
-              style={styles.editor}
+              style={[styles.editor, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
               multiline
               textAlignVertical="top"
             />
@@ -639,14 +640,14 @@ export default function RecordScreen() {
                       key={`${relation.name}:${relation.target_id}`}
                       accessibilityRole="link"
                       onPress={() => router.push(`/record/${relation.target_id}`)}
-                      style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
+                        style={({ pressed }) => [styles.relationCard, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && { opacity: 0.7 }]}
                     >
                       <View style={styles.relationTop}>
-                        <Text style={styles.relationName}>{relation.name}</Text>
+                        <Text style={[styles.relationName, { color: theme.colors.moss }]}>{relation.name}</Text>
                         <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
                       </View>
-                      <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
-                      <Text style={styles.relationDetail}>
+                      <Text style={[styles.relationTitle, { color: theme.colors.ink }]}>{linked?.title ?? relation.target_id}</Text>
+                      <Text style={[styles.relationDetail, { color: theme.colors.muted }]}>
                         {linked
                           ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
                           : 'Linked record not loaded in this local graph yet.'}
@@ -656,7 +657,7 @@ export default function RecordScreen() {
                 })
               ) : (
                 <Card style={styles.emptyRelationCard}>
-                  <Text style={sharedStyles.muted}>No linked records yet.</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>No linked records yet.</Text>
                 </Card>
               )}
             </View>
@@ -689,8 +690,8 @@ export default function RecordScreen() {
                 <>
               {!structuredFoodDetail ? (
                 <Card tone="amber" style={styles.dataWarning}>
-                  <Text style={styles.warningTitle}>Rich Food detail missing from source</Text>
-                  <Text style={styles.warningBody}>
+                  <Text style={[styles.warningTitle, { color: theme.colors.ink }]}>Rich Food detail missing from source</Text>
+                  <Text style={[styles.warningBody, { color: theme.colors.muted }]}>
                     Showing inferred recipe detail from title/body. Add `food_detail` and `relations` in Notion, Sheets or SQLite to get full trusted nutrition, pantry state, shopping state, logs and variations.
                   </Text>
                 </Card>
@@ -705,9 +706,9 @@ export default function RecordScreen() {
             </View>
           </View>
           <Pressable onPress={() => router.back()} style={styles.close}>
-            <Text style={styles.closeText}>Close record</Text>
+            <Text style={[styles.closeText, { color: theme.colors.muted }]}>Close record</Text>
           </Pressable>
-          {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+          {notice ? <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.colors.moss }]}>{notice}</Text> : null}
         </View>
       </ScrollView>
     </Page>
@@ -719,29 +720,31 @@ function IngredientGroup({ title, items, tone }: {
   items: FoodDetail['ingredients'];
   tone: 'moss' | 'amber' | 'blue' | 'plum';
 }) {
+  const theme = useLifeOSTheme();
   return (
     <Card tone={tone} style={styles.ingredientGroup}>
       <View style={styles.ingredientGroupHead}>
-        <Text style={styles.ingredientGroupTitle}>{title}</Text>
+        <Text style={[styles.ingredientGroupTitle, { color: theme.colors.ink }]}>{title}</Text>
         <Pill tone={tone}>{items.length}</Pill>
       </View>
       {items.length ? items.map((ingredient) => (
-        <View key={`${title}-${ingredient.name}-${ingredient.amount}`} style={styles.ingredientMini}>
-          <Text style={styles.ingredientName}>{ingredient.name}</Text>
-          <Text style={styles.ingredientAmount}>{ingredient.amount}</Text>
+        <View key={`${title}-${ingredient.name}-${ingredient.amount}`} style={[styles.ingredientMini, { borderTopColor: theme.colors.line }]}>
+          <Text style={[styles.ingredientName, { color: theme.colors.ink }]}>{ingredient.name}</Text>
+          <Text style={[styles.ingredientAmount, { color: theme.colors.muted }]}>{ingredient.amount}</Text>
         </View>
       )) : (
-        <Text style={styles.emptyBody}>None captured.</Text>
+        <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>None captured.</Text>
       )}
     </Card>
   );
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
+  const theme = useLifeOSTheme();
   return (
-    <View style={styles.sideFact}>
-      <Text style={styles.sideFactLabel}>{label}</Text>
-      <Text style={styles.sideFactValue}>{value}</Text>
+    <View style={[styles.sideFact, { borderTopColor: theme.colors.line }]}>
+      <Text style={[styles.sideFactLabel, { color: theme.colors.muted }]}>{label}</Text>
+      <Text style={[styles.sideFactValue, { color: theme.colors.ink }]}>{value}</Text>
     </View>
   );
 }
