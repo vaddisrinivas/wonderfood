@@ -235,6 +235,7 @@ const routes = [
     name: 'capture',
     path: '/capture',
     must: ['LIFEOS / CAPTURE', 'Capture anything', 'INBOX FIRST', 'Food graph', 'Save capture'],
+    forbidden: ['this phase', 'inbox (preview)', 'session fallback'],
   },
   {
     name: 'capture-health-active',
@@ -246,6 +247,7 @@ const routes = [
       },
     },
     must: ['LIFEOS / CAPTURE', 'Health graph', 'Health records', 'Health local graph', 'Save capture'],
+    forbidden: ['this phase', 'inbox (preview)', 'session fallback'],
   },
 ];
 
@@ -294,6 +296,11 @@ for (const viewport of viewports) {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
       const text = await page.locator('body').innerText({ timeout: 8000 });
       result.missing = route.must.filter((needle) => !text.includes(needle));
+      if (route.forbidden) {
+        for (const needle of route.forbidden) {
+          if (text.includes(needle)) result.missing.push(`forbidden:${needle}`);
+        }
+      }
       if (route.orderedBefore) {
         const [first, second] = route.orderedBefore;
         if (text.indexOf(first) < 0 || text.indexOf(second) < 0 || text.indexOf(first) > text.indexOf(second)) {

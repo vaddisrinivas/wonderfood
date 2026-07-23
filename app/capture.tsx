@@ -80,7 +80,7 @@ export default function CaptureScreen() {
   const configuredDestinationHint = captureConfig.destinationHint.replace(/\bFood\b/g, catalog.activeManifest.label);
   const destinationHint = configuredDestinationHint || (hasLocalGraph
     ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
-    : 'No local graph yet. Capture is kept in-session for this phase.');
+    : `Local graph is starting. Capture stays as a ${catalog.activeManifest.label} draft on this screen until storage is ready.`);
 
   useEffect(() => {
     const requested = typeof params.type === 'string' ? params.type : '';
@@ -147,7 +147,7 @@ export default function CaptureScreen() {
             tone: 'moss',
             meta: `${type} capture from ${catalog.activeManifest.label} inbox`,
             body: value.trim(),
-            source: `${type} · ${hasLocalGraph ? 'SQLite' : 'fallback'}`,
+            source: `${type} · ${hasLocalGraph ? 'SQLite' : 'local draft'}`,
             attachments: photos.map((photo) => ({
               kind: 'photo',
               uri: photo.uri,
@@ -223,7 +223,7 @@ export default function CaptureScreen() {
           <Card key={section} style={styles.editorCard}>
             <View style={styles.editorTop}>
               <Pill tone="moss">{type.toUpperCase()}</Pill>
-              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} inbox (preview)`}</Text>
+              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} local draft`}</Text>
             </View>
             <TextInput
               value={value}
@@ -287,7 +287,7 @@ export default function CaptureScreen() {
           {saved ? (
             <Card tone="moss" style={styles.success}>
               <Text style={styles.successTitle}>Captured</Text>
-              <Text style={sharedStyles.muted}>Stored in {hasLocalGraph ? `${catalog.activeManifest.label} graph` : 'session fallback'}{savedPhotoCount ? ` with ${savedPhotoCount} photo${savedPhotoCount === 1 ? '' : 's'}` : ''}.</Text>
+              <Text style={sharedStyles.muted}>Stored in {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} local draft`}{savedPhotoCount ? ` with ${savedPhotoCount} photo${savedPhotoCount === 1 ? '' : 's'}` : ''}.</Text>
             </Card>
           ) : null}
           <View style={styles.actions}>
