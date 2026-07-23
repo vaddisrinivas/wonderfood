@@ -311,7 +311,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         sectionOrder: 'hero,status,details',
         showHero: true,
         showStatusCard: true,
-        showTechnicalReceipt: true,
+        showTechnicalReceipt: false,
         showDetails: true,
       },
     },
@@ -500,7 +500,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       sectionOrder: normalizeOrderString(config.health?.sectionOrder, defaults.health.sectionOrder),
       showHero: config.health?.showHero !== false,
       showStatusCard: config.health?.showStatusCard !== false,
-      showTechnicalReceipt: config.health?.showTechnicalReceipt !== false,
+      showTechnicalReceipt: Boolean(config.health?.showTechnicalReceipt),
       showDetails: config.health?.showDetails !== false,
     },
   };

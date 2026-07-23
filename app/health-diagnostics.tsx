@@ -94,15 +94,6 @@ export default function HealthDiagnosticsScreen() {
               />
               <Fact label="Last checked" value={friendlyCheckedAt(check.observedAt)} />
               <Fact label="Next step" value={passed ? 'Use Health as an optional domain context in Chat and Sources.' : 'Grant Health Connect permissions from Settings.'} />
-              {healthConfig.showTechnicalReceipt ? (
-                <View style={[styles.technicalBox, { borderColor: theme.colors.line, backgroundColor: theme.colors.canvas }]}>
-                  <Text style={[styles.kicker, { color: theme.colors.muted }]}>technical receipt</Text>
-                  <Fact label="Temporary test ID" value={check.clientRecordId} />
-                  <Fact label="Rows written" value={String(check.insertedIds.length)} />
-                  <Fact label="Read before cleanup" value={String(check.readBeforeDelete)} />
-                  <Fact label="Read after cleanup" value={String(check.readAfterDelete)} />
-                </View>
-              ) : null}
             </View>
           </Card>
         ) : null;
@@ -140,7 +131,6 @@ const styles = StyleSheet.create({
   body: { fontSize: 14, lineHeight: 21 },
   grid: { gap: 10 },
   fact: { gap: 4 },
-  technicalBox: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   factLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   factValue: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
 });

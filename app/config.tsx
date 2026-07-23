@@ -88,15 +88,15 @@ const screenBlueprints = [
     id: 'sources',
     title: 'Sources',
     route: '/sources',
-    intent: 'Trust center for Notion, Sheets, local replica, provider pulls, citations, freshness and sync policy.',
-    editable: ['section order', 'hero', 'metrics', 'data homes', 'citations', 'sync plan', 'policy', 'config link'],
+    intent: 'Data-home center for Notion, Sheets, local records, provider pulls, citations, freshness and conflict rules.',
+    editable: ['section order', 'hero', 'metrics', 'data homes', 'citations', 'pull flow', 'policy', 'config link'],
   },
   {
     id: 'health',
     title: 'Health Connect',
     route: '/health-diagnostics',
-    intent: 'Native Health Connect status surface for write/read/delete access, temporary record cleanup and device receipt.',
-    editable: ['section order', 'hero', 'status card', 'technical receipt', 'details'],
+    intent: 'Android Health Connect permission, privacy and readiness surface for optional health context.',
+    editable: ['section order', 'hero', 'status card', 'details'],
   },
 ] as const;
 
@@ -683,11 +683,11 @@ export default function ConfigStudioScreen() {
               <SurfaceConfigCard title="Sources">
                 <Field label="Section order" value={settings.runtime.surfaceConfig.sources.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('sources', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show source model and sync CTA." value={settings.runtime.surfaceConfig.sources.showHero} onValueChange={(showHero) => updateSurfaceConfig('sources', { showHero })} />
-                <ToggleRow title="Metrics" detail="Show source count, enabled settings and last pull rows." value={settings.runtime.surfaceConfig.sources.showMetrics} onValueChange={(showMetrics) => updateSurfaceConfig('sources', { showMetrics })} />
+                <ToggleRow title="Metrics" detail="Show data homes, enabled settings and last pull records." value={settings.runtime.surfaceConfig.sources.showMetrics} onValueChange={(showMetrics) => updateSurfaceConfig('sources', { showMetrics })} />
                 <ToggleRow title="Data homes" detail="Show Notion, Sheets, SQLite and Postgres cards." value={settings.runtime.surfaceConfig.sources.showDataHomes} onValueChange={(showDataHomes) => updateSurfaceConfig('sources', { showDataHomes })} />
                 <ToggleRow title="Citations" detail="Show source packs Chat can cite." value={settings.runtime.surfaceConfig.sources.showCitations} onValueChange={(showCitations) => updateSurfaceConfig('sources', { showCitations })} />
                 <Field label="Citation cards" value={settings.runtime.surfaceConfig.sources.citationLimit} onChangeText={(citationLimit) => updateSurfaceConfig('sources', { citationLimit })} />
-                <ToggleRow title="Sync plan" detail="Show pull implementation order." value={settings.runtime.surfaceConfig.sources.showSyncPlan} onValueChange={(showSyncPlan) => updateSurfaceConfig('sources', { showSyncPlan })} />
+                <ToggleRow title="Pull flow" detail="Show what happens when LifeOS pulls provider data." value={settings.runtime.surfaceConfig.sources.showSyncPlan} onValueChange={(showSyncPlan) => updateSurfaceConfig('sources', { showSyncPlan })} />
                 <ToggleRow title="Policy" detail="Show calm sync rules." value={settings.runtime.surfaceConfig.sources.showPolicy} onValueChange={(showPolicy) => updateSurfaceConfig('sources', { showPolicy })} />
                 <ToggleRow title="Config link" detail="Show package/schema link at bottom." value={settings.runtime.surfaceConfig.sources.showConfigLink} onValueChange={(showConfigLink) => updateSurfaceConfig('sources', { showConfigLink })} />
               </SurfaceConfigCard>
@@ -695,8 +695,7 @@ export default function ConfigStudioScreen() {
                 <Field label="Section order" value={settings.runtime.surfaceConfig.health.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('health', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show Health Connect positioning copy." value={settings.runtime.surfaceConfig.health.showHero} onValueChange={(showHero) => updateSurfaceConfig('health', { showHero })} />
                 <ToggleRow title="Status card" detail="Show current Android availability/check result." value={settings.runtime.surfaceConfig.health.showStatusCard} onValueChange={(showStatusCard) => updateSurfaceConfig('health', { showStatusCard })} />
-                <ToggleRow title="Technical receipt" detail="Show the machine-readable local check line used by scripts." value={settings.runtime.surfaceConfig.health.showTechnicalReceipt} onValueChange={(showTechnicalReceipt) => updateSurfaceConfig('health', { showTechnicalReceipt })} />
-                <ToggleRow title="Details" detail="Show temporary record and cleanup counts." value={settings.runtime.surfaceConfig.health.showDetails} onValueChange={(showDetails) => updateSurfaceConfig('health', { showDetails })} />
+                <ToggleRow title="Details" detail="Show what Health can add, privacy state and next step." value={settings.runtime.surfaceConfig.health.showDetails} onValueChange={(showDetails) => updateSurfaceConfig('health', { showDetails })} />
               </SurfaceConfigCard>
             </View>
           </Card>

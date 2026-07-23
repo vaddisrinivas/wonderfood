@@ -138,7 +138,7 @@ const routes = [
   {
     name: 'sources',
     path: '/sources',
-    must: ['LIFEOS / SOURCES', 'Where food comes from.', 'SYNC READY', 'Bring sources onto this device.', 'No hosted bridge is required', 'sources known', 'What Food Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Your food data homes.', 'LOCAL FIRST', 'Pull what you want. Keep control.', 'Manual pulls keep the graph understandable and portable.', 'data homes', 'What Food Chat can cite'],
   },
   {
     name: 'sources-configured-citations',
@@ -152,7 +152,7 @@ const routes = [
         },
       },
     },
-    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 source packs'],
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 citeable homes'],
   },
   {
     name: 'sources-configured-order',
@@ -166,8 +166,8 @@ const routes = [
         },
       },
     },
-    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', 'Where food comes from.'],
-    orderedBefore: ['What Food Chat can cite', 'Where food comes from.'],
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', 'Your food data homes.'],
+    orderedBefore: ['What Food Chat can cite', 'Your food data homes.'],
   },
   {
     name: 'sources-health-active',
@@ -178,7 +178,7 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / SOURCES', 'Where health comes from.', 'Bring sources onto this device.', 'What Health Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Your health data homes.', 'Pull what you want. Keep control.', 'What Health Chat can cite'],
   },
   {
     name: 'config',
@@ -231,7 +231,7 @@ const routes = [
     name: 'health-diagnostics',
     path: '/health-diagnostics',
     must: ['LIFEOS / HEALTH CONNECT', 'Health data access', 'You stay in control of permissions.', 'WHAT THIS MEANS', 'AVAILABLE TO LIFEOS', 'PRIVACY', 'LAST CHECKED', 'NEXT STEP'],
-    forbidden: ['round-trip proof', 'native evidence', 'clientRecordId', 'insertedIds', 'readBeforeDelete', 'readAfterDelete'],
+    forbidden: ['round-trip proof', 'native evidence', 'clientRecordId', 'insertedIds', 'readBeforeDelete', 'readAfterDelete', 'Temporary test ID', 'Rows written', 'Read before cleanup', 'Read after cleanup', 'technical receipt'],
   },
   {
     name: 'health-diagnostics-configured',

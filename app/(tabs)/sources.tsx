@@ -23,37 +23,37 @@ const sourceMeta: Record<string, { icon: string; tone: Tone; role: string; summa
   notion: {
     icon: 'N',
     tone: 'moss' as Tone,
-    role: 'Optional authority',
-    summary: 'Connect your own Notion workspace for meals, kitchen, recipes and planning.',
-    scope: 'User configured',
+    role: 'Notion home',
+    summary: 'Pull selected Notion databases and pages into LifeOS, then ask Chat with exact citations.',
+    scope: 'Manual pull',
     action: 'Configure provider',
     href: null,
   },
   'google_sheets': {
     icon: '▦',
     tone: 'blue' as Tone,
-    role: 'Optional surface',
-    summary: 'Connect your own workbook for auditable rows, formulas and collaboration.',
-    scope: 'User configured',
+    role: 'Sheets home',
+    summary: 'Use a workbook as your spreadsheet-first surface while LifeOS keeps rows source-backed.',
+    scope: 'Manual pull',
     action: 'Configure provider',
     href: null,
   },
   sqlite: {
     icon: '▣',
     tone: 'plum' as Tone,
-    role: 'On this device',
-    summary: 'Fast offline records, recent changes, citations and recovery.',
-    scope: 'Encrypted · on device',
-    action: 'Inspect device copy',
+    role: 'Always available',
+    summary: 'Your local LifeOS copy keeps records, recent changes, citations and chat context available offline.',
+    scope: 'On device',
+    action: 'Open local graph',
     href: null,
   },
   postgres: {
     icon: 'P',
     tone: 'amber' as Tone,
-    role: 'Ready',
-    summary: 'Hosted authority option for household scale and durable history.',
+    role: 'Self-managed option',
+    summary: 'Use Postgres when you want a durable household database beyond this device.',
     scope: 'Not connected',
-    action: 'Connection guide planned',
+    action: 'Configure database',
     href: null,
   },
 } as const;
@@ -75,9 +75,10 @@ function citationSourcesFor(domainLabel: string, collections: string[]) {
 }
 
 const recentSync = [
-  ['01', 'Notion pull', 'Reads your selected Notion data sources from in-app credentials'],
-  ['02', 'Sheets pull', 'Reads workbook rows from in-app credentials'],
-  ['03', 'Device copy', 'Keeps records, citations and chat context available offline'],
+  ['01', 'Choose homes', 'Use the app alone, or enable Notion, Sheets or Postgres from Connections.'],
+  ['02', 'Pull into LifeOS', 'Bring selected pages or rows onto this device without a required server.'],
+  ['03', 'Ask with sources', 'Chat answers from the local graph and opens the exact Notion, Sheets or device record it used.'],
+  ['04', 'Review changes', 'Conflicts and provider-owned fields stay visible before anything important is overwritten.'],
 ] as const;
 
 const defaultSourceSectionOrder = ['hero', 'metrics', 'dataHomes', 'citations', 'syncPlan', 'policy', 'configLink'] as const;
@@ -170,20 +171,20 @@ export default function SourcesScreen() {
         <>
           <PageHeader
             eyebrow="Connected sources"
-            title={`Where ${domainLabel.toLowerCase()} comes from.`}
-            subtitle={`Use the app alone, or bring in Notion and Sheets when you want richer pages and rows. Chat cites the exact source it used.`}
+            title={`Your ${domainLabel.toLowerCase()} data homes.`}
+            subtitle={`Use LifeOS by itself, or connect Notion and Sheets when those are your preferred surfaces. Chat cites the exact page, row or device record it used.`}
           />
 
           <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
             <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
-              <Pill tone="blue">SYNC READY</Pill>
-              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Bring sources onto this device.</Text>
+              <Pill tone="blue">LOCAL FIRST</Pill>
+              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull what you want. Keep control.</Text>
               <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
-                Start locally, then pull your own Notion data sources or Sheets workbook. No hosted bridge is required.
+                Start with the app only. Add your own Notion databases or Sheets workbook later. Manual pulls keep the graph understandable and portable.
               </Text>
               <View style={styles.syncActions}>
                 <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
-                  <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
+                  <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Pulling...' : 'Pull enabled homes'}</Text>
                 </Pressable>
                 <Link href="/settings" asChild>
                   <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
@@ -192,8 +193,8 @@ export default function SourcesScreen() {
                 </Link>
               </View>
             </View>
-            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion or Sheets can sync into LifeOS and stay available on this device">
-              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Notion / Sheets</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
+            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion, Sheets or this device can become LifeOS records with citations">
+              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Notion / Sheets</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Your homes</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
               <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Records</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
@@ -209,16 +210,16 @@ export default function SourcesScreen() {
     if (section === 'metrics') {
       return sourcesConfig.showMetrics ? (
         <View style={styles.metrics}>
-          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>sources known</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Configured homes and links</Text></Card>
+          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>data homes</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Local plus connected providers</Text></Card>
           <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{configuredCount}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>enabled settings</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Editable in app</Text></Card>
-          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull rows</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
+          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull records</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No pull run this session'}</Text></Card>
         </View>
       ) : null;
     }
     if (section === 'dataHomes') {
       return sourcesConfig.showDataHomes ? (
         <>
-          <SectionTitle title="Connected homes" />
+          <SectionTitle title="Your data homes" />
           {!sourceRows.length ? (
             <Card>
               <Text style={styles.emptyTitle}>No external sources connected</Text>
@@ -271,7 +272,7 @@ export default function SourcesScreen() {
                       }}
                       style={[styles.sourceActionRow, { borderTopColor: theme.colors.line }]}
                     >
-                      <Text style={[styles.sourceAction, { color: theme.colors.ink }]}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull now' : meta.action}</Text>
+                      <Text style={[styles.sourceAction, { color: theme.colors.ink }]}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull latest' : meta.action}</Text>
                       <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
                     </Pressable>
                   </Card>
@@ -292,7 +293,7 @@ export default function SourcesScreen() {
                 <Text style={styles.sectionLead}>Source-backed by default</Text>
                 <Text style={styles.sectionDetail}>Every {domainLabel.toLowerCase()} claim opens the exact record, quote and observed version.</Text>
               </View>
-              <Pill tone="moss">{citationSources.length} source packs</Pill>
+              <Pill tone="moss">{citationSources.length} citeable homes</Pill>
             </View>
             <View style={styles.citationList}>
               {citationSources.map(([handle, scope, freshness]) => (
@@ -313,7 +314,7 @@ export default function SourcesScreen() {
     if (section === 'syncPlan') {
       return sourcesConfig.showSyncPlan ? (
         <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
-          <SectionTitle title="How sync works" />
+          <SectionTitle title="What happens when you pull" />
           <Card style={styles.timelineCard}>
             {recentSync.map(([time, title, detail], index) => (
               <View key={`${time}-${title}`} style={styles.timelineRow}>
@@ -334,15 +335,15 @@ export default function SourcesScreen() {
     if (section === 'policy') {
       return sourcesConfig.showPolicy ? (
         <View style={[styles.detailSide, compact ? styles.detailFull : null]}>
-          <SectionTitle title="Sync policy" />
+          <SectionTitle title="Your sync rules" />
           <Card tone="moss" style={styles.policyCard}>
             <Pill tone="moss">CALM BY DEFAULT</Pill>
-            <Text style={styles.policyTitle}>One authority. No sync loops.</Text>
+            <Text style={styles.policyTitle}>No mystery writes.</Text>
             <View style={styles.policyList}>
               <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Your device stays available offline.</Text></View>
               <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Exact source versions stay attached to answers.</Text></View>
               <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Extra source fields are preserved.</Text></View>
-              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Credentials never appear here.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Provider tokens are edited in Settings, never shown on this screen.</Text></View>
             </View>
           </Card>
         </View>
@@ -369,7 +370,7 @@ export default function SourcesScreen() {
           <View style={styles.contextBar}>
             <View>
               <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / SOURCES</Text>
-              <Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} authority, sync and citation health</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} homes, freshness and citations</Text>
             </View>
             <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
           </View>
@@ -382,7 +383,7 @@ export default function SourcesScreen() {
 
           {receipts.length ? (
             <Card style={styles.receiptCard}>
-              <Text style={styles.sectionLead}>Latest sync receipts</Text>
+              <Text style={styles.sectionLead}>Latest pull result</Text>
               <View style={styles.receiptList}>
                 {receipts.map((receipt) => (
                   <View key={`${receipt.provider}-${receipt.observedAt}`} style={styles.receiptRow}>
@@ -391,7 +392,7 @@ export default function SourcesScreen() {
                       <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
                       <Text style={styles.receiptMessage}>{receipt.message}</Text>
                     </View>
-                    <Text style={styles.receiptCount}>{receipt.records} rows</Text>
+                    <Text style={styles.receiptCount}>{receipt.records} records</Text>
                   </View>
                 ))}
               </View>

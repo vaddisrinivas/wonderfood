@@ -28,7 +28,7 @@ const viewCopy: Record<string, { title: string; subtitle: string; empty: string 
   Kitchen: {
     title: 'Kitchen',
     subtitle: 'What you have, what expires, what needs correction.',
-    empty: 'Add pantry items or sync receipts to build the kitchen.',
+    empty: 'Add pantry items or pull source updates to build the kitchen.',
   },
   Shopping: {
     title: 'Shopping',
@@ -366,7 +366,7 @@ export default function FoodScreen() {
               {isFoodDomain ? (
                 <>
                   <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
-                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
+                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or pull source updates." />
                   <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
                 </>
               ) : surfaceColumns.map((surface) => (

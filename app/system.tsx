@@ -32,7 +32,7 @@ const domains = {
 } as const;
 
 const controlTiles = [
-  ['Sources', 'Notion, Sheets, local graph and sync receipts.', 'Open trust center', '/sources', 'blue'],
+  ['Sources', 'Notion, Sheets, local graph and pull results.', 'Open data homes', '/sources', 'blue'],
   ['AI and chat', 'Providers, fallback, citations and source-bounded answers.', 'Tune assistant', '/settings', 'plum'],
   ['Domains', 'Pick Food now; add Health, Plants or any future package from config.', 'Edit packages', '/config', 'moss'],
   ['Skills and MCP', 'Tools, resources and instructions shared by app and external assistants.', 'Inspect contracts', '/config', 'amber'],
