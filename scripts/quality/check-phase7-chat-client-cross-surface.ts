@@ -66,14 +66,14 @@ async function post(path: string, body: unknown) {
   try {
     await waitForServer();
 
-    process.env.EXPO_PUBLIC_LIFEOS_SERVER_URL = baseUrl;
-    process.env.EXPO_PUBLIC_LIFEOS_SERVER_TOKEN = token;
     const { sendChatMessage } = await import('../../src/chat/client');
     const result = await sendChatMessage({
       db: null,
       text: 'create recipe phase7 cross surface pasta',
       domainId: 'food',
       conversationId: `phase7-${Date.now()}`,
+      serverUrl: baseUrl,
+      serverToken: token,
     });
 
     assert(result.mode === 'server', `client returned ${result.mode}, expected server`);
