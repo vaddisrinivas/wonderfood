@@ -180,7 +180,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     density: 'comfortable',
     surfaceConfig: {
       home: {
-        sectionOrder: 'now,review,lifeSpaces,recent,sourceTrust,control',
+        sectionOrder: 'now,review,recent,sourceTrust,lifeSpaces,control',
         showNowCard: true,
         showReviewQueue: true,
         reviewLimit: '2',
@@ -191,7 +191,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: true,
       },
       food: {
-        sectionOrder: 'hero,tabs,widgets,workspace,attention,view,package',
+        sectionOrder: 'hero,tabs,workspace,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
         showWidgets: true,
@@ -313,12 +313,17 @@ function normalizeOrderString(value: unknown, fallback: string) {
   return text.length ? text : fallback;
 }
 
+function normalizeDefaultOrder(value: unknown, fallback: string, legacy: string) {
+  const text = normalizeOrderString(value, fallback);
+  return text === legacy ? fallback : text;
+}
+
 function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surfaceConfig'] {
   const config = value && typeof value === 'object' ? value as Partial<LifeOSSettings['runtime']['surfaceConfig']> : {};
   const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
   return {
     home: {
-      sectionOrder: normalizeOrderString(config.home?.sectionOrder, defaults.home.sectionOrder),
+      sectionOrder: normalizeDefaultOrder(config.home?.sectionOrder, defaults.home.sectionOrder, 'now,review,lifeSpaces,recent,sourceTrust,control'),
       showNowCard: config.home?.showNowCard !== false,
       showReviewQueue: config.home?.showReviewQueue !== false,
       reviewLimit: normalizePositiveString(config.home?.reviewLimit, defaults.home.reviewLimit),
@@ -329,7 +334,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showControlCard: config.home?.showControlCard !== false,
     },
     food: {
-      sectionOrder: normalizeOrderString(config.food?.sectionOrder, defaults.food.sectionOrder),
+      sectionOrder: normalizeDefaultOrder(config.food?.sectionOrder, defaults.food.sectionOrder, 'hero,tabs,widgets,workspace,attention,view,package'),
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
       showWidgets: config.food?.showWidgets !== false,
