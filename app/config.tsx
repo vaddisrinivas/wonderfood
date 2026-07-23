@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -68,6 +68,25 @@ export default function ConfigStudioScreen() {
 
   const updateRuntime = (patch: Partial<LifeOSSettings['runtime']>) => {
     setSettings((current) => ({ ...current, runtime: { ...current.runtime, ...patch } }));
+  };
+
+  const updateSurfaceConfig = <K extends keyof LifeOSSettings['runtime']['surfaceConfig']>(
+    surface: K,
+    patch: Partial<LifeOSSettings['runtime']['surfaceConfig'][K]>,
+  ) => {
+    setSettings((current) => ({
+      ...current,
+      runtime: {
+        ...current.runtime,
+        surfaceConfig: {
+          ...current.runtime.surfaceConfig,
+          [surface]: {
+            ...current.runtime.surfaceConfig[surface],
+            ...patch,
+          },
+        },
+      },
+    }));
   };
 
   const save = async () => {
@@ -292,6 +311,33 @@ export default function ConfigStudioScreen() {
             </View>
           </Card>
 
+          <SectionTitle title="Screen composition" />
+          <Card tone="moss" style={styles.sectionCard}>
+            <Text style={styles.lead}>Every main screen gets runtime knobs.</Text>
+            <Text style={styles.help}>These settings control section visibility and card counts without changing app code. Domain manifests still own the schema and collections.</Text>
+            <View style={styles.surfaceGrid}>
+              <SurfaceConfigCard title="Home">
+                <Field label="Review cards" value={settings.runtime.surfaceConfig.home.reviewLimit} onChangeText={(reviewLimit) => updateSurfaceConfig('home', { reviewLimit })} />
+                <Field label="Recent graph cards" value={settings.runtime.surfaceConfig.home.recentLimit} onChangeText={(recentLimit) => updateSurfaceConfig('home', { recentLimit })} />
+                <ToggleRow title="Life spaces section" detail="Show active/add-domain cards." value={settings.runtime.surfaceConfig.home.showLifeSpaces} onValueChange={(showLifeSpaces) => updateSurfaceConfig('home', { showLifeSpaces })} />
+                <ToggleRow title="Source trust section" detail="Show Notion/Sheets/local trust cards." value={settings.runtime.surfaceConfig.home.showSourceTrust} onValueChange={(showSourceTrust) => updateSurfaceConfig('home', { showSourceTrust })} />
+                <ToggleRow title="Control card" detail="Show Settings/Config entry point." value={settings.runtime.surfaceConfig.home.showControlCard} onValueChange={(showControlCard) => updateSurfaceConfig('home', { showControlCard })} />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Food">
+                <Field label="Cards per column" value={settings.runtime.surfaceConfig.food.columnLimit} onChangeText={(columnLimit) => updateSurfaceConfig('food', { columnLimit })} />
+                <Field label="Attention cards" value={settings.runtime.surfaceConfig.food.attentionLimit} onChangeText={(attentionLimit) => updateSurfaceConfig('food', { attentionLimit })} />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Chat">
+                <Field label="Source chips" value={settings.runtime.surfaceConfig.chat.sourceLimit} onChangeText={(sourceLimit) => updateSurfaceConfig('chat', { sourceLimit })} />
+                <ToggleRow title="Prompt rail" detail="Show suggested prompts above composer." value={settings.runtime.surfaceConfig.chat.promptRail} onValueChange={(promptRail) => updateSurfaceConfig('chat', { promptRail })} />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Record">
+                <Field label="Nutrition cards" value={settings.runtime.surfaceConfig.record.nutritionLimit} onChangeText={(nutritionLimit) => updateSurfaceConfig('record', { nutritionLimit })} />
+                <ToggleRow title="Provenance" detail="Show source/schema trust panel." value={settings.runtime.surfaceConfig.record.showProvenance} onValueChange={(showProvenance) => updateSurfaceConfig('record', { showProvenance })} />
+              </SurfaceConfigCard>
+            </View>
+          </Card>
+
           <SectionTitle title="Schemas & advanced overrides" />
           <Card tone="blue" style={styles.sectionCard}>
             <View style={styles.schemaChips}>
@@ -365,6 +411,29 @@ function ChoiceField(props: { label: string; value: string; choices: string[]; o
   );
 }
 
+function SurfaceConfigCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.surfaceCard}>
+      <Text style={styles.surfaceTitle}>{title}</Text>
+      <View style={styles.surfaceBody}>{children}</View>
+    </View>
+  );
+}
+
+function Field(props: { label: string; value: string; onChangeText: (value: string) => void }) {
+  return (
+    <View style={styles.smallField}>
+      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <TextInput
+        keyboardType="number-pad"
+        value={props.value}
+        onChangeText={props.onChangeText}
+        style={styles.input}
+      />
+    </View>
+  );
+}
+
 function ChipList(props: { values: string[]; tone: 'moss' | 'blue' | 'amber' | 'plum'; limit?: number }) {
   const visible = props.values.slice(0, props.limit ?? props.values.length);
   const hidden = props.values.length - visible.length;
@@ -417,6 +486,10 @@ const styles = StyleSheet.create({
   toggleTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', textTransform: 'capitalize' },
   toggleDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   inlineFields: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, marginTop: 18 },
+  surfaceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 },
+  surfaceCard: { flexGrow: 1, flexBasis: 240, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 14 },
+  surfaceTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
+  surfaceBody: { gap: 10, marginTop: 12 },
   choiceField: { gap: 8 },
   smallField: { gap: 8, minWidth: 150 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

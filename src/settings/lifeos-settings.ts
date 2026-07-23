@@ -49,6 +49,27 @@ export type LifeOSSettings = {
     webSearch: boolean;
     theme: 'system' | 'light' | 'dark';
     density: 'comfortable' | 'compact';
+    surfaceConfig: {
+      home: {
+        reviewLimit: string;
+        recentLimit: string;
+        showLifeSpaces: boolean;
+        showSourceTrust: boolean;
+        showControlCard: boolean;
+      };
+      food: {
+        columnLimit: string;
+        attentionLimit: string;
+      };
+      chat: {
+        sourceLimit: string;
+        promptRail: boolean;
+      };
+      record: {
+        nutritionLimit: string;
+        showProvenance: boolean;
+      };
+    };
   };
 };
 
@@ -132,6 +153,27 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     webSearch: true,
     theme: 'system',
     density: 'comfortable',
+    surfaceConfig: {
+      home: {
+        reviewLimit: '2',
+        recentLimit: '4',
+        showLifeSpaces: true,
+        showSourceTrust: true,
+        showControlCard: true,
+      },
+      food: {
+        columnLimit: '4',
+        attentionLimit: '3',
+      },
+      chat: {
+        sourceLimit: '8',
+        promptRail: true,
+      },
+      record: {
+        nutritionLimit: '6',
+        showProvenance: true,
+      },
+    },
   },
 };
 
@@ -205,6 +247,39 @@ function normalizeSettings(input: Partial<LifeOSSettings> | null): LifeOSSetting
       webSearch: runtime?.webSearch !== false,
       theme: runtime?.theme === 'light' || runtime?.theme === 'dark' ? runtime.theme : 'system',
       density: runtime?.density === 'compact' ? 'compact' : 'comfortable',
+      surfaceConfig: normalizeSurfaceConfig(runtime?.surfaceConfig),
+    },
+  };
+}
+
+function normalizePositiveString(value: unknown, fallback: string) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : fallback;
+}
+
+function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surfaceConfig'] {
+  const config = value && typeof value === 'object' ? value as Partial<LifeOSSettings['runtime']['surfaceConfig']> : {};
+  const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
+  return {
+    home: {
+      reviewLimit: normalizePositiveString(config.home?.reviewLimit, defaults.home.reviewLimit),
+      recentLimit: normalizePositiveString(config.home?.recentLimit, defaults.home.recentLimit),
+      showLifeSpaces: config.home?.showLifeSpaces !== false,
+      showSourceTrust: config.home?.showSourceTrust !== false,
+      showControlCard: config.home?.showControlCard !== false,
+    },
+    food: {
+      columnLimit: normalizePositiveString(config.food?.columnLimit, defaults.food.columnLimit),
+      attentionLimit: normalizePositiveString(config.food?.attentionLimit, defaults.food.attentionLimit),
+    },
+    chat: {
+      sourceLimit: normalizePositiveString(config.chat?.sourceLimit, defaults.chat.sourceLimit),
+      promptRail: config.chat?.promptRail !== false,
+    },
+    record: {
+      nutritionLimit: normalizePositiveString(config.record?.nutritionLimit, defaults.record.nutritionLimit),
+      showProvenance: config.record?.showProvenance !== false,
     },
   };
 }

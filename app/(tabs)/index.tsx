@@ -7,13 +7,20 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors } from '@/src/theme';
+
+function countSetting(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
 
 export default function TodayScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
+  const settings = useLifeOSSettingsSnapshot();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
 
@@ -33,9 +40,12 @@ export default function TodayScreen() {
     };
   }, [db]);
 
+  const homeConfig = settings.runtime.surfaceConfig.home;
+  const reviewLimit = countSetting(homeConfig.reviewLimit, 2);
+  const recentLimit = countSetting(homeConfig.recentLimit, 4);
   const rhythmRows = records.slice(0, 3);
-  const reviewRows = records.slice(1, 3);
-  const recentRows = records.slice(0, 4);
+  const reviewRows = records.slice(1, 1 + reviewLimit);
+  const recentRows = records.slice(0, recentLimit);
   const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
   const firstRecord = rhythmRows[0];
   const secondRecord = rhythmRows[1];
@@ -88,27 +98,31 @@ export default function TodayScreen() {
             )}
           </Card>
 
-          <SectionTitle title="Life spaces" />
-          <View style={sharedStyles.grid}>
-            <Link href="/(tabs)/food" asChild>
-              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
-                <Card tone="moss" style={styles.spaceCard}>
-                  <Text style={styles.spaceGlyph}>F</Text>
-                  <Text style={styles.spaceTitle}>{catalog.activeManifest.label}</Text>
-                  <Text style={styles.spaceBody}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active food graph.` : 'Kitchen, meals, recipes and shopping render from config.'}</Text>
-                </Card>
-              </Pressable>
-            </Link>
-            <Link href="/config" asChild>
-              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
-                <Card tone="plum" style={styles.spaceCard}>
-                  <Text style={styles.spaceGlyph}>+</Text>
-                  <Text style={styles.spaceTitle}>Add a domain</Text>
-                  <Text style={styles.spaceBody}>Health, Plants or any future package should arrive by config, not app rebuild.</Text>
-                </Card>
-              </Pressable>
-            </Link>
-          </View>
+          {homeConfig.showLifeSpaces ? (
+            <>
+              <SectionTitle title="Life spaces" />
+              <View style={sharedStyles.grid}>
+                <Link href="/(tabs)/food" asChild>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
+                    <Card tone="moss" style={styles.spaceCard}>
+                      <Text style={styles.spaceGlyph}>F</Text>
+                      <Text style={styles.spaceTitle}>{catalog.activeManifest.label}</Text>
+                      <Text style={styles.spaceBody}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active food graph.` : 'Kitchen, meals, recipes and shopping render from config.'}</Text>
+                    </Card>
+                  </Pressable>
+                </Link>
+                <Link href="/config" asChild>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
+                    <Card tone="plum" style={styles.spaceCard}>
+                      <Text style={styles.spaceGlyph}>+</Text>
+                      <Text style={styles.spaceTitle}>Add a domain</Text>
+                      <Text style={styles.spaceBody}>Health, Plants or any future package should arrive by config, not app rebuild.</Text>
+                    </Card>
+                  </Pressable>
+                </Link>
+              </View>
+            </>
+          ) : null}
 
           <SectionTitle title="Recent graph" action="Open Sources" href="/sources" />
           <Card style={styles.timelineCard}>
@@ -125,31 +139,39 @@ export default function TodayScreen() {
             )}
           </Card>
 
-          <SectionTitle title="Source trust" />
-          <View style={sharedStyles.grid}>
-            <Card tone="blue" style={styles.trustCard}>
-              <Text style={styles.trustTitle}>Notion and Sheets are optional homes</Text>
-              <Text style={sharedStyles.muted}>The app can run local-first, then pull chosen providers into one source-backed graph.</Text>
-              <Link href="/sources" style={styles.cardLink}>Open trust center →</Link>
-            </Card>
-            <Card tone="amber" style={styles.trustCard}>
-              <Text style={styles.trustTitle}>{secondRecord?.title ?? 'Chat needs citations'}</Text>
-              <Text style={sharedStyles.muted}>{secondRecord?.meta ?? 'Assistant answers should show tables, records and exact source cards.'}</Text>
-              <Link href="/chat" style={styles.cardLink}>Open Chat →</Link>
-            </Card>
-          </View>
+          {homeConfig.showSourceTrust ? (
+            <>
+              <SectionTitle title="Source trust" />
+              <View style={sharedStyles.grid}>
+                <Card tone="blue" style={styles.trustCard}>
+                  <Text style={styles.trustTitle}>Notion and Sheets are optional homes</Text>
+                  <Text style={sharedStyles.muted}>The app can run local-first, then pull chosen providers into one source-backed graph.</Text>
+                  <Link href="/sources" style={styles.cardLink}>Open trust center →</Link>
+                </Card>
+                <Card tone="amber" style={styles.trustCard}>
+                  <Text style={styles.trustTitle}>{secondRecord?.title ?? 'Chat needs citations'}</Text>
+                  <Text style={sharedStyles.muted}>{secondRecord?.meta ?? 'Assistant answers should show tables, records and exact source cards.'}</Text>
+                  <Link href="/chat" style={styles.cardLink}>Open Chat →</Link>
+                </Card>
+              </View>
+            </>
+          ) : null}
 
-          <SectionTitle title="Control lives in Settings" />
-          <Card style={styles.controlCard}>
-            <View style={styles.controlCopy}>
-              <Text style={styles.controlTitle}>Providers, domains, skills, schemas and MCP are editable from the app.</Text>
-              <Text style={sharedStyles.muted}>Settings holds the machinery. Home stays useful.</Text>
-            </View>
-            <View style={styles.controlActions}>
-              <Link href="/settings" style={styles.controlLink}>Settings</Link>
-              <Link href="/config" style={styles.controlLinkQuiet}>Config</Link>
-            </View>
-          </Card>
+          {homeConfig.showControlCard ? (
+            <>
+              <SectionTitle title="Control lives in Settings" />
+              <Card style={styles.controlCard}>
+                <View style={styles.controlCopy}>
+                  <Text style={styles.controlTitle}>Providers, domains, skills, schemas, screens and MCP are editable from the app.</Text>
+                  <Text style={sharedStyles.muted}>Settings holds the machinery. Home stays useful.</Text>
+                </View>
+                <View style={styles.controlActions}>
+                  <Link href="/settings" style={styles.controlLink}>Settings</Link>
+                  <Link href="/config" style={styles.controlLinkQuiet}>Config</Link>
+                </View>
+              </Card>
+            </>
+          ) : null}
         </View>
       </ScrollView>
     </Page>
