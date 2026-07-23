@@ -85,6 +85,7 @@
     "phase9:check:responsive-visual-matrix": "node scripts/quality/check-responsive-visual-matrix.mjs",
     "phase9:check:performance-budget": "node scripts/quality/check-performance-budget.mjs",
     "phase9:check:visual-state-matrix": "node scripts/quality/check-visual-state-matrix.mjs",
+    "phase9:check:product-polish-review": "node scripts/quality/check-product-polish-review.mjs",
     "phase9:check:completion-audit": "node scripts/quality/check-lifeos-completion-audit.mjs",
     "test:server:notion": "./server/node_modules/.bin/tsx server/test/notion/unit-notion-adapter.ts",
     "test:contract:notion": "./server/node_modules/.bin/tsx server/test/notion/contract-notion-webhook.ts",

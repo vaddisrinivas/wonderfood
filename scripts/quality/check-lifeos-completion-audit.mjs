@@ -64,6 +64,7 @@ const visualMatrix = readJson('app/build/evidence/visual-state-matrix/visual-sta
 const nativeVisualMatrix = readJson('app/build/evidence/native-visual-matrix/native-visual-matrix.json');
 const responsiveVisualMatrix = readJson('app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json');
 const performanceBudget = readJson('app/build/evidence/performance/performance-budget.json');
+const productPolish = readJson('app/build/evidence/product-polish/product-polish-review.json');
 const androidArtifacts = readJson('app/build/evidence/android-release-artifacts.json');
 const iosExport = readJson('app/build/evidence/ios-export.json');
 
@@ -75,6 +76,7 @@ const visualMatrixPassed = visualMatrix?.status === 'passed';
 const nativeVisualMatrixPassed = nativeVisualMatrix?.status === 'passed';
 const responsiveVisualMatrixPassed = responsiveVisualMatrix?.status === 'passed';
 const performanceBudgetPassed = performanceBudget?.status === 'passed';
+const productPolishPassed = productPolish?.status === 'passed';
 const androidArtifactsCurrent = androidArtifacts?.git_head === head;
 
 const items = [
@@ -130,7 +132,7 @@ const items = [
   item(
     'final_visual_accessibility_polish',
     'Final visual/accessibility polish',
-    visualSmokePassed && visualMatrixPassed && nativeVisualMatrixPassed && responsiveVisualMatrixPassed && performanceBudgetPassed ? 'partial' : 'missing',
+    productPolishPassed ? 'passed' : (visualSmokePassed && visualMatrixPassed && nativeVisualMatrixPassed && responsiveVisualMatrixPassed && performanceBudgetPassed ? 'partial' : 'missing'),
     {
       web_product: 'app/build/evidence/web-product-smoke/web-product-smoke.json',
       accessibility: 'app/build/evidence/accessibility/accessibility-smoke.json',
@@ -138,10 +140,15 @@ const items = [
       native_visual_matrix: 'app/build/evidence/native-visual-matrix/native-visual-matrix.json',
       responsive_visual_matrix: 'app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json',
       performance_budget: 'app/build/evidence/performance/performance-budget.json',
+      product_polish_review: 'app/build/evidence/product-polish/product-polish-review.json',
     },
-    visualSmokePassed
+    productPolishPassed
+      ? []
+      : productPolish?.issues?.length
+        ? productPolish.issues
+        : visualSmokePassed
       ? [
-        'Web/native/responsive visual matrices, accessibility smoke and performance budgets pass, but manual product-grade UI review is still not complete.',
+        'Run phase9:check:product-polish-review and clear its issues.',
       ]
       : ['Run/fix check:web-product and check:accessibility-smoke.'],
   ),

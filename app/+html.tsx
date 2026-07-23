@@ -28,4 +28,22 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
 }
+
+a[href],
+[role="link"],
+[role="button"],
+[role="switch"],
+button,
+input[type="button"],
+input[type="submit"] {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+
+a[href],
+[role="link"],
+[role="button"],
+button {
+  align-items: center !important;
+}
 `;
