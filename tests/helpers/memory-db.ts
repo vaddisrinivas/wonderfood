@@ -9,6 +9,7 @@ export class MemoryDb {
   sourceSnapshots = new Map<string, Row>();
   sourceSnapshotRelations: Row[] = [];
   outbox = new Map<string, Row>();
+  workflowRuns = new Map<string, Row>();
 
   async execAsync(_sql: string) {}
 
@@ -108,6 +109,25 @@ export class MemoryDb {
       }
       return;
     }
+    if (compact.startsWith('INSERT INTO workflow_runs')) {
+      const [id, domain, workflow_id, inputs_json, status, payload_json, created_at, updated_at] = params;
+      this.workflowRuns.set(id, { id, domain, workflow_id, inputs_json, status, payload_json, created_at, updated_at });
+      return;
+    }
+    if (compact.startsWith('UPDATE workflow_runs SET')) {
+      const id = params[params.length - 1];
+      const row = this.workflowRuns.get(id);
+      if (!row) return;
+      if (compact.includes('status = ?')) {
+        row.status = params[0];
+      }
+      if (compact.includes('payload_json = ?')) {
+        const payloadIndex = compact.includes('status = ?') ? 1 : 0;
+        row.payload_json = params[payloadIndex];
+      }
+      row.updated_at = params[params.length - 2];
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 
@@ -138,6 +158,9 @@ export class MemoryDb {
         .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
       return (rows[0] ?? null) as T | null;
     }
+    if (compact === 'SELECT * FROM workflow_runs WHERE id = ?') {
+      return (this.workflowRuns.get(params[0]) ?? null) as T | null;
+    }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
   }
 
@@ -150,6 +173,11 @@ export class MemoryDb {
       return Array.from(this.conflicts.values())
         .filter((row) => row.status === params[0])
         .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at))) as T[];
+    }
+    if (compact === 'SELECT * FROM workflow_runs WHERE domain = ? ORDER BY updated_at DESC') {
+      return Array.from(this.workflowRuns.values())
+        .filter((row) => row.domain === params[0])
+        .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at))) as T[];
     }
     throw new Error(`Unsupported getAllAsync SQL: ${compact}`);
   }
@@ -164,6 +192,7 @@ export class MemoryDb {
       sourceSnapshots: new Map(this.sourceSnapshots),
       sourceSnapshotRelations: this.sourceSnapshotRelations.map((row) => ({ ...row })),
       outbox: new Map(this.outbox),
+      workflowRuns: new Map(this.workflowRuns),
     };
   }
 
@@ -176,5 +205,6 @@ export class MemoryDb {
     this.sourceSnapshots = new Map(snapshot.sourceSnapshots);
     this.sourceSnapshotRelations = snapshot.sourceSnapshotRelations.map((row) => ({ ...row }));
     this.outbox = new Map(snapshot.outbox);
+    this.workflowRuns = new Map(snapshot.workflowRuns);
   }
 }
