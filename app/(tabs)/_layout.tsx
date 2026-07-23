@@ -1,9 +1,10 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
+import { VisualMark } from '@/src/components/ui';
 import { useLifeOSTheme } from '@/src/theme';
-import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
-import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
+import { loadCatalog, setActiveDomainOverride, VisualToken } from '@/src/domain/catalog';
+import { mergeVisualIdentity } from '@/src/domain/visual-identity';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 export default function TabLayout() {
@@ -11,12 +12,12 @@ export default function TabLayout() {
   setActiveDomainOverride(settings.runtime.activeDomain);
   const domain = loadCatalog().activeManifest;
   const visualIdentity = mergeVisualIdentity(domain, settings.runtime.visualIdentityOverrides);
-  const icons: Record<string, string> = {
-    index: visualGlyph(visualIdentity.actions?.home, '⌂'),
-    food: visualGlyph(visualIdentity.domain, domain.label.slice(0, 1)),
-    chat: visualGlyph(visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, '✦'),
-    sources: visualGlyph(visualIdentity.actions?.open_sources, '▣'),
-    settings: visualGlyph(visualIdentity.actions?.settings, '⚙'),
+  const icons: Record<string, { token?: VisualToken; fallback: string }> = {
+    index: { token: visualIdentity.actions?.home, fallback: '⌂' },
+    food: { token: visualIdentity.domain, fallback: domain.label.slice(0, 1) },
+    chat: { token: visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, fallback: '✦' },
+    sources: { token: visualIdentity.actions?.open_sources, fallback: '▣' },
+    settings: { token: visualIdentity.actions?.settings, fallback: '⚙' },
   };
   const theme = useLifeOSTheme();
   return (
@@ -34,7 +35,20 @@ export default function TabLayout() {
       tabBarActiveTintColor: theme.colors.moss,
       tabBarInactiveTintColor: theme.colors.muted,
       tabBarLabelStyle: [styles.tabLabel, theme.density === 'compact' && styles.tabLabelCompact],
-      tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>{icons[route.name] ?? '•'}</Text>,
+      tabBarIcon: ({ color, focused }) => {
+        const visual = icons[route.name] ?? { fallback: '•' };
+        return (
+          <VisualMark
+            token={visual.token}
+            fallback={visual.fallback}
+            size={26}
+            backgroundColor={focused ? theme.colors.mossSoft : 'transparent'}
+            color={String(color)}
+            label={`${route.name} tab`}
+            glyphStyle={styles.tabIconGlyph}
+          />
+        );
+      },
     })}>
       <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false }} />
       <Tabs.Screen name="food" options={{ title: domain.label, headerShown: false }} />
@@ -52,5 +66,5 @@ const styles = StyleSheet.create({
   tabItemCompact: { paddingVertical: 0 },
   tabLabel: { fontSize: 8, fontWeight: '800', minWidth: 54, textAlign: 'center' },
   tabLabelCompact: { fontSize: 7 },
-  tabIcon: { fontSize: 17, fontWeight: '800', height: 23 },
+  tabIconGlyph: { fontSize: 15, fontWeight: '900' },
 });
