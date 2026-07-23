@@ -87,6 +87,27 @@ export class MemoryDb {
       this.outbox.set(id, { id, action_key, domain, payload_json, status, attempts: 0, last_error: null, created_at, updated_at });
       return;
     }
+    if (compact === 'UPDATE outbox_events SET status = ?, last_error = ?, updated_at = ? WHERE id = ?') {
+      const [status, last_error, updated_at, id] = params;
+      const row = this.outbox.get(id);
+      if (row) {
+        row.status = status;
+        row.last_error = last_error;
+        row.updated_at = updated_at;
+      }
+      return;
+    }
+    if (compact === 'UPDATE outbox_events SET attempts = attempts + ?, status = ?, last_error = ?, updated_at = ? WHERE id = ?') {
+      const [attemptsDelta, status, last_error, updated_at, id] = params;
+      const row = this.outbox.get(id);
+      if (row) {
+        row.attempts = Number(row.attempts ?? 0) + Number(attemptsDelta ?? 0);
+        row.status = status;
+        row.last_error = last_error;
+        row.updated_at = updated_at;
+      }
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 

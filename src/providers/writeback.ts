@@ -1,8 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { CanonicalRecord } from '@/src/domain/runtime';
-import { enqueueOutboxEvent, getOutboxEventByActionKey, type OutboxEvent } from '@/src/db/outbox';
+import { enqueueOutboxEvent, getOutboxEventByActionKey, markOutboxEvent, type OutboxEvent } from '@/src/db/outbox';
 import type { DirectSyncProvider } from '@/src/providers/provider-local-copy';
+import type { LifeOSSettings } from '@/src/settings/lifeos-settings';
 
 export type ProviderWriteOperation = 'create_record' | 'update_record' | 'archive_record';
 
@@ -23,6 +24,17 @@ export type ProviderWritebackResult =
   | { status: 'queued'; event: OutboxEvent; payload: ProviderWritePayload }
   | { status: 'duplicate'; event: OutboxEvent; payload: ProviderWritePayload }
   | { status: 'rejected'; op_id: string; reject_reason: string };
+
+export type ProviderWriteDeliveryResult =
+  | { status: 'delivered'; event_id: string; provider: DirectSyncProvider; statusCode: number }
+  | { status: 'blocked'; event_id: string; provider?: DirectSyncProvider; reason: string }
+  | { status: 'failed'; event_id: string; provider: DirectSyncProvider; statusCode: number; reason: string };
+
+type FetchLike = (url: string, init: {
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+}) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 
 type OperationRow = {
   op_id: string;
@@ -103,4 +115,132 @@ export async function enqueueProviderWriteForOperation(input: {
     payload_json: JSON.stringify(payload),
   });
   return { status: 'queued', event, payload };
+}
+
+function parsePayload(event: OutboxEvent): ProviderWritePayload | null {
+  try {
+    const parsed = JSON.parse(event.payload_json) as ProviderWritePayload;
+    return parsed?.schema_version === 'lifeos.provider-write.v1' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function recordTitle(record: CanonicalRecord | null) {
+  return record?.title?.trim() || record?.id || 'LifeOS record';
+}
+
+function notionProperties(record: CanonicalRecord | null) {
+  return {
+    Name: {
+      title: [{ type: 'text', text: { content: recordTitle(record) } }],
+    },
+  };
+}
+
+function firstDataSourceId(settings: LifeOSSettings) {
+  return settings.notion.dataSourceIds.split(',').map((id) => id.trim()).filter(Boolean)[0] ?? '';
+}
+
+function buildNotionRequest(payload: ProviderWritePayload, settings: LifeOSSettings) {
+  if (!settings.notion.enabled || !settings.notion.token.trim()) return { blocked: 'Notion token is missing.' };
+  const dataSourceId = firstDataSourceId(settings);
+  if (payload.operation === 'create_record') {
+    if (!dataSourceId) return { blocked: 'Notion data source ID is missing.' };
+    return {
+      url: 'https://api.notion.com/v1/pages',
+      init: {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${settings.notion.token.trim()}`,
+          'content-type': 'application/json',
+          'notion-version': '2026-03-11',
+        },
+        body: JSON.stringify({
+          parent: { type: 'data_source_id', data_source_id: dataSourceId },
+          properties: notionProperties(payload.record),
+        }),
+      },
+    };
+  }
+  const pageId = payload.external_id?.trim();
+  if (!pageId) return { blocked: 'Notion page ID is missing for update/archive.' };
+  return {
+    url: `https://api.notion.com/v1/pages/${encodeURIComponent(pageId)}`,
+    init: {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${settings.notion.token.trim()}`,
+        'content-type': 'application/json',
+        'notion-version': '2026-03-11',
+      },
+      body: JSON.stringify({
+        ...(payload.operation === 'archive_record'
+          ? { archived: true }
+          : { properties: notionProperties(payload.record) }),
+      }),
+    },
+  };
+}
+
+function sheetRow(payload: ProviderWritePayload) {
+  const record = payload.record ?? payload.before;
+  return [
+    payload.record_id,
+    recordTitle(record),
+    record?.domain ?? '',
+    record?.collection ?? '',
+    JSON.stringify(record?.properties ?? {}),
+    payload.operation === 'archive_record' ? 'true' : String(record?.archived_at ? true : record?.deleted ?? false),
+    String(record?.revision ?? ''),
+    new Date().toISOString(),
+    payload.op_id,
+  ];
+}
+
+function buildSheetsRequest(payload: ProviderWritePayload, settings: LifeOSSettings) {
+  if (!settings.sheets.enabled || !settings.sheets.token.trim()) return { blocked: 'Google Sheets token is missing.' };
+  if (!settings.sheets.workbookId.trim()) return { blocked: 'Google Sheets workbook ID is missing.' };
+  const sheetName = settings.sheets.sheetName.trim() || 'LifeOS Canonical';
+  const range = encodeURIComponent(`${sheetName}!A:I`);
+  return {
+    url: `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(settings.sheets.workbookId.trim())}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    init: {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${settings.sheets.token.trim()}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ values: [sheetRow(payload)] }),
+    },
+  };
+}
+
+export async function deliverProviderWriteEvent(input: {
+  db: SQLiteDatabase;
+  event: OutboxEvent;
+  settings: LifeOSSettings;
+  fetcher?: FetchLike;
+  platform?: 'native' | 'web' | 'node';
+}): Promise<ProviderWriteDeliveryResult> {
+  const payload = parsePayload(input.event);
+  if (!payload) return { status: 'blocked', event_id: input.event.id, reason: 'unsupported_outbox_payload' };
+  if (input.platform === 'web') {
+    return { status: 'blocked', event_id: input.event.id, provider: payload.provider, reason: 'Direct provider writes are blocked by browser CORS; use native app delivery.' };
+  }
+  const request = payload.provider === 'notion'
+    ? buildNotionRequest(payload, input.settings)
+    : buildSheetsRequest(payload, input.settings);
+  if ('blocked' in request) {
+    return { status: 'blocked', event_id: input.event.id, provider: payload.provider, reason: request.blocked ?? 'provider_config_missing' };
+  }
+  const fetcher = input.fetcher ?? fetch;
+  const response = await fetcher(request.url, request.init);
+  if (response.ok) {
+    await markOutboxEvent(input.db, input.event.id, { status: 'done', last_error: null });
+    return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status };
+  }
+  const reason = (await response.text().catch(() => '')).slice(0, 240) || `HTTP ${response.status}`;
+  await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: reason, attemptsDelta: 1 });
+  return { status: 'failed', event_id: input.event.id, provider: payload.provider, statusCode: response.status, reason };
 }

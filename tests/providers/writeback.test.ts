@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { loadCatalog } from '@/src/domain/catalog';
 import { applyOperation } from '@/src/ops/apply';
 import { undoOperation } from '@/src/ops/undo';
-import { enqueueProviderWriteForOperation, type ProviderWritePayload } from '@/src/providers/writeback';
+import { deliverProviderWriteEvent, enqueueProviderWriteForOperation, type ProviderWritePayload } from '@/src/providers/writeback';
+import { defaultLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { MemoryDb } from '../helpers/memory-db';
 
 const manifest = loadCatalog().activeManifest;
@@ -104,5 +105,59 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(queued.status).toBe('queued');
     expect(body.operation).toBe('archive_record');
     expect(body.record?.archived_at).toBeTruthy();
+  });
+
+  it('delivers queued Notion writes with device settings and marks outbox done', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-notion');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-deliver-notion' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+    const calls: Array<{ url: string; init: { method: string; headers: Record<string, string>; body?: string } }> = [];
+    const delivered = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async (url, init) => {
+        calls.push({ url, init });
+        return { ok: true, status: 200, text: async () => '{}' };
+      },
+      platform: 'native',
+    });
+
+    expect(delivered.status).toBe('delivered');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('done');
+    expect(calls[0].url).toBe('https://api.notion.com/v1/pages');
+    expect(calls[0].init.headers.authorization).toBe('Bearer test-token');
+  });
+
+  it('blocks browser delivery and marks failed provider responses', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-sheets');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: 'writeback-deliver-sheets' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+    const settings = {
+      ...defaultLifeOSSettings,
+      sheets: { enabled: true, token: 'sheet-token', workbookId: 'book-1', sheetName: 'LifeOS Canonical' },
+    };
+
+    const blocked = await deliverProviderWriteEvent({ db: db as any, event: queued.event, settings, platform: 'web' });
+    const failed = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings,
+      fetcher: async () => ({ ok: false, status: 409, text: async () => 'version conflict' }),
+      platform: 'native',
+    });
+
+    expect(blocked.status).toBe('blocked');
+    expect(failed.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.attempts).toBe(1);
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('version conflict');
   });
 });
