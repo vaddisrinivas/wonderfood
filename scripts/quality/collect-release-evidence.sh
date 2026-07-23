@@ -100,13 +100,21 @@ client_id=""
 if [[ -n "$google_auth_file" ]]; then
   client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' "$google_auth_file" | head -n 1)"
 fi
-if [[ -z "$google_auth_file" ]]; then
-  record "google_web_client_id=missing_file"
-elif [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
-  record "google_web_client_id=placeholder"
-else
-  record "google_web_client_id=configured_public_value"
+google_auth_required=0
+if rg -q 'google_web_client_id|GoogleSignIn|R\.string\.google' android/app/src app src 2>/dev/null; then
+  google_auth_required=1
 fi
+google_auth_status=""
+if [[ -z "$google_auth_file" && "$google_auth_required" -eq 0 ]]; then
+  google_auth_status="not_required_direct_settings"
+elif [[ -z "$google_auth_file" ]]; then
+  google_auth_status="missing_file"
+elif [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
+  google_auth_status="placeholder"
+else
+  google_auth_status="configured_public_value"
+fi
+record "google_web_client_id=$google_auth_status"
 
 if [[ -f .well-known/assetlinks.json ]]; then
   if grep -q 'REPLACE_WITH_RELEASE_SHA256_CERT_FINGERPRINT' .well-known/assetlinks.json; then
@@ -138,7 +146,7 @@ version_name=$version_name
 version_code=$version_code
 package=$package_name
 signing_env=$([[ "$missing_signing" -eq 0 ]] && echo present || echo missing)
-google_web_client_id=${client_id:-missing}
+google_web_client_id=$google_auth_status
 release_apk_count=${#release_apks[@]}
 MANIFEST
 

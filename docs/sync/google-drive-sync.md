@@ -23,17 +23,16 @@ WonderFood sync is local-first:
    - Debug SHA-1: `91:30:EA:BE:10:CA:97:31:15:E8:81:B1:20:39:EE:D6:AA:D1:E6:04`
 
 7. Create a Web OAuth client.
-8. For local testing, paste the Web client ID on the phone:
+8. Paste provider credentials in the app when that provider is enabled:
 
-   WonderFood → Settings → Data → Google sync → Web OAuth client ID
+   WonderFood → Settings → Data sources
 
-9. For production/release builds, copy the Web client ID into:
+9. Legacy native Google Sign-In builds used:
 
    `app/src/main/res/values/google_auth.xml`
 
-   Replace:
-
-   `TODO_ADD_GOOGLE_WEB_CLIENT_ID`
+   The current Expo LifeOS app does not require this XML unless native Google Sign-In is reintroduced.
+   Provider tokens and workbook IDs are user-editable from Settings.
 
 ## Runtime flow
 
