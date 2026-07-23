@@ -1,7 +1,8 @@
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
+import { Card, Page, PageHeader, Pill, VisualMark, sharedStyles } from '@/src/components/ui';
+import { VisualToken } from '@/src/domain/catalog';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { searchDomainRecords } from '@/src/domain/queries';
@@ -51,9 +52,9 @@ export default function SearchScreen() {
   const hasQuery = query.trim().length > 0;
   const visibleResults = results.slice(0, resultLimit);
   const commands = [
-    { id: 'ask', title: `Ask ${domainLabel} AI`, detail: `Search ${domainLabel} sources, saved data and the web`, href: '/(tabs)/chat' as const, icon: visualGlyph(visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, '✦') },
-    { id: 'capture', title: `Add ${domainLabel.toLowerCase()}`, detail: `Note, receipt, photo, link or quick thought`, href: '/capture' as const, icon: visualGlyph(visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, '＋') },
-    { id: 'settings', title: 'Open Settings', detail: 'AI, sources, domains and app behavior', href: '/settings' as const, icon: visualGlyph(visualIdentity.actions?.settings, '⚙') },
+    { id: 'ask', title: `Ask ${domainLabel} AI`, detail: `Search ${domainLabel} sources, saved data and the web`, href: '/(tabs)/chat' as const, visual: visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, fallback: '✦' },
+    { id: 'capture', title: `Add ${domainLabel.toLowerCase()}`, detail: `Note, receipt, photo, link or quick thought`, href: '/capture' as const, visual: visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, fallback: '＋' },
+    { id: 'settings', title: 'Open Settings', detail: 'AI, sources, domains and app behavior', href: '/settings' as const, visual: visualIdentity.actions?.settings, fallback: '⚙' },
   ];
 
   const renderSection = (section: SearchSection) => {
@@ -76,7 +77,7 @@ export default function SearchScreen() {
               {commands.map((command) => (
                 <Link href={command.href} asChild key={command.id}>
                   <Pressable style={styles.result}>
-                    <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>{command.icon}</Text></View>
+                    <VisualMark token={command.visual as VisualToken | undefined} fallback={command.fallback} size={38} backgroundColor={theme.colors.canvas} label={`${command.title} visual`} style={styles.resultIcon} />
                     <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{command.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{command.detail}</Text></View>
                     <Text style={[styles.chevron, { color: theme.colors.muted }]}>›</Text>
                   </Pressable>
@@ -98,7 +99,7 @@ export default function SearchScreen() {
                     const status = record.status ?? 'Active';
                     return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
                       <Pressable style={styles.result}>
-                        <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>{visualGlyph(visualIdentity.collections?.[record.collection], '◉')}</Text></View>
+                        <VisualMark token={visualIdentity.collections?.[record.collection]} fallback="◉" size={38} backgroundColor={theme.colors.canvas} label={`${record.collection} visual`} style={styles.resultIcon} />
                         <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{record.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{record.meta ?? ''}</Text></View>
                         <Pill tone={tone}>{status}</Pill>
                       </Pressable>

@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { Card, Page, PageHeader, Pill, SectionTitle, VisualMark, sharedStyles } from '@/src/components/ui';
 import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
@@ -254,7 +254,6 @@ export default function SourcesScreen() {
                 ? { icon: visualGlyph(visualIdentity.sources?.user, '◉'), tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source was found by the app.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
                 : sourceMeta[normalized];
               const sourceVisual = normalized === 'other' ? undefined : visualIdentity.sources?.[normalized];
-              const sourceIcon = visualGlyph(sourceVisual, meta.icon);
               const sourceTone = visualAccent(sourceVisual) as Tone;
               const isReady = normalized === 'postgres';
               const displayRole = normalized === 'sqlite' ? `${domainLabel} on this device` : meta.role;
@@ -265,7 +264,7 @@ export default function SourcesScreen() {
                 <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
                     <View style={styles.sourceTop}>
-                      <View style={[styles.sourceIcon, { backgroundColor: toneColor(sourceTone, theme.colors) }]}><Text style={[styles.sourceIconText, { color: theme.colors.paper }]}>{sourceIcon}</Text></View>
+                      <VisualMark token={sourceVisual} fallback={meta.icon} size={44} backgroundColor={toneColor(sourceTone, theme.colors)} color={theme.colors.paper} label={`${sourceRow.name} visual`} style={styles.sourceIcon} glyphStyle={styles.sourceIconText} />
                       <Pill tone={isReady ? 'amber' : meta.tone}>{sourceRow.status.toUpperCase()}</Pill>
                     </View>
                     <Text style={[styles.sourceName, { color: theme.colors.ink }]}>{sourceRow.name}</Text>

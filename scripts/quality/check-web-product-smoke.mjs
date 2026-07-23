@@ -136,6 +136,18 @@ const routes = [
     forbidden: ['Collection not found', 'Record not found'],
   },
   {
+    name: 'collection-configured-image-visual',
+    path: '/collection/recipe',
+    localSettings: {
+      runtime: {
+        visualIdentityOverrides: '{"collections":{"recipe":{"emoji":"🧪","image_url":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2718%27 fill=%27%23E9DFF0%27/%3E%3Ctext x=%2732%27 y=%2739%27 text-anchor=%27middle%27 font-size=%2728%27%3E🍳%3C/text%3E%3C/svg%3E","accent":"plum"}}}',
+      },
+    },
+    must: ['LIFEOS / FOOD COLLECTION', 'Custom image visual active.', 'Visual identity'],
+    minimumImages: 1,
+    forbidden: ['Collection not found', 'Record not found'],
+  },
+  {
     name: 'record-configured-order',
     path: '/record/meal-green-dal',
     localSettings: {
@@ -412,6 +424,10 @@ for (const viewport of viewports) {
         const root = document.scrollingElement || document.documentElement;
         return Math.max(0, root.scrollWidth - window.innerWidth);
       });
+      result.imageCount = await page.evaluate(() => document.querySelectorAll('img').length);
+      if (route.minimumImages && result.imageCount < route.minimumImages) {
+        result.missing.push(`images:${result.imageCount}/${route.minimumImages}`);
+      }
       await page.screenshot({ path: result.screenshot, fullPage: true });
       result.ok = result.missing.length === 0 && consoleErrors.length === 0 && result.horizontalOverflow <= 2;
     } catch (error) {

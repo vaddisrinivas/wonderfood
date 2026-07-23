@@ -2,7 +2,7 @@ import { Link, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { ActionButton, Card, Page, Pill, SectionTitle, VisualMark, sharedStyles } from '@/src/components/ui';
 import { DashboardBlock, loadCatalog, setActiveDomainOverride, VisualToken } from '@/src/domain/catalog';
 import { getDomainRecordCanonical, getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
@@ -728,7 +728,7 @@ function CollectionGroup({ title, subtitle, collections, counts, visuals, tone }
           return (
             <Link key={collection} href={{ pathname: '/collection/[id]', params: { id: collection } }} asChild>
               <Pressable accessibilityRole="button" style={({ pressed }) => [styles.collectionChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-                <Text style={[styles.collectionChipGlyph, { backgroundColor: softForAccent(accent, theme.colors), color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(token, collection.slice(0, 1).toUpperCase())}</Text>
+                <VisualMark token={token} fallback={collection.slice(0, 1).toUpperCase()} size={25} backgroundColor={softForAccent(accent, theme.colors)} color={inkForAccent(accent, theme.colors)} label={`${humanizeCollection(collection)} visual`} glyphStyle={styles.collectionChipGlyphText} />
                 <Text style={[styles.collectionChipName, { color: theme.colors.ink }]}>{humanizeCollection(collection)}</Text>
                 <Text style={[styles.collectionChipCount, { color: count ? theme.colors.moss : theme.colors.muted }]}>{count ? `${count}` : '—'}</Text>
               </Pressable>
@@ -828,7 +828,7 @@ function MiniRecord({ record, visual }: { record: FoodRecordView; visual?: Visua
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.miniRecord, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-        <View style={[styles.miniGlyph, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.miniGlyphText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
+        <VisualMark token={visual} fallback={record.collection.slice(0, 1).toUpperCase()} size={34} backgroundColor={softForAccent(accent, theme.colors)} color={inkForAccent(accent, theme.colors)} label={`${record.collection} visual`} style={styles.miniGlyph} glyphStyle={styles.miniGlyphText} />
         <View style={styles.miniTop}>
           <Text style={[styles.miniTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
           <Pill tone={record.tone}>{record.status}</Pill>
@@ -846,7 +846,7 @@ function RecordListItem({ record, visual }: { record: FoodRecordView; visual?: V
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.record, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
-        <View style={[styles.recordIcon, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.recordIconText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
+        <VisualMark token={visual} fallback={record.collection.slice(0, 1).toUpperCase()} size={42} backgroundColor={softForAccent(accent, theme.colors)} color={inkForAccent(accent, theme.colors)} label={`${record.collection} visual`} style={styles.recordIcon} glyphStyle={styles.recordIconText} />
         <View style={styles.recordCopy}>
           <View style={styles.recordTop}>
             <Text style={[styles.recordTitle, { color: theme.colors.ink }]}>{record.title}</Text>
@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
   collectionGroupSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   collectionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   collectionChip: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  collectionChipGlyph: { minWidth: 25, height: 25, borderRadius: 10, overflow: 'hidden', textAlign: 'center', lineHeight: 25, fontSize: 13, fontWeight: '900' },
+  collectionChipGlyphText: { fontSize: 13, fontWeight: '900' },
   collectionChipName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   collectionChipCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },

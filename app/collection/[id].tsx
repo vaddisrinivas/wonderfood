@@ -2,7 +2,7 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
-import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { ActionButton, Card, Page, Pill, SectionTitle, VisualMark, sharedStyles } from '@/src/components/ui';
 import { loadCatalog, setActiveDomainOverride, VisualToken } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
@@ -99,7 +99,6 @@ export default function CollectionScreen() {
   const reviewRecords = collectionRecords.filter((record) => /review|need|buy|planned|use|open|tonight/i.test(`${record.status} ${record.meta} ${record.body}`));
   const collectionTitle = humanizeCollection(collectionId || 'collection');
   const collectionVisual = visualIdentity.collections?.[collectionId];
-  const collectionGlyph = visualGlyph(collectionVisual, collectionId.slice(0, 1).toUpperCase());
   const collectionAccent = visualAccent(collectionVisual);
   const searchable = query.trim().toLowerCase();
   const visibleRecords = [...collectionRecords]
@@ -138,7 +137,7 @@ export default function CollectionScreen() {
             <View style={styles.heroTop}>
               <View style={styles.heroCopy}>
                 <View style={styles.titleLine}>
-                  <View style={[styles.heroGlyph, { backgroundColor: softForAccent(collectionAccent, theme.colors) }]}><Text style={[styles.heroGlyphText, { color: inkForAccent(collectionAccent, theme.colors) }]}>{collectionGlyph}</Text></View>
+                  <VisualMark token={collectionVisual} fallback={collectionId.slice(0, 1).toUpperCase()} size={58} backgroundColor={softForAccent(collectionAccent, theme.colors)} color={inkForAccent(collectionAccent, theme.colors)} label={`${collectionTitle} visual`} style={styles.heroGlyph} glyphStyle={styles.heroGlyphText} />
                   <View style={styles.titleCopy}>
                     <Text style={[styles.kicker, { color: theme.colors.moss }]}>COLLECTION</Text>
                     <Text style={[styles.title, { color: theme.colors.ink }]}>{collectionTitle}</Text>
@@ -265,10 +264,10 @@ export default function CollectionScreen() {
                   <Card style={styles.propertyCard}>
                     <Text style={[styles.propertyIntro, { color: theme.colors.muted }]}>Fields, icon, image slot and source identity that Notion, Sheets, SQLite and Chat should preserve for this collection.</Text>
                     <View style={[styles.visualIdentityRow, { backgroundColor: softForAccent(collectionAccent, theme.colors), borderColor: theme.colors.line }]}>
-                      <Text style={[styles.visualIdentityGlyph, { color: inkForAccent(collectionAccent, theme.colors) }]}>{collectionGlyph}</Text>
+                      <Text style={[styles.visualIdentityGlyph, { color: inkForAccent(collectionAccent, theme.colors) }]}>{visualGlyph(collectionVisual, collectionId.slice(0, 1).toUpperCase())}</Text>
                       <View style={styles.visualIdentityCopy}>
                         <Text style={[styles.visualIdentityTitle, { color: theme.colors.ink }]}>Visual identity</Text>
-                        <Text style={[styles.visualIdentityBody, { color: theme.colors.muted }]}>{collectionVisual?.image_url ? `Image: ${collectionVisual.image_url}` : 'No image URL set. Emoji/icon fallback is active.'}</Text>
+                        <Text style={[styles.visualIdentityBody, { color: theme.colors.muted }]}>{collectionVisual?.image_url ? 'Custom image visual active.' : 'Emoji/icon fallback is active.'}</Text>
                       </View>
                     </View>
                     <View style={styles.propertyChips}>
@@ -346,7 +345,7 @@ function RecordRow({ record, visual }: { record: DomainRecordViewModel; visual?:
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.recordRow, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
-        <View style={[styles.recordIcon, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.recordIconText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
+        <VisualMark token={visual} fallback={record.collection.slice(0, 1).toUpperCase()} size={42} backgroundColor={softForAccent(accent, theme.colors)} color={inkForAccent(accent, theme.colors)} label={`${record.collection} visual`} style={styles.recordIcon} glyphStyle={styles.recordIconText} />
         <View style={styles.recordCopy}>
           <View style={styles.recordTop}>
             <Text style={[styles.recordTitle, { color: theme.colors.ink }]}>{record.title}</Text>
@@ -368,7 +367,7 @@ function BoardCard({ record, visual }: { record: DomainRecordViewModel; visual?:
   return (
     <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.boardCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-        <View style={[styles.boardGlyph, { backgroundColor: softForAccent(accent, theme.colors) }]}><Text style={[styles.boardGlyphText, { color: inkForAccent(accent, theme.colors) }]}>{visualGlyph(visual, record.collection.slice(0, 1).toUpperCase())}</Text></View>
+        <VisualMark token={visual} fallback={record.collection.slice(0, 1).toUpperCase()} size={38} backgroundColor={softForAccent(accent, theme.colors)} color={inkForAccent(accent, theme.colors)} label={`${record.collection} visual`} style={styles.boardGlyph} glyphStyle={styles.boardGlyphText} />
         <View style={styles.recordTop}>
           <Text style={[styles.recordTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
           <Pill tone={record.tone}>{record.status}</Pill>

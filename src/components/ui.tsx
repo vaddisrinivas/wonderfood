@@ -1,7 +1,9 @@
 import { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Image, ImageStyle, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Link } from 'expo-router';
 
+import { VisualToken } from '@/src/domain/catalog';
+import { visualGlyph } from '@/src/domain/visual-identity';
 import { colors, radius, shadow, useLifeOSTheme } from '@/src/theme';
 
 export function Page({ children }: PropsWithChildren) {
@@ -40,6 +42,36 @@ export function Pill({ children, tone = 'neutral' }: PropsWithChildren<{ tone?: 
   const theme = useLifeOSTheme();
   const backgroundColor = { neutral: theme.dark ? '#2D3028' : '#ECEBE3', moss: theme.colors.mossSoft, amber: theme.colors.amberSoft, plum: theme.colors.plumSoft, blue: theme.colors.blueSoft }[tone];
   return <View style={[styles.pill, { backgroundColor }]}><Text style={[styles.pillText, { color: theme.colors.ink }]}>{children}</Text></View>;
+}
+
+export function VisualMark({ token, fallback, size = 36, backgroundColor, color, label, style, glyphStyle, imageStyle }: {
+  token?: VisualToken;
+  fallback: string;
+  size?: number;
+  backgroundColor?: string;
+  color?: string;
+  label?: string;
+  style?: StyleProp<ViewStyle>;
+  glyphStyle?: StyleProp<TextStyle>;
+  imageStyle?: StyleProp<ImageStyle>;
+}) {
+  const glyph = visualGlyph(token, fallback);
+  const borderRadius = Math.max(8, Math.round(size * 0.32));
+  return (
+    <View style={[styles.visualMark, { width: size, height: size, borderRadius, backgroundColor: backgroundColor ?? colors.canvas }, style]}>
+      {token?.image_url ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={label ?? glyph}
+          source={{ uri: token.image_url }}
+          resizeMode="cover"
+          style={[styles.visualMarkImage, { width: size, height: size, borderRadius }, imageStyle]}
+        />
+      ) : (
+        <Text style={[styles.visualMarkGlyph, { color }, glyphStyle]}>{glyph}</Text>
+      )}
+    </View>
+  );
 }
 
 export function ActionButton({ label, icon, onPress, quiet, disabled }: { label: string; icon?: string; onPress?: () => void; quiet?: boolean; disabled?: boolean }) {
@@ -106,6 +138,9 @@ const styles = StyleSheet.create({
   cardCompact: { padding: 12, borderRadius: radius.sm },
   pill: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.pill },
   pillText: { color: colors.ink, fontSize: 11, fontWeight: '700' },
+  visualMark: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  visualMarkImage: { overflow: 'hidden' },
+  visualMarkGlyph: { fontSize: 16, fontWeight: '900' },
   button: { minHeight: 44, borderRadius: radius.pill, backgroundColor: colors.ink, paddingHorizontal: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   buttonCompact: { minHeight: 38, paddingHorizontal: 14 },
   buttonQuiet: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line },
