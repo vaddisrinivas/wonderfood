@@ -667,6 +667,8 @@ const server = createServer(async (req: any, res: any) => {
         externalId?: string;
         source?: Record<string, unknown>;
         version?: number;
+        expected_version?: number;
+        expected_digest?: string;
       };
       try {
         payload = (await readJsonBody(req)) as typeof payload;
@@ -700,9 +702,21 @@ const server = createServer(async (req: any, res: any) => {
           source: payload.source,
           externalId: payload.externalId,
           version: typeof payload.version === 'number' && Number.isFinite(payload.version) ? payload.version : undefined,
+          expectedVersion: typeof payload.expected_version === 'number' && Number.isFinite(payload.expected_version)
+            ? payload.expected_version
+            : undefined,
+          expectedDigest: typeof payload.expected_digest === 'string' ? payload.expected_digest : undefined,
         },
       });
       if (!result.ok) {
+        if (result.conflict) {
+          setJson(res, 409, {
+            status: 'conflict',
+            message: result.error || 'Sheets write conflict',
+            conflict: result.conflict,
+          });
+          return;
+        }
         badRequest(res, result.error || 'Sheets write failed');
         return;
       }

@@ -84,6 +84,7 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - `[App snapshot]`: on-device kitchen, shopping, recipes, meal logs/plans, receipts, preferences, and Health Connect context.
 - `[LifeOS Notion]`: presentation dashboard, relations, rollups, quests, habits, journal, vaults, and template-health checks.
 - `[LifeOS Sheets]`: workbook mirror for schema rows, import/export checks, formulas, conflicts, and source handles.
+- Sheets writes use compare-and-set (`expected_version` or `expected_digest`) and return a typed 409 conflict instead of overwriting a changed row.
 - `[MCP schema]`: `wonderfood://lifeos/domain-catalog-v1` for GPT/plugin parity.
 - `[Template health]`: `@now` duplication guard, sample/empty parity, relation/rollup checks, and source visibility.
 - `[Web source]`: OpenAI Responses web-search URL/title citations when the user asks for current or internet-backed facts.

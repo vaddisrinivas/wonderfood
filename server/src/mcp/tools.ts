@@ -401,6 +401,15 @@ function notionPropertiesForWrite(existing: McpRecord, patch: Partial<McpRecord>
   };
 }
 
+function expectedSheetsDigest(existing: McpRecord) {
+  if (existing.source?.provider !== 'google_sheets') {
+    return undefined;
+  }
+  return typeof existing.source.content_hash === 'string' && existing.source.content_hash.length > 0
+    ? existing.source.content_hash
+    : undefined;
+}
+
 function ensureTool(raw: unknown) {
   return makeText(raw);
 }
@@ -1226,6 +1235,7 @@ async function runWorkflowStep(
           properties,
           archived: Boolean(existing.archived_at),
           externalId,
+          expectedDigest: expectedSheetsDigest(existing),
         },
       });
       if (!sheetWrite.ok) {
@@ -1390,6 +1400,7 @@ async function runWorkflowStep(
           properties: existing.properties,
           archived: true,
           externalId,
+          expectedDigest: expectedSheetsDigest(existing),
         },
       });
       if (!sheetWrite.ok) {
@@ -2459,6 +2470,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         properties: updatedProperties,
         archived: normalizedArchived,
         externalId: makeText((existing.source as { external_id?: unknown })?.external_id),
+        expectedDigest: expectedSheetsDigest(existing),
       },
     });
     if (!sheetWrite.ok) {
@@ -2720,6 +2732,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
           properties: existing.properties,
           archived: true,
           externalId: makeText((existing.source as { external_id?: unknown })?.external_id),
+          expectedDigest: expectedSheetsDigest(existing),
         },
       });
       if (!sheetWrite.ok) {

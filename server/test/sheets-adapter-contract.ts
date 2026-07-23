@@ -143,6 +143,40 @@ function ensure(condition: boolean, message: string) {
   const batchUpdateCalls = contract.calls.filter((entry) => entry.method === 'POST' && entry.url.includes('/values:batchUpdate')).length;
   ensure(batchUpdateCalls === 1, `Expected one batchUpdate call, got ${batchUpdateCalls}`);
 
+  const staleDigestResult = await writeSheetsRecord({
+    operation: 'update_record',
+    record: {
+      id: 'sheet-phase6-adapter',
+      domain: 'food',
+      collection: 'recipe',
+      title: 'Stale digest update',
+      properties: { legacy: 'preserved' },
+      archived: false,
+      externalId: 'sheet-phase6-adapter',
+      expectedDigest,
+    },
+  });
+  ensure(!staleDigestResult.ok, 'Expected stale digest write to fail');
+  ensure(staleDigestResult.conflict?.kind === 'digest', 'Expected digest conflict metadata');
+
+  const staleVersionResult = await writeSheetsRecord({
+    operation: 'update_record',
+    record: {
+      id: 'sheet-phase6-adapter',
+      domain: 'food',
+      collection: 'recipe',
+      title: 'Stale version update',
+      properties: { legacy: 'preserved' },
+      archived: false,
+      externalId: 'sheet-phase6-adapter',
+      expectedVersion: 1,
+    },
+  });
+  ensure(!staleVersionResult.ok, 'Expected stale version write to fail');
+  ensure(staleVersionResult.conflict?.kind === 'version', 'Expected version conflict metadata');
+  const conflictBatchUpdates = contract.calls.filter((entry) => entry.method === 'POST' && entry.url.includes('/values:batchUpdate')).length;
+  ensure(conflictBatchUpdates === 1, `Expected conflicts to avoid batchUpdate, got ${conflictBatchUpdates}`);
+
   const noChangeCallState = withMockSheetsFetch(state, () => {});
   const noChangeState = await writeSheetsRecord({
     operation: 'update_record',

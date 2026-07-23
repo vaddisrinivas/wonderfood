@@ -12,6 +12,8 @@ type SheetsRecord = {
   properties?: Record<string, unknown>;
   archived?: boolean;
   version?: number;
+  expectedVersion?: number;
+  expectedDigest?: string;
   source?: Record<string, unknown>;
   externalId?: string;
 };
@@ -526,6 +528,14 @@ export async function writeSheetsRecord(input: {
     observed_at: string;
     content_hash: string | null;
   };
+  conflict?: {
+    kind: 'version' | 'digest';
+    expected_version?: number;
+    actual_version?: number;
+    expected_digest?: string;
+    actual_digest?: string;
+    row: number;
+  };
   source_snapshot?: WriteSourceSnapshot;
 }> {
   const state = await readRuntimeState();
@@ -557,6 +567,41 @@ export async function writeSheetsRecord(input: {
   const targetRowNumber = rowNumber;
 
   const existingRow = match?.row ? [...match.row] : null;
+  const currentVersion = existingRow ? normalizeManagedVersion(indexes, existingRow) : null;
+  const currentDigest = existingRow ? nowDigest(existingRow) : null;
+  const expectedVersion = Number.isFinite(input.record.expectedVersion ?? NaN)
+    ? Number(input.record.expectedVersion)
+    : undefined;
+  const expectedDigest = typeof input.record.expectedDigest === 'string' && input.record.expectedDigest.trim().length > 0
+    ? input.record.expectedDigest.trim()
+    : undefined;
+
+  if (existingRow && expectedVersion !== undefined && expectedVersion !== currentVersion) {
+    return {
+      ok: false,
+      error: `Sheets conflict for ${id}: expected version ${expectedVersion}, found ${currentVersion}. Refetch before retrying.`,
+      conflict: {
+        kind: 'version' as const,
+        expected_version: expectedVersion,
+        actual_version: currentVersion ?? undefined,
+        actual_digest: currentDigest ?? undefined,
+        row: targetRowNumber,
+      },
+    };
+  }
+  if (existingRow && expectedDigest !== undefined && expectedDigest !== currentDigest) {
+    return {
+      ok: false,
+      error: `Sheets conflict for ${id}: the workbook row changed since the source snapshot. Refetch before retrying.`,
+      conflict: {
+        kind: 'digest' as const,
+        expected_digest: expectedDigest,
+        actual_version: currentVersion ?? undefined,
+        actual_digest: currentDigest ?? undefined,
+        row: targetRowNumber,
+      },
+    };
+  }
   const baseRecord = {
     id,
     domain: input.record.domain || 'food',
@@ -571,6 +616,8 @@ export async function writeSheetsRecord(input: {
     },
     externalId: input.record.externalId || id,
     version: Number.isFinite(input.record.version ?? NaN) ? Number(input.record.version) : undefined,
+    expectedVersion,
+    expectedDigest,
   };
 
   const managed = parseManagedTargetValue({
