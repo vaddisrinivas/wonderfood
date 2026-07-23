@@ -55,6 +55,20 @@ function countSetting(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+const CHAT_SECTIONS = ['threads', 'sources', 'messages', 'promptRail', 'context'] as const;
+type ChatSection = typeof CHAT_SECTIONS[number];
+const WORKSPACE_CHAT_SECTIONS = new Set<ChatSection>(['threads', 'sources', 'messages', 'promptRail']);
+
+function orderedChatSections(value: string) {
+  const allowed = new Set<string>(CHAT_SECTIONS);
+  const requested = value
+    .split(',')
+    .map((section) => section.trim())
+    .filter((section): section is ChatSection => allowed.has(section));
+  const missing = CHAT_SECTIONS.filter((section) => !requested.includes(section));
+  return [...requested, ...missing];
+}
+
 export default function ChatScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
@@ -115,6 +129,8 @@ export default function ChatScreen() {
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
   const chatConfig = settings.runtime.surfaceConfig.chat;
   const sourceLimit = countSetting(chatConfig.sourceLimit, 8);
+  const chatSections = orderedChatSections(chatConfig.sectionOrder);
+  const workspaceSections = chatSections.filter((section) => WORKSPACE_CHAT_SECTIONS.has(section));
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -295,6 +311,76 @@ export default function ChatScreen() {
     setWarnings(['This direct-provider answer has no reversible action.']);
   };
 
+  const renderThreadRail = () => (
+    chatConfig.showThreads ? (
+      <Card key="threads" style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
+        <View style={styles.threadHeading}><Text style={styles.panelLabel}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={styles.plus}>＋</Text></Pressable></View>
+        <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
+          {threads.map((thread) => {
+            const active = thread.id === activeThreadId;
+            return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, pressed && styles.pressed]}>
+              <Text numberOfLines={1} style={[styles.threadTitle, active && styles.threadTitleActive]}>{thread.title}</Text>
+              <Text numberOfLines={1} style={[styles.threadDetail, active && styles.threadDetailActive]}>{thread.detail}</Text>
+            </Pressable>;
+          })}
+        </ScrollView>
+        {isWide ? (
+          <View style={styles.threadFoot}>
+            <Pill tone="moss">{domainLabel} context on</Pill>
+            <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+          </View>
+        ) : null}
+      </Card>
+    ) : null
+  );
+
+  const renderChatPanelSection = (section: ChatSection) => {
+    switch (section) {
+      case 'sources':
+        return chatConfig.showSources ? (
+          <View key={section} style={styles.sourceStrip}>
+            <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
+              {sourceRecords.slice(0, sourceLimit).map((record) => (
+                <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
+                  <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
+                  <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
+                </Pressable>
+              ))}
+              {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
+            </ScrollView>
+          </View>
+        ) : null;
+      case 'messages':
+        return (
+          <View key={section} style={styles.messages}>
+            {activeThread.messages.map((message: MessageRow) => (
+              <MessageBubble key={message.id} message={message} onUndo={() => void undoMessageAction(activeThread.id, message)} />
+            ))}
+          </View>
+        );
+      case 'promptRail':
+        return chatConfig.promptRail ? (
+          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
+            {promptBank.map((prompt) => (
+              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
+                <Text style={styles.promptText}>{prompt}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  const renderWorkspaceSection = (section: ChatSection) => {
+    if (section === 'threads') {
+      return renderThreadRail();
+    }
+    return null;
+  };
+
   return (
     <Page>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
@@ -314,26 +400,7 @@ export default function ChatScreen() {
             {warnings.length ? <Card style={styles.modeNote}>{warnings.map((item) => <Text key={item} style={styles.modeText}>{item}</Text>)}</Card> : null}
 
             <View style={[styles.workspace, isWide && styles.workspaceWide]}>
-              {chatConfig.showThreads ? (
-                <Card style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
-                  <View style={styles.threadHeading}><Text style={styles.panelLabel}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={styles.plus}>＋</Text></Pressable></View>
-                  <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
-                    {threads.map((thread) => {
-                      const active = thread.id === activeThreadId;
-                      return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, pressed && styles.pressed]}>
-                        <Text numberOfLines={1} style={[styles.threadTitle, active && styles.threadTitleActive]}>{thread.title}</Text>
-                        <Text numberOfLines={1} style={[styles.threadDetail, active && styles.threadDetailActive]}>{thread.detail}</Text>
-                      </Pressable>;
-                    })}
-                  </ScrollView>
-                  {isWide ? (
-                    <View style={styles.threadFoot}>
-                      <Pill tone="moss">{domainLabel} context on</Pill>
-                      <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
-                    </View>
-                  ) : null}
-                </Card>
-              ) : null}
+              {workspaceSections.map(renderWorkspaceSection)}
 
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
@@ -346,37 +413,10 @@ export default function ChatScreen() {
                   </Pressable>
                 </View>
 
-                {chatConfig.showSources ? (
-                  <View style={styles.sourceStrip}>
-                    <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
-                      {sourceRecords.slice(0, sourceLimit).map((record) => (
-                        <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
-                          <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
-                          <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
-                        </Pressable>
-                      ))}
-                      {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
-                    </ScrollView>
-                  </View>
-                ) : null}
                 <View style={styles.divider} />
-                <View style={styles.messages}>
-                  {activeThread.messages.map((message: MessageRow) => (
-                    <MessageBubble key={message.id} message={message} onUndo={() => void undoMessageAction(activeThread.id, message)} />
-                  ))}
-                </View>
+                {workspaceSections.filter((section) => section !== 'threads').map(renderChatPanelSection)}
 
                 <View style={styles.composerWrap}>
-                  {chatConfig.promptRail ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
-                      {promptBank.map((prompt) => (
-                        <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
-                          <Text style={styles.promptText}>{prompt}</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  ) : null}
                   <View style={styles.composer}>
                     <TextInput
                       accessibilityLabel="Chat message"

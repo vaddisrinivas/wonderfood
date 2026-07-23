@@ -42,6 +42,7 @@
     "export:web": "expo export --platform web --output-dir dist/web",
     "export:android": "expo export --platform android --output-dir dist/android",
     "check:web-product": "node scripts/quality/check-web-product-smoke.mjs",
+    "check:product": "npm run typecheck && npm run config:validate && npm run check:web-product && npm run export:web && npm run export:android && npm run phase3:check:chat-send && npm run phase3:check:chat-rollback-idempotency && npm run phase7:check:chat-client-cross-surface",
     "quality": "npm run config:validate && npm run typecheck && npm run doctor && npm run export:web && npm run export:android",
     "phase4:check:mcp-workflow-replay": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay.ts",
     "phase4:check:mcp-workflow-replay:http": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay-http.ts",
