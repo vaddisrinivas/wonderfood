@@ -21,7 +21,7 @@ import {
   loadLifeOSSettings,
   saveLifeOSSettings,
 } from '@/src/settings/lifeos-settings';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 const workflows = [
   ['meal-plan-to-shopping', 'Meal plan to shopping'],
@@ -174,6 +174,7 @@ function parseProfile(input: string) {
 }
 
 export default function ConfigStudioScreen() {
+  const theme = useLifeOSTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
@@ -288,8 +289,8 @@ export default function ConfigStudioScreen() {
         <View style={sharedStyles.content}>
           <View style={styles.contextBar}>
             <View>
-              <Text style={styles.brand}>LIFEOS / CONFIG STUDIO</Text>
-              <Text style={styles.context}>Packages, behavior and contracts</Text>
+              <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / CONFIG STUDIO</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>Packages, behavior and contracts</Text>
             </View>
             <Pill tone="moss">{activeDomain.label.toUpperCase()} ACTIVE</Pill>
           </View>
@@ -309,23 +310,23 @@ export default function ConfigStudioScreen() {
                 <View key={domain.id} style={styles.column}>
                   <Card tone={active ? 'moss' : domain.id === 'health' ? 'plum' : 'blue'} style={styles.domainCard}>
                     <View style={styles.rowBetween}>
-                      <View style={styles.domainGlyph}><Text style={styles.domainGlyphText}>{domain.label.slice(0, 1)}</Text></View>
+                      <View style={[styles.domainGlyph, { backgroundColor: theme.colors.ink }]}><Text style={[styles.domainGlyphText, { color: theme.colors.paper }]}>{domain.label.slice(0, 1)}</Text></View>
                       <Switch
                         value={enabled}
                         onValueChange={(value) => updateRuntime({ enabledDomains: toggle(settings.runtime.enabledDomains, domain.id, value) })}
-                        trackColor={{ false: colors.line, true: colors.mossSoft }}
-                        thumbColor={enabled ? colors.moss : colors.muted}
+                        trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
+                        thumbColor={enabled ? theme.colors.moss : theme.colors.muted}
                       />
                     </View>
-                    <Text style={styles.cardTitle}>{domain.label}</Text>
-                    <Text style={styles.cardBody}>{domain.summary}</Text>
+                    <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>{domain.label}</Text>
+                    <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{domain.summary}</Text>
                     <Pressable
                       accessibilityRole="button"
                       disabled={!enabled}
                       onPress={() => updateRuntime({ activeDomain: domain.id })}
-                      style={[styles.select, active && styles.selectActive, !enabled && styles.disabled]}
+                      style={[styles.select, { borderColor: theme.colors.line }, active && [styles.selectActive, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }], !enabled && styles.disabled]}
                     >
-                      <Text style={[styles.selectText, active && styles.selectTextActive]}>{active ? 'Active package' : 'Make active'}</Text>
+                      <Text style={[styles.selectText, { color: theme.colors.ink }, active && { color: theme.colors.paper }]}>{active ? 'Active package' : 'Make active'}</Text>
                     </Pressable>
                   </Card>
                 </View>
@@ -336,37 +337,37 @@ export default function ConfigStudioScreen() {
           {activeManifest ? (
             <>
               <SectionTitle title="Active package contract" />
-              <Text style={styles.contractIntro}>Collections, relations, surfaces, provider fields and MCP contract are visible before you activate a package.</Text>
+              <Text style={[styles.contractIntro, { color: theme.colors.muted }]}>Collections, relations, surfaces, provider fields and MCP contract are visible before you activate a package.</Text>
               <View style={[styles.contractGrid, compact && styles.stack]}>
                 <Card style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>Collections</Text>
-                  <Text style={styles.contractNumber}>{activeManifest.collections.length}</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>Collections</Text>
+                  <Text style={[styles.contractNumber, { color: theme.colors.ink }]}>{activeManifest.collections.length}</Text>
                   <ChipList values={activeManifest.collections} tone="moss" limit={14} />
                 </Card>
                 <Card style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>Surfaces</Text>
-                  <Text style={styles.contractNumber}>{activeManifest.surfaces.length}</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>Surfaces</Text>
+                  <Text style={[styles.contractNumber, { color: theme.colors.ink }]}>{activeManifest.surfaces.length}</Text>
                   <ChipList values={activeManifest.surfaces.map((surface) => `${surface.label}: ${surface.collections.join(', ')}`)} tone="blue" limit={6} />
                 </Card>
                 <Card style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>Relations</Text>
-                  <Text style={styles.contractNumber}>{activeManifest.relations.length}</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>Relations</Text>
+                  <Text style={[styles.contractNumber, { color: theme.colors.ink }]}>{activeManifest.relations.length}</Text>
                   <ChipList values={activeManifest.relations.map((relation) => `${relation.from} → ${relation.to} · ${relation.name}`)} tone="plum" limit={10} />
                 </Card>
               </View>
               <View style={[styles.contractGrid, compact && styles.stack]}>
                 <Card tone="blue" style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>Data homes</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>Data homes</Text>
                   <ChipList values={activeManifest.data_homes} tone="blue" />
-                  <Text style={styles.help}>Same package can run as app, Notion, Sheets, SQLite/Postgres, or MCP.</Text>
+                  <Text style={[styles.help, { color: theme.colors.muted }]}>Same package can run as app, Notion, Sheets, SQLite/Postgres, or MCP.</Text>
                 </Card>
                 <Card style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>MCP contract</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>MCP contract</Text>
                   <ChipList values={activeManifest.mcp.tools.map((tool) => `tool:${tool}`)} tone="moss" limit={8} />
                   <ChipList values={activeManifest.mcp.resources.map((resource) => `resource:${resource}`)} tone="amber" limit={8} />
                 </Card>
                 <Card tone="plum" style={styles.contractCard}>
-                  <Text style={styles.contractLabel}>Provider fields</Text>
+                  <Text style={[styles.contractLabel, { color: theme.colors.muted }]}>Provider fields</Text>
                   <ChipList values={[
                     ...(activeManifest.provider_template_fields?.required ?? []).map((field) => `required:${field}`),
                     ...(activeManifest.provider_template_fields?.rich_detail_json ?? []).map((field) => `detail:${field}`),
@@ -379,14 +380,14 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Skill instructions" />
           <Card style={styles.sectionCard}>
-            <Text style={styles.lead}>Add your judgment above the bundled domain skill.</Text>
-            <Text style={styles.help}>Examples: dietary rules, medical caution, preferred tone, household conventions, or plant-care philosophy.</Text>
+            <Text style={[styles.lead, { color: theme.colors.ink }]}>Add your judgment above the bundled domain skill.</Text>
+            <Text style={[styles.help, { color: theme.colors.muted }]}>Examples: dietary rules, medical caution, preferred tone, household conventions, or plant-care philosophy.</Text>
             <View style={styles.fields}>
               {catalogDomains.filter((domain) => settings.runtime.enabledDomains.includes(domain.id)).map((domain) => (
                 <View key={domain.id} style={styles.field}>
                   <View style={styles.fieldHeading}>
-                    <Text style={styles.fieldLabel}>{domain.label} skill</Text>
-                    <Text style={styles.filePath}>{domain.skill.replace('./skills/', '')}</Text>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{domain.label} skill</Text>
+                    <Text style={[styles.filePath, { color: theme.colors.blue }]}>{domain.skill.replace('./skills/', '')}</Text>
                   </View>
                   <TextInput
                     value={settings.runtime.skillInstructions[domain.id] ?? ''}
@@ -394,9 +395,9 @@ export default function ConfigStudioScreen() {
                       skillInstructions: { ...settings.runtime.skillInstructions, [domain.id]: value },
                     })}
                     placeholder={`Add personal instructions for ${domain.label}…`}
-                    placeholderTextColor={colors.muted}
+                    placeholderTextColor={theme.colors.muted}
                     multiline
-                    style={[styles.input, styles.textarea]}
+                    style={[styles.input, styles.textarea, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
                   />
                 </View>
               ))}
@@ -442,8 +443,8 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Behavior & appearance" />
           <Card style={styles.sectionCard}>
-            <Text style={styles.help}>
-              Theme and density apply to the app shell and shared components. Remaining screen-specific hardcoded colors are tracked for the full visual-token pass.
+            <Text style={[styles.help, { color: theme.colors.muted }]}>
+              Theme, density, screen sections, card counts and source behavior are all runtime config, editable here.
             </Text>
             <ToggleRow
               title="Automatic sync"
@@ -471,12 +472,12 @@ export default function ConfigStudioScreen() {
                 onChange={(density) => updateRuntime({ density: density as LifeOSSettings['runtime']['density'] })}
               />
               <View style={styles.smallField}>
-                <Text style={styles.fieldLabel}>Sync every minutes</Text>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Sync every minutes</Text>
                 <TextInput
                   keyboardType="number-pad"
                   value={settings.runtime.syncMinutes}
                   onChangeText={(syncMinutes) => updateRuntime({ syncMinutes })}
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
                 />
               </View>
             </View>
@@ -484,8 +485,8 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Screen composition" />
           <Card tone="moss" style={styles.sectionCard}>
-            <Text style={styles.lead}>Every main screen gets runtime knobs.</Text>
-            <Text style={styles.help}>These settings control section visibility and card counts without changing app code. Domain manifests still own the schema and collections.</Text>
+            <Text style={[styles.lead, { color: theme.colors.ink }]}>Every main screen gets runtime knobs.</Text>
+            <Text style={[styles.help, { color: theme.colors.muted }]}>These settings control section visibility and card counts without changing app code. Domain manifests still own the schema and collections.</Text>
             <View style={styles.surfaceGrid}>
               <SurfaceConfigCard title="Home">
                 <Field label="Section order" value={settings.runtime.surfaceConfig.home.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('home', { sectionOrder })} />
@@ -536,8 +537,8 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Portable profile" />
           <Card tone="plum" style={styles.sectionCard}>
-            <Text style={styles.lead}>Copy, edit, paste, and move this LifeOS layout.</Text>
-            <Text style={styles.help}>
+            <Text style={[styles.lead, { color: theme.colors.ink }]}>Copy, edit, paste, and move this LifeOS layout.</Text>
+            <Text style={[styles.help, { color: theme.colors.muted }]}>
               This is the app-editable YAML/JSON profile layer behind the Notion/Glance idea: domains, enabled loops, theme, density, section order, visibility and counts.
             </Text>
             <TextInput
@@ -546,17 +547,17 @@ export default function ConfigStudioScreen() {
               multiline
               autoCapitalize="none"
               autoCorrect={false}
-              style={[styles.input, styles.code, styles.profileEditor]}
+              style={[styles.input, styles.code, styles.profileEditor, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
             />
             <View style={styles.profileActions}>
-              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('yaml')} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
-                <Text style={styles.openText}>Load YAML</Text>
+              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('yaml')} style={({ pressed }) => [styles.open, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.openText, { color: theme.colors.ink }]}>Load YAML</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('json')} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
-                <Text style={styles.openText}>Load JSON</Text>
+              <Pressable accessibilityRole="button" onPress={() => loadCurrentProfile('json')} style={({ pressed }) => [styles.open, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.openText, { color: theme.colors.ink }]}>Load JSON</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={applyProfileDraft} style={({ pressed }) => [styles.save, pressed && styles.pressed]}>
-                <Text style={styles.saveText}>Apply profile</Text>
+              <Pressable accessibilityRole="button" onPress={applyProfileDraft} style={({ pressed }) => [styles.save, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+                <Text style={[styles.saveText, { color: theme.colors.paper }]}>Apply profile</Text>
               </Pressable>
             </View>
           </Card>
@@ -566,7 +567,7 @@ export default function ConfigStudioScreen() {
             <View style={styles.schemaChips}>
               {schemaFiles.map((file) => <Pill key={file} tone="blue">{file.replace('.v1.schema.json', '')}</Pill>)}
             </View>
-            <Text style={styles.help}>
+            <Text style={[styles.help, { color: theme.colors.muted }]}>
               Bundled schemas stay versioned and safe. Put JSON Merge Patch-style overrides here; invalid JSON cannot activate.
             </Text>
             <TextInput
@@ -575,22 +576,22 @@ export default function ConfigStudioScreen() {
               multiline
               autoCapitalize="none"
               autoCorrect={false}
-              style={[styles.input, styles.code]}
+              style={[styles.input, styles.code, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
             />
           </Card>
 
-          {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
+          {notice ? <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.colors.moss }]}>{notice}</Text> : null}
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
               disabled={saving}
               onPress={() => void save()}
-              style={({ pressed }) => [styles.save, saving && styles.disabled, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.save, { backgroundColor: theme.colors.ink }, saving && styles.disabled, pressed && styles.pressed]}
             >
-              <Text style={styles.saveText}>{saving ? 'Validating…' : 'Save & activate'}</Text>
+              <Text style={[styles.saveText, { color: theme.colors.paper }]}>{saving ? 'Validating…' : 'Save & activate'}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.replace('/')} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
-              <Text style={styles.openText}>Open active domain</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.replace('/')} style={({ pressed }) => [styles.open, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+              <Text style={[styles.openText, { color: theme.colors.ink }]}>Open active domain</Text>
             </Pressable>
           </View>
         </View>
@@ -600,32 +601,34 @@ export default function ConfigStudioScreen() {
 }
 
 function ToggleRow(props: { title: string; detail: string; value: boolean; onValueChange: (value: boolean) => void }) {
+  const theme = useLifeOSTheme();
   return (
-    <View style={styles.toggleRow}>
+    <View style={[styles.toggleRow, { borderTopColor: theme.colors.line }]}>
       <View style={styles.toggleCopy}>
-        <Text style={styles.toggleTitle}>{props.title}</Text>
-        <Text style={styles.toggleDetail}>{props.detail}</Text>
+        <Text style={[styles.toggleTitle, { color: theme.colors.ink }]}>{props.title}</Text>
+        <Text style={[styles.toggleDetail, { color: theme.colors.muted }]}>{props.detail}</Text>
       </View>
       <Switch
         value={props.value}
         onValueChange={props.onValueChange}
-        trackColor={{ false: colors.line, true: colors.mossSoft }}
-        thumbColor={props.value ? colors.moss : colors.muted}
+        trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
+        thumbColor={props.value ? theme.colors.moss : theme.colors.muted}
       />
     </View>
   );
 }
 
 function ChoiceField(props: { label: string; value: string; choices: string[]; onChange: (value: string) => void }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.choiceField}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{props.label}</Text>
       <View style={styles.choices}>
         {props.choices.map((choice) => {
           const active = props.value === choice;
           return (
-            <Pressable key={choice} onPress={() => props.onChange(choice)} style={[styles.choice, active && styles.choiceActive]}>
-              <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{choice}</Text>
+            <Pressable key={choice} onPress={() => props.onChange(choice)} style={[styles.choice, { borderColor: theme.colors.line }, active && [styles.choiceActive, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]]}>
+              <Text style={[styles.choiceText, { color: theme.colors.muted }, active && { color: theme.colors.paper }]}>{choice}</Text>
             </Pressable>
           );
         })}
@@ -635,24 +638,27 @@ function ChoiceField(props: { label: string; value: string; choices: string[]; o
 }
 
 function SurfaceConfigCard({ title, children }: { title: string; children: ReactNode }) {
+  const theme = useLifeOSTheme();
   return (
-    <View style={styles.surfaceCard}>
-      <Text style={styles.surfaceTitle}>{title}</Text>
+    <View style={[styles.surfaceCard, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+      <Text style={[styles.surfaceTitle, { color: theme.colors.ink }]}>{title}</Text>
       <View style={styles.surfaceBody}>{children}</View>
     </View>
   );
 }
 
 function Field(props: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.smallField}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{props.label}</Text>
       <TextInput
         value={props.value}
         onChangeText={props.onChangeText}
         multiline={props.multiline}
         textAlignVertical={props.multiline ? 'top' : undefined}
-        style={[styles.input, props.multiline && styles.textarea]}
+        placeholderTextColor={theme.colors.muted}
+        style={[styles.input, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }, props.multiline && styles.textarea]}
       />
     </View>
   );
