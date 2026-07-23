@@ -1,268 +1,173 @@
 import { Link } from 'expo-router';
-import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
+import { Card, Page, Pill, SectionTitle } from '@/src/components/ui';
 import { colors, radius } from '@/src/theme';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 
 type Tone = 'moss' | 'amber' | 'plum' | 'blue';
 
-const domainDetails = {
+const domains = {
   Food: {
-    icon: '◉',
     tone: 'moss' as Tone,
-    description: 'Meals, kitchen, recipes, shopping and spending share one living graph.',
-    footnote: '1 domain skill · 3 workflows',
+    glyph: 'F',
+    title: 'Food command space',
+    detail: 'Kitchen, meals, recipes, shopping and spend are one editable graph.',
+    href: '/(tabs)/food',
   },
   Health: {
-    icon: '♡',
     tone: 'plum' as Tone,
-    description: 'Health Connect context is ready when you choose to bring it into LifeOS.',
-    footnote: 'Package manifest next',
+    glyph: 'H',
+    title: 'Health space',
+    detail: 'Health Connect, symptoms, sleep, labs and habits can join when enabled.',
+    href: '/config',
   },
   Plants: {
-    icon: '⌁',
     tone: 'blue' as Tone,
-    description: 'A lightweight domain proving that new spaces arrive through config, not new app code.',
-    footnote: 'Package manifest next',
+    glyph: 'P',
+    title: 'Plants space',
+    detail: 'Rooms, species, watering, light and problems use the same runtime.',
+    href: '/config',
   },
 } as const;
 
-const automations = [
-  {
-    icon: '↻',
-    title: 'Weekly food reset',
-    detail: 'Checks use-soon food, drafts the week and reconciles shopping.',
-    meta: 'Sunday · 6:00 PM',
-    tone: 'moss' as Tone,
-  },
-  {
-    icon: '⌁',
-    title: 'Source steward',
-    detail: 'Watches source freshness and keeps citations attached to exact versions.',
-    meta: 'Runs after sync',
-    tone: 'blue' as Tone,
-  },
-  {
-    icon: '✦',
-    title: 'Dinner agent',
-    detail: 'Answers from pantry, plans and preferences; acts only on explicit requests.',
-    meta: 'On demand',
-    tone: 'plum' as Tone,
-  },
+const controlTiles = [
+  ['Sources', 'Notion, Sheets, local graph and sync receipts.', 'Open trust center', '/sources', 'blue'],
+  ['AI and chat', 'Providers, fallback, citations and source-bounded answers.', 'Tune assistant', '/settings', 'plum'],
+  ['Domains', 'Pick Food now; add Health, Plants or any future package from config.', 'Edit packages', '/config', 'moss'],
+  ['Skills and MCP', 'Tools, resources and instructions shared by app and external assistants.', 'Inspect contracts', '/config', 'amber'],
+  ['Schemas', 'Properties, relations, rollups, provenance and archive rules.', 'Edit schema layer', '/config', 'blue'],
+  ['Privacy', 'No mandatory hosted bridge. Tokens stay provider-scoped and app editable.', 'Review settings', '/settings', 'moss'],
 ] as const;
 
-const skills = [
-  ['Food brain', 'Inventory, recipes, meals and shopping', '6 tools'],
-  ['Weekly reset', 'A durable four-step household workflow', '4 steps'],
-  ['Source verifier', 'Checks every quote, version and source link', 'Read only'],
+const homeModel = [
+  ['Home', 'Now card, review queue, active domains, recent changes.'],
+  ['Domain', 'Config-driven workspace: overview, views, tables, boards and record pages.'],
+  ['Chat', 'GPT-like threads with citations, tables, source cards and reviewable actions.'],
+  ['Sources', 'Trust center for Notion, Sheets, local, Postgres and import/export.'],
+  ['Settings', 'All providers, domains, skills, schemas, MCP and sync editable in-app.'],
 ] as const;
 
-const configFiles = [
-  ['domain-catalog.v1.json', 'Domains', 'Food active · Health and Plants ready'],
-  ['domains/food.v1.json', 'Surfaces', 'Overview, Meals, Kitchen and Shopping'],
-  ['schemas/record.v1.schema.json', 'Data', 'Properties, relations, provenance and archive rules'],
-  ['food.md', 'Skill', 'Instructions, allowed tools and source boundaries'],
-] as const;
-
-const roadmap = [
-  ['01', 'Web', 'Now', 'Responsive product shell and interaction proving ground.'],
-  ['02', 'Android', 'Next', 'Offline SQLite, native capture, shares and background sync.'],
-  ['03', 'iOS', 'Then', 'Same package runtime and surfaces after Android evidence.'],
-] as const;
-
-function StatusMark({ tone = 'moss' }: { tone?: Tone }) {
-  return <View style={[styles.statusMark, { backgroundColor: toneColor(tone) }]} />;
+function toneSoft(tone: Tone) {
+  return { moss: colors.mossSoft, amber: colors.amberSoft, plum: colors.plumSoft, blue: colors.blueSoft }[tone];
 }
 
-function ResponsiveCard({ children, compact }: { children: ReactNode; compact: boolean }) {
-  return <View style={[styles.responsiveCard, compact ? styles.responsiveCardCompact : null]}>{children}</View>;
-}
-
-function toneColor(tone: Tone) {
-  return {
-    moss: colors.moss,
-    amber: colors.amber,
-    plum: colors.plum,
-    blue: colors.blue,
-  }[tone];
+function toneInk(tone: Tone) {
+  return { moss: colors.moss, amber: colors.amber, plum: colors.plum, blue: colors.blue }[tone];
 }
 
 export default function SystemScreen() {
   const { width } = useWindowDimensions();
-  const compact = width < 700;
-  const visibleDomains = catalog.domains;
+  const compact = width < 760;
+  const contentWidth = compact ? Math.max(width - 36, 280) : '100%';
 
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
-        <View style={sharedStyles.content}>
-          <View style={styles.contextBar}>
+        <View style={[styles.content, { width: contentWidth }]}>
+          <View style={styles.topbar}>
             <View>
-              <Text style={styles.brand}>LIFEOS / SYSTEM</Text>
-              <Text style={styles.context}>Runtime, packages and delivery</Text>
+              <Text style={styles.brand}>LIFEOS / CONTROL DECK</Text>
+              <Text style={styles.context}>Advanced settings, not your daily home</Text>
             </View>
-            <View style={styles.runtimeBadge}>
-              <StatusMark />
-              <Text style={styles.runtimeText}>Config valid</Text>
-            </View>
+            <Link href="/settings" asChild>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
+                <Text style={styles.settingsButtonText}>Settings</Text>
+              </Pressable>
+            </Link>
           </View>
 
-          <PageHeader
-            eyebrow="Config-driven LifeOS"
-            title="The operating layer behind your life."
-            subtitle="Domains bring the data model. Skills bring judgment. Agents and automations connect them without exposing technical machinery in daily work."
-          />
-
-          <Card tone="moss" style={compact ? styles.overviewCardCompact : styles.overviewCard}>
-            <View style={styles.overviewCopy}>
-              <Pill tone="moss">FOOD PACKAGE LOADED</Pill>
-              <Text style={styles.overviewTitle}>One runtime, many life spaces.</Text>
-              <Text style={styles.overviewBody}>
-                Food is active now. Health and Plants are visible previews; their manifests can join the same shell without rebuilding navigation.
+          <Card style={[styles.hero, compact && styles.heroCompact]}>
+            <View style={styles.heroCopy}>
+              <Pill tone="moss">PORTABLE LIFEOS</Pill>
+              <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]}>Your app should feel like Notion plus GPT, not a status page.</Text>
+              <Text style={[styles.heroBody, compact && styles.heroBodyCompact]}>
+                Daily work belongs on Home and Domain pages. This deck is only for changing the system: sources,
+                domains, skills, schemas, providers and sync.
               </Text>
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryItem}><Text style={styles.summaryValue}>1</Text><Text style={styles.summaryLabel}>active domain</Text></View>
-                <View style={styles.summaryItem}><Text style={styles.summaryValue}>2</Text><Text style={styles.summaryLabel}>previews</Text></View>
-                <View style={styles.summaryItem}><Text style={styles.summaryValue}>4</Text><Text style={styles.summaryLabel}>data homes</Text></View>
+              <View style={styles.heroActions}>
+                <Link href="/" style={styles.primaryAction}>Open Home</Link>
+                <Link href="/(tabs)/food" style={styles.secondaryAction}>Open Food</Link>
               </View>
             </View>
-            <View style={[styles.graphic, compact ? styles.graphicCompact : null]} accessible accessibilityLabel="Connected LifeOS package graph">
-              <View style={styles.graphicCore}><Text style={styles.graphicCoreText}>L</Text></View>
-              <View style={[styles.graphicNode, styles.graphicNodeOne]}><Text style={styles.graphicNodeText}>Food</Text></View>
-              <View style={[styles.graphicNode, styles.graphicNodeTwo]}><Text style={styles.graphicNodeText}>Health</Text></View>
-              <View style={[styles.graphicNode, styles.graphicNodeThree]}><Text style={styles.graphicNodeText}>Plants</Text></View>
-            </View>
-          </Card>
-
-          <SectionTitle title="Domains" />
-          <View style={styles.grid}>
-            {visibleDomains.map(({ label: name, status }) => {
-              const detail = domainDetails[name as keyof typeof domainDetails];
-              return (
-                <ResponsiveCard key={name} compact={compact}>
-                  <Card tone={detail.tone} style={styles.domainCard}>
-                    <View style={styles.cardTop}>
-                      <View style={[styles.domainIcon, { backgroundColor: toneColor(detail.tone) }]}><Text style={styles.domainIconText}>{detail.icon}</Text></View>
-                      <Pill tone={detail.tone}>{status.toUpperCase()}</Pill>
-                    </View>
-                    <Text style={styles.cardTitle}>{name}</Text>
-                    <Text style={styles.cardBody}>{detail.description}</Text>
-                    <Text style={styles.cardMeta}>{detail.footnote}</Text>
-                  </Card>
-                </ResponsiveCard>
-              );
-            })}
-          </View>
-
-          <SectionTitle title="Agents & automations" />
-          <Card style={styles.sectionCard}>
-            <View style={styles.sectionIntro}>
-              <View>
-                <Text style={styles.sectionKicker}>BOUNDED BY DESIGN</Text>
-                <Text style={styles.sectionLead}>Quiet help, visible outcomes.</Text>
-              </View>
-              <Pill tone="moss">3 enabled</Pill>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Agents can read allowed sources and run typed, reversible actions. They cannot reveal secrets, make payments or create hidden branches.
-            </Text>
-            <View style={styles.automationList}>
-              {automations.map((automation) => (
-                <View key={automation.title} style={styles.automationRow}>
-                  <View style={[styles.automationIcon, { backgroundColor: toneColor(automation.tone) }]}><Text style={styles.automationIconText}>{automation.icon}</Text></View>
-                  <View style={styles.automationCopy}>
-                    <Text style={styles.rowTitle}>{automation.title}</Text>
-                    <Text style={styles.rowDetail}>{automation.detail}</Text>
-                  </View>
-                  <Text style={styles.rowMeta}>{automation.meta}</Text>
+            <View style={[styles.stackGraphic, compact && styles.stackGraphicCompact]} accessible accessibilityLabel="LifeOS stack: Home, Domain, Chat, Sources and Settings">
+              {homeModel.map(([name], index) => (
+                <View key={name} style={[styles.stackLayer, { transform: [{ translateY: index * -6 }] }]}>
+                  <Text style={styles.stackLayerText}>{name}</Text>
                 </View>
               ))}
             </View>
           </Card>
 
-          <SectionTitle title="Skills & MCP" />
-          <View style={styles.grid}>
-            <View style={[styles.wideColumn, compact ? styles.fullColumn : null]}>
-              <Card style={styles.sectionCard}>
-                <View style={styles.sectionIntro}>
-                  <Text style={styles.sectionLead}>Installed skills</Text>
-                  <Pill>3 active</Pill>
+          <SectionTitle title="Screen model" />
+          <Card style={styles.modelCard}>
+            {homeModel.map(([name, detail], index) => (
+              <View key={name} style={[styles.modelRow, index === 0 && styles.modelRowFirst]}>
+                <Text style={styles.modelNumber}>{String(index + 1).padStart(2, '0')}</Text>
+                <View style={styles.modelCopy}>
+                  <Text style={styles.modelTitle}>{name}</Text>
+                  <Text style={[styles.modelDetail, compact && styles.modelDetailCompact]}>{detail}</Text>
                 </View>
-                <View style={styles.skillList}>
-                  {skills.map(([name, detail, scope]) => (
-                    <View key={name} style={styles.skillRow}>
-                      <View style={styles.skillGlyph}><Text style={styles.skillGlyphText}>✦</Text></View>
-                      <View style={styles.skillCopy}><Text style={styles.rowTitle}>{name}</Text><Text style={styles.rowDetail}>{detail}</Text></View>
-                      <Text style={styles.rowMeta}>{scope}</Text>
-                    </View>
-                  ))}
-                </View>
-              </Card>
-            </View>
-            <View style={[styles.narrowColumn, compact ? styles.fullColumn : null]}>
-              <Card tone="plum" style={styles.mcpCard}>
-                <Text style={styles.mcpGlyph}>⌘</Text>
-                <Pill tone="plum">MCP READY</Pill>
-                <Text style={styles.cardTitle}>One tool contract</Text>
-                <Text style={styles.cardBody}>Chat, agents and external assistants use the same schemas, sources and reversible actions.</Text>
-                <View style={styles.mcpStats}>
-                  <Text style={styles.mcpStat}>6 tools</Text>
-                  <Text style={styles.mcpStat}>5 resources</Text>
-                  <Text style={styles.mcpStat}>Read + reversible</Text>
-                </View>
-              </Card>
-            </View>
+              </View>
+            ))}
+          </Card>
+
+          <SectionTitle title="Active and available spaces" />
+          <View style={styles.domainGrid}>
+            {catalog.domains.map(({ label, status }) => {
+              const domain = domains[label as keyof typeof domains];
+              return (
+                <Link key={label} href={domain.href} asChild>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.domainPress, pressed && styles.pressed]}>
+                    <Card tone={domain.tone} style={styles.domainCard}>
+                      <View style={styles.domainTop}>
+                        <View style={[styles.domainGlyph, { backgroundColor: toneInk(domain.tone) }]}>
+                          <Text style={styles.domainGlyphText}>{domain.glyph}</Text>
+                        </View>
+                        <Pill tone={domain.tone}>{status.toUpperCase()}</Pill>
+                      </View>
+                      <Text style={styles.domainTitle}>{domain.title}</Text>
+                      <Text style={[styles.domainDetail, compact && styles.domainDetailCompact]}>{domain.detail}</Text>
+                      <Text style={[styles.domainLink, { color: toneInk(domain.tone) }]}>Open or configure →</Text>
+                    </Card>
+                  </Pressable>
+                </Link>
+              );
+            })}
           </View>
 
-          <SectionTitle title="Schemas & config" />
-          <Card style={styles.filesCard}>
-            <View style={styles.filesHeader}>
-              <View>
-                <Text style={styles.sectionLead}>Human-readable system files</Text>
-                <Text style={styles.rowDetail}>Versioned, validated and free of credentials.</Text>
-              </View>
-              <Pill tone="blue">4 loaded</Pill>
+          <SectionTitle title="Configure from the app" />
+          <View style={styles.tileGrid}>
+            {controlTiles.map(([title, detail, action, href, tone]) => (
+              <Link key={title} href={href} asChild>
+                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.tilePress, pressed && styles.pressed]}>
+                  <View style={[styles.controlTile, { backgroundColor: toneSoft(tone as Tone) }]}>
+                    <Text style={[styles.tileKicker, { color: toneInk(tone as Tone) }]}>{title}</Text>
+                    <Text style={[styles.tileDetail, compact && styles.tileDetailCompact]}>{detail}</Text>
+                    <Text style={styles.tileAction}>{action} →</Text>
+                  </View>
+                </Pressable>
+              </Link>
+            ))}
+          </View>
+
+          <SectionTitle title="Glance-style config, LifeOS-grade model" />
+          <Card style={styles.yamlCard}>
+            <View style={styles.yamlText}>
+              <Text style={styles.yamlTitle}>Borrow the YAML idea. Do not become YAML-first.</Text>
+              <Text style={styles.yamlBody}>
+                A portable LifeOS profile can describe pages, sections and widgets like Glance. The app still owns
+                typed records, relations, sources, reversible actions and chat context.
+              </Text>
             </View>
-            {configFiles.map(([file, kind, description]) => (
-              <View key={file} style={styles.fileRow}>
-                <View style={styles.fileIcon}><Text style={styles.fileIconText}>{'{ }'}</Text></View>
-                <View style={styles.fileCopy}>
-                  <Text style={styles.fileName}>{file}</Text>
-                  <Text style={styles.rowDetail}>{description}</Text>
-                </View>
-                <Text style={styles.fileKind}>{kind}</Text>
-              </View>
-            ))}
+            <View style={styles.yamlSnippet}>
+              <Text style={styles.code}>home:</Text>
+              <Text style={styles.code}>  - now-card</Text>
+              <Text style={styles.code}>  - review-queue</Text>
+              <Text style={styles.code}>domains:</Text>
+              <Text style={styles.code}>  food: gallery + calendar</Text>
+            </View>
           </Card>
-
-          <SectionTitle title="Delivery roadmap" />
-          <Card style={styles.roadmapCard}>
-            {roadmap.map(([number, platform, status, detail], index) => (
-              <View key={platform} style={styles.roadmapRow}>
-                <View style={styles.roadmapRail}>
-                  <View style={[styles.roadmapNumber, index === 0 ? styles.roadmapNumberActive : null]}><Text style={[styles.roadmapNumberText, index === 0 ? styles.roadmapNumberTextActive : null]}>{number}</Text></View>
-                  {index < roadmap.length - 1 ? <View style={styles.roadmapLine} /> : null}
-                </View>
-                <View style={styles.roadmapCopy}>
-                  <View style={styles.roadmapTitleRow}><Text style={styles.roadmapTitle}>{platform}</Text><Pill tone={index === 0 ? 'moss' : index === 1 ? 'blue' : 'neutral'}>{status.toUpperCase()}</Pill></View>
-                  <Text style={styles.roadmapDetail}>{detail}</Text>
-                </View>
-              </View>
-            ))}
-          </Card>
-
-          <Link href="/settings" asChild>
-            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.sourceAction, pressed ? styles.pressed : null]}>
-              <View>
-                <Text style={styles.sourceActionEyebrow}>SETTINGS</Text>
-                <Text style={styles.sourceActionTitle}>Configure the whole LifeOS</Text>
-                <Text style={styles.sourceActionBody}>AI, Notion, Sheets, Postgres, MCP, domains, skills, agents, schemas and sync—all editable here.</Text>
-              </View>
-              <Text style={styles.sourceActionArrow}>→</Text>
-            </Pressable>
-          </Link>
         </View>
       </ScrollView>
     </Page>
@@ -270,89 +175,56 @@ export default function SystemScreen() {
 }
 
 const styles = StyleSheet.create({
-  contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
-  brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.6 },
+  content: { alignSelf: 'center', maxWidth: 1080, paddingBottom: 44 },
+  topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
+  brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  runtimeBadge: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, backgroundColor: colors.paper, paddingHorizontal: 12 },
-  statusMark: { width: 7, height: 7, borderRadius: 4 },
-  runtimeText: { color: colors.ink, fontSize: 11, fontWeight: '800' },
-  overviewCard: { minHeight: 238, padding: 24, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-  overviewCardCompact: { minHeight: 386, padding: 20, alignItems: 'stretch', overflow: 'hidden' },
-  overviewCopy: { flex: 1, minWidth: 230, zIndex: 1 },
-  overviewTitle: { color: colors.ink, fontSize: 26, lineHeight: 31, fontWeight: '800', letterSpacing: -0.8, marginTop: 18 },
-  overviewBody: { color: colors.muted, fontSize: 14, lineHeight: 21, maxWidth: 570, marginTop: 8 },
-  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 24 },
-  summaryItem: { gap: 2 },
-  summaryValue: { color: colors.ink, fontSize: 24, lineHeight: 27, fontWeight: '800' },
-  summaryLabel: { color: colors.muted, fontSize: 11, fontWeight: '700' },
-  graphic: { width: 210, height: 190, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
-  graphicCompact: { width: '100%', height: 150, marginTop: 12, marginRight: 0 },
-  graphicCore: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  graphicCoreText: { color: '#FFF', fontSize: 28, fontWeight: '900' },
-  graphicNode: { position: 'absolute', minWidth: 58, minHeight: 34, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  graphicNodeOne: { top: 8, left: 8 },
-  graphicNodeTwo: { top: 26, right: 0 },
-  graphicNodeThree: { bottom: 8, right: 18 },
-  graphicNodeText: { color: colors.ink, fontSize: 11, fontWeight: '800' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  responsiveCard: { minWidth: 220, flexGrow: 1, flexBasis: 0 },
-  responsiveCardCompact: { flexBasis: '100%' },
-  domainCard: { minHeight: 226, height: '100%' },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  domainIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  domainIconText: { color: '#FFF', fontSize: 21, fontWeight: '800' },
-  cardTitle: { color: colors.ink, fontSize: 18, fontWeight: '800', marginTop: 20 },
-  cardBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
-  cardMeta: { color: colors.ink, fontSize: 11, lineHeight: 16, fontWeight: '800', marginTop: 'auto', paddingTop: 18 },
-  sectionCard: { padding: 20 },
-  sectionIntro: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
-  sectionKicker: { color: colors.moss, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  sectionLead: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 4 },
-  sectionDescription: { color: colors.muted, fontSize: 13, lineHeight: 20, maxWidth: 720, marginTop: 10 },
-  automationList: { marginTop: 18 },
-  automationRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  automationIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  automationIconText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
-  automationCopy: { flex: 1 },
-  rowTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  rowDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  rowMeta: { color: colors.muted, fontSize: 11, fontWeight: '700', textAlign: 'right', maxWidth: 112 },
-  wideColumn: { flexGrow: 1, flexBasis: 520, minWidth: 280 },
-  narrowColumn: { flexGrow: 1, flexBasis: 280, minWidth: 240 },
-  fullColumn: { flexBasis: '100%' },
-  skillList: { marginTop: 12 },
-  skillRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  skillGlyph: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.mossSoft, alignItems: 'center', justifyContent: 'center' },
-  skillGlyphText: { color: colors.moss, fontSize: 16, fontWeight: '800' },
-  skillCopy: { flex: 1 },
-  mcpCard: { minHeight: 262, height: '100%', padding: 20 },
-  mcpGlyph: { color: colors.plum, fontSize: 34, lineHeight: 40, marginBottom: 12 },
-  mcpStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 'auto', paddingTop: 22 },
-  mcpStat: { color: colors.plum, backgroundColor: '#FFF9', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, fontWeight: '800' },
-  filesCard: { paddingVertical: 8 },
-  filesHeader: { paddingHorizontal: 4, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
-  fileRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEEDE5', alignItems: 'center', justifyContent: 'center' },
-  fileIconText: { color: colors.blue, fontSize: 11, fontWeight: '900' },
-  fileCopy: { flex: 1 },
-  fileName: { color: colors.ink, fontSize: 13, fontWeight: '800', fontFamily: 'monospace' },
-  fileKind: { color: colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 },
-  roadmapCard: { paddingHorizontal: 20, paddingVertical: 12 },
-  roadmapRow: { flexDirection: 'row', gap: 16, minHeight: 102 },
-  roadmapRail: { width: 40, alignItems: 'center' },
-  roadmapNumber: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' },
-  roadmapNumberActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  roadmapNumberText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
-  roadmapNumberTextActive: { color: '#FFF' },
-  roadmapLine: { width: 1, flex: 1, backgroundColor: colors.line },
-  roadmapCopy: { flex: 1, paddingBottom: 24 },
-  roadmapTitleRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  roadmapTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  roadmapDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7, maxWidth: 640 },
-  sourceAction: { minHeight: 112, marginTop: 24, marginBottom: 12, borderRadius: radius.md, backgroundColor: colors.ink, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 18 },
-  sourceActionEyebrow: { color: '#AFC19F', fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
-  sourceActionTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', marginTop: 5 },
-  sourceActionBody: { color: '#C8CCC3', fontSize: 12, lineHeight: 17, marginTop: 4, maxWidth: 620 },
-  sourceActionArrow: { color: '#FFF', fontSize: 28, fontWeight: '400' },
-  pressed: { opacity: 0.72 },
+  settingsButton: { minHeight: 40, borderRadius: radius.pill, backgroundColor: colors.ink, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  settingsButtonText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  hero: { minHeight: 292, padding: 24, flexDirection: 'row', alignItems: 'center', gap: 24, backgroundColor: '#202416', overflow: 'hidden' },
+  heroCompact: { flexDirection: 'column', alignItems: 'stretch' },
+  heroCopy: { flex: 1, minWidth: 0 },
+  heroTitle: { color: '#FFFDF2', fontSize: 34, lineHeight: 38, fontWeight: '900', letterSpacing: -1.4, marginTop: 18, maxWidth: 650 },
+  heroTitleCompact: { maxWidth: 304, fontSize: 28, lineHeight: 32 },
+  heroBody: { color: '#D5D8C8', fontSize: 15, lineHeight: 22, marginTop: 12, maxWidth: 650 },
+  heroBodyCompact: { maxWidth: 304, fontSize: 14, lineHeight: 21 },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22 },
+  primaryAction: { minHeight: 46, borderRadius: radius.pill, backgroundColor: '#FFF1A8', color: colors.ink, paddingHorizontal: 18, paddingVertical: 14, fontSize: 14, fontWeight: '900', overflow: 'hidden' },
+  secondaryAction: { minHeight: 46, borderRadius: radius.pill, borderWidth: 1, borderColor: '#FFFFFF55', color: '#FFFDF2', paddingHorizontal: 18, paddingVertical: 14, fontSize: 14, fontWeight: '800', overflow: 'hidden' },
+  stackGraphic: { flex: 0.7, minWidth: 0, width: '100%', gap: 0, alignSelf: 'stretch', justifyContent: 'center' },
+  stackGraphicCompact: { maxWidth: 304 },
+  stackLayer: { minHeight: 54, borderRadius: 18, backgroundColor: '#FFFDF2', borderWidth: 1, borderColor: '#FFFFFF55', paddingHorizontal: 18, justifyContent: 'center' },
+  stackLayerText: { color: colors.ink, fontSize: 16, fontWeight: '900' },
+  modelCard: { paddingVertical: 4 },
+  modelRow: { minHeight: 72, flexDirection: 'row', gap: 14, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  modelRowFirst: { borderTopWidth: 0 },
+  modelNumber: { width: 34, color: colors.moss, fontSize: 12, fontWeight: '900' },
+  modelCopy: { flex: 1 },
+  modelTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  modelDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  modelDetailCompact: { maxWidth: 260 },
+  domainGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  domainPress: { flexGrow: 1, flexBasis: 240 },
+  domainCard: { minHeight: 214, height: '100%' },
+  domainTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  domainGlyph: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  domainGlyphText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  domainTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 20 },
+  domainDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
+  domainDetailCompact: { maxWidth: 285 },
+  domainLink: { fontSize: 12, fontWeight: '900', marginTop: 'auto', paddingTop: 18 },
+  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  tilePress: { flexGrow: 1, flexBasis: 260 },
+  controlTile: { minHeight: 150, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 16 },
+  tileKicker: { fontSize: 11, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  tileDetail: { color: colors.ink, fontSize: 15, lineHeight: 21, fontWeight: '700', marginTop: 12 },
+  tileDetailCompact: { maxWidth: 285 },
+  tileAction: { color: colors.ink, fontSize: 12, fontWeight: '900', marginTop: 'auto', paddingTop: 14 },
+  yamlCard: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 14 },
+  yamlText: { flex: 1, minWidth: 260 },
+  yamlTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' },
+  yamlBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  yamlSnippet: { minWidth: 230, borderRadius: 16, backgroundColor: '#161A12', padding: 14 },
+  code: { color: '#E8F0D7', fontSize: 12, lineHeight: 19, fontFamily: 'monospace' },
+  pressed: { opacity: 0.7 },
 });
