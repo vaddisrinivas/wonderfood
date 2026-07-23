@@ -563,6 +563,11 @@ const server = createServer(async (req: any, res: any) => {
         badRequest(res, 'Unsupported method');
         return;
       }
+      // Google Sheets has no native signed webhook envelope in this adapter;
+      // require the same bearer boundary as other hosted provider writes.
+      if (!assertAuth(req, res)) {
+        return;
+      }
       const rawBody = await readRawBody(req);
       let webhookPayload: unknown;
       try {

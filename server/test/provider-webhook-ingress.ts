@@ -58,9 +58,19 @@ try {
     range: 'LifeOS Runtime!A2:K2',
     row: 2,
   });
-  const sheetsResponse = await fetch(`http://127.0.0.1:${port}/providers/sheets/webhook`, {
+  const unauthenticatedSheetsResponse = await fetch(`http://127.0.0.1:${port}/providers/sheets/webhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: sheetsBody,
+  });
+  ensure(unauthenticatedSheetsResponse.status === 401, 'Sheets webhook must reject unauthenticated ingress');
+
+  const sheetsResponse = await fetch(`http://127.0.0.1:${port}/providers/sheets/webhook`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer webhook-ingress-test-token',
+    },
     body: sheetsBody,
   });
   const sheets = await readJson(sheetsResponse);

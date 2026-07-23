@@ -19,6 +19,44 @@ export LIFEOS_MCP_TOKEN="$LIFEOS_SERVER_TOKEN"
 
 mkdir -p "$NPM_CONFIG_CACHE"
 
+# Keep the Mac-backed hosted connector from losing Sheets after the one-hour
+# access token expires. The refresh token and OAuth client values remain in the
+# private agent environment; only the refreshed cache is written locally.
+refresh_sheets_token() {
+  if [[ ! -s "$GOOGLE_SHEETS_TOKEN_FILE" || -z "${GOOGLE_CLIENT_ID:-}" || -z "${GOOGLE_CLIENT_SECRET:-}" ]]; then
+    return 0
+  fi
+  local refresh_token response
+  refresh_token="$(python3 - "$GOOGLE_SHEETS_TOKEN_FILE" <<'PY'
+import json, sys
+try:
+    value = json.load(open(sys.argv[1])).get('refresh_token', '')
+except Exception:
+    value = ''
+print(value)
+PY
+)"
+  [[ -n "$refresh_token" ]] || return 0
+  if ! response="$(curl -fsS --data-urlencode "client_id=$GOOGLE_CLIENT_ID" --data-urlencode "client_secret=$GOOGLE_CLIENT_SECRET" --data-urlencode "refresh_token=$refresh_token" --data-urlencode "grant_type=refresh_token" https://oauth2.googleapis.com/token)"; then
+    return 0
+  fi
+  RESPONSE="$response" TOKEN_FILE="$GOOGLE_SHEETS_TOKEN_FILE" python3 - <<'PY'
+import json, os
+path = os.environ['TOKEN_FILE']
+try:
+    with open(path) as f:
+        cached = json.load(f)
+    refreshed = json.loads(os.environ['RESPONSE'])
+    cached.update(refreshed)
+    cached['refresh_token'] = cached.get('refresh_token') or json.loads(os.environ['RESPONSE']).get('refresh_token', '')
+    with open(path, 'w') as f:
+        json.dump(cached, f)
+except Exception:
+    pass
+PY
+}
+refresh_sheets_token
+
 server_log="/tmp/wonderfood-lifeos-server.log"
 (cd "$ROOT" && npm --prefix server start >>"$server_log" 2>&1) &
 server_pid=$!
