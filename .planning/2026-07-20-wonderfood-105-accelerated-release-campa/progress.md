@@ -873,3 +873,17 @@
   - `npm run phase8:check:android-release-artifacts` ✅ — artifacts current for `7b38fd7`, APK debug-signed, AAB unsigned.
   - `npm run phase8:check:release-readiness` ✅ as audit — `release_ready=false`; blockers now exclude stale artifacts and remain `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
 - Refreshed live Notion/Sheets standalone authority after `7b38fd7` with private env and Homebrew Node path: `npm run check:provider-standalone-authority` ✅. Evidence: `app/build/evidence/live-workspace/provider-standalone-authority-1784835678/provider-standalone-authority-proof.json`, `all_authority_checks_passed=true`.
+
+## 2026-07-23 completion audit gate
+
+- Added `scripts/quality/check-lifeos-completion-audit.mjs` and `npm run phase9:check:completion-audit`.
+- The audit rolls up the active goal directly: live user-token Notion/Sheets authority proof, workflow resume/cancel, Android/iOS release, final visual/accessibility polish, current Android artifacts, and iOS export evidence.
+- Fresh result after refreshing Android artifact evidence: `complete=false`.
+- Passed items:
+  - live user-token Notion/Sheets authority proof
+  - workflow resume/cancel proof
+  - Android release artifacts are current for the latest pushed HEAD
+  - iOS export evidence exists
+- Still open:
+  - Android/iOS release is blocked by debug-signed APK, unsigned AAB, missing Android signing env, and missing Apple release env.
+  - Final visual/accessibility polish is partial: web/accessibility smokes pass, but full visual state matrix, native visual proof, responsive screenshots, and product-grade UI review remain open.
