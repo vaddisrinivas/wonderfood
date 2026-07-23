@@ -53,7 +53,7 @@ const screenBlueprints = [
     id: 'food',
     title: 'Workspace',
     route: '/food',
-    intent: 'Near-Notion domain surface: hero, view tabs, manifest dashboard blocks, widgets, board and attention queue.',
+    intent: 'Near-Notion domain surface: hero, view tabs, operating views, manifest dashboard blocks, widgets, board and attention queue.',
     editable: ['section order', 'hero', 'tabs', 'dashboard blocks', 'widgets', 'operating views', 'board columns', 'attention cards'],
   },
   {
@@ -631,7 +631,7 @@ export default function ConfigStudioScreen() {
                 <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
                 <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />
                 <ToggleRow title="Operating views" detail="Show week plan, pantry timeline and shopping checklist." value={settings.runtime.surfaceConfig.food.showOperatingViews} onValueChange={(showOperatingViews) => updateSurfaceConfig('food', { showOperatingViews })} />
-                <Field label="Operating view order" value={settings.runtime.surfaceConfig.food.operatingViewOrder} onChangeText={(operatingViewOrder) => updateSurfaceConfig('food', { operatingViewOrder })} placeholder="weekPlan,pantryTimeline,shoppingChecklist" />
+                <Field label="Operating view order" value={settings.runtime.surfaceConfig.food.operatingViewOrder} onChangeText={(operatingViewOrder) => updateSurfaceConfig('food', { operatingViewOrder })} placeholder="assemblyTable,weekPlan,pantryTimeline,shoppingChecklist" />
                 <ToggleRow title="Attention section" detail="Show review cards." value={settings.runtime.surfaceConfig.food.showAttention} onValueChange={(showAttention) => updateSurfaceConfig('food', { showAttention })} />
                 <ToggleRow title="Package card" detail="Show edit-package footer." value={settings.runtime.surfaceConfig.food.showPackageCard} onValueChange={(showPackageCard) => updateSurfaceConfig('food', { showPackageCard })} />
                 <Field label="Cards per column" value={settings.runtime.surfaceConfig.food.columnLimit} onChangeText={(columnLimit) => updateSurfaceConfig('food', { columnLimit })} />

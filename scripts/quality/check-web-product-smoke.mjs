@@ -46,7 +46,7 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food can be customized'],
+    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food workspace', 'TONIGHT OPERATING TABLE', 'Plan, pantry, shopping and next action', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food can be customized'],
     forbidden: ['0 food records', 'Record not found'],
   },
   {
@@ -83,6 +83,8 @@ const routes = [
       'NEED / BUY',
       'MEMORY',
       'Nutrition profile',
+      'SERVING CONTROLS',
+      'Macro lens',
       'Ingredients and availability',
       'Available',
       'Shopping',
@@ -194,6 +196,8 @@ const routes = [
       'Sources',
       'Citation cards',
       'Manifest Dashboard Blocks',
+      'operating views',
+      'Operating view order',
       'Prompt presets',
       'Composer context note',
       'Search',

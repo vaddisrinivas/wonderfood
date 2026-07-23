@@ -87,7 +87,7 @@ function countSetting(value: string, fallback: number) {
 const FOOD_SECTIONS = ['hero', 'tabs', 'manifest', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
 type FoodSection = typeof FOOD_SECTIONS[number];
 type FoodWidget = { title: string; detail: string; tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral'; href: string };
-const OPERATING_VIEW_SECTIONS = ['weekPlan', 'pantryTimeline', 'shoppingChecklist'] as const;
+const OPERATING_VIEW_SECTIONS = ['assemblyTable', 'weekPlan', 'pantryTimeline', 'shoppingChecklist'] as const;
 type OperatingViewSection = typeof OPERATING_VIEW_SECTIONS[number];
 
 function orderedFoodSections(value: string) {
@@ -526,6 +526,7 @@ function FoodOperatingViews({ meals, kitchen, shopping, compact, order, onToggle
   onToggleShopping: (record: FoodRecordView) => void;
 }) {
   const renderView = (section: OperatingViewSection) => {
+    if (section === 'assemblyTable') return <DinnerAssemblyTable key={section} meals={meals} kitchen={kitchen} shopping={shopping} compact={compact} />;
     if (section === 'weekPlan') return <MealWeekPlan key={section} records={meals} />;
     if (section === 'pantryTimeline') return <PantryTimeline key={section} records={kitchen} />;
     return <ShoppingChecklist key={section} records={shopping} onToggle={onToggleShopping} />;
@@ -534,6 +535,79 @@ function FoodOperatingViews({ meals, kitchen, shopping, compact, order, onToggle
   return (
     <View style={[styles.operatingViews, compact && styles.operatingViewsCompact]}>
       {order.map(renderView)}
+    </View>
+  );
+}
+
+function DinnerAssemblyTable({ meals, kitchen, shopping, compact }: {
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  compact: boolean;
+}) {
+  const theme = useLifeOSTheme();
+  const rows = meals.slice(0, compact ? 2 : 4).map((meal, index) => {
+    const available = kitchen[index % Math.max(kitchen.length, 1)];
+    const missing = shopping[index % Math.max(shopping.length, 1)];
+    return {
+      meal,
+      available,
+      missing,
+      action: missing ? `Resolve ${missing.title}` : 'Ready to cook',
+    };
+  });
+
+  return (
+    <Card tone="moss" style={[styles.assemblyCard, compact && styles.assemblyCardCompact]}>
+      <View style={styles.assemblyHead}>
+        <View>
+          <Text style={[styles.operatingLabel, { color: theme.colors.muted }]}>Tonight operating table</Text>
+          <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Plan, pantry, shopping and next action</Text>
+        </View>
+        <Link href="/chat" style={[styles.assemblyAsk, { color: theme.colors.moss }]}>Ask with this table →</Link>
+      </View>
+      <View style={[styles.assemblyTable, { borderColor: theme.colors.line }]}>
+        {!compact ? (
+          <View style={[styles.assemblyRow, styles.assemblyHeaderRow, { borderBottomColor: theme.colors.line }]}>
+            <Text style={[styles.assemblyHeader, { color: theme.colors.muted }]}>Meal / recipe</Text>
+            <Text style={[styles.assemblyHeader, { color: theme.colors.muted }]}>Available</Text>
+            <Text style={[styles.assemblyHeader, { color: theme.colors.muted }]}>Need / cart</Text>
+            <Text style={[styles.assemblyHeader, { color: theme.colors.muted }]}>Action</Text>
+          </View>
+        ) : null}
+        {rows.length ? rows.map((row) => (
+          <Link key={row.meal.id} href={{ pathname: '/record/[id]', params: { id: row.meal.id } }} asChild>
+            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.assemblyRow, compact && styles.assemblyRowCompact, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
+              <AssemblyCell label={compact ? 'Meal / recipe' : undefined} title={row.meal.title} detail={row.meal.meta} tone="moss" />
+              <AssemblyCell label={compact ? 'Available' : undefined} title={row.available?.title ?? 'Not captured'} detail={row.available?.meta ?? 'Add pantry source'} tone="amber" />
+              <AssemblyCell label={compact ? 'Need / cart' : undefined} title={row.missing?.title ?? 'Nothing missing'} detail={row.missing?.meta ?? 'No shopping blocker'} tone="blue" />
+              <AssemblyCell label={compact ? 'Action' : undefined} title={row.action} detail={row.missing ? 'Open item or ask AI to substitute' : 'Open and log cooking'} tone={row.missing ? 'plum' : 'moss'} />
+            </Pressable>
+          </Link>
+        )) : (
+          <View style={styles.assemblyEmpty}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No dinner table yet</Text>
+            <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>Capture a meal plan, recipe, pantry item or shopping need.</Text>
+          </View>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+function AssemblyCell({ label, title, detail, tone }: {
+  label?: string;
+  title: string;
+  detail: string;
+  tone: 'moss' | 'amber' | 'blue' | 'plum';
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={styles.assemblyCell}>
+      {label ? <Text style={[styles.assemblyCellLabel, { color: theme.colors.muted }]}>{label}</Text> : null}
+      <View style={[styles.assemblyDot, commandToneStyle(tone, theme.colors)]} />
+      <Text style={[styles.assemblyTitle, { color: theme.colors.ink }]} numberOfLines={1}>{title}</Text>
+      <Text style={[styles.assemblyDetail, { color: theme.colors.muted }]} numberOfLines={1}>{detail}</Text>
     </View>
   );
 }
@@ -772,6 +846,21 @@ const styles = StyleSheet.create({
   operatingCard: { flex: 1, minHeight: 230 },
   operatingLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   operatingTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 8, marginBottom: 10 },
+  assemblyCard: { flex: 1.35, minHeight: 250 },
+  assemblyCardCompact: { flex: 0, minHeight: 0 },
+  assemblyHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  assemblyAsk: { color: colors.moss, fontSize: 12, fontWeight: '900', paddingTop: 2 },
+  assemblyTable: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.paper },
+  assemblyRow: { minHeight: 70, flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  assemblyRowCompact: { flexDirection: 'column', paddingVertical: 8 },
+  assemblyHeaderRow: { minHeight: 38, backgroundColor: '#F4F5EF' },
+  assemblyHeader: { flex: 1, color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: 12, paddingVertical: 12 },
+  assemblyCell: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
+  assemblyCellLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 5 },
+  assemblyDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: colors.line, marginBottom: 6 },
+  assemblyTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
+  assemblyDetail: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
+  assemblyEmpty: { padding: 14 },
   weekRows: { gap: 0 },
   weekRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   dayPill: { width: 38, height: 28, borderRadius: radius.pill, overflow: 'hidden', textAlign: 'center', lineHeight: 28, backgroundColor: colors.paper, color: colors.moss, fontSize: 11, fontWeight: '900' },

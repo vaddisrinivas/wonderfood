@@ -144,6 +144,7 @@ export type LifeOSSettings = {
 
 const STORAGE_KEY = 'lifeos.settings.v1';
 const listeners = new Set<(settings: LifeOSSettings) => void>();
+const oldFoodSectionOrderDefault = 'hero,tabs,manifest,workspace,attention,widgets,view,package';
 const oldFoodWidgetsDefault = 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings';
 const oldCaptureDestinationDefault = 'Writes to Food local graph with no network dependency.';
 
@@ -237,7 +238,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: false,
       },
       food: {
-        sectionOrder: 'hero,tabs,manifest,workspace,attention,widgets,view,package',
+        sectionOrder: 'hero,tabs,workspace,manifest,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
         showManifestBlocks: true,
@@ -246,7 +247,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         widgets: 'Dinner assistant|Ask with pantry, recipe, shopping and nutrition context.|plum|/chat\nConnected sources|See exactly what Notion, Sheets and the phone can cite.|blue|/sources',
         showWorkspace: true,
         showOperatingViews: true,
-        operatingViewOrder: 'weekPlan,pantryTimeline,shoppingChecklist',
+        operatingViewOrder: 'assemblyTable,weekPlan,pantryTimeline,shoppingChecklist',
         showAttention: true,
         showPackageCard: true,
         columnLimit: '4',
@@ -424,7 +425,9 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showControlCard: config.home?.showControlCard !== false,
     },
     food: {
-      sectionOrder: normalizeDefaultOrder(config.food?.sectionOrder, defaults.food.sectionOrder, 'hero,tabs,widgets,workspace,attention,view,package'),
+      sectionOrder: typeof config.food?.sectionOrder === 'string' && config.food.sectionOrder !== oldFoodSectionOrderDefault
+        ? normalizeDefaultOrder(config.food.sectionOrder, defaults.food.sectionOrder, 'hero,tabs,widgets,workspace,attention,view,package')
+        : defaults.food.sectionOrder,
       showHero: config.food?.showHero !== false,
       showViewTabs: config.food?.showViewTabs !== false,
       showManifestBlocks: config.food?.showManifestBlocks !== false,

@@ -298,6 +298,32 @@ function stateTone(state: FoodDetail['ingredients'][number]['state']) {
   return 'plum';
 }
 
+function parseNutritionNumber(value: string) {
+  const match = value.match(/(~)?\s*(\d+(?:\.\d+)?)\s*([a-zA-Z%]+)?/);
+  if (!match) return null;
+  return {
+    approximate: Boolean(match[1]) || value.includes('~'),
+    amount: Number.parseFloat(match[2]),
+    unit: match[3] ?? '',
+  };
+}
+
+function scaledNutritionValue(label: string, value: string, servings: number) {
+  const parsed = parseNutritionNumber(value);
+  if (!parsed || /serving/i.test(label)) return value;
+  const next = parsed.amount * servings;
+  const rounded = next >= 100 ? Math.round(next) : Math.round(next * 10) / 10;
+  return `${parsed.approximate ? '~' : ''}${rounded}${parsed.unit ? ` ${parsed.unit}` : ''}`;
+}
+
+function macroColor(label: string): 'moss' | 'amber' | 'blue' | 'plum' {
+  const key = label.toLowerCase();
+  if (key.includes('protein')) return 'moss';
+  if (key.includes('carb') || key.includes('fiber')) return 'blue';
+  if (key.includes('fat')) return 'amber';
+  return 'plum';
+}
+
 export default function RecordScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -317,6 +343,7 @@ export default function RecordScreen() {
   const [linkedRecords, setLinkedRecords] = useState<Record<string, CanonicalRecord>>({});
   const [notice, setNotice] = useState('');
   const [actionPanelOpen, setActionPanelOpen] = useState(false);
+  const [servingMultiplier, setServingMultiplier] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,6 +418,19 @@ export default function RecordScreen() {
     ? `${ingredientsByState.available.length} available · ${openIngredientCount} to resolve`
     : '';
   const primaryNutritionSummary = primaryNutrition.slice(0, 2);
+  const nutritionRows = foodDetail?.nutrition.slice(0, nutritionLimit).map(([label, value]) => ({
+    label,
+    value,
+    scaledValue: scaledNutritionValue(label, value, servingMultiplier),
+    parsed: parseNutritionNumber(value),
+  })) ?? [];
+  const macroRows = nutritionRows.filter((row) => /protein|carb|fat|fiber/i.test(row.label) && row.parsed);
+  const macroMax = Math.max(...macroRows.map((row) => (row.parsed?.amount ?? 0) * servingMultiplier), 1);
+  const caloriesRow = nutritionRows.find((row) => /calorie|kcal/i.test(row.label));
+  const servingLabel = nutritionRows.find((row) => /serving/i.test(row.label))?.value ?? '1 serving';
+  const nutritionSourceLabel = structuredFoodDetail
+    ? `Saved food_detail from ${sourceLabel || 'source record'}`
+    : 'Inferred estimate from title/body until Notion, Sheets or the device syncs source detail';
   const nextStep = foodDetail?.instructions[0] ?? 'Add instructions in the source note.';
   const missingSummary = [...ingredientsByState.needed, ...ingredientsByState.shopping]
     .slice(0, 3)
@@ -619,13 +659,50 @@ export default function RecordScreen() {
             <View style={styles.sectionNoteRow}>
               <Pill tone={structuredFoodDetail ? 'moss' : 'amber'}>{structuredFoodDetail ? 'Source-backed' : 'Inferred'}</Pill>
               <Text style={[styles.sectionNote, { color: theme.colors.muted }]}>
-                {structuredFoodDetail ? 'Loaded from this item’s saved detail.' : 'Estimated from title/body until Notion, Sheets or the device provides food detail.'}
+                {nutritionSourceLabel}
               </Text>
             </View>
+            <Card style={styles.servingPanel}>
+              <View style={styles.servingHead}>
+                <View>
+                  <Text style={[styles.servingLabel, { color: theme.colors.muted }]}>Serving controls</Text>
+                  <Text style={[styles.servingTitle, { color: theme.colors.ink }]}>{servingMultiplier}× · {servingLabel}</Text>
+                </View>
+                <View style={styles.servingButtons}>
+                  {[1, 2, 3].map((count) => (
+                    <Pressable
+                      key={count}
+                      accessibilityRole="button"
+                      onPress={() => setServingMultiplier(count)}
+                      style={({ pressed }) => [styles.servingButton, { backgroundColor: servingMultiplier === count ? theme.colors.ink : theme.colors.paper, borderColor: theme.colors.line }, pressed && { opacity: 0.72 }]}
+                    >
+                      <Text style={[styles.servingButtonText, { color: servingMultiplier === count ? theme.colors.paper : theme.colors.ink }]}>{count}×</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.macroPanel}>
+                <Text style={[styles.macroTitle, { color: theme.colors.ink }]}>Macro lens {caloriesRow ? `· ${caloriesRow.scaledValue}` : ''}</Text>
+                {macroRows.length ? macroRows.map((row) => {
+                  const amount = (row.parsed?.amount ?? 0) * servingMultiplier;
+                  return (
+                    <View key={row.label} style={styles.macroRow}>
+                      <Text style={[styles.macroLabel, { color: theme.colors.muted }]}>{row.label}</Text>
+                      <View style={[styles.macroTrack, { backgroundColor: theme.colors.canvas }]}>
+                        <View style={[styles.macroFill, planToneStyle(macroColor(row.label), theme.colors), { width: `${Math.max(8, Math.min(100, (amount / macroMax) * 100))}%` }]} />
+                      </View>
+                      <Text style={[styles.macroValue, { color: theme.colors.ink }]}>{row.scaledValue}</Text>
+                    </View>
+                  );
+                }) : (
+                  <Text style={[styles.sectionNote, { color: theme.colors.muted }]}>No macro rows yet. Add protein, carbs, fat or fiber in the source profile.</Text>
+                )}
+              </View>
+            </Card>
             <View style={styles.nutritionGrid}>
-              {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
+              {nutritionRows.map(({ label, scaledValue }) => (
                 <Card key={label} style={styles.nutritionCard}>
-                  <Text style={[styles.nutritionValue, { color: theme.colors.ink }]}>{value}</Text>
+                  <Text style={[styles.nutritionValue, { color: theme.colors.ink }]}>{scaledValue}</Text>
                   <Text style={[styles.nutritionLabel, { color: theme.colors.muted }]}>{label}</Text>
                 </Card>
               ))}
@@ -922,6 +999,20 @@ const styles = StyleSheet.create({
   warningBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
   sectionNoteRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 },
   sectionNote: { color: colors.muted, fontSize: 12, lineHeight: 17, flex: 1, minWidth: 180 },
+  servingPanel: { marginBottom: 12, padding: 14 },
+  servingHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
+  servingLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  servingTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 4 },
+  servingButtons: { flexDirection: 'row', gap: 8 },
+  servingButton: { minWidth: 46, minHeight: 38, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  servingButtonText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  macroPanel: { marginTop: 14, gap: 8 },
+  macroTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', marginBottom: 2 },
+  macroRow: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  macroLabel: { color: colors.muted, width: 72, fontSize: 11, fontWeight: '900' },
+  macroTrack: { flex: 1, height: 10, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.canvas },
+  macroFill: { height: 10, borderRadius: 8, borderWidth: 0 },
+  macroValue: { color: colors.ink, width: 70, textAlign: 'right', fontSize: 12, fontWeight: '900' },
   nutritionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   nutritionCard: { flexGrow: 1, flexBasis: 130, minHeight: 92 },
   nutritionValue: { color: colors.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
