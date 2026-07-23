@@ -214,7 +214,7 @@ const routes = [
   {
     name: 'settings',
     path: '/settings',
-    must: ['AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
+    must: ['Control center', 'AI ROUTE', 'DATA HOMES', 'RUNTIME', 'AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
   },
   {
     name: 'health-diagnostics',

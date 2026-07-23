@@ -85,6 +85,9 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState('');
   const [testing, setTesting] = useState<AiProviderProfile['id'] | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
+  const enabledAiCount = [settings.ai.primary, settings.ai.fallback].filter((profile) => profile.enabled).length;
+  const enabledSourceCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
+  const healthReady = healthStatus?.availability === 'available';
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +184,34 @@ export default function SettingsScreen() {
               title="Bring the intelligence you trust."
               subtitle="Use providers directly and choose every data surface yourself. Everything is optional; local records remain usable without any connection."
             />
+
+            <SectionTitle title="Control center" />
+            <View style={[styles.statusGrid, compact && styles.stack]}>
+              <SettingsStatusCard
+                tone={enabledAiCount ? 'moss' : 'blue'}
+                label="AI route"
+                title={enabledAiCount ? `${enabledAiCount} provider${enabledAiCount === 1 ? '' : 's'} enabled` : 'Local answers first'}
+                detail={enabledAiCount ? 'Primary/fallback model routing is ready for Chat.' : 'Paste a key when you want live model answers.'}
+              />
+              <SettingsStatusCard
+                tone={enabledSourceCount ? 'plum' : 'amber'}
+                label="Data homes"
+                title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external homes'}
+                detail="Notion, Sheets, Postgres and MCP are optional, provider-scoped, and editable here."
+              />
+              <SettingsStatusCard
+                tone="moss"
+                label="Runtime"
+                title={`${settings.runtime.activeDomain} · ${settings.runtime.density}`}
+                detail="Domains, skills, agents, schemas, screen order and card counts live in Config Studio."
+              />
+              <SettingsStatusCard
+                tone={healthReady ? 'moss' : 'blue'}
+                label="Health"
+                title={Platform.OS === 'android' ? (healthReady ? 'Health Connect ready' : 'Grant Health Connect') : 'Android-only check'}
+                detail={healthStatus?.message ?? 'Health Connect is checked locally on device.'}
+              />
+            </View>
 
             <Card tone="moss" style={styles.principleCard}>
               <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE BY DESIGN</Text>
@@ -430,6 +461,22 @@ function ProviderCard(props: {
   );
 }
 
+function SettingsStatusCard(props: {
+  tone: 'moss' | 'blue' | 'amber' | 'plum';
+  label: string;
+  title: string;
+  detail: string;
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <Card tone={props.tone} style={styles.statusCard}>
+      <Text style={[styles.statusLabel, { color: theme.colors.muted }]}>{props.label}</Text>
+      <Text style={[styles.statusTitle, { color: theme.colors.ink }]}>{props.title}</Text>
+      <Text style={[styles.statusDetail, { color: theme.colors.muted }]}>{props.detail}</Text>
+    </Card>
+  );
+}
+
 function SourceCard(props: {
   title: string;
   detail: string;
@@ -497,6 +544,11 @@ const styles = StyleSheet.create({
   arrow: { color: colors.muted, fontSize: 15 },
   providerGrid: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   stack: { flexDirection: 'column' },
+  statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+  statusCard: { flexGrow: 1, flexBasis: 220, minHeight: 132 },
+  statusLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  statusTitle: { color: colors.ink, fontSize: 17, lineHeight: 22, fontWeight: '900', marginTop: 12 },
+  statusDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 6 },
   healthCard: { padding: 20, marginBottom: 12 },
   healthActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
   secondaryButton: { minHeight: 50, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
