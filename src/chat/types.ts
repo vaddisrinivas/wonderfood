@@ -45,8 +45,13 @@ export type ChatMessage = {
     actor?: string;
     domain?: string;
     tool?: string;
-    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    risk?: string;
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone';
     record_ids: string[];
+    source_ids?: string[];
+    source_citations?: ChatCitation[];
+    conversation_id?: string;
+    schema_version?: string;
     created_at: string;
     updated_at: string;
     undo_deadline_at?: string;

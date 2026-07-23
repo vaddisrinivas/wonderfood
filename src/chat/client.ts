@@ -99,6 +99,13 @@ function publicEnv(name: string) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+export async function resolveChatServerConfig(input?: { serverUrl?: string; serverToken?: string }) {
+  return {
+    serverUrl: input?.serverUrl?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_URL'),
+    serverToken: input?.serverToken?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_TOKEN'),
+  };
+}
+
 export async function listChatThreads(db: SQLiteDatabase | null): Promise<ChatThread[]> {
   if (!db) {
     return [];
@@ -161,8 +168,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   const offlineAnswer = makeOfflineAnswer(text);
   const offlineWarnings: string[] = [];
   const settings = await loadLifeOSSettings();
-  const configuredServerUrl = input.serverUrl?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_URL');
-  const configuredServerToken = input.serverToken?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_TOKEN');
+  const { serverUrl: configuredServerUrl, serverToken: configuredServerToken } = await resolveChatServerConfig(input);
   const directProfiles = usableAiProfiles(settings);
 
   if (!db) {

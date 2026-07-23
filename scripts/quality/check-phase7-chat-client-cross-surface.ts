@@ -36,20 +36,6 @@ async function waitForServer() {
   throw new Error('server did not become ready');
 }
 
-async function post(path: string, body: unknown) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json() as Record<string, unknown>;
-  assert(response.ok, `${path} failed: ${JSON.stringify(payload)}`);
-  return payload;
-}
-
 (async () => {
   const server = spawn(tsxBinary, [serverEntry], {
     cwd: root,
@@ -66,7 +52,7 @@ async function post(path: string, body: unknown) {
   try {
     await waitForServer();
 
-    const { sendChatMessage } = await import('../../src/chat/client');
+    const { sendChatMessage, undoServerAction } = await import('../../src/chat/client');
     const result = await sendChatMessage({
       db: null,
       text: 'create recipe phase7 cross surface pasta',
@@ -81,18 +67,21 @@ async function post(path: string, body: unknown) {
     assert(receipt?.id, 'client result missing action receipt id');
     assert(receipt.status === 'completed', 'client action receipt is not completed');
     assert(receipt.record_ids.length > 0, 'client action receipt has no changed records');
+    assert(receipt.tool, 'client action receipt missing tool');
 
     const before = readRuntime();
     for (const id of receipt.record_ids) {
       assert(before.records?.[id], `client-created record ${id} missing from canonical runtime`);
     }
 
-    const undone = await post('/chat/undo', {
-      action_id: receipt.id,
+    const undone = await undoServerAction({
+      actionId: receipt.id,
+      baseUrl,
+      token,
       actor: 'hearth',
-      idempotency_key: `phase7-undo-${receipt.id}`,
+      idempotencyKey: `phase7-undo-${receipt.id}`,
     });
-    const undoResult = undone.undo_result as { success?: unknown } | undefined;
+    const undoResult = undone?.undo_result;
     assert(undoResult?.success === true, 'client-created action Undo failed');
 
     const after = readRuntime();

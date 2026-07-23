@@ -15,7 +15,7 @@ import { Link, useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
-import { listChatThreads, makeWelcomeAnswer, sendChatMessage } from '@/src/chat/client';
+import { listChatThreads, makeWelcomeAnswer, resolveChatServerConfig, sendChatMessage, undoServerAction } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -87,6 +87,7 @@ export default function ChatScreen() {
   const [mode, setMode] = useState<MessageSourceMode>('offline');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [undoingActionId, setUndoingActionId] = useState<string | null>(null);
   const [sourceRecords, setSourceRecords] = useState<CanonicalRecord[]>([]);
 
   useEffect(() => {
@@ -316,9 +317,40 @@ export default function ChatScreen() {
   };
 
   const undoMessageAction = async (threadId: string, message: MessageRow) => {
-    void threadId;
-    void message;
-    setWarnings(['This direct-provider answer has no reversible action.']);
+    const receipt = message.actionReceipt;
+    if (!receipt?.id) {
+      setWarnings(['No reversible action receipt on this answer.']);
+      return;
+    }
+
+    const { serverUrl, serverToken } = await resolveChatServerConfig();
+    if (!serverUrl) {
+      setWarnings(['Undo needs the same LifeOS server that created this receipt. No hosted bridge or webhook is required.']);
+      return;
+    }
+
+    setUndoingActionId(receipt.id);
+    const result = await undoServerAction({
+      actionId: receipt.id,
+      baseUrl: serverUrl,
+      token: serverToken,
+      actor: 'hearth',
+      idempotencyKey: `app-undo-${receipt.id}`,
+    });
+    setUndoingActionId(null);
+
+    if (!result?.undo_result?.success) {
+      setWarnings([result?.undo_result?.message || 'Undo failed. The server did not confirm rollback.']);
+      return;
+    }
+
+    setMessageReceipt(threadId, message.id, (current) => ({
+      ...current,
+      actionReceipt: current.actionReceipt
+        ? { ...current.actionReceipt, status: 'undone', updated_at: new Date().toISOString() }
+        : current.actionReceipt,
+    }));
+    setWarnings([result.undo_result.message || 'Undo applied. Changed records were rolled back.']);
   };
 
   const renderThreadRail = () => (
@@ -366,7 +398,7 @@ export default function ChatScreen() {
         return (
           <View key={section} style={styles.messages}>
             {activeThread.messages.map((message: MessageRow) => (
-              <MessageBubble key={message.id} message={message} onUndo={() => void undoMessageAction(activeThread.id, message)} />
+              <MessageBubble key={message.id} message={message} undoing={undoingActionId === message.actionReceipt?.id} onUndo={() => void undoMessageAction(activeThread.id, message)} />
             ))}
           </View>
         );
@@ -484,7 +516,7 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () => void }) {
+function MessageBubble({ message, undoing, onUndo }: { message: MessageRow; undoing: boolean; onUndo: () => void }) {
   const theme = useLifeOSTheme();
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
@@ -499,9 +531,32 @@ function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () =>
         <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'Hearth' : 'You'}</Text>
         <View style={[styles.bubble, { backgroundColor: theme.colors.canvas }, !assistant && styles.userBubble, !assistant && { backgroundColor: theme.colors.ink }]}><Text style={[styles.bubbleText, { color: theme.colors.ink }, !assistant && styles.userBubbleText, !assistant && { color: theme.colors.paper }]}>{visibleText}</Text></View>
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
+        {assistant && message.actionReceipt ? <ActionReceiptCard receipt={message.actionReceipt} /> : null}
         {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
-        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" onPress={onUndo} style={({ pressed }) => [styles.undoButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.moss }, pressed && styles.pressed]}><Text style={[styles.undoButtonText, { color: theme.colors.ink }]}>Undo</Text></Pressable>}
+        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" disabled={undoing} onPress={onUndo} style={({ pressed }) => [styles.undoButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.moss }, undoing && styles.sendDisabled, pressed && styles.pressed]}><Text style={[styles.undoButtonText, { color: theme.colors.ink }]}>{undoing ? 'Undoing…' : 'Undo'}</Text></Pressable>}
       </View>
+    </View>
+  );
+}
+
+function ActionReceiptCard({ receipt }: { receipt: NonNullable<MessageRow['actionReceipt']> }) {
+  const theme = useLifeOSTheme();
+  const recordCount = receipt.record_ids?.length ?? 0;
+  const sourceCount = receipt.source_ids?.length ?? receipt.source_citations?.length ?? 0;
+  const idLabel = receipt.id.length > 18 ? `${receipt.id.slice(0, 18)}…` : receipt.id;
+  const statusTone = receipt.status === 'completed' ? 'moss' : receipt.status === 'undone' ? 'blue' : receipt.status === 'failed' ? 'amber' : 'plum';
+
+  return (
+    <View style={[styles.receiptCard, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+      <View style={styles.receiptTop}>
+        <Text style={[styles.receiptTitle, { color: theme.colors.ink }]}>Action receipt</Text>
+        <Pill tone={statusTone}>{receipt.status}</Pill>
+      </View>
+      <Text style={[styles.receiptMeta, { color: theme.colors.muted }]}>
+        {(receipt.tool || 'LifeOS action')} · {(receipt.domain || 'domain')} · {recordCount} record{recordCount === 1 ? '' : 's'} changed · {sourceCount} source{sourceCount === 1 ? '' : 's'}
+      </Text>
+      <Text style={[styles.receiptId, { color: theme.colors.moss }]}>id {idLabel} · risk {receipt.risk || 'bounded'}</Text>
+      {receipt.undo_deadline_at ? <Text style={[styles.receiptMeta, { color: theme.colors.muted }]}>Undo window until {receipt.undo_deadline_at}</Text> : null}
     </View>
   );
 }
@@ -663,6 +718,11 @@ const styles = StyleSheet.create({
   citationNeutral: { backgroundColor: '#ECEBE3' },
   citationLabel: { color: colors.ink, fontSize: 10, fontWeight: '900' },
   citationDetail: { color: colors.muted, fontSize: 10, marginTop: 1 },
+  receiptCard: { marginTop: 9, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: 12, padding: 10 },
+  receiptTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  receiptTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  receiptMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 5 },
+  receiptId: { color: colors.moss, fontSize: 10, fontWeight: '900', marginTop: 6 },
   composerWrap: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, padding: 12, backgroundColor: '#FEFEFA' },
   sourceStrip: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FBFBF4' },
   sourceStripTitle: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 7 },
