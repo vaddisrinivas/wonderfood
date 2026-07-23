@@ -70,6 +70,11 @@ const routes = [
     must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Undo', 'Open source'],
   },
   {
+    name: 'sources',
+    path: '/sources',
+    must: ['LIFEOS / SOURCES', 'Your data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'What Chat can cite'],
+  },
+  {
     name: 'config',
     path: '/config',
     must: [

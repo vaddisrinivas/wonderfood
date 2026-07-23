@@ -70,11 +70,7 @@ export default function SystemScreen() {
               <Text style={styles.brand}>LIFEOS / CONTROL DECK</Text>
               <Text style={styles.context}>Advanced settings, not your daily home</Text>
             </View>
-            <Link href="/settings" asChild>
-              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
-                <Text style={styles.settingsButtonText}>Settings</Text>
-              </Pressable>
-            </Link>
+            <Link href="/settings" style={styles.settingsLink}>Settings</Link>
           </View>
 
           <Card style={[styles.hero, compact && styles.heroCompact]}>
@@ -179,8 +175,7 @@ const styles = StyleSheet.create({
   topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  settingsButton: { minHeight: 40, borderRadius: radius.pill, backgroundColor: colors.ink, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
-  settingsButtonText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  settingsLink: { minHeight: 40, borderRadius: radius.pill, backgroundColor: colors.ink, color: '#FFF', paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, fontWeight: '800', overflow: 'hidden' },
   hero: { minHeight: 292, padding: 24, flexDirection: 'row', alignItems: 'center', gap: 24, backgroundColor: '#202416', overflow: 'hidden' },
   heroCompact: { flexDirection: 'column', alignItems: 'stretch' },
   heroCopy: { flex: 1, minWidth: 0 },

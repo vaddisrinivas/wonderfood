@@ -158,8 +158,8 @@ export default function SourcesScreen() {
             subtitle="LifeOS keeps one clear authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work."
           />
 
-          <Card tone="blue" style={styles.loopCard}>
-            <View style={styles.loopCopy}>
+          <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
+            <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
               <Pill tone="blue">DIRECT SYNC READY</Pill>
               <Text style={styles.loopTitle}>Pull your sources into one local graph.</Text>
               <Text style={styles.loopBody}>
@@ -376,7 +376,9 @@ const styles = StyleSheet.create({
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.moss },
   liveText: { color: colors.ink, fontSize: 11, fontWeight: '800' },
   loopCard: { minHeight: 224, padding: 24, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 28 },
+  loopCardCompact: { padding: 20, alignItems: 'stretch', gap: 20 },
   loopCopy: { flexGrow: 1, flexBasis: 360, minWidth: 240 },
+  loopCopyCompact: { flexBasis: '100%', minWidth: 0, width: '100%' },
   loopTitle: { color: colors.ink, fontSize: 25, lineHeight: 30, fontWeight: '800', letterSpacing: -0.7, marginTop: 18 },
   loopBody: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8, maxWidth: 560 },
   syncActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
