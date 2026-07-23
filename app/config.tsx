@@ -494,6 +494,7 @@ export default function ConfigStudioScreen() {
                     <View style={styles.rowBetween}>
                       <View style={[styles.domainGlyph, { backgroundColor: theme.colors.ink }]}><Text style={[styles.domainGlyphText, { color: theme.colors.paper }]}>{domain.label.slice(0, 1)}</Text></View>
                       <Switch
+                        accessibilityLabel={`${domain.label} domain enabled`}
                         value={enabled}
                         onValueChange={(value) => updateRuntime({ enabledDomains: toggle(settings.runtime.enabledDomains, domain.id, value) })}
                         trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
@@ -804,6 +805,7 @@ export default function ConfigStudioScreen() {
               This is the app-editable YAML/JSON profile layer behind the Notion/Glance idea: domains, enabled loops, theme, density, section order, visibility and counts.
             </Text>
             <TextInput
+              accessibilityLabel="Portable profile YAML or JSON"
               value={profileDraft}
               onChangeText={setProfileDraft}
               multiline
@@ -833,6 +835,7 @@ export default function ConfigStudioScreen() {
               Bundled schemas stay versioned and safe. Put JSON Merge Patch-style overrides here; invalid JSON cannot activate.
             </Text>
             <TextInput
+              accessibilityLabel="Schema overrides JSON"
               value={settings.runtime.schemaOverrides}
               onChangeText={(schemaOverrides) => updateRuntime({ schemaOverrides })}
               multiline
@@ -871,6 +874,7 @@ function ToggleRow(props: { title: string; detail: string; value: boolean; onVal
         <Text style={[styles.toggleDetail, { color: theme.colors.muted }]}>{props.detail}</Text>
       </View>
       <Switch
+        accessibilityLabel={`${props.title} setting enabled`}
         value={props.value}
         onValueChange={props.onValueChange}
         trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
@@ -944,6 +948,7 @@ function Field(props: { label: string; value: string; onChangeText: (value: stri
     <View style={styles.smallField}>
       <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{props.label}</Text>
       <TextInput
+        accessibilityLabel={props.label}
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}

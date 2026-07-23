@@ -394,7 +394,7 @@ export default function ChatScreen() {
   const renderThreadRail = () => (
     chatConfig.showThreads ? (
       <Card key="threads" style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
-        <View style={styles.threadHeading}><Text style={[styles.panelLabel, { color: theme.colors.muted }]}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={[styles.plus, { color: theme.colors.moss }]}>＋</Text></Pressable></View>
+        <View style={styles.threadHeading}><Text style={[styles.panelLabel, { color: theme.colors.muted }]}>Threads</Text><Pressable accessibilityRole="button" accessibilityLabel="New thread" onPress={createThread} style={styles.plusButton}><Text style={[styles.plus, { color: theme.colors.moss }]}>＋</Text></Pressable></View>
         <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
           {threads.map((thread) => {
             const active = thread.id === activeThreadId;
@@ -835,6 +835,7 @@ const styles = StyleSheet.create({
   threadPanelMobile: { paddingVertical: 9 },
   threadHeading: { paddingHorizontal: 6, paddingVertical: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   panelLabel: { color: colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 0.9, textTransform: 'uppercase' },
+  plusButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   plus: { color: colors.moss, fontSize: 20, lineHeight: 21, fontWeight: '500' },
   threadList: { gap: 4 },
   threadListMobile: { paddingHorizontal: 2 },

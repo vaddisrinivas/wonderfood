@@ -807,7 +807,7 @@ function ShoppingChecklist({ records, onToggle }: { records: FoodRecordView[]; o
       <View style={styles.checkRows}>
         {records.length ? records.map((record) => (
           <View key={record.id} style={[styles.checkRow, { borderTopColor: theme.colors.line }]}>
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: /in cart|bought/i.test(record.status) }} onPress={() => onToggle(record)} style={({ pressed }) => [styles.checkTap, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="checkbox" accessibilityLabel={`Mark ${record.title} as in cart`} accessibilityState={{ checked: /in cart|bought/i.test(record.status) }} onPress={() => onToggle(record)} style={({ pressed }) => [styles.checkTap, pressed && styles.pressed]}>
               <View style={[styles.checkBox, /in cart|bought/i.test(record.status) && styles.checkBoxDone, { borderColor: theme.colors.moss, backgroundColor: /in cart|bought/i.test(record.status) ? theme.colors.mossSoft : theme.colors.paper }]}>
                 {/in cart|bought/i.test(record.status) ? <Text style={[styles.checkMark, { color: theme.colors.moss }]}>✓</Text> : null}
               </View>
@@ -922,7 +922,7 @@ const styles = StyleSheet.create({
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   date: { color: colors.muted, fontSize: 12, marginTop: 3 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  topIcon: { color: colors.ink, fontSize: 26 },
+  topIcon: { color: colors.ink, minWidth: 44, minHeight: 44, textAlign: 'center', lineHeight: 44, fontSize: 26 },
   capture: { color: '#FFF', backgroundColor: colors.ink, borderRadius: 99, overflow: 'hidden', paddingHorizontal: 13, paddingVertical: 8, fontWeight: '800', fontSize: 12 },
   avatar: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', textAlign: 'center', lineHeight: 32, backgroundColor: colors.ink, color: '#FFF', fontWeight: '800', fontSize: 11 },
   dashboard: { flexDirection: 'row', gap: 16, alignItems: 'stretch' },

@@ -14,9 +14,9 @@ function HeaderActions({ palette, settings }: { palette: LifeOSColors; settings:
   const visualIdentity = mergeVisualIdentity(loadCatalog().activeManifest, settings.runtime.visualIdentityOverrides);
   return (
     <View style={styles.actions}>
-      <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text></Pressable></Link>
-      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, '＋')}</Text></Pressable></Link>
-      <Link href="/settings" asChild><Pressable accessibilityLabel="Settings"><Text style={[styles.avatar, { backgroundColor: palette.ink, color: palette.paper }]}>SV</Text></Pressable></Link>
+      <Link href="/search" asChild><Pressable accessibilityLabel="Search" style={styles.headerAction}><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text></Pressable></Link>
+      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture" style={styles.headerAction}><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, '＋')}</Text></Pressable></Link>
+      <Link href="/settings" asChild><Pressable accessibilityLabel="Settings" style={styles.headerAction}><Text style={[styles.avatar, { backgroundColor: palette.ink, color: palette.paper }]}>SV</Text></Pressable></Link>
     </View>
   );
 }
@@ -81,6 +81,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 18, marginRight: 8 },
+  headerAction: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   icon: { color: colors.ink, fontSize: 27, lineHeight: 32, fontWeight: '400' },
   avatar: { width: 31, height: 31, borderRadius: 16, overflow: 'hidden', textAlign: 'center', textAlignVertical: 'center', backgroundColor: colors.ink, color: '#FFF', fontSize: 11, fontWeight: '800', lineHeight: 31 },
 });

@@ -394,6 +394,7 @@ function ProviderCard(props: {
             <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{props.subtitle}</Text>
           </View>
           <Switch
+            accessibilityLabel={`${props.title} enabled`}
             value={profile.enabled}
             onValueChange={(enabled) => props.onChange({ enabled })}
             trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
@@ -494,6 +495,7 @@ function SourceCard(props: {
             <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{props.detail}</Text>
           </View>
           <Switch
+            accessibilityLabel={`${props.title} enabled`}
             value={props.enabled}
             onValueChange={props.onEnabled}
             trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
@@ -518,6 +520,7 @@ function Field(props: {
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>{props.label}</Text>
       <TextInput
+        accessibilityLabel={props.label}
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
