@@ -561,7 +561,7 @@ export default function RecordScreen() {
               <ActionButton label="Skipped" quiet onPress={() => { void appendFoodLog('Skipped in app', 'Not done today', 'Skipped'); }} />
               <ActionButton label="Substituted" quiet onPress={() => { void appendFoodLog('Substitution note', 'Substitution used; edit details in source note', 'Needs review'); }} />
               <ActionButton label="Changed serving" quiet onPress={() => { void appendFoodLog('Serving change', 'Serving changed; update source nutrition if needed', 'Needs review'); }} />
-              <ActionButton label="Add photo" quiet onPress={() => noteUnsupportedAction('Photo attachment needs native capture wiring next; no fake upload was created.')} />
+              <ActionButton label="Add photo" quiet onPress={() => router.push({ pathname: '/capture', params: { type: 'Photo', targetRecordId: record.id } })} />
               <ActionButton label="Ask AI with this" quiet onPress={() => router.push('/chat')} />
             </View>
           </Card>

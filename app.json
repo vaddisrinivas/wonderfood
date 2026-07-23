@@ -36,6 +36,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow WonderFood to attach meal, receipt, pantry, and cooking photos to your LifeOS graph.",
+          "cameraPermission": "Allow WonderFood to capture meal, receipt, pantry, and cooking photos."
+        }
+      ],
       "react-native-health-connect",
       [
         "expo-splash-screen",
