@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, Row, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { colors, radius } from '@/src/theme';
@@ -276,6 +276,8 @@ function stateTone(state: FoodDetail['ingredients'][number]['state']) {
 export default function RecordScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const compact = width < 860;
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
 
@@ -286,6 +288,7 @@ export default function RecordScreen() {
   const [body, setBody] = useState('');
   const [saved, setSaved] = useState({ title: '', body: '' });
   const [linkedRecords, setLinkedRecords] = useState<Record<string, CanonicalRecord>>({});
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -344,6 +347,15 @@ export default function RecordScreen() {
   const relations = record?.relations ?? [];
   const foodDetail = record ? getFoodDetail(record) : null;
   const structuredFoodDetail = record ? hasStructuredFoodDetail(record) : false;
+  const ingredientsByState = foodDetail
+    ? {
+        available: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'available'),
+        needed: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'needed'),
+        shopping: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'shopping'),
+        previous: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'previous'),
+      }
+    : { available: [], needed: [], shopping: [], previous: [] };
+  const primaryNutrition = foodDetail?.nutrition.slice(0, 4) ?? [];
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -385,6 +397,46 @@ export default function RecordScreen() {
     setBody(saved.body);
   };
 
+  const persistRecordPatch = async (patch: Partial<CanonicalRecord>) => {
+    if (!record || !db) {
+      setNotice('Saved locally in this view. Open Settings to connect a writable graph.');
+      return;
+    }
+
+    const nextRecord: CanonicalRecord = {
+      ...record,
+      ...patch,
+      properties: {
+        ...record.properties,
+        ...(patch.properties ?? {}),
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    await upsertRecord(db, loadCatalog().activeManifest, nextRecord);
+    const refreshed = await getDomainRecordCanonical(db, record.id);
+    setRecord(refreshed ?? nextRecord);
+    setNotice('Updated this Food record.');
+  };
+
+  const handlePrimaryFoodAction = async () => {
+    if (!record || !foodDetail) return;
+    const stamped = new Date().toLocaleString();
+    const nextDetail = {
+      ...foodDetail,
+      logs: [
+        ['Logged in app', stamped],
+        ...foodDetail.logs.filter(([label]) => label !== 'Logged in app'),
+      ],
+    };
+    await persistRecordPatch({
+      properties: {
+        food_detail: nextDetail,
+        status: foodDetail.kind === 'shopping' ? 'Review' : 'Logged',
+      },
+    });
+  };
+
   if (loading) {
     return (
       <Page>
@@ -416,13 +468,24 @@ export default function RecordScreen() {
   return (
     <Page>
       <ScrollView keyboardShouldPersistTaps="handled">
-        <View style={sharedStyles.content}>
-          <View style={styles.statusRow}>
-            <Pill tone={tone}>{status}</Pill>
-            <Text style={styles.sync}>Updated {updatedAt}</Text>
-          </View>
-          <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
-          <Text style={styles.meta}>{meta}</Text>
+        <View style={styles.pageContent}>
+          <Card tone={tone === 'neutral' ? undefined : tone} style={styles.hero}>
+            <View style={styles.statusRow}>
+              <Pill tone={tone}>{status}</Pill>
+              <Text style={styles.sync}>Updated {updatedAt}</Text>
+            </View>
+            <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={styles.title} multiline />
+            <Text style={styles.meta}>{record.collection} · {meta}</Text>
+            <Text style={styles.heroBody}>{body || 'No note yet.'}</Text>
+            <View style={styles.quickActions}>
+              <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
+              <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
+              <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
+            </View>
+          </Card>
+
+          <View style={[styles.workspace, compact && styles.workspaceCompact]}>
+            <View style={styles.mainColumn}>
           {foodDetail ? (
             <>
               {!structuredFoodDetail ? (
@@ -433,12 +496,6 @@ export default function RecordScreen() {
                   </Text>
                 </Card>
               ) : null}
-
-              <View style={styles.quickActions}>
-                <ActionButton label="Ask about this" quiet onPress={() => router.push('/chat')} />
-                <ActionButton label={foodDetail.kind === 'recipe' || foodDetail.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => {}} />
-                <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
-              </View>
 
               <SectionTitle title="Nutrition profile" />
               <View style={styles.nutritionGrid}>
@@ -451,19 +508,12 @@ export default function RecordScreen() {
               </View>
 
               <SectionTitle title="Ingredients and availability" />
-              <Card style={styles.listCard}>
-                {foodDetail.ingredients.length ? foodDetail.ingredients.map((ingredient) => (
-                  <View key={`${ingredient.name}-${ingredient.state}`} style={styles.ingredientRow}>
-                    <View style={styles.ingredientCopy}>
-                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                      <Text style={styles.ingredientAmount}>{ingredient.amount}</Text>
-                    </View>
-                    <Pill tone={stateTone(ingredient.state)}>{ingredient.state.toUpperCase()}</Pill>
-                  </View>
-                )) : (
-                  <Text style={sharedStyles.muted}>No structured ingredients yet.</Text>
-                )}
-              </Card>
+              <View style={styles.ingredientBoard}>
+                <IngredientGroup title="Available" items={ingredientsByState.available} tone="moss" />
+                <IngredientGroup title="Needed" items={ingredientsByState.needed} tone="amber" />
+                <IngredientGroup title="Shopping" items={ingredientsByState.shopping} tone="blue" />
+                <IngredientGroup title="Previous / substitute" items={ingredientsByState.previous} tone="plum" />
+              </View>
 
               <SectionTitle title="Instructions" />
               <Card style={styles.listCard}>
@@ -511,57 +561,123 @@ export default function RecordScreen() {
             <ActionButton label={dirty ? 'Save changes' : 'Saved'} onPress={handleSave} />
             {dirty ? <ActionButton label="Undo" quiet onPress={handleUndo} /> : null}
           </View>
-          <SectionTitle title="Connected records" />
-          <View style={styles.relationGrid}>
-            {relations.length ? (
-              relations.map((relation) => {
-                const linked = linkedRecords[relation.target_id];
-                const relationTone = linked ? toTone(linked.properties.tone) : 'neutral';
-                return (
-                  <Pressable
-                    key={`${relation.name}:${relation.target_id}`}
-                    accessibilityRole="link"
-                    onPress={() => router.push(`/record/${relation.target_id}`)}
-                    style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
-                  >
-                    <View style={styles.relationTop}>
-                      <Text style={styles.relationName}>{relation.name}</Text>
-                      <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
-                    </View>
-                    <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
-                    <Text style={styles.relationDetail}>
-                      {linked
-                        ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
-                        : 'Linked record not loaded in this local graph yet.'}
-                    </Text>
-                  </Pressable>
-                );
-              })
-            ) : (
-              <Card style={styles.emptyRelationCard}>
-                <Text style={sharedStyles.muted}>No linked records yet.</Text>
+            </View>
+
+            <View style={[styles.sideColumn, compact && styles.sideColumnCompact]}>
+              <SectionTitle title="Properties" />
+              <Card style={styles.sideCard}>
+                <Fact label="Status" value={status} />
+                <Fact label="Collection" value={record.collection} />
+                <Fact label="Source" value={sourceLabel} />
+                <Fact label="Updated" value={updatedAt} />
+                <Fact label="Detail" value={structuredFoodDetail ? 'Structured food_detail' : 'Inferred fallback'} />
               </Card>
-            )}
+
+              {primaryNutrition.length ? (
+                <>
+                  <SectionTitle title="At a glance" />
+                  <Card style={styles.sideCard}>
+                    {primaryNutrition.map(([label, value]) => <Fact key={label} label={label} value={value} />)}
+                  </Card>
+                </>
+              ) : null}
+
+              <SectionTitle title="Connected records" />
+              <View style={styles.relationGrid}>
+                {relations.length ? (
+                  relations.map((relation) => {
+                    const linked = linkedRecords[relation.target_id];
+                    const relationTone = linked ? toTone(linked.properties.tone) : 'neutral';
+                    return (
+                      <Pressable
+                        key={`${relation.name}:${relation.target_id}`}
+                        accessibilityRole="link"
+                        onPress={() => router.push(`/record/${relation.target_id}`)}
+                        style={({ pressed }) => [styles.relationCard, pressed && { opacity: 0.7 }]}
+                      >
+                        <View style={styles.relationTop}>
+                          <Text style={styles.relationName}>{relation.name}</Text>
+                          <Pill tone={relationTone}>{String(linked?.properties.status ?? 'Linked')}</Pill>
+                        </View>
+                        <Text style={styles.relationTitle}>{linked?.title ?? relation.target_id}</Text>
+                        <Text style={styles.relationDetail}>
+                          {linked
+                            ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
+                            : 'Linked record not loaded in this local graph yet.'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })
+                ) : (
+                  <Card style={styles.emptyRelationCard}>
+                    <Text style={sharedStyles.muted}>No linked records yet.</Text>
+                  </Card>
+                )}
+              </View>
+
+              <SectionTitle title="Provenance" />
+              <Card>
+                <Row icon="S" title={sourceLabel} detail="Canonical source" />
+                <Row icon="⌁" title="LifeOS Food schema v1" detail="Record shape and relations" />
+              </Card>
+            </View>
           </View>
-          <SectionTitle title="Provenance" />
-          <Card>
-            <Row icon="S" title={sourceLabel} detail="Canonical source" />
-            <Row icon="⌁" title="LifeOS Food schema v1" detail="Record shape and relations" />
-          </Card>
           <Pressable onPress={() => router.back()} style={styles.close}>
             <Text style={styles.closeText}>Close record</Text>
           </Pressable>
+          {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         </View>
       </ScrollView>
     </Page>
   );
 }
 
+function IngredientGroup({ title, items, tone }: {
+  title: string;
+  items: FoodDetail['ingredients'];
+  tone: 'moss' | 'amber' | 'blue' | 'plum';
+}) {
+  return (
+    <Card tone={tone} style={styles.ingredientGroup}>
+      <View style={styles.ingredientGroupHead}>
+        <Text style={styles.ingredientGroupTitle}>{title}</Text>
+        <Pill tone={tone}>{items.length}</Pill>
+      </View>
+      {items.length ? items.map((ingredient) => (
+        <View key={`${title}-${ingredient.name}-${ingredient.amount}`} style={styles.ingredientMini}>
+          <Text style={styles.ingredientName}>{ingredient.name}</Text>
+          <Text style={styles.ingredientAmount}>{ingredient.amount}</Text>
+        </View>
+      )) : (
+        <Text style={styles.emptyBody}>None captured.</Text>
+      )}
+    </Card>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.sideFact}>
+      <Text style={styles.sideFactLabel}>{label}</Text>
+      <Text style={styles.sideFactValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  pageContent: { width: '100%', maxWidth: 1380, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 120 },
+  hero: { marginTop: 18, padding: 26, minHeight: 230 },
+  workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: 18 },
+  workspaceCompact: { flexDirection: 'column' },
+  mainColumn: { flex: 1, minWidth: 0 },
+  sideColumn: { width: 340 },
+  sideColumnCompact: { width: '100%' },
+  sideCard: { gap: 0 },
   statusRow: { paddingTop: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   sync: { color: colors.muted, fontSize: 11 },
   title: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1, marginTop: 22, padding: 0 },
   meta: { color: colors.muted, fontSize: 13, marginTop: 8 },
+  heroBody: { color: colors.ink, fontSize: 16, lineHeight: 24, marginTop: 14, maxWidth: 820 },
   editor: { minHeight: 150, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, color: colors.ink, fontSize: 15, lineHeight: 23 },
   actions: { flexDirection: 'row', gap: 9, marginTop: 12 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
@@ -573,6 +689,11 @@ const styles = StyleSheet.create({
   nutritionValue: { color: colors.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
   nutritionLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', marginTop: 6, textTransform: 'uppercase' },
   listCard: { paddingVertical: 0 },
+  ingredientBoard: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  ingredientGroup: { flexGrow: 1, flexBasis: 240, minHeight: 150 },
+  ingredientGroupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
+  ingredientGroupTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  ingredientMini: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingVertical: 9 },
   ingredientRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
   ingredientCopy: { flex: 1, minWidth: 0 },
   ingredientName: { color: colors.ink, fontSize: 15, fontWeight: '900' },
@@ -586,6 +707,9 @@ const styles = StyleSheet.create({
   factLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
   factValue: { color: colors.ink, fontSize: 12, fontWeight: '800', flex: 1, textAlign: 'right' },
   variation: { color: colors.ink, fontSize: 13, lineHeight: 20, marginTop: 4 },
+  sideFact: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  sideFactLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
+  sideFactValue: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: 4 },
   relationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   relationCard: { flexGrow: 1, flexBasis: 240, minHeight: 128, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 14 },
   relationTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' },
@@ -595,6 +719,7 @@ const styles = StyleSheet.create({
   emptyRelationCard: { flex: 1 },
   close: { alignSelf: 'center', padding: 18, marginTop: 20 },
   closeText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  notice: { color: colors.moss, fontSize: 13, fontWeight: '800', textAlign: 'center', marginBottom: 24 },
   emptyTitle: { color: colors.ink, marginTop: 22, fontSize: 16, fontWeight: '800' },
   emptyBody: { color: colors.muted, marginTop: 6 },
   loading: { color: colors.muted, marginTop: 22 },
