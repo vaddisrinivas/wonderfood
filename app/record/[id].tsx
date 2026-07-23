@@ -19,6 +19,8 @@ type FoodDetail = {
   variations: string[];
 };
 
+const ingredientStates = new Set(['available', 'needed', 'shopping', 'previous']);
+
 function fallbackCanonicalFromView(
   view: NonNullable<Awaited<ReturnType<typeof getDomainRecord>>>,
   domainId: string
@@ -60,6 +62,55 @@ function toTone(value: unknown) {
 
 function asText(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function isTupleArray(value: unknown): value is Array<[string, string]> {
+  return Array.isArray(value)
+    && value.every((item) => Array.isArray(item) && item.length === 2 && typeof item[0] === 'string' && typeof item[1] === 'string');
+}
+
+function isFoodDetail(value: unknown): value is Omit<FoodDetail, 'kind'> {
+  if (!value || typeof value !== 'object') return false;
+  const detail = value as Record<string, unknown>;
+  return isTupleArray(detail.nutrition)
+    && Array.isArray(detail.ingredients)
+    && detail.ingredients.every((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const ingredient = item as Record<string, unknown>;
+      return typeof ingredient.name === 'string'
+        && typeof ingredient.amount === 'string'
+        && typeof ingredient.state === 'string'
+        && ingredientStates.has(ingredient.state);
+    })
+    && Array.isArray(detail.instructions)
+    && detail.instructions.every((item) => typeof item === 'string')
+    && isTupleArray(detail.logs)
+    && Array.isArray(detail.variations)
+    && detail.variations.every((item) => typeof item === 'string');
+}
+
+function collectionKind(collection: string): FoodDetail['kind'] {
+  if (collection === 'recipe') return 'recipe';
+  if (collection === 'meal_plan' || collection === 'meal_log') return 'meal';
+  if (collection === 'inventory' || collection === 'ingredient' || collection === 'purchase_line') return 'inventory';
+  if (collection === 'shopping_item' || collection === 'purchase') return 'shopping';
+  return 'generic';
+}
+
+function getFoodDetail(record: CanonicalRecord): FoodDetail {
+  const detail = record.properties.food_detail;
+  if (isFoodDetail(detail)) {
+    return {
+      kind: collectionKind(record.collection),
+      nutrition: detail.nutrition,
+      ingredients: detail.ingredients,
+      instructions: detail.instructions,
+      logs: detail.logs,
+      variations: detail.variations,
+    };
+  }
+
+  return inferFoodDetail(record);
 }
 
 function inferFoodDetail(record: CanonicalRecord): FoodDetail {
@@ -278,7 +329,7 @@ export default function RecordScreen() {
   const tone = record ? toTone(record.properties.tone) : 'neutral';
   const status = record ? String(record.properties.status ?? 'Active') : 'Active';
   const relations = record?.relations ?? [];
-  const foodDetail = record ? inferFoodDetail(record) : null;
+  const foodDetail = record ? getFoodDetail(record) : null;
 
   const handleSave = async () => {
     if (!record || !db) {

@@ -30,19 +30,14 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
       {
         id: sample.id,
         title: sample.title,
-        collection: sample.meta.includes('Recipe') || sample.meta.includes('Dining')
-          ? 'recipe'
-          : sample.meta.includes('Meal plan')
-            ? 'meal_plan'
-          : sample.meta.includes('Shopping')
-            ? 'shopping_item'
-            : 'inventory',
+        collection: sample.collection,
         properties: {
           status: sample.status,
           tone: sample.tone,
           meta: sample.meta,
           body: sample.body,
           source: sample.source,
+          food_detail: sample.food_detail,
         },
         source: {
           provider: 'sqlite',
@@ -54,6 +49,7 @@ export async function seedDatabase(db: SQLiteDatabase, options: SeedOptions = {}
         archived_at: null,
         created_at: createdAt,
         updated_at: createdAt,
+        relations: sample.relations,
       }
     );
   }
