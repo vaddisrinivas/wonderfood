@@ -5,7 +5,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimens
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { DirectSyncReceipt, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
@@ -64,12 +64,15 @@ function normalizeSourceName(name: string): keyof typeof sourceMeta | 'other' {
   return 'other';
 }
 
-const citationSources = [
-  ['[LifeOS Notion]', 'Pages, properties, relations and exact block quotes', 'When connected'],
-  ['[LifeOS Sheets]', 'Rows, cells, formulas and workbook timestamps', 'When connected'],
-  ['[App snapshot]', 'Local kitchen, plans, shopping and recent actions', 'Demo'],
-  ['[MCP schema]', 'Domain catalog, skill rules and tool contracts', 'Versioned'],
-] as const;
+function citationSourcesFor(domainLabel: string, collections: string[]) {
+  const collectionSummary = collections.slice(0, 5).join(', ') || `${domainLabel.toLowerCase()} records`;
+  return [
+    [`[${domainLabel} Notion]`, 'Pages, properties, relations and exact block quotes', 'When connected'],
+    [`[${domainLabel} Sheets]`, 'Rows, cells, formulas and workbook timestamps', 'When connected'],
+    [`[${domainLabel} app snapshot]`, `Local ${collectionSummary}, source snapshots and recent actions`, 'On device'],
+    [`[${domainLabel} MCP schema]`, 'Domain catalog, skill rules and tool contracts', 'Versioned'],
+  ] as const;
+}
 
 const recentSync = [
   ['01', 'Notion direct pull', 'Reads user data sources into canonical records from in-app credentials'],
@@ -91,9 +94,12 @@ export default function SourcesScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 720;
   const db = useLifeOSDatabase();
-  const { activeManifest } = loadCatalog();
   const [sourceRows, setSourceRows] = useState<SourceRow[]>([]);
   const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const { activeManifest } = loadCatalog();
+  const domainLabel = activeManifest.label;
+  const citationSources = citationSourcesFor(domainLabel, activeManifest.collections);
   const [receipts, setReceipts] = useState<DirectSyncReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<DirectSyncReceipt['provider'] | 'all' | null>(null);
@@ -101,7 +107,9 @@ export default function SourcesScreen() {
 
   const refreshRows = async () => {
     setLoading(true);
-    const [rows, loadedSettings] = await Promise.all([listSourceRows(db), loadLifeOSSettings()]);
+    const loadedSettings = await loadLifeOSSettings();
+    setActiveDomainOverride(loadedSettings.runtime.activeDomain);
+    const rows = await listSourceRows(db);
     setSettings(loadedSettings);
     setSourceRows(mergeConfiguredRows(rows, loadedSettings));
     setLoading(false);
@@ -110,7 +118,9 @@ export default function SourcesScreen() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const [rows, loadedSettings] = await Promise.all([listSourceRows(db), loadLifeOSSettings()]);
+      const loadedSettings = await loadLifeOSSettings();
+      setActiveDomainOverride(loadedSettings.runtime.activeDomain);
+      const rows = await listSourceRows(db);
       if (!cancelled) {
         setSettings(loadedSettings);
         setSourceRows(mergeConfiguredRows(rows, loadedSettings));
@@ -148,23 +158,23 @@ export default function SourcesScreen() {
           <View style={styles.contextBar}>
             <View>
               <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / SOURCES</Text>
-              <Text style={[styles.context, { color: theme.colors.muted }]}>Authority, sync and citation health</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} authority, sync and citation health</Text>
             </View>
             <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
           </View>
 
           <PageHeader
             eyebrow="One graph · Your chosen homes"
-            title="Your data stays legible."
-            subtitle="LifeOS keeps one clear authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work."
+            title={`${domainLabel} data stays legible.`}
+            subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
           />
 
           <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
             <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
               <Pill tone="blue">DIRECT SYNC READY</Pill>
-              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull your sources into one local graph.</Text>
+              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
               <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
-                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server.
+                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
               </Text>
               <View style={styles.syncActions}>
                 <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
@@ -180,10 +190,10 @@ export default function SourcesScreen() {
             <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
               <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>LifeOS</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
+              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
               <View style={styles.flowDestinations}>
-                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>SQLite · local</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
                 <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
               </View>
             </View>
@@ -238,6 +248,10 @@ export default function SourcesScreen() {
                 ? { icon: '◉', tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source discovered at runtime.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
                 : sourceMeta[normalized];
               const isReady = normalized === 'postgres';
+              const displayRole = normalized === 'sqlite' ? `${domainLabel} local replica` : meta.role;
+              const displaySummary = meta.summary
+                .replace('meals, kitchen, recipes and planning', `${domainLabel.toLowerCase()} pages, records and planning`)
+                .replace('Fast offline graph', `Fast offline ${domainLabel.toLowerCase()} graph`);
               return (
                 <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
@@ -246,8 +260,8 @@ export default function SourcesScreen() {
                       <Pill tone={isReady ? 'amber' : meta.tone}>{sourceRow.status.toUpperCase()}</Pill>
                     </View>
                     <Text style={[styles.sourceName, { color: theme.colors.ink }]}>{sourceRow.name}</Text>
-                    <Text style={[styles.sourceRole, { color: theme.colors.moss }]}>{meta.role} · {sourceRow.workspace}</Text>
-                    <Text style={[styles.sourceSummary, { color: theme.colors.muted }]}>{meta.summary}</Text>
+                    <Text style={[styles.sourceRole, { color: theme.colors.moss }]}>{displayRole} · {sourceRow.workspace}</Text>
+                    <Text style={[styles.sourceSummary, { color: theme.colors.muted }]}>{displaySummary}</Text>
                     <View style={styles.sourceFacts}>
                       <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>FRESHNESS</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{sourceRow.freshness}</Text></View>
                       <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>SCOPE</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{meta.scope}</Text></View>
@@ -271,12 +285,12 @@ export default function SourcesScreen() {
             })}
           </View>
 
-          <SectionTitle title="What Chat can cite" />
+          <SectionTitle title={`What ${domainLabel} Chat can cite`} />
           <Card style={styles.citationCard}>
             <View style={styles.citationHeader}>
               <View>
                 <Text style={styles.sectionLead}>Source-backed by default</Text>
-                <Text style={styles.sectionDetail}>Every household claim opens the exact record, quote and observed version.</Text>
+                <Text style={styles.sectionDetail}>Every {domainLabel.toLowerCase()} claim opens the exact record, quote and observed version.</Text>
               </View>
               <Pill tone="moss">4 source packs</Pill>
             </View>

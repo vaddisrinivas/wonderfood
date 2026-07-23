@@ -112,7 +112,18 @@ const routes = [
   {
     name: 'sources',
     path: '/sources',
-    must: ['LIFEOS / SOURCES', 'Your data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Local device replica', 'What Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Food data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Food local replica', 'What Food Chat can cite'],
+  },
+  {
+    name: 'sources-health-active',
+    path: '/sources',
+    localSettings: {
+      runtime: {
+        activeDomain: 'health',
+        enabledDomains: ['food', 'health'],
+      },
+    },
+    must: ['LIFEOS / SOURCES', 'Health data stays legible', 'Pull Health sources into one local graph', 'Health local replica', 'What Health Chat can cite'],
   },
   {
     name: 'config',
