@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import agentRegistry from '@/packages/domain-config/agents/registry.v1.json';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
+import { DashboardBlock, DashboardBlockSize, DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
 import { mergeVisualIdentity, parseVisualIdentityOverrides, visualGlyph } from '@/src/domain/visual-identity';
 import {
   LifeOSSettings,
@@ -233,6 +233,34 @@ function parseProfile(input: string) {
   return (trimmed.startsWith('{') ? JSON.parse(trimmed) : parseLifeOSYaml(trimmed)) as {
     runtime?: Partial<LifeOSSettings['runtime']>;
   };
+}
+
+function dashboardBlockLine(block: DashboardBlock, size: DashboardBlockSize) {
+  const collections = block.query.collections?.join(',') ?? '';
+  const match = block.query.match ?? '';
+  const limit = String(block.query.limit ?? 3);
+  return [
+    block.id,
+    block.title,
+    block.subtitle ?? '',
+    block.kind,
+    block.tone,
+    collections,
+    match,
+    limit,
+    block.href,
+    size,
+  ].join('|');
+}
+
+function dashboardSizePreset(blocks: DashboardBlock[], preset: 'balanced' | 'uniform' | 'editorial') {
+  return blocks.map((block, index) => {
+    let size: DashboardBlockSize = 'standard';
+    if (preset === 'uniform') size = 'standard';
+    if (preset === 'balanced') size = block.kind === 'metric' || index % 3 === 2 ? 'wide' : 'standard';
+    if (preset === 'editorial') size = index === 0 ? 'feature' : block.kind === 'list' && index > 3 ? 'compact' : block.kind === 'metric' ? 'wide' : 'standard';
+    return dashboardBlockLine(block, size);
+  }).join('\n');
 }
 
 export default function ConfigStudioScreen() {
@@ -689,6 +717,12 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
                 <ToggleRow title="Manifest dashboard blocks" detail="Render cards declared by the active domain package." value={settings.runtime.surfaceConfig.food.showManifestBlocks} onValueChange={(showManifestBlocks) => updateSurfaceConfig('food', { showManifestBlocks })} />
                 <ToggleRow title="Collection atlas" detail="Show every managed collection grouped by workspace view." value={settings.runtime.surfaceConfig.food.showCollectionAtlas} onValueChange={(showCollectionAtlas) => updateSurfaceConfig('food', { showCollectionAtlas })} />
+                <CardSizePresetRow
+                  onPreset={(preset) => {
+                    const blocks = (activeManifest?.dashboard_blocks ?? []).filter((block) => block.surface.startsWith(`${settings.runtime.activeDomain}.`));
+                    updateSurfaceConfig('food', { dashboardBlocks: dashboardSizePreset(blocks, preset) });
+                  }}
+                />
                 <Field label="Dashboard blocks" value={settings.runtime.surfaceConfig.food.dashboardBlocks} onChangeText={(dashboardBlocks) => updateSurfaceConfig('food', { dashboardBlocks })} placeholder="Leave empty to use manifest. Or one per line: id|title|subtitle|kind|tone|collections|match|limit|href|size. Size: compact, standard, wide, feature." multiline />
                 <ToggleRow title="Profile widgets" detail="Show custom cards defined by profile." value={settings.runtime.surfaceConfig.food.showWidgets} onValueChange={(showWidgets) => updateSurfaceConfig('food', { showWidgets })} />
                 <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
@@ -887,6 +921,23 @@ function SurfaceConfigCard({ title, children }: { title: string; children: React
   );
 }
 
+function CardSizePresetRow(props: { onPreset: (preset: 'balanced' | 'uniform' | 'editorial') => void }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.presetBox, { borderColor: theme.colors.line, backgroundColor: theme.colors.canvas }]}>
+      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Dashboard card sizes</Text>
+      <Text style={[styles.toggleDetail, { color: theme.colors.muted }]}>Use uniform cards for calm grids, or make high-value Food cards larger. You can still edit each block below.</Text>
+      <View style={styles.presetActions}>
+        {(['balanced', 'uniform', 'editorial'] as const).map((preset) => (
+          <Pressable key={preset} accessibilityRole="button" onPress={() => props.onPreset(preset)} style={({ pressed }) => [styles.choice, { borderColor: theme.colors.line, backgroundColor: theme.colors.paper }, pressed && styles.pressed]}>
+            <Text style={[styles.choiceText, { color: theme.colors.ink }]}>{preset}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function Field(props: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; multiline?: boolean }) {
   const theme = useLifeOSTheme();
   return (
@@ -990,6 +1041,8 @@ const styles = StyleSheet.create({
   surfaceCard: { flexGrow: 1, flexBasis: 240, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 14 },
   surfaceTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
   surfaceBody: { gap: 10, marginTop: 12 },
+  presetBox: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 12, gap: 8 },
+  presetActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   choiceField: { gap: 8 },
   smallField: { gap: 8, minWidth: 150 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
