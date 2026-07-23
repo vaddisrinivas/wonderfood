@@ -15,7 +15,7 @@ import { Link, useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
-import { listChatThreads, makeWelcomeAnswer, resolveChatServerConfig, sendChatMessage, undoServerAction } from '@/src/chat/client';
+import { listChatThreads, makeWelcomeAnswer, resolveChatServerConfig, sendChatMessage, undoChatAction } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -364,16 +364,13 @@ export default function ChatScreen() {
       return;
     }
 
-    const { serverUrl, serverToken } = await resolveChatServerConfig();
-    if (!serverUrl) {
-      setWarnings(['Undo needs the same LifeOS server that created this receipt. No hosted bridge or webhook is required.']);
-      return;
-    }
-
     setUndoingActionId(receipt.id);
-    const result = await undoServerAction({
-      actionId: receipt.id,
-      baseUrl: serverUrl,
+    const { serverUrl, serverToken } = await resolveChatServerConfig();
+    const result = await undoChatAction({
+      db,
+      receipt,
+      domainId: activeDomainId,
+      baseUrl: serverUrl || undefined,
       token: serverToken,
       actor: 'hearth',
       idempotencyKey: `app-undo-${receipt.id}`,
