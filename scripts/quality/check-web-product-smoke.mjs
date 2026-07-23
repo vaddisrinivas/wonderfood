@@ -85,6 +85,17 @@ const routes = [
     ],
   },
   {
+    name: 'system',
+    path: '/system',
+    must: [
+      'LIFEOS / CONTROL DECK',
+      'Your app should feel like Notion plus GPT',
+      'Screen model',
+      'Configure from the app',
+      'Glance-style config',
+    ],
+  },
+  {
     name: 'settings',
     path: '/settings',
     must: ['AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
