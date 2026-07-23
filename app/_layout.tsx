@@ -1,35 +1,39 @@
 import { Link, Stack } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
-import { colors } from '@/src/theme';
+import { colors, darkColors, LifeOSColors } from '@/src/theme';
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { setActiveDomainOverride } from '@/src/domain/catalog';
-import { loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
+import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
 
-function HeaderActions() {
+function HeaderActions({ palette }: { palette: LifeOSColors }) {
   return (
     <View style={styles.actions}>
-      <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={styles.icon}>⌕</Text></Pressable></Link>
-      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={styles.icon}>＋</Text></Pressable></Link>
-      <Link href="/settings" asChild><Pressable accessibilityLabel="Settings"><Text style={styles.avatar}>SV</Text></Pressable></Link>
+      <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={[styles.icon, { color: palette.ink }]}>⌕</Text></Pressable></Link>
+      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={[styles.icon, { color: palette.ink }]}>＋</Text></Pressable></Link>
+      <Link href="/settings" asChild><Pressable accessibilityLabel="Settings"><Text style={[styles.avatar, { backgroundColor: palette.ink, color: palette.paper }]}>SV</Text></Pressable></Link>
     </View>
   );
 }
 
 export default function RootLayout() {
+  const systemTheme = useColorScheme();
   const [settingsReady, setSettingsReady] = useState(false);
+  const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
 
   useEffect(() => {
     let cancelled = false;
     void loadLifeOSSettings().then((settings) => {
       if (cancelled) return;
       setActiveDomainOverride(settings.runtime.activeDomain);
+      setSettings(settings);
       setSettingsReady(true);
     });
     const unsubscribe = subscribeLifeOSSettings((settings) => {
       setActiveDomainOverride(settings.runtime.activeDomain);
+      setSettings(settings);
     });
     return () => {
       cancelled = true;
@@ -41,17 +45,20 @@ export default function RootLayout() {
     return <View style={styles.boot}><ActivityIndicator color={colors.moss} /></View>;
   }
 
+  const activeDark = settings.runtime.theme === 'dark' || (settings.runtime.theme === 'system' && systemTheme === 'dark');
+  const activeColors = activeDark ? darkColors : colors;
+
   return (
     <LifeOSDatabaseProvider>
       <>
-        <StatusBar style="dark" />
+        <StatusBar style={activeDark ? 'light' : 'dark'} />
         <Stack screenOptions={{
-          headerStyle: { backgroundColor: colors.canvas },
+          headerStyle: { backgroundColor: activeColors.canvas },
           headerShadowVisible: false,
-          headerTintColor: colors.ink,
+          headerTintColor: activeColors.ink,
           headerTitleStyle: { fontWeight: '800' },
-          contentStyle: { backgroundColor: colors.canvas },
-          headerRight: HeaderActions,
+          contentStyle: { backgroundColor: activeColors.canvas },
+          headerRight: () => <HeaderActions palette={activeColors} />,
         }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="record/[id]" options={{ title: 'Record', headerRight: undefined }} />

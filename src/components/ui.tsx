@@ -2,74 +2,84 @@ import { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Link } from 'expo-router';
 
-import { colors, radius, shadow } from '@/src/theme';
-import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
+import { colors, radius, shadow, useLifeOSTheme } from '@/src/theme';
 
 export function Page({ children }: PropsWithChildren) {
-  const { runtime } = useLifeOSSettingsSnapshot();
-  return <View style={[styles.page, runtime.density === 'compact' && styles.pageCompact]}>{children}</View>;
+  const theme = useLifeOSTheme();
+  return <View style={[styles.page, theme.density === 'compact' && styles.pageCompact, { backgroundColor: theme.colors.canvas }]}>{children}</View>;
 }
 
 export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.header}>
-      {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-      <Text style={styles.title}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {eyebrow ? <Text style={[styles.eyebrow, { color: theme.colors.moss }]}>{eyebrow}</Text> : null}
+      <Text style={[styles.title, { color: theme.colors.ink }]}>{title}</Text>
+      {subtitle ? <Text style={[styles.subtitle, { color: theme.colors.muted }]}>{subtitle}</Text> : null}
     </View>
   );
 }
 
 export function SectionTitle({ title, action, href }: { title: string; action?: string; href?: any }) {
+  const theme = useLifeOSTheme();
   return (
     <View style={styles.sectionRow}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {action && href ? <Link href={href} style={styles.link}>{action}</Link> : null}
+      <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>{title}</Text>
+      {action && href ? <Link href={href} style={[styles.link, { color: theme.colors.moss }]}>{action}</Link> : null}
     </View>
   );
 }
 
 export function Card({ children, tone, style }: PropsWithChildren<{ tone?: 'moss' | 'amber' | 'plum' | 'blue'; style?: StyleProp<ViewStyle> }>) {
-  const { runtime } = useLifeOSSettingsSnapshot();
-  const backgroundColor = tone ? ({ moss: colors.mossSoft, amber: colors.amberSoft, plum: colors.plumSoft, blue: colors.blueSoft }[tone]) : colors.paper;
-  return <View style={[styles.card, runtime.density === 'compact' && styles.cardCompact, { backgroundColor }, style]}>{children}</View>;
+  const theme = useLifeOSTheme();
+  const backgroundColor = tone ? ({ moss: theme.colors.mossSoft, amber: theme.colors.amberSoft, plum: theme.colors.plumSoft, blue: theme.colors.blueSoft }[tone]) : theme.colors.paper;
+  return <View style={[styles.card, theme.density === 'compact' && styles.cardCompact, { backgroundColor, borderColor: theme.colors.line }, style]}>{children}</View>;
 }
 
 export function Pill({ children, tone = 'neutral' }: PropsWithChildren<{ tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue' }>) {
-  const backgroundColor = { neutral: '#ECEBE3', moss: colors.mossSoft, amber: colors.amberSoft, plum: colors.plumSoft, blue: colors.blueSoft }[tone];
-  return <View style={[styles.pill, { backgroundColor }]}><Text style={styles.pillText}>{children}</Text></View>;
+  const theme = useLifeOSTheme();
+  const backgroundColor = { neutral: theme.dark ? '#2D3028' : '#ECEBE3', moss: theme.colors.mossSoft, amber: theme.colors.amberSoft, plum: theme.colors.plumSoft, blue: theme.colors.blueSoft }[tone];
+  return <View style={[styles.pill, { backgroundColor }]}><Text style={[styles.pillText, { color: theme.colors.ink }]}>{children}</Text></View>;
 }
 
 export function ActionButton({ label, icon, onPress, quiet, disabled }: { label: string; icon?: string; onPress?: () => void; quiet?: boolean; disabled?: boolean }) {
-  const { runtime } = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
   return (
-    <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, runtime.density === 'compact' && styles.buttonCompact, quiet && styles.buttonQuiet, disabled && { opacity: 0.4 }, pressed && { opacity: 0.68 }]}>
-      {icon ? <Text style={styles.buttonIcon}>{icon}</Text> : null}
-      <Text style={[styles.buttonText, quiet && styles.buttonQuietText]}>{label}</Text>
+    <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({ pressed }) => [
+      styles.button,
+      theme.density === 'compact' && styles.buttonCompact,
+      { backgroundColor: theme.colors.ink },
+      quiet && [styles.buttonQuiet, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }],
+      disabled && { opacity: 0.4 },
+      pressed && { opacity: 0.68 },
+    ]}>
+      {icon ? <Text style={[styles.buttonIcon, { color: quiet ? theme.colors.ink : theme.colors.paper }]}>{icon}</Text> : null}
+      <Text style={[styles.buttonText, { color: theme.colors.paper }, quiet && { color: theme.colors.ink }]}>{label}</Text>
     </Pressable>
   );
 }
 
 export function Metric({ value, label, footnote }: { value: string; label: string; footnote?: string }) {
+  const theme = useLifeOSTheme();
   return (
     <Card style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      {footnote ? <Text style={styles.metricFoot}>{footnote}</Text> : null}
+      <Text style={[styles.metricValue, { color: theme.colors.ink }]}>{value}</Text>
+      <Text style={[styles.metricLabel, { color: theme.colors.ink }]}>{label}</Text>
+      {footnote ? <Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{footnote}</Text> : null}
     </Card>
   );
 }
 
 export function Row({ icon, title, detail, trailing, href }: { icon?: string; title: string; detail?: string; trailing?: ReactNode; href?: any }) {
-  const { runtime } = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
   const content = (
-    <View style={[styles.row, runtime.density === 'compact' && styles.rowCompact]}>
-      {icon ? <View style={styles.rowIcon}><Text>{icon}</Text></View> : null}
+    <View style={[styles.row, theme.density === 'compact' && styles.rowCompact, { borderBottomColor: theme.colors.line }]}>
+      {icon ? <View style={[styles.rowIcon, { backgroundColor: theme.dark ? '#2D3028' : '#EEEDE5' }]}><Text>{icon}</Text></View> : null}
       <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+        <Text style={[styles.rowTitle, { color: theme.colors.ink }]}>{title}</Text>
+        {detail ? <Text style={[styles.rowDetail, { color: theme.colors.muted }]}>{detail}</Text> : null}
       </View>
-      {trailing ?? (href ? <Text style={styles.chevron}>›</Text> : null)}
+      {trailing ?? (href ? <Text style={[styles.chevron, { color: theme.colors.muted }]}>›</Text> : null)}
     </View>
   );
   return href ? <Link href={href} asChild><Pressable>{content}</Pressable></Link> : content;

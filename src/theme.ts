@@ -1,4 +1,6 @@
-import { Platform } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
+
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 export const colors = {
   ink: '#171914',
@@ -29,3 +31,33 @@ export const shadow = Platform.select({
     elevation: 2,
   },
 }) ?? {};
+
+export const darkColors = {
+  ink: '#F4F0E6',
+  muted: '#B9B2A3',
+  canvas: '#11130F',
+  paper: '#191B16',
+  line: '#34372D',
+  moss: '#A9C891',
+  mossSoft: '#263220',
+  plum: '#D9AFD0',
+  plumSoft: '#342637',
+  amber: '#F0B173',
+  amberSoft: '#3C291B',
+  blue: '#9FC7D8',
+  blueSoft: '#1F3138',
+  red: '#E28E85',
+};
+
+export type LifeOSColors = typeof colors;
+
+export function useLifeOSTheme() {
+  const { runtime } = useLifeOSSettingsSnapshot();
+  const system = useColorScheme();
+  const dark = runtime.theme === 'dark' || (runtime.theme === 'system' && system === 'dark');
+  return {
+    colors: dark ? darkColors : colors,
+    dark,
+    density: runtime.density,
+  };
+}
