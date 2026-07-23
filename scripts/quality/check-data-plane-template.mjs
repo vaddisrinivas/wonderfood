@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
@@ -7,6 +8,7 @@ const read = (path) => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 
 const food = read('packages/domain-config/domains/food.v1.json');
 const template = read('packages/domain-config/templates/lifeos-data-plane-template.v1.json');
+const schemaPath = resolve(root, 'packages/domain-config/templates', template.$schema ?? '');
 
 function fail(message) {
   console.error(`Data-plane template invalid: ${message}`);
@@ -14,6 +16,8 @@ function fail(message) {
 }
 
 if (template.schema_version !== 'lifeos.data_plane_template.v1') fail('schema_version mismatch');
+if (!template.$schema || !existsSync(schemaPath)) fail(`missing referenced schema: ${template.$schema}`);
+read(schemaPath);
 if (template.sync_contract?.webhooks_required !== false) fail('webhooks must be optional');
 if (template.sync_contract?.hosted_server_required !== false) fail('hosted server must not be required');
 if (template.sync_contract?.source_snapshots_required !== true) fail('source snapshots must be required');
