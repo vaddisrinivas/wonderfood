@@ -25,6 +25,8 @@ These remain the source of truth. If this execution overlay is ambiguous, the or
 - No backward compatibility. Delete legacy runtime, dual-write, and bridge paths after callers move.
 - SQLite remains fully usable offline in every mode.
 - Exactly one data home is active per household.
+- Control plane and data plane are separate: schemas/config/surfaces/skills/icons/settings may come from local, GitHub, URL, Notion, or Sheets; household records remain in the selected authority.
+- Remote control-plane changes are proposed, validated, previewed, and accepted before they govern the app; last-good config survives bad remote config.
 - Notion and Google Sheets are standalone household products, not dumps or backup views.
 - Postgres uses HTTPS/API or a user-owned service endpoint, authenticated users, household membership checks, and no direct DB password/DSN ships in Android.
 - AI and imports produce typed proposals; accepted changes use canonical commands.
@@ -78,6 +80,27 @@ Before parallel edits, the coordinator freezes these APIs for the campaign:
 Workers may extend these only through a coordinator-owned contract commit. This prevents four divergent models.
 
 ## Four Proof Bundles
+
+## Portable Control Plane Addendum
+
+This addendum is now part of the release plan, not a separate nice-to-have.
+
+Goal: the same LifeOS runtime can load domains, schemas, screens, visual tokens, skills, agents, actions, and settings from editable config sources without changing app code.
+
+Hard requirements:
+
+- Config sources: local file, GitHub raw file, HTTPS URL, Notion page/data source, Google Sheets range.
+- Config storage: `config_sources`, `config_snapshots`, `config_conflicts`.
+- Safety: config fetchers never write household `records`; data sync never writes `config_*`.
+- Failure mode: if remote config fails fetch/validation, app keeps last-good control plane.
+- UX: C4 remains required before product completion — user must edit every config source from the app.
+
+Current evidence:
+
+- `npm run check:control-plane` passes for C0/C1/C2/C3/C5.
+- `npm run check:control-plane-separation` statically guards control-plane/data-plane table boundaries.
+- `npm run check:roundtrip` now proves config tables and workflow runs survive recovery.
+- Remaining gap: in-app Config Sources/preview/accept/reorder/disable UX.
 
 ## V4 Completion Campaign
 

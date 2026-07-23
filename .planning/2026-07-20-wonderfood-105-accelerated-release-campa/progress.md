@@ -716,3 +716,20 @@
 - S23 Ultra is currently connected over adb; Notion token and cached Google OAuth proof credentials are available without exposing values. Android release-signing variables remain missing.
 - Found a Notion spending defect: Food amount and Non-food amount both rolled up every line. Added hidden per-line food/non-food formula components and separate rollups.
 - First live formula attempt failed with Notion `Type error with formula`; changed the select comparison to explicit `format(...)`. The verification rerun was then interrupted by the Sheets worker's incomplete shared-worktree edit, so integrated Gradle runs are paused until that worker completes.
+
+## 2026-07-23 portable control-plane + workflow recovery hardening
+
+- Read the new v5 control-plane note and folded it into the active campaign plan as a blocking addendum.
+- Confirmed existing control-plane implementation covers C0/C1/C2/C3/C5 with `src/config/*`, `src/db/config.ts`, and `tests/config/*`.
+- Strengthened C3 sync proof: bad remote fetch and invalid remote config now keep previous last-good control-plane manifests instead of silently governing the app.
+- Added `scripts/quality/check-control-plane-separation.sh` and wired it into `npm run check:control-plane` so table-boundary drift fails CI.
+- Strengthened recovery proof: `scripts/quality/check-roundtrip.ts` now seeds and asserts `workflow_runs` so cancelled/resumed workflow state survives export/import restore.
+- Updated `docs/lifeos/implementation-ledger.md` with C3 last-good evidence and Phase 7 workflow recovery evidence.
+- Verified:
+  - `npm run check:control-plane` ✅
+  - `npm run check:control-plane-separation` ✅
+  - `npm run check:workflow-runtime` ✅
+  - `npm run check:roundtrip` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Still open after this hard slice: C4 Config Sources UX, provider/device Undo across every adapter, full Notion/Sheets authority UX, final visual polish, signed Android/iOS release.

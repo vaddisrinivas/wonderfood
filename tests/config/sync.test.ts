@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { syncConfigSources, type ConfigSyncStore } from '@/src/config/sync';
 import { saveConfigConflict, saveConfigSnapshot, saveConfigSource } from '@/src/db/config';
-import type { ConfigConflict, ConfigSource, ConfigSnapshot } from '@/src/config/types';
+import type { ConfigConflict, ConfigSource, ConfigSnapshot, ControlPlaneState } from '@/src/config/types';
 
 const now = '2026-07-23T03:00:00.000Z';
 
@@ -85,6 +85,38 @@ describe('config sync', () => {
     expect(result.proposal.mode).toBe('migration_required');
     expect(store.conflicts).toHaveLength(1);
     expect(store.conflicts[0].key).toBe('activeDomain');
+  });
+
+  it('keeps last-good control plane when remote fetch or validation fails', async () => {
+    const previous: ControlPlaneState = {
+      sources: [source({ id: 'last-good', kind: 'local', location: { path: 'last-good.json' } })],
+      snapshots: [],
+      conflicts: [],
+      errors: [],
+      manifests: { domains: ['food'], screens: ['home'] },
+      applied_at: '2026-07-22T00:00:00.000Z',
+      last_good_hash: 'last-good-hash',
+      mode: 'additive',
+    };
+    const store = new MemoryConfigStore();
+    const result = await syncConfigSources({
+      now,
+      previous,
+      store,
+      sources: [
+        source({ id: 'remote-down', kind: 'url', location: { url: 'https://example.invalid/lifeos.yaml' } }),
+        source({ id: 'remote-bad', kind: 'local', location: { path: 'bad.yaml' }, precedence: 2 }),
+      ],
+      localFiles: {
+        'bad.yaml': 'not valid\n  : yaml',
+      },
+      fetcher: async () => ({ ok: false, status: 503, text: async () => 'down' }),
+    });
+
+    expect(result.errors.map((error) => error.path)).toEqual(['remote-down', 'remote-bad']);
+    expect(result.proposal.document).toEqual(previous.manifests);
+    expect(store.snapshots.map((item) => item.source_id)).toEqual(['remote-bad']);
+    expect(store.conflicts).toEqual([]);
   });
 
   it('SQLite control-plane persistence writes only config tables', async () => {

@@ -63,3 +63,12 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - The currently open Google Sheet is blank and is not V4 integration proof. No connected Sheets document-control session is available, and the Google Drive native-import plugin is not installed.
 - GitHub reference review identified concrete Sheets gaps: relation fields lack `ONE_OF_RANGE` validation, table ranges/column metadata need reconciliation, spreadsheet reads omit some tables/metadata/protected-range state, and repeated bootstrap can duplicate protections.
 - The acceptance matrix still reports 65 PASS / 11 TODO, but C09-C19 evidence must be audited because several notes describe the rejected V3 projection.
+
+## Portable Control Plane Findings
+
+- The missing v5 pillar is not a visual/dashboard issue; it is the control-plane/data-plane split. Config is data, but not household records.
+- Existing code already had most hard contracts: typed config sources, fetchers for local/GitHub/URL/Notion/Sheets, additive merge, conflict gating, AI preview/accept/rollback, and SQLite `config_*` tables.
+- The main hard gaps found today were fail-safe behavior and recovery proof, not fetcher shape.
+- Added evidence now proves invalid/failed remote config keeps the last-good control plane and that workflow run checkpoints survive recovery along with records/config.
+- Static separation now has its own gate: config modules cannot write record tables, and provider/data-sync modules cannot write config tables.
+- Remaining C4 UI is product-critical but should sit on these contracts: add/reorder/disable source, preview diff, accept/undo, show conflicts/errors/freshness, no token display.

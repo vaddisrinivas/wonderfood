@@ -99,7 +99,8 @@
     "check:control-plane-c2": "vitest run tests/config/runtime.test.ts",
     "check:control-plane-c3": "vitest run tests/config/sync.test.ts",
     "check:control-plane-c5": "vitest run tests/config/ai.test.ts",
-    "check:control-plane": "npm run check:control-plane-c0 && npm run check:control-plane-c1 && npm run check:control-plane-c2 && npm run check:control-plane-c3 && npm run check:control-plane-c5",
+    "check:control-plane-separation": "./scripts/quality/check-control-plane-separation.sh",
+    "check:control-plane": "npm run check:control-plane-c0 && npm run check:control-plane-c1 && npm run check:control-plane-c2 && npm run check:control-plane-c3 && npm run check:control-plane-separation && npm run check:control-plane-c5",
     "cleanup:notion-proof-artifacts": "node scripts/quality/cleanup-notion-proof-artifacts.mjs"
   },
   "private": true,

@@ -216,6 +216,46 @@ function assert(condition: unknown, message: string): asserts condition {
     created_at: now,
     resolved_at: null,
   });
+  sourceProof.tables.get('workflow_runs')!.push({
+    id: 'roundtrip-workflow-weekly-reset',
+    domain: 'food',
+    workflow_id: 'weekly-food-reset',
+    inputs_json: JSON.stringify({ day: 'Thursday' }),
+    status: 'cancelled',
+    payload_json: JSON.stringify({
+      schema_version: 'lifeos.workflow-run.v1',
+      run_id: 'roundtrip-workflow-weekly-reset',
+      domain: 'food',
+      workflow_id: 'weekly-food-reset',
+      cursor: 2,
+      resume_count: 1,
+      steps: [
+        {
+          id: 'choose-dinner',
+          title: 'Choose dinner',
+          status: 'completed',
+          receipts: [{ operation_ids: ['roundtrip-delete-yogurt'], record_ids: ['roundtrip-meal-dal'] }],
+          completed_at: now,
+        },
+        {
+          id: 'build-shopping',
+          title: 'Build shopping',
+          status: 'cancelled',
+          receipts: [],
+          cancelled_at: now,
+        },
+      ],
+      completed_operation_ids: ['roundtrip-delete-yogurt'],
+      completed_action_ids: [],
+      source_ids: ['sqlite:roundtrip-meal-dal'],
+      created_at: now,
+      updated_at: now,
+      cancelled_at: now,
+      cancel_reason: 'Roundtrip proof cancellation.',
+    }),
+    created_at: now,
+    updated_at: now,
+  });
 
   const beforeChecksum = canonicalRecordChecksum(sourceProof);
   const snapshot = await exportRecoverySnapshot(sourceDb);
@@ -233,6 +273,8 @@ function assert(condition: unknown, message: string): asserts condition {
   assert(restoredProof.tables.get('config_sources')!.length === 1, 'config sources not preserved');
   assert(restoredProof.tables.get('config_snapshots')!.length === 1, 'config snapshots not preserved');
   assert(restoredProof.tables.get('config_conflicts')!.length === 1, 'config conflicts not preserved');
+  assert(restoredProof.tables.get('workflow_runs')!.length === 1, 'workflow runs not preserved');
+  assert(restoredProof.tables.get('workflow_runs')![0].status === 'cancelled', 'workflow status not preserved');
 
   const outDir = join(process.cwd(), 'app', 'build', 'evidence', 'roundtrip');
   mkdirSync(outDir, { recursive: true });
@@ -247,6 +289,8 @@ function assert(condition: unknown, message: string): asserts condition {
     config_sources: restoredProof.tables.get('config_sources')!.length,
     config_snapshots: restoredProof.tables.get('config_snapshots')!.length,
     config_conflicts: restoredProof.tables.get('config_conflicts')!.length,
+    workflow_runs: restoredProof.tables.get('workflow_runs')!.length,
+    workflow_cancel_resume_preserved: restoredProof.tables.get('workflow_runs')![0]?.status === 'cancelled',
     tombstone: {
       id: tombstone?.id,
       deleted: tombstone?.deleted,
