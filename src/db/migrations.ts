@@ -235,7 +235,6 @@ const MIGRATIONS: Migration[] = [
       `);
 
       await db.execAsync('PRAGMA foreign_keys = ON');
-      await db.execAsync('PRAGMA journal_mode = WAL');
       await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
       await db.runAsync(
         `INSERT OR REPLACE INTO ${TABLES.meta} (key, value) VALUES ($key, $value)`,
@@ -269,6 +268,11 @@ export async function getDatabaseVersion(db: SQLiteDatabase): Promise<number> {
 }
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
+  // Journal mode changes require autocommit mode on Android SQLite. Keep this
+  // outside the migration transaction so a fresh install cannot remain behind
+  // the splash screen while the provider waits for initialization.
+  await db.execAsync('PRAGMA journal_mode = WAL');
+
   const currentVersion = await getDatabaseVersion(db);
   if (currentVersion > DATABASE_VERSION) {
     throw new Error(`Database schema is newer than app can handle: ${currentVersion}`);
