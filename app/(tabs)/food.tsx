@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { DashboardBlock } from '@/src/domain/catalog';
-import { loadCatalog } from '@/src/domain/catalog';
+import { DashboardBlock, loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { getDomainRecordCanonical, getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
@@ -37,6 +36,17 @@ const viewCopy: Record<string, { title: string; subtitle: string; empty: string 
     empty: 'Add missing ingredients or generate a list from meal plans.',
   },
 };
+
+function copyForView(domainLabel: string, view: string) {
+  if (domainLabel === 'Food') {
+    return viewCopy[view] ?? viewCopy.Overview;
+  }
+  return {
+    title: view === 'Overview' ? `${domainLabel} command center` : view,
+    subtitle: `Views, records and actions from the active ${domainLabel} package.`,
+    empty: `Connect sources or capture a ${domainLabel.toLowerCase()} record to wake up this space.`,
+  };
+}
 
 function pickByNeed(records: FoodRecordView[], needle: string, fallbackIndex: number) {
   return records.find((item) => `${item.collection} ${item.meta} ${item.title}`.toLowerCase().includes(needle)) ?? records[fallbackIndex];
@@ -81,7 +91,7 @@ function parseFoodWidgets(value: string): FoodWidget[] {
     });
 }
 
-function parseDashboardBlockOverrides(value: string): DashboardBlock[] {
+function parseDashboardBlockOverrides(value: string, domainId: string): DashboardBlock[] {
   return value
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -100,8 +110,8 @@ function parseDashboardBlockOverrides(value: string): DashboardBlock[] {
       ] = line.split('|').map((part) => part.trim());
       const parsedLimit = Number.parseInt(limit, 10);
       return {
-        id: id || `food:custom-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-        surface: 'food.overview',
+        id: id || `${domainId}:custom-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        surface: `${domainId}.overview`,
         title: title || 'Custom dashboard block',
         subtitle: subtitle || 'Configured from the app profile.',
         kind: kind === 'spotlight' || kind === 'metric' || kind === 'action' ? kind : 'list',
@@ -134,8 +144,11 @@ export default function FoodScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const contentWidth = compact ? Math.max(width - 32, 280) : Math.max(width - 128, 900);
-  const { activeManifest } = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const { activeDomainId, activeManifest } = loadCatalog();
+  const domainLabel = activeManifest.label;
+  const isFoodDomain = activeDomainId === 'food';
   const theme = useLifeOSTheme();
   const surfaceCatalog = useMemo(() => buildSurfaceCatalog(activeManifest), [activeManifest]);
   const views = surfaceCatalog.tabs;
@@ -160,7 +173,7 @@ export default function FoodScreen() {
     return () => {
       cancelled = true;
     };
-  }, [active, db]);
+  }, [active, activeDomainId, db]);
 
   const shown = useMemo(() => {
     if (active === 'Overview') return records;
@@ -174,19 +187,26 @@ export default function FoodScreen() {
   const todayMeal = pickByNeed(records, 'meal', 0);
   const kitchenItem = pickByNeed(records, 'pantry', 1);
   const shoppingItem = pickByNeed(records, 'shopping', 2);
-  const activeCopy = viewCopy[active] ?? viewCopy.Overview;
+  const activeCopy = copyForView(domainLabel, active);
   const foodConfig = settings.runtime.surfaceConfig.food;
   const columnLimit = countSetting(foodConfig.columnLimit, 4);
   const attentionLimit = countSetting(foodConfig.attentionLimit, 3);
   const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, columnLimit);
   const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
   const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, columnLimit);
+  const surfaceColumns = activeManifest.surfaces.slice(0, 3).map((surface) => ({
+    id: surface.id,
+    title: surface.label,
+    subtitle: surface.views?.slice(0, 3).join(' · ') || surface.collections.join(' · ') || 'Package surface',
+    records: records.filter((record) => surface.collections.includes(record.collection)).slice(0, columnLimit),
+    empty: `No ${surface.label.toLowerCase()} records yet.`,
+  }));
   const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
   const widgets = parseFoodWidgets(foodConfig.widgets);
-  const configuredBlocks = parseDashboardBlockOverrides(foodConfig.dashboardBlocks);
+  const configuredBlocks = parseDashboardBlockOverrides(foodConfig.dashboardBlocks, activeDomainId);
   const manifestBlocks = (configuredBlocks.length ? configuredBlocks : (activeManifest.dashboard_blocks ?? []))
-    .filter((block) => block.surface.startsWith('food.'));
+    .filter((block) => block.surface.startsWith(`${activeDomainId}.`));
 
   const toggleShoppingRecord = async (record: FoodRecordView) => {
     const nextStatus = /in cart|bought/i.test(record.status) ? 'To buy' : 'In cart';
@@ -217,30 +237,36 @@ export default function FoodScreen() {
           <View key={section} style={[styles.dashboard, compact && styles.dashboardCompact]}>
             <Card tone="moss" style={styles.hero}>
               <View style={styles.heroHeader}>
-                <Pill tone="moss">TONIGHT</Pill>
-                <Text style={[styles.heroMeta, { color: theme.colors.muted }]}>{loading ? 'Loading kitchen...' : `${records.length} food records`}</Text>
+                <Pill tone="moss">{isFoodDomain ? 'TONIGHT' : `${domainLabel.toUpperCase()} ACTIVE`}</Pill>
+                <Text style={[styles.heroMeta, { color: theme.colors.muted }]}>{loading ? `Loading ${domainLabel.toLowerCase()}...` : `${records.length} ${domainLabel.toLowerCase()} records`}</Text>
               </View>
               <Text style={[styles.heroTitle, { color: theme.colors.ink }, compact && styles.heroTitleCompact]}>
-                {todayMeal?.title ?? 'Decide dinner from what you have.'}
+                {todayMeal?.title ?? `Run your ${domainLabel.toLowerCase()} workspace from one graph.`}
               </Text>
               <Text style={[styles.heroBody, { color: theme.colors.ink }, compact && styles.heroBodyCompact]}>
-                {todayMeal?.body || todayMeal?.meta || 'Plan, cook, shop and review receipts from one food workspace.'}
+                {todayMeal?.body || todayMeal?.meta || `Views, records, sources, skills and MCP tools come from the active ${domainLabel} package.`}
               </Text>
               <View style={styles.heroActions}>
-                <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
-                <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
+                <ActionButton label={todayMeal ? `Open ${isFoodDomain ? 'dinner' : 'record'}` : `Ask ${domainLabel} AI`} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
+                <ActionButton label="Edit package" quiet onPress={() => router.push('/config')} />
               </View>
               <View style={styles.commandLane}>
-                <CommandStep index="01" title="Dinner" detail={todayMeal?.title ?? 'Pick tonight'} tone="moss" href={todayMeal ? `/record/${todayMeal.id}` : '/chat'} />
-                <CommandStep index="02" title="Pantry risk" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
-                <CommandStep index="03" title="Shopping gap" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
-                <CommandStep index="04" title="Prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
+                {isFoodDomain ? (
+                  <>
+                    <CommandStep index="01" title="Dinner" detail={todayMeal?.title ?? 'Pick tonight'} tone="moss" href={todayMeal ? `/record/${todayMeal.id}` : '/chat'} />
+                    <CommandStep index="02" title="Pantry risk" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
+                    <CommandStep index="03" title="Shopping gap" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
+                    <CommandStep index="04" title="Prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
+                  </>
+                ) : surfaceColumns.map((surface, index) => (
+                  <CommandStep key={surface.id} index={String(index + 1).padStart(2, '0')} title={surface.title} detail={surface.subtitle} tone={index === 0 ? 'moss' : index === 1 ? 'blue' : 'plum'} href="/config" />
+                ))}
               </View>
             </Card>
 
             <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
-              <FeatureCard tone="amber" label="Use soon" item={kitchenItem} fallbackTitle="Nothing urgent" fallbackBody="Use-soon pantry items will appear here." />
-              <FeatureCard tone="blue" label="Shopping" item={shoppingItem} fallbackTitle="No shopping pressure" fallbackBody="Missing ingredients and receipt items will appear here." />
+              <FeatureCard tone="amber" label={isFoodDomain ? 'Use soon' : 'First surface'} item={isFoodDomain ? kitchenItem : surfaceColumns[0]?.records[0]} fallbackTitle={isFoodDomain ? 'Nothing urgent' : surfaceColumns[0]?.title ?? 'No records yet'} fallbackBody={isFoodDomain ? 'Use-soon pantry items will appear here.' : surfaceColumns[0]?.subtitle ?? 'Connect a source or capture a record.'} />
+              <FeatureCard tone="blue" label={isFoodDomain ? 'Shopping' : 'Sources'} item={isFoodDomain ? shoppingItem : undefined} fallbackTitle={isFoodDomain ? 'No shopping pressure' : `${domainLabel} sources`} fallbackBody={isFoodDomain ? 'Missing ingredients and receipt items will appear here.' : 'Notion, Sheets, SQLite and Postgres can feed this package.'} />
             </View>
           </View>
         ) : null;
@@ -295,13 +321,19 @@ export default function FoodScreen() {
       case 'workspace':
         return active === 'Overview' && foodConfig.showWorkspace ? (
           <View key={section}>
-            <SectionTitle title="Food workspace" action="Ask" href="/chat" />
+            <SectionTitle title={`${domainLabel} workspace`} action="Ask" href="/chat" />
             <View style={[styles.board, compact && styles.boardCompact]}>
-              <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
-              <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
-              <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
+              {isFoodDomain ? (
+                <>
+                  <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} empty="Plan dinner from pantry." />
+                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
+                  <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
+                </>
+              ) : surfaceColumns.map((surface) => (
+                <RecordColumn key={surface.id} title={surface.title} subtitle={surface.subtitle} records={surface.records} empty={surface.empty} />
+              ))}
             </View>
-            <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} onToggleShopping={toggleShoppingRecord} />
+            {isFoodDomain ? <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} onToggleShopping={toggleShoppingRecord} /> : null}
           </View>
         ) : null;
       case 'attention':
@@ -314,7 +346,7 @@ export default function FoodScreen() {
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing needs review</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Receipt matches, AI proposals and source conflicts land here before they change your kitchen.</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>AI proposals, source conflicts and reviewable changes land here before they change your graph.</Text>
                 </Card>
               )}
             </View>
@@ -325,7 +357,7 @@ export default function FoodScreen() {
           <View key={section}>
             <SectionTitle title={activeCopy.title} action="Ask" href="/chat" />
             <Text style={[styles.viewSubtitle, { color: theme.colors.muted }]}>{activeCopy.subtitle}</Text>
-            {loading ? <Text style={[styles.loading, { color: theme.colors.muted }]}>Loading food records...</Text> : null}
+            {loading ? <Text style={[styles.loading, { color: theme.colors.muted }]}>{`Loading ${domainLabel.toLowerCase()} records...`}</Text> : null}
 
             <View style={[styles.records, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
               {shown.length ? shown.map((record) => (
@@ -333,8 +365,8 @@ export default function FoodScreen() {
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>{activeCopy.empty}</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Use capture, Sources, or Food AI. No config page required.</Text>
-                  <Link href="/capture" style={[styles.cardLink, { color: theme.colors.moss }]}>Capture food →</Link>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{`Use capture, Sources, or ${domainLabel} AI. No code change required.`}</Text>
+                  <Link href="/capture" style={[styles.cardLink, { color: theme.colors.moss }]}>{`Capture ${domainLabel.toLowerCase()} →`}</Link>
                 </Card>
               )}
             </View>
@@ -344,8 +376,8 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Food is the active package</Text>
-              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views come from config, but the workspace stays about dinner, pantry and shopping.</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>{domainLabel} is the active package</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, dashboard blocks, skills, schemas and MCP tools come from the active package.</Text>
             </View>
             <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Edit package</Link>
           </Card>
@@ -361,8 +393,8 @@ export default function FoodScreen() {
         <View style={[styles.content, { width: contentWidth }]}>
           <View style={styles.topbar}>
             <View>
-              <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / FOOD</Text>
-              <Text style={[styles.date, { color: theme.colors.muted }]}>Kitchen, meals, recipes, shopping</Text>
+              <Text style={[styles.brand, { color: theme.colors.moss }]}>{`LIFEOS / ${domainLabel.toUpperCase()}`}</Text>
+              <Text style={[styles.date, { color: theme.colors.muted }]}>{activeManifest.surfaces.map((surface) => surface.label).join(', ')}</Text>
             </View>
             <View style={styles.topActions}>
               <Link href="/search" style={[styles.topIcon, { color: theme.colors.ink }]}>⌕</Link>

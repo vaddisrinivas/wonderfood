@@ -62,6 +62,17 @@ const routes = [
     must: ['Package dashboard', 'Chef board', 'Custom app-edited block.', 'food.overview · food:chef'],
   },
   {
+    name: 'health-active-workspace',
+    path: '/food',
+    localSettings: {
+      runtime: {
+        activeDomain: 'health',
+        enabledDomains: ['food', 'health'],
+      },
+    },
+    must: ['LIFEOS / HEALTH', 'Run your health workspace from one graph.', 'Today health signal', 'Health workspace', 'Health is the active package'],
+  },
+  {
     name: 'record-green-dal',
     path: '/record/meal-green-dal',
     must: [

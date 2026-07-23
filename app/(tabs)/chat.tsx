@@ -20,7 +20,7 @@ import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { loadLifeOSSettings, usableAiProfiles, useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { listRecordsForDomain } from '@/src/db/records';
 import type { CanonicalRecord } from '@/src/domain/runtime';
@@ -76,6 +76,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const db = useLifeOSDatabase();
   const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
   const theme = useLifeOSTheme();
   const { activeDomainId, activeManifest } = loadCatalog();
   const domainLabel = activeManifest.label;

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { ActionButton, Card, Page, Pill, Row, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -36,8 +36,9 @@ export default function TodayScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const db = useLifeOSDatabase();
-  const catalog = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const catalog = loadCatalog();
   const theme = useLifeOSTheme();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
@@ -56,7 +57,7 @@ export default function TodayScreen() {
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [db, settings.runtime.activeDomain]);
 
   const homeConfig = settings.runtime.surfaceConfig.home;
   const reviewLimit = countSetting(homeConfig.reviewLimit, 2);
@@ -85,16 +86,16 @@ export default function TodayScreen() {
             </View>
             <Text style={[styles.nowTitle, compact && styles.nowTitleCompact, { color: theme.colors.ink }]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
             <Text style={[styles.nowBody, { color: theme.colors.ink }]}>
-              {firstRecord?.body || firstRecord?.meta || 'Start with a meal, receipt, pantry item or question. Home should show daily work, not internal machinery.'}
+              {firstRecord?.body || firstRecord?.meta || `Start with a ${catalog.activeManifest.label.toLowerCase()} record, source, or question. Home should show daily work, not internal machinery.`}
             </Text>
             <View style={styles.nowActions}>
               <ActionButton label={firstRecord ? 'Open now card' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
               <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
             </View>
             <View style={styles.commandDeck}>
-              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? 'Pick dinner'} detail={dinnerRecord?.meta ?? 'Choose from Food graph'} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
-              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No use-soon risk'} detail={riskRecord?.meta ?? 'Pantry looks calm'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
-              <HomeCommandCard label="Shopping gap" title={shoppingRecord?.title ?? 'Nothing to buy'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
+              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? `Open ${catalog.activeManifest.label}`} detail={dinnerRecord?.meta ?? `Choose from ${catalog.activeManifest.label} graph`} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
+              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No active risk'} detail={riskRecord?.meta ?? 'Graph looks calm'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
+              <HomeCommandCard label="Gap" title={shoppingRecord?.title ?? 'No blockers'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
               <HomeCommandCard label="Assistant" title="Ask AI" detail="Use sources, tables, receipts" tone="plum" href="/chat" />
             </View>
           </Card>
@@ -131,7 +132,7 @@ export default function TodayScreen() {
                   <Card tone="moss" style={styles.spaceCard}>
                     <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>F</Text>
                     <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>{catalog.activeManifest.label}</Text>
-                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active food graph.` : 'Kitchen, meals, recipes and shopping render from config.'}</Text>
+                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active ${catalog.activeManifest.label.toLowerCase()} graph.` : `${catalog.activeManifest.label} surfaces render from config.`}</Text>
                   </Card>
                 </Pressable>
               </Link>

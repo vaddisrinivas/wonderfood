@@ -10,6 +10,38 @@
     { "id": "plants.supplies", "label": "Supplies", "views": ["inventory", "to_buy"], "collections": ["plant_supply"] }
   ],
   "collections": ["plant", "care_task", "plant_observation", "plant_journal", "plant_supply", "source_record"],
+  "dashboard_blocks": [
+    {
+      "id": "plants:attention",
+      "surface": "plants.overview",
+      "title": "Needs attention",
+      "subtitle": "Plants, care tasks and observations that should surface first.",
+      "kind": "spotlight",
+      "tone": "blue",
+      "query": { "collections": ["plant", "care_task"], "match": "water|light|attention|care|today", "limit": 1 },
+      "href": "/chat"
+    },
+    {
+      "id": "plants:watering",
+      "surface": "plants.overview",
+      "title": "Care rhythm",
+      "subtitle": "Watering, feeding and room-level care tasks.",
+      "kind": "list",
+      "tone": "moss",
+      "query": { "collections": ["care_task", "plant_journal"], "match": "water|feed|rotate|journal", "limit": 4 },
+      "href": "/capture"
+    },
+    {
+      "id": "plants:supplies",
+      "surface": "plants.supplies",
+      "title": "Supply gaps",
+      "subtitle": "Soil, pots, fertilizer and plant-care supplies.",
+      "kind": "list",
+      "tone": "amber",
+      "query": { "collections": ["plant_supply"], "match": "buy|low|needed|supply", "limit": 4 },
+      "href": "/sources"
+    }
+  ],
   "relations": [
     { "from": "care_task", "to": "plant", "name": "cares_for" },
     { "from": "plant_observation", "to": "plant", "name": "observes" },

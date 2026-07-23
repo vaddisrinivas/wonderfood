@@ -2,7 +2,8 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
 import { useLifeOSTheme } from '@/src/theme';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 const icons: Record<string, string> = {
   index: '⌂',
@@ -13,6 +14,8 @@ const icons: Record<string, string> = {
 };
 
 export default function TabLayout() {
+  const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
   const domain = loadCatalog().activeManifest;
   const theme = useLifeOSTheme();
   return (

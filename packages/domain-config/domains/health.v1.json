@@ -10,6 +10,38 @@
     { "id": "health.plans", "label": "Plans", "views": ["active", "review"], "collections": ["health_goal", "health_plan"] }
   ],
   "collections": ["health_observation", "health_measurement", "health_goal", "health_plan", "health_note", "source_record"],
+  "dashboard_blocks": [
+    {
+      "id": "health:today",
+      "surface": "health.overview",
+      "title": "Today health signal",
+      "subtitle": "Observations, measurements and notes that need attention.",
+      "kind": "spotlight",
+      "tone": "plum",
+      "query": { "collections": ["health_observation", "health_measurement", "health_note"], "match": "today|sleep|steps|heart|symptom|note", "limit": 1 },
+      "href": "/chat"
+    },
+    {
+      "id": "health:goals",
+      "surface": "health.plans",
+      "title": "Goal progress",
+      "subtitle": "Active goals, plans and trend checkpoints.",
+      "kind": "list",
+      "tone": "moss",
+      "query": { "collections": ["health_goal", "health_plan"], "match": "active|goal|plan|review", "limit": 4 },
+      "href": "/config"
+    },
+    {
+      "id": "health:sources",
+      "surface": "health.overview",
+      "title": "Health source trust",
+      "subtitle": "Health Connect, Notion, Sheets and local records feed one graph.",
+      "kind": "action",
+      "tone": "blue",
+      "query": { "collections": ["source_record"], "match": "health|connect|notion|sheets", "limit": 3 },
+      "href": "/sources"
+    }
+  ],
   "relations": [
     { "from": "health_measurement", "to": "health_observation", "name": "measures" },
     { "from": "health_observation", "to": "health_goal", "name": "supports" },

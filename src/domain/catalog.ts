@@ -99,7 +99,11 @@ let parsedCatalogCache: ParsedCatalog | null = null;
 let activeDomainOverride: string | null = null;
 
 export function setActiveDomainOverride(domainId: string | null): void {
-  activeDomainOverride = domainId?.trim() || null;
+  const next = domainId?.trim() || null;
+  if (activeDomainOverride === next) {
+    return;
+  }
+  activeDomainOverride = next;
   parsedCatalogCache = null;
 }
 
