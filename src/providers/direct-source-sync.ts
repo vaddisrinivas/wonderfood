@@ -3,8 +3,14 @@ import { SQLiteDatabase } from 'expo-sqlite';
 
 import { DomainManifest } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
-import { upsertRecord } from '@/src/db/records';
-import { linkSnapshotToRecord, upsertProviderLink, upsertSourceSnapshot } from '@/src/db/sources';
+import { getRecord, upsertRecord } from '@/src/db/records';
+import {
+  getLatestSourceSnapshotForExternalId,
+  linkSnapshotToRecord,
+  upsertProviderLink,
+  upsertSourceSnapshot,
+} from '@/src/db/sources';
+import { mergeRemoteRecord } from '@/src/providers/merge';
 import { LifeOSSettings } from '@/src/settings/lifeos-settings';
 export { clearProviderLocalCopy, disconnectProviderLocalCopy, restoreClearedProviderLocalCopy } from '@/src/providers/provider-local-copy';
 export type { DirectSyncProvider, DirectSyncReceipt } from '@/src/providers/provider-local-copy';
@@ -21,6 +27,9 @@ type NotionPage = {
 type SheetValuesResponse = {
   values?: unknown[][];
 };
+
+type DirectSourceSnapshot = { id: string; provider: DirectSyncProvider; externalId: string; payload: unknown; checksum: string };
+type CanonicalSnapshotPayload = { provider_payload: unknown; canonical_record: CanonicalRecord };
 
 const NOTION_VERSION = '2026-03-11';
 const foodDetailKeys = ['Food detail', 'food_detail', 'Food Detail', 'Detail JSON', 'detail_json'];
@@ -259,11 +268,11 @@ function sheetValuesToRecords(values: unknown[][], manifest: DomainManifest, wor
     .filter((record) => record.title.trim().length > 0);
 }
 
-async function applyRecords(
+export async function applyDirectSourceRecords(
   db: SQLiteDatabase,
   manifest: DomainManifest,
   records: CanonicalRecord[],
-  snapshots: Array<{ id: string; provider: DirectSyncProvider; externalId: string; payload: unknown; checksum: string }>,
+  snapshots: DirectSourceSnapshot[],
   link: { provider: DirectSyncProvider; externalId: string; name: string; workspace: string; url: string; observedAt: string },
 ) {
   const now = new Date().toISOString();
@@ -279,24 +288,75 @@ async function applyRecords(
     created_at: now,
     updated_at: now,
   });
-  for (const snapshot of snapshots) {
-    await upsertSourceSnapshot(db, {
-      id: snapshot.id,
-      provider: snapshot.provider,
-      external_id: snapshot.externalId,
-      scope: manifest.id,
-      observed_at: link.observedAt,
-      payload_json: JSON.stringify(snapshot.payload),
-      checksum: snapshot.checksum,
-      created_at: now,
-      updated_at: now,
-    });
-  }
   for (const record of records) {
-    await upsertRecord(db, manifest, record);
     const snapshot = snapshots.find((item) => record.source.external_id === item.externalId);
-    if (snapshot) await linkSnapshotToRecord(db, { snapshot_id: snapshot.id, record_id: record.id });
+    const previousSnapshot = snapshot
+      ? await getLatestSourceSnapshotForExternalId(db, snapshot.provider, snapshot.externalId)
+      : null;
+    const local = await getRecord(db, record.id);
+    if (local) {
+      await mergeRemoteRecord({
+        db,
+        manifest,
+        provider: record.source.provider,
+        externalId: record.source.external_id,
+        base: canonicalRecordFromSnapshot(previousSnapshot?.payload_json ?? null),
+        local,
+        remote: record,
+      });
+    } else {
+      await upsertRecord(db, manifest, {
+        ...record,
+        operation_actor: 'sync',
+        operation_origin: 'sync',
+        idempotency_key: `direct-source-create:${record.source.provider}:${record.source.external_id}:${record.id}:${record.source.content_hash ?? ''}`,
+      });
+    }
+    if (snapshot) {
+      await upsertSourceSnapshot(db, {
+        id: snapshot.id,
+        provider: snapshot.provider,
+        external_id: snapshot.externalId,
+        scope: manifest.id,
+        observed_at: link.observedAt,
+        payload_json: JSON.stringify(snapshotPayload(snapshot.payload, record)),
+        checksum: snapshot.checksum,
+        created_at: now,
+        updated_at: now,
+      });
+      await linkSnapshotToRecord(db, { snapshot_id: snapshot.id, record_id: record.id });
+    }
   }
+}
+
+async function applyRecords(
+  db: SQLiteDatabase,
+  manifest: DomainManifest,
+  records: CanonicalRecord[],
+  snapshots: DirectSourceSnapshot[],
+  link: { provider: DirectSyncProvider; externalId: string; name: string; workspace: string; url: string; observedAt: string },
+) {
+  await applyDirectSourceRecords(db, manifest, records, snapshots, link);
+}
+
+function snapshotPayload(providerPayload: unknown, canonicalRecord: CanonicalRecord): CanonicalSnapshotPayload {
+  return {
+    provider_payload: providerPayload,
+    canonical_record: canonicalRecord,
+  };
+}
+
+function canonicalRecordFromSnapshot(payloadJson: string | null): CanonicalRecord | null {
+  if (!payloadJson) return null;
+  try {
+    const parsed = JSON.parse(payloadJson) as Partial<CanonicalSnapshotPayload>;
+    if (parsed && typeof parsed === 'object' && parsed.canonical_record && typeof parsed.canonical_record === 'object') {
+      return parsed.canonical_record;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function pickTitle(props: Record<string, unknown>): string {

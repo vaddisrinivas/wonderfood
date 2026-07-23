@@ -111,6 +111,17 @@ export async function getSnapshot(db: SQLiteDatabase, id: string): Promise<Sourc
   return db.getFirstAsync<SourceSnapshot>('SELECT * FROM source_snapshots WHERE id = ?', [id]);
 }
 
+export async function getLatestSourceSnapshotForExternalId(
+  db: SQLiteDatabase,
+  provider: RecordProvider,
+  externalId: string,
+): Promise<SourceSnapshot | null> {
+  return db.getFirstAsync<SourceSnapshot>(
+    'SELECT * FROM source_snapshots WHERE provider = ? AND external_id = ? ORDER BY observed_at DESC LIMIT 1',
+    [provider, externalId],
+  );
+}
+
 export async function listSourceSnapshots(db: SQLiteDatabase, provider?: RecordProvider): Promise<SourceSnapshot[]> {
   if (provider) {
     return db.getAllAsync<SourceSnapshot>('SELECT * FROM source_snapshots WHERE provider = ? ORDER BY observed_at DESC', [provider]);

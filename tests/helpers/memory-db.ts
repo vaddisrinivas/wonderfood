@@ -5,6 +5,9 @@ export class MemoryDb {
   recordRelations: Row[] = [];
   operations = new Map<string, Row>();
   conflicts = new Map<string, Row>();
+  providerLinks = new Map<string, Row>();
+  sourceSnapshots = new Map<string, Row>();
+  sourceSnapshotRelations: Row[] = [];
 
   async execAsync(_sql: string) {}
 
@@ -61,6 +64,23 @@ export class MemoryDb {
       }
       return;
     }
+    if (compact.startsWith('INSERT INTO provider_links')) {
+      const [id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at] = params;
+      this.providerLinks.set(id, { id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at });
+      return;
+    }
+    if (compact.startsWith('INSERT INTO source_snapshots')) {
+      const [id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at] = params;
+      this.sourceSnapshots.set(id, { id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at });
+      return;
+    }
+    if (compact.startsWith('INSERT OR IGNORE INTO source_snapshot_relations')) {
+      const [snapshot_id, record_id] = params;
+      if (!this.sourceSnapshotRelations.some((row) => row.snapshot_id === snapshot_id && row.record_id === record_id)) {
+        this.sourceSnapshotRelations.push({ snapshot_id, record_id });
+      }
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 
@@ -78,6 +98,12 @@ export class MemoryDb {
     }
     if (compact === 'SELECT * FROM sync_conflicts WHERE id = ?') {
       return (this.conflicts.get(params[0]) ?? null) as T | null;
+    }
+    if (compact === 'SELECT * FROM source_snapshots WHERE provider = ? AND external_id = ? ORDER BY observed_at DESC LIMIT 1') {
+      const rows = Array.from(this.sourceSnapshots.values())
+        .filter((row) => row.provider === params[0] && row.external_id === params[1])
+        .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)));
+      return (rows[0] ?? null) as T | null;
     }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
   }
@@ -101,6 +127,9 @@ export class MemoryDb {
       recordRelations: this.recordRelations.map((row) => ({ ...row })),
       operations: new Map(this.operations),
       conflicts: new Map(this.conflicts),
+      providerLinks: new Map(this.providerLinks),
+      sourceSnapshots: new Map(this.sourceSnapshots),
+      sourceSnapshotRelations: this.sourceSnapshotRelations.map((row) => ({ ...row })),
     };
   }
 
@@ -109,5 +138,8 @@ export class MemoryDb {
     this.recordRelations = snapshot.recordRelations.map((row) => ({ ...row }));
     this.operations = new Map(snapshot.operations);
     this.conflicts = new Map(snapshot.conflicts);
+    this.providerLinks = new Map(snapshot.providerLinks);
+    this.sourceSnapshots = new Map(snapshot.sourceSnapshots);
+    this.sourceSnapshotRelations = snapshot.sourceSnapshotRelations.map((row) => ({ ...row }));
   }
 }
