@@ -117,6 +117,32 @@ export async function listChatThreads(db: SQLiteDatabase | null): Promise<ChatTh
   return threads;
 }
 
+export function makeWelcomeAnswer(records: CanonicalRecord[], domainLabel = 'Food'): ChatAnswer {
+  const selectedRecords = records.slice(0, 4);
+  const rows = selectedRecords.map((record) => {
+    const detail = readFoodDetail(record);
+    const available = detail.ingredients.filter((item) => item.state === 'available').slice(0, 3).map((item) => item.name).join(', ') || 'not captured';
+    const open = detail.ingredients.filter((item) => item.state === 'needed' || item.state === 'shopping').slice(0, 3).map((item) => item.name).join(', ') || 'none visible';
+    return { cells: [record.title, available, open] };
+  });
+
+  return {
+    title: `${domainLabel} source briefing`,
+    intro: selectedRecords.length
+      ? `I loaded ${selectedRecords.length} source-backed ${domainLabel} records. Ask a follow-up and I will keep using this thread context.`
+      : `Connect Notion, Sheets, SQLite or another source, then I will answer from exact ${domainLabel} records.`,
+    columns: rows.length ? ['Record', 'Available', 'Needed / shopping'] : undefined,
+    rows,
+    recordCards: selectedRecords.map(recordToAnswerCard),
+    citations: selectedRecords.map((record, index) => ({
+      label: `${record.source.provider} · ${record.title}`,
+      detail: record.source.external_id || record.collection,
+      href: record.source.url || `wonderfood://record/${record.id}`,
+      tone: (['moss', 'blue', 'amber', 'plum'] as const)[index % 4],
+    })),
+  };
+}
+
 export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendResult> {
   const catalog = loadCatalog();
   const domainId = input.domainId || catalog.activeDomainId;

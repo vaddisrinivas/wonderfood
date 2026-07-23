@@ -156,6 +156,8 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
 
 (async () => {
   let serverFailure = '';
+  let serverStopping = false;
+  let serverStderr = '';
   const outPath = join(outDir, 'phase3-chat-send-proof.json');
 
   const env = {
@@ -174,14 +176,20 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
 
   const cleanup = () => {
     if (!server.killed) {
+      serverStopping = true;
       server.kill('SIGTERM');
     }
     rmSync(stateDir, { recursive: true, force: true });
   };
 
+  server.stderr.on('data', (chunk) => {
+    serverStderr += String(chunk);
+  });
+
   server.on('exit', (code) => {
-    if (code && code !== 0) {
-      serverFailure = `server exited with code ${String(code)}`;
+    if (!serverStopping && code && code !== 0) {
+      const detail = serverStderr.trim();
+      serverFailure = `server exited with code ${String(code)}${detail ? `: ${detail}` : ''}`;
     }
   });
 
