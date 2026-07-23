@@ -19,7 +19,7 @@ import { listChatThreads, sendChatMessage } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
-import { colors, radius } from '@/src/theme';
+import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
 import { loadLifeOSSettings, usableAiProfiles, useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { listRecordsForDomain } from '@/src/db/records';
@@ -75,6 +75,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const db = useLifeOSDatabase();
   const settings = useLifeOSSettingsSnapshot();
+  const theme = useLifeOSTheme();
   const { activeDomainId, activeManifest } = loadCatalog();
   const domainLabel = activeManifest.label;
   const scrollRef = useRef<ScrollView>(null);
@@ -314,21 +315,21 @@ export default function ChatScreen() {
   const renderThreadRail = () => (
     chatConfig.showThreads ? (
       <Card key="threads" style={[styles.threadPanel, isWide ? styles.threadPanelWide : styles.threadPanelMobile]}>
-        <View style={styles.threadHeading}><Text style={styles.panelLabel}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={styles.plus}>＋</Text></Pressable></View>
+        <View style={styles.threadHeading}><Text style={[styles.panelLabel, { color: theme.colors.muted }]}>Threads</Text><Pressable accessibilityRole="button" onPress={createThread} hitSlop={8}><Text style={[styles.plus, { color: theme.colors.moss }]}>＋</Text></Pressable></View>
         <ScrollView horizontal={!isWide} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.threadList, !isWide && styles.threadListMobile]}>
           {threads.map((thread) => {
             const active = thread.id === activeThreadId;
-            return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, pressed && styles.pressed]}>
-              <Text numberOfLines={1} style={[styles.threadTitle, active && styles.threadTitleActive]}>{thread.title}</Text>
-              <Text numberOfLines={1} style={[styles.threadDetail, active && styles.threadDetailActive]}>{thread.detail}</Text>
+            return <Pressable key={thread.id} accessibilityRole="button" onPress={() => setActiveThreadId(thread.id)} style={({ pressed }) => [styles.thread, active && styles.threadActive, active && { backgroundColor: theme.colors.mossSoft }, pressed && styles.pressed]}>
+              <Text numberOfLines={1} style={[styles.threadTitle, { color: active ? theme.colors.moss : theme.colors.ink }]}>{thread.title}</Text>
+              <Text numberOfLines={1} style={[styles.threadDetail, { color: active ? theme.colors.moss : theme.colors.muted }]}>{thread.detail}</Text>
             </Pressable>;
           })}
         </ScrollView>
         {isWide ? (
           <View style={styles.threadFoot}>
             <Pill tone="moss">{domainLabel} context on</Pill>
-            <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
-            <Text style={styles.threadFootText}>Open source cards and Undo reversible actions when a write receipt exists.</Text>
+            <Text style={[styles.threadFootText, { color: theme.colors.muted }]}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+            <Text style={[styles.threadFootText, { color: theme.colors.muted }]}>Open source cards and Undo reversible actions when a write receipt exists.</Text>
           </View>
         ) : null}
       </Card>
@@ -339,16 +340,16 @@ export default function ChatScreen() {
     switch (section) {
       case 'sources':
         return chatConfig.showSources ? (
-          <View key={section} style={styles.sourceStrip}>
-            <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
+          <View key={section} style={[styles.sourceStrip, { backgroundColor: theme.colors.canvas }]}>
+            <Text style={[styles.sourceStripTitle, { color: theme.colors.muted }]}>{sourceRecords.length} source records loaded</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
               {sourceRecords.slice(0, sourceLimit).map((record) => (
-                <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
-                  <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
-                  <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
+                <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                  <Text style={[styles.sourcePillTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
+                  <Text style={[styles.sourcePillMeta, { color: theme.colors.muted }]} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
                 </Pressable>
               ))}
-              {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
+              {!sourceRecords.length ? <Text style={[styles.sourceEmpty, { color: theme.colors.muted }]}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
             </ScrollView>
           </View>
         ) : null;
@@ -364,16 +365,16 @@ export default function ChatScreen() {
         return chatConfig.promptRail && isWide ? (
           <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
             {promptBank.map((prompt) => (
-              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
-                <Text style={styles.promptText}>{prompt}</Text>
+              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.promptText, { color: theme.colors.ink }]}>{prompt}</Text>
               </Pressable>
             ))}
           </ScrollView>
         ) : chatConfig.promptRail ? (
           <View key={section} style={styles.promptRailMobile}>
             {promptBank.slice(0, 3).map((prompt) => (
-              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChipMobile, pressed && styles.pressed]}>
-                <Text style={styles.promptText}>{prompt}</Text>
+              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChipMobile, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.promptText, { color: theme.colors.ink }]}>{prompt}</Text>
               </Pressable>
             ))}
           </View>
@@ -397,24 +398,24 @@ export default function ChatScreen() {
           <View style={sharedStyles.content}>
             <View style={styles.topbar}>
               <View>
-                <Text style={styles.brand}>LIFEOS / CHAT</Text>
-                <Text style={styles.date}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
+                <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CHAT</Text>
+                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
               </View>
-              <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, pressed && styles.pressed]}>
-                <Text style={styles.newThreadText}>＋ New thread</Text>
+              <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+                <Text style={[styles.newThreadText, { color: theme.colors.paper }]}>＋ New thread</Text>
               </Pressable>
             </View>
             <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle={`Hearth reasons over ${domainLabel} records and keeps source cards close to the answer.`} />
 
-            {warnings.length ? <Card style={styles.modeNote}>{warnings.map((item) => <Text key={item} style={styles.modeText}>{item}</Text>)}</Card> : null}
+            {warnings.length ? <Card style={[styles.modeNote, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>{warnings.map((item) => <Text key={item} style={[styles.modeText, { color: theme.colors.muted }]}>{item}</Text>)}</Card> : null}
 
             <View style={[styles.workspace, isWide && styles.workspaceWide]}>
               {workspaceSections.map(renderWorkspaceSection)}
 
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
-                  <View style={styles.assistantMark}><Text style={styles.assistantMarkText}>✦</Text></View>
-                  <View style={styles.chatHeaderCopy}><Text style={styles.chatTitle}>{activeThread.title}</Text><Text style={styles.chatDetail}>Hearth · {domainLabel} workspace available</Text></View>
+                  <View style={[styles.assistantMark, { backgroundColor: theme.colors.plumSoft }]}><Text style={[styles.assistantMarkText, { color: theme.colors.plum }]}>✦</Text></View>
+                  <View style={styles.chatHeaderCopy}><Text style={[styles.chatTitle, { color: theme.colors.ink }]}>{activeThread.title}</Text><Text style={[styles.chatDetail, { color: theme.colors.muted }]}>Hearth · {domainLabel} workspace available</Text></View>
                   <Pressable accessibilityRole="button" onPress={() => router.push('/settings')}>
                     <Pill tone={mode === 'direct' ? 'plum' : 'blue'}>
                       {mode === 'direct' ? 'Direct' : 'Set up AI'}
@@ -422,30 +423,30 @@ export default function ChatScreen() {
                   </Pressable>
                 </View>
 
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: theme.colors.line }]} />
                 {workspaceSections.filter((section) => section !== 'threads').map(renderChatPanelSection)}
 
-                <View style={styles.composerWrap}>
-                  <View style={styles.composer}>
+                <View style={[styles.composerWrap, { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line }]}>
+                  <View style={[styles.composer, { borderColor: theme.colors.line }]}>
                     <TextInput
                       accessibilityLabel="Chat message"
                       value={draft}
                       onChangeText={setDraft}
                       placeholder={`Ask about ${domainLabel.toLowerCase()} records, sources, or next actions...`}
-                      placeholderTextColor={colors.muted}
+                      placeholderTextColor={theme.colors.muted}
                       multiline
-                      style={styles.input}
+                      style={[styles.input, { color: theme.colors.ink }]}
                       onSubmitEditing={sendMessage}
                       blurOnSubmit={false}
                     />
-                    <Pressable accessibilityRole="button" disabled={!draft.trim() || sending} onPress={sendMessage} style={({ pressed }) => [styles.send, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
-                      <Text style={styles.sendText}>{sending ? 'Working…' : 'Send ↑'}</Text>
+                    <Pressable accessibilityRole="button" disabled={!draft.trim() || sending} onPress={sendMessage} style={({ pressed }) => [styles.send, { backgroundColor: theme.colors.moss }, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
+                      <Text style={[styles.sendText, { color: theme.colors.paper }]}>{sending ? 'Working…' : 'Send ↑'}</Text>
                     </Pressable>
-                    {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><Text style={styles.sendText}>Retry</Text></Pressable> : null}
+                    {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, { backgroundColor: theme.colors.moss }, pressed && styles.pressed]}><Text style={[styles.sendText, { color: theme.colors.paper }]}>Retry</Text></Pressable> : null}
                   </View>
                   <View style={styles.composerFoot}>
-                    <Text style={styles.composerHint}>Uses enabled domains, skill instructions, source records, and model keys stored in app settings.</Text>
-                    <Text style={styles.shortcut}>{activeRunId ? 'running' : settings.runtime.webSearch ? 'web on' : 'web off'}</Text>
+                    <Text style={[styles.composerHint, { color: theme.colors.muted }]}>Uses enabled domains, skill instructions, source records, and model keys stored in app settings.</Text>
+                    <Text style={[styles.shortcut, { color: theme.colors.muted }]}>{activeRunId ? 'running' : settings.runtime.webSearch ? 'web on' : 'web off'}</Text>
                   </View>
                 </View>
               </Card>
@@ -453,8 +454,8 @@ export default function ChatScreen() {
 
             {chatConfig.showContextCard ? (
               <Card tone="blue" style={styles.contextCard}>
-                <View style={styles.contextIcon}><Text>⌁</Text></View>
-                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · Chat cites sources · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
+                <View style={[styles.contextIcon, { backgroundColor: theme.colors.blueSoft }]}><Text>⌁</Text></View>
+                <View style={styles.contextCopy}><Text style={[styles.contextTitle, { color: theme.colors.ink }]}>What Hearth can see</Text><Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{activeThread.messages.length} messages loaded · Chat cites sources · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
                 <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
               </Card>
             ) : null}
@@ -466,6 +467,7 @@ export default function ChatScreen() {
 }
 
 function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () => void }) {
+  const theme = useLifeOSTheme();
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
   const citations = answerRows?.citations?.length ? ensureCitations(answerRows.citations) : [];
@@ -474,34 +476,35 @@ function MessageBubble({ message, onUndo }: { message: MessageRow; onUndo: () =>
 
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
-      {assistant ? <View style={styles.smallMark}><Text style={styles.smallMarkText}>✦</Text></View> : null}
+      {assistant ? <View style={[styles.smallMark, { backgroundColor: theme.colors.plumSoft }]}><Text style={[styles.smallMarkText, { color: theme.colors.plum }]}>✦</Text></View> : null}
       <View style={[styles.messageBlock, !assistant && styles.userMessageBlock]}>
-        <Text style={styles.messageByline}>{assistant ? 'Hearth' : 'You'}</Text>
-        <View style={[styles.bubble, !assistant && styles.userBubble]}><Text style={[styles.bubbleText, !assistant && styles.userBubbleText]}>{visibleText}</Text></View>
+        <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'Hearth' : 'You'}</Text>
+        <View style={[styles.bubble, { backgroundColor: theme.colors.canvas }, !assistant && styles.userBubble, !assistant && { backgroundColor: theme.colors.ink }]}><Text style={[styles.bubbleText, { color: theme.colors.ink }, !assistant && styles.userBubbleText, !assistant && { color: theme.colors.paper }]}>{visibleText}</Text></View>
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
         {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
-        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" onPress={onUndo} style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}><Text style={styles.undoButtonText}>Undo</Text></Pressable>}
+        {!assistant || !hasUndo ? null : <Pressable accessibilityRole="button" onPress={onUndo} style={({ pressed }) => [styles.undoButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.moss }, pressed && styles.pressed]}><Text style={[styles.undoButtonText, { color: theme.colors.ink }]}>Undo</Text></Pressable>}
       </View>
     </View>
   );
 }
 
 function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']> }) {
+  const theme = useLifeOSTheme();
   return (
-    <View style={styles.answer}>
-      <Text style={styles.answerTitle}>{answer.title}</Text>
+    <View style={[styles.answer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+      <Text style={[styles.answerTitle, { color: theme.colors.ink }]}>{answer.title}</Text>
       {answer.rows.length ? (
-        <View style={styles.table} accessibilityLabel="Structured answer table">
-          <View style={[styles.tableRow, styles.tableHeader]}>
+        <View style={[styles.table, { borderColor: theme.colors.line }]} accessibilityLabel="Structured answer table">
+          <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.line }]}>
             {(answer.columns?.length ? answer.columns : ['When', 'Use', 'Next']).map((column) => (
-              <Text key={column} style={[styles.tableCell, styles.tableHeaderText]}>{column.toUpperCase()}</Text>
+              <Text key={column} style={[styles.tableCell, styles.tableHeaderText, { color: theme.colors.muted }]}>{column.toUpperCase()}</Text>
             ))}
           </View>
           {answer.rows.map((row, index) => {
             const cells = row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? ''];
             return (
-              <View key={`${index}-${cells.join('|')}`} style={styles.tableRow}>
-                {cells.map((cell, cellIndex) => <Text key={`${cellIndex}-${cell}`} style={styles.tableCell}>{cell}</Text>)}
+              <View key={`${index}-${cells.join('|')}`} style={[styles.tableRow, { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line }]}>
+                {cells.map((cell, cellIndex) => <Text key={`${cellIndex}-${cell}`} style={[styles.tableCell, { color: theme.colors.ink }]}>{cell}</Text>)}
               </View>
             );
           })}
@@ -511,16 +514,16 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
         <View style={styles.recordCards}>
           {answer.recordCards.map((record) => (
             <Link key={record.id} href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
-              <Pressable accessibilityRole="link" style={({ pressed }) => [styles.answerRecord, pressed && styles.pressed]}>
+              <Pressable accessibilityRole="link" style={({ pressed }) => [styles.answerRecord, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
                 <View style={styles.answerRecordTop}>
-                  <Text style={styles.answerRecordTitle} numberOfLines={1}>{record.title}</Text>
+                  <Text style={[styles.answerRecordTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
                   <Pill tone="moss">{record.status}</Pill>
                 </View>
-                <Text style={styles.answerRecordMeta} numberOfLines={1}>{record.collection} · {record.detail}</Text>
+                <Text style={[styles.answerRecordMeta, { color: theme.colors.muted }]} numberOfLines={1}>{record.collection} · {record.detail}</Text>
                 {record.bullets?.slice(0, 3).map((bullet) => (
-                  <Text key={bullet} style={styles.answerRecordBullet} numberOfLines={2}>• {bullet}</Text>
+                  <Text key={bullet} style={[styles.answerRecordBullet, { color: theme.colors.ink }]} numberOfLines={2}>• {bullet}</Text>
                 ))}
-                <Text style={styles.answerRecordSource} numberOfLines={1}>{record.source}</Text>
+                <Text style={[styles.answerRecordSource, { color: theme.colors.moss }]} numberOfLines={1}>{record.source}</Text>
               </Pressable>
             </Link>
           ))}
@@ -532,6 +535,7 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
 
 function CitationChip({ citation }: { citation: Citation }) {
   const router = useRouter();
+  const theme = useLifeOSTheme();
   const openCitation = () => {
     const recordId = citation.href.startsWith('wonderfood://record/')
       ? citation.href.replace('wonderfood://record/', '')
@@ -544,10 +548,18 @@ function CitationChip({ citation }: { citation: Citation }) {
   };
 
   return (
-    <Pressable accessibilityRole="link" onPress={openCitation} style={({ pressed }) => [styles.citation, citationToneStyle(citation.tone), pressed && styles.pressed]}>
-      <Text style={styles.citationLabel}>{citation.label}</Text><Text numberOfLines={1} style={styles.citationDetail}>{citation.detail} ↗</Text>
+    <Pressable accessibilityRole="link" onPress={openCitation} style={({ pressed }) => [styles.citation, citationToneStyle(citation.tone), citationToneDynamicStyle(citation.tone, theme.colors), pressed && styles.pressed]}>
+      <Text style={[styles.citationLabel, { color: theme.colors.ink }]}>{citation.label}</Text><Text numberOfLines={1} style={[styles.citationDetail, { color: theme.colors.muted }]}>{citation.detail} ↗</Text>
     </Pressable>
   );
+}
+
+function citationToneDynamicStyle(tone: Citation['tone'], themed: typeof colors) {
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft };
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft };
+  if (tone === 'plum') return { backgroundColor: themed.plumSoft };
+  if (tone === 'neutral') return { backgroundColor: themed.canvas };
+  return { backgroundColor: themed.mossSoft };
 }
 
 function citationToneStyle(tone: Citation['tone']) {
