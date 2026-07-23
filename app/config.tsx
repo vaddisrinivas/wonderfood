@@ -84,6 +84,13 @@ const screenBlueprints = [
     intent: 'Inbox-first capture for notes, food, receipts, voice, links and photos before classification.',
     editable: ['section order', 'hero', 'type picker', 'editor', 'attachments', 'route card', 'destination hint'],
   },
+  {
+    id: 'sources',
+    title: 'Sources',
+    route: '/sources',
+    intent: 'Trust center for Notion, Sheets, local replica, provider pulls, citations, freshness and sync policy.',
+    editable: ['section order', 'hero', 'metrics', 'data homes', 'citations', 'sync plan', 'policy', 'config link'],
+  },
 ] as const;
 
 type LifeOSProfile = {
@@ -296,6 +303,7 @@ export default function ConfigStudioScreen() {
             record: { ...current.runtime.surfaceConfig.record, ...runtime.surfaceConfig?.record },
             search: { ...current.runtime.surfaceConfig.search, ...runtime.surfaceConfig?.search },
             capture: { ...current.runtime.surfaceConfig.capture, ...runtime.surfaceConfig?.capture },
+            sources: { ...current.runtime.surfaceConfig.sources, ...runtime.surfaceConfig?.sources },
           },
         },
       }));
@@ -659,6 +667,17 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Route card" detail="Show classify/source/relation path." value={settings.runtime.surfaceConfig.capture.showRouteCard} onValueChange={(showRouteCard) => updateSurfaceConfig('capture', { showRouteCard })} />
                 <Field label="Default type" value={settings.runtime.surfaceConfig.capture.defaultType} onChangeText={(defaultType) => updateSurfaceConfig('capture', { defaultType })} />
                 <Field label="Destination hint" value={settings.runtime.surfaceConfig.capture.destinationHint} onChangeText={(destinationHint) => updateSurfaceConfig('capture', { destinationHint })} multiline />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Sources">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.sources.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('sources', { sectionOrder })} />
+                <ToggleRow title="Hero" detail="Show source model and sync CTA." value={settings.runtime.surfaceConfig.sources.showHero} onValueChange={(showHero) => updateSurfaceConfig('sources', { showHero })} />
+                <ToggleRow title="Metrics" detail="Show source count, enabled settings and last pull rows." value={settings.runtime.surfaceConfig.sources.showMetrics} onValueChange={(showMetrics) => updateSurfaceConfig('sources', { showMetrics })} />
+                <ToggleRow title="Data homes" detail="Show Notion, Sheets, SQLite and Postgres cards." value={settings.runtime.surfaceConfig.sources.showDataHomes} onValueChange={(showDataHomes) => updateSurfaceConfig('sources', { showDataHomes })} />
+                <ToggleRow title="Citations" detail="Show source packs Chat can cite." value={settings.runtime.surfaceConfig.sources.showCitations} onValueChange={(showCitations) => updateSurfaceConfig('sources', { showCitations })} />
+                <Field label="Citation cards" value={settings.runtime.surfaceConfig.sources.citationLimit} onChangeText={(citationLimit) => updateSurfaceConfig('sources', { citationLimit })} />
+                <ToggleRow title="Sync plan" detail="Show pull implementation order." value={settings.runtime.surfaceConfig.sources.showSyncPlan} onValueChange={(showSyncPlan) => updateSurfaceConfig('sources', { showSyncPlan })} />
+                <ToggleRow title="Policy" detail="Show calm sync rules." value={settings.runtime.surfaceConfig.sources.showPolicy} onValueChange={(showPolicy) => updateSurfaceConfig('sources', { showPolicy })} />
+                <ToggleRow title="Config link" detail="Show package/schema link at bottom." value={settings.runtime.surfaceConfig.sources.showConfigLink} onValueChange={(showConfigLink) => updateSurfaceConfig('sources', { showConfigLink })} />
               </SurfaceConfigCard>
             </View>
           </Card>

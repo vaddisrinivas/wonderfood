@@ -116,6 +116,17 @@ export type LifeOSSettings = {
         defaultType: string;
         destinationHint: string;
       };
+      sources: {
+        sectionOrder: string;
+        showHero: boolean;
+        showMetrics: boolean;
+        showDataHomes: boolean;
+        showCitations: boolean;
+        citationLimit: string;
+        showSyncPlan: boolean;
+        showPolicy: boolean;
+        showConfigLink: boolean;
+      };
     };
   };
 };
@@ -266,6 +277,17 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showRouteCard: true,
         defaultType: 'Note',
         destinationHint: 'Writes to Food local graph with no network dependency.',
+      },
+      sources: {
+        sectionOrder: 'hero,metrics,dataHomes,citations,syncPlan,policy,configLink',
+        showHero: true,
+        showMetrics: true,
+        showDataHomes: true,
+        showCitations: true,
+        citationLimit: '4',
+        showSyncPlan: true,
+        showPolicy: true,
+        showConfigLink: true,
       },
     },
   },
@@ -431,6 +453,17 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showRouteCard: config.capture?.showRouteCard !== false,
       defaultType: typeof config.capture?.defaultType === 'string' ? config.capture.defaultType : defaults.capture.defaultType,
       destinationHint: typeof config.capture?.destinationHint === 'string' ? config.capture.destinationHint : defaults.capture.destinationHint,
+    },
+    sources: {
+      sectionOrder: normalizeOrderString(config.sources?.sectionOrder, defaults.sources.sectionOrder),
+      showHero: config.sources?.showHero !== false,
+      showMetrics: config.sources?.showMetrics !== false,
+      showDataHomes: config.sources?.showDataHomes !== false,
+      showCitations: config.sources?.showCitations !== false,
+      citationLimit: normalizePositiveString(config.sources?.citationLimit, defaults.sources.citationLimit),
+      showSyncPlan: config.sources?.showSyncPlan !== false,
+      showPolicy: config.sources?.showPolicy !== false,
+      showConfigLink: config.sources?.showConfigLink !== false,
     },
   };
 }

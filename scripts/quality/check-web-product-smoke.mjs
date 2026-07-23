@@ -115,6 +115,20 @@ const routes = [
     must: ['LIFEOS / SOURCES', 'Food data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Food local replica', 'What Food Chat can cite'],
   },
   {
+    name: 'sources-configured-citations',
+    path: '/sources',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          sources: {
+            citationLimit: '2',
+          },
+        },
+      },
+    },
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 source packs'],
+  },
+  {
     name: 'sources-health-active',
     path: '/sources',
     localSettings: {
@@ -138,6 +152,8 @@ const routes = [
       'MCP contract',
       'Screen composition',
       'Every main screen gets runtime knobs',
+      'Sources',
+      'Citation cards',
       'Manifest Dashboard Blocks',
       'Prompt presets',
       'Composer context note',

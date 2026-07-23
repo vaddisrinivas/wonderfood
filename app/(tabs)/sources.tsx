@@ -99,7 +99,9 @@ export default function SourcesScreen() {
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeManifest } = loadCatalog();
   const domainLabel = activeManifest.label;
-  const citationSources = citationSourcesFor(domainLabel, activeManifest.collections);
+  const sourcesConfig = settings.runtime.surfaceConfig.sources;
+  const citationLimit = Math.max(1, Math.min(12, Number.parseInt(sourcesConfig.citationLimit, 10) || 4));
+  const citationSources = citationSourcesFor(domainLabel, activeManifest.collections).slice(0, citationLimit);
   const [receipts, setReceipts] = useState<DirectSyncReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<DirectSyncReceipt['provider'] | 'all' | null>(null);
@@ -163,47 +165,51 @@ export default function SourcesScreen() {
             <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
           </View>
 
-          <PageHeader
-            eyebrow="One graph · Your chosen homes"
-            title={`${domainLabel} data stays legible.`}
-            subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
-          />
+          {sourcesConfig.showHero ? (
+            <>
+              <PageHeader
+                eyebrow="One graph · Your chosen homes"
+                title={`${domainLabel} data stays legible.`}
+                subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
+              />
 
-          <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
-            <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
-              <Pill tone="blue">DIRECT SYNC READY</Pill>
-              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
-              <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
-                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
-              </Text>
-              <View style={styles.syncActions}>
-                <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
-                  <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
-                </Pressable>
-                <Link href="/settings" asChild>
-                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-                    <Text style={[styles.secondarySyncText, { color: theme.colors.ink }]}>Connections</Text>
-                  </Pressable>
-                </Link>
-              </View>
-            </View>
-            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
-              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
-              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
-              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-              <View style={styles.flowDestinations}>
-                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
-                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
-              </View>
-            </View>
-          </Card>
+              <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
+                <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
+                  <Pill tone="blue">DIRECT SYNC READY</Pill>
+                  <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
+                  <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
+                    Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
+                  </Text>
+                  <View style={styles.syncActions}>
+                    <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
+                      <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
+                    </Pressable>
+                    <Link href="/settings" asChild>
+                      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                        <Text style={[styles.secondarySyncText, { color: theme.colors.ink }]}>Connections</Text>
+                      </Pressable>
+                    </Link>
+                  </View>
+                </View>
+                <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
+                  <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
+                  <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
+                  <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
+                  <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
+                  <View style={styles.flowDestinations}>
+                    <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
+                    <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
+                  </View>
+                </View>
+              </Card>
+            </>
+          ) : null}
 
-          <View style={styles.metrics}>
+          {sourcesConfig.showMetrics ? <View style={styles.metrics}>
             <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>sources known</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Configured homes and links</Text></Card>
             <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{configuredCount}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>enabled settings</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Editable in app</Text></Card>
             <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull rows</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
-          </View>
+          </View> : null}
 
           {receipts.length ? (
             <Card style={styles.receiptCard}>
@@ -223,8 +229,8 @@ export default function SourcesScreen() {
             </Card>
           ) : null}
 
-          <SectionTitle title="Data homes & surfaces" />
-          {!sourceRows.length ? (
+          {sourcesConfig.showDataHomes ? <SectionTitle title="Data homes & surfaces" /> : null}
+          {sourcesConfig.showDataHomes && !sourceRows.length ? (
             <Card>
               <Text style={styles.emptyTitle}>No sources connected in this session</Text>
               <Text style={styles.emptyBody}>
@@ -241,7 +247,7 @@ export default function SourcesScreen() {
             </Card>
           ) : null}
 
-          <View style={styles.sourceGrid}>
+          {sourcesConfig.showDataHomes ? <View style={styles.sourceGrid}>
             {sourceRows.map((sourceRow) => {
               const normalized = normalizeSourceName(sourceRow.name);
               const meta = normalized === 'other'
@@ -283,16 +289,16 @@ export default function SourcesScreen() {
                 </View>
               );
             })}
-          </View>
+          </View> : null}
 
-          <SectionTitle title={`What ${domainLabel} Chat can cite`} />
-          <Card style={styles.citationCard}>
+          {sourcesConfig.showCitations ? <SectionTitle title={`What ${domainLabel} Chat can cite`} /> : null}
+          {sourcesConfig.showCitations ? <Card style={styles.citationCard}>
             <View style={styles.citationHeader}>
               <View>
                 <Text style={styles.sectionLead}>Source-backed by default</Text>
                 <Text style={styles.sectionDetail}>Every {domainLabel.toLowerCase()} claim opens the exact record, quote and observed version.</Text>
               </View>
-              <Pill tone="moss">4 source packs</Pill>
+              <Pill tone="moss">{citationSources.length} source packs</Pill>
             </View>
             <View style={styles.citationList}>
               {citationSources.map(([handle, scope, freshness]) => (
@@ -306,10 +312,10 @@ export default function SourcesScreen() {
                 </View>
               ))}
             </View>
-          </Card>
+          </Card> : null}
 
-          <View style={styles.detailGrid}>
-            <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
+          {sourcesConfig.showSyncPlan || sourcesConfig.showPolicy ? <View style={styles.detailGrid}>
+            {sourcesConfig.showSyncPlan ? <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
               <SectionTitle title="Sync implementation order" />
               <Card style={styles.timelineCard}>
                 {recentSync.map(([time, title, detail], index) => (
@@ -325,9 +331,9 @@ export default function SourcesScreen() {
                   </View>
                 ))}
               </Card>
-            </View>
+            </View> : null}
 
-            <View style={[styles.detailSide, compact ? styles.detailFull : null]}>
+            {sourcesConfig.showPolicy ? <View style={[styles.detailSide, compact ? styles.detailFull : null]}>
               <SectionTitle title="Sync policy" />
               <Card tone="moss" style={styles.policyCard}>
                 <Pill tone="moss">CALM BY DEFAULT</Pill>
@@ -339,10 +345,10 @@ export default function SourcesScreen() {
                   <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Credentials never appear here.</Text></View>
                 </View>
               </Card>
-            </View>
-          </View>
+            </View> : null}
+          </View> : null}
 
-          <Link href="/config" asChild>
+          {sourcesConfig.showConfigLink ? <Link href="/config" asChild>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.systemAction, pressed ? styles.pressed : null]}>
               <View>
                 <Text style={styles.systemActionEyebrow}>CONFIG MAP</Text>
@@ -351,7 +357,7 @@ export default function SourcesScreen() {
               </View>
               <Text style={styles.systemActionArrow}>→</Text>
             </Pressable>
-          </Link>
+          </Link> : null}
         </View>
       </ScrollView>
     </Page>
