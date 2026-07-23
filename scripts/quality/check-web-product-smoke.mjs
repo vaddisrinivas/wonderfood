@@ -327,6 +327,11 @@ for (const viewport of viewports) {
         if (settings) localStorage.setItem('lifeos.settings.v1', JSON.stringify(settings));
       }, route.localSettings ?? null);
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+      await page.waitForFunction(
+        (needles) => needles.every((needle) => document.body?.innerText?.includes(needle)),
+        route.must,
+        { timeout: 12000 },
+      ).catch(() => undefined);
       const text = await page.locator('body').innerText({ timeout: 8000 });
       result.missing = route.must.filter((needle) => !text.includes(needle));
       if (route.forbidden) {
