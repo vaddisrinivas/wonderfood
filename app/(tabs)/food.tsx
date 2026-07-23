@@ -211,6 +211,7 @@ export default function FoodScreen() {
               <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} empty="Add pantry or sync receipts." />
               <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} empty="No shopping pressure." />
             </View>
+            <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} />
           </View>
         ) : null;
       case 'attention':
@@ -301,6 +302,97 @@ function RecordColumn({ title, subtitle, records, empty }: {
       <View style={styles.columnRecords}>
         {records.length ? records.map((record) => <MiniRecord key={record.id} record={record} />) : (
           <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>{empty}</Text>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+function FoodOperatingViews({ meals, kitchen, shopping, compact }: {
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  compact: boolean;
+}) {
+  return (
+    <View style={[styles.operatingViews, compact && styles.operatingViewsCompact]}>
+      <MealWeekPlan records={meals} />
+      <PantryTimeline records={kitchen} />
+      <ShoppingChecklist records={shopping} />
+    </View>
+  );
+}
+
+function MealWeekPlan({ records }: { records: FoodRecordView[] }) {
+  const theme = useLifeOSTheme();
+  const days = ['Thu', 'Fri', 'Sat', 'Sun'];
+  return (
+    <Card tone="moss" style={styles.operatingCard}>
+      <Text style={[styles.operatingLabel, { color: theme.colors.muted }]}>Week plan</Text>
+      <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Dinner rhythm</Text>
+      <View style={styles.weekRows}>
+        {days.map((day, index) => {
+          const record = records[index % Math.max(records.length, 1)];
+          return (
+            <Link key={day} href={record ? { pathname: '/record/[id]', params: { id: record.id } } : '/chat'} asChild>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.weekRow, { borderTopColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.dayPill, { backgroundColor: theme.colors.paper, color: theme.colors.moss }]}>{day}</Text>
+                <View style={styles.weekCopy}>
+                  <Text style={[styles.weekTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record?.title ?? 'Ask Food AI to plan'}</Text>
+                  <Text style={[styles.weekDetail, { color: theme.colors.muted }]} numberOfLines={1}>{record?.meta ?? 'Draft from pantry and preferences'}</Text>
+                </View>
+              </Pressable>
+            </Link>
+          );
+        })}
+      </View>
+    </Card>
+  );
+}
+
+function PantryTimeline({ records }: { records: FoodRecordView[] }) {
+  const theme = useLifeOSTheme();
+  return (
+    <Card tone="amber" style={styles.operatingCard}>
+      <Text style={[styles.operatingLabel, { color: theme.colors.muted }]}>Pantry timeline</Text>
+      <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Use-first queue</Text>
+      <View style={styles.timelineRows}>
+        {(records.length ? records : []).slice(0, 4).map((record, index) => (
+          <Link key={record.id} href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.timelineRow, pressed && styles.pressed]}>
+              <View style={[styles.timelineDot, { backgroundColor: index === 0 ? theme.colors.amberSoft : theme.colors.paper, borderColor: theme.colors.line }]} />
+              <View style={styles.weekCopy}>
+                <Text style={[styles.weekTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
+                <Text style={[styles.weekDetail, { color: theme.colors.muted }]} numberOfLines={1}>{record.status} · {record.meta}</Text>
+              </View>
+            </Pressable>
+          </Link>
+        ))}
+        {!records.length ? <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>No pantry pressure yet.</Text> : null}
+      </View>
+    </Card>
+  );
+}
+
+function ShoppingChecklist({ records }: { records: FoodRecordView[] }) {
+  const theme = useLifeOSTheme();
+  return (
+    <Card tone="blue" style={styles.operatingCard}>
+      <Text style={[styles.operatingLabel, { color: theme.colors.muted }]}>Shopping checklist</Text>
+      <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Buy with reasons</Text>
+      <View style={styles.checkRows}>
+        {records.length ? records.map((record) => (
+          <Link key={record.id} href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild>
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: false }} style={({ pressed }) => [styles.checkRow, { borderTopColor: theme.colors.line }, pressed && styles.pressed]}>
+              <View style={[styles.checkBox, { borderColor: theme.colors.moss }]} />
+              <View style={styles.weekCopy}>
+                <Text style={[styles.weekTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
+                <Text style={[styles.weekDetail, { color: theme.colors.muted }]} numberOfLines={1}>{record.body || record.meta}</Text>
+              </View>
+            </Pressable>
+          </Link>
+        )) : (
+          <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>Nothing to buy.</Text>
         )}
       </View>
     </Card>
@@ -440,6 +532,23 @@ const styles = StyleSheet.create({
   columnTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
   columnSubtitle: { color: colors.muted, fontSize: 12, marginTop: 4, marginBottom: 12 },
   columnRecords: { gap: 10 },
+  operatingViews: { flexDirection: 'row', gap: 12, alignItems: 'stretch', marginTop: 12 },
+  operatingViewsCompact: { flexDirection: 'column' },
+  operatingCard: { flex: 1, minHeight: 230 },
+  operatingLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
+  operatingTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 8, marginBottom: 10 },
+  weekRows: { gap: 0 },
+  weekRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  dayPill: { width: 38, height: 28, borderRadius: radius.pill, overflow: 'hidden', textAlign: 'center', lineHeight: 28, backgroundColor: colors.paper, color: colors.moss, fontSize: 11, fontWeight: '900' },
+  weekCopy: { flex: 1, minWidth: 0 },
+  weekTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
+  weekDetail: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  timelineRows: { gap: 8, marginTop: 2 },
+  timelineRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  timelineDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
+  checkRows: { gap: 0 },
+  checkRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  checkBox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: colors.moss, backgroundColor: colors.paper },
   miniRecord: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.line, backgroundColor: '#FEFEFA', borderRadius: 16, padding: 12 },
   miniTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   miniTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', flex: 1 },
