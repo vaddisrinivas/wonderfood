@@ -85,3 +85,10 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - One-write-path had a create-overwrite hole: `create` on an existing record could mutate without an expected revision if the idempotency key did not catch it. This is now rejected.
 - Provider local-copy clear/disconnect directly deletes local provider-owned rows by design. The operation-boundary gate now explicitly allowlists that lifecycle exception so future broad direct deletes are visible.
 - Config merge had a precedence semantics bug: scalar disagreements always conflicted. Runtime now tracks path ownership so higher-precedence sources win and equal-precedence disagreements go to review.
+
+## Standalone Provider Authority Findings
+
+- The old `run-provider-standalone-visual-proof.sh` was invalid after the Expo migration because it depended on Gradle test targets from the previous Android app.
+- The replacement should be treated as an authority receipt: it proves live Notion and Sheets seed/read/edit/archive/undo/repair plus direct app create/update/archive write delivery under one redacted receipt.
+- It should not be used to claim direct manual UX inspection of the user's final Notion/Sheets dashboards; that remains separate product visual proof.
+- `check-live-provider-writeback.ts` now supports `PROVIDER_WRITEBACK_OUT`, so composite live receipts can keep all evidence in one directory instead of scattering proof files.

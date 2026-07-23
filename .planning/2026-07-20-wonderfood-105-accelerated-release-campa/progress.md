@@ -808,3 +808,16 @@
   - `npm run phase8:check:android-release-signed` ❌ — APK is debug-signed.
 - Verified without printing secret values that `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, and `APPLE_TEAM_ID` are still missing.
 - Phase 8 remains in progress: native Health Connect proof is good; signed Android/Play and iOS/TestFlight remain blocked by missing credentials plus remaining native capture/share/background-sync/release-matrix work.
+
+## 2026-07-23 standalone provider authority receipt
+
+- Found the old standalone provider visual proof script was stale after the Expo migration; it still tried to run `./gradlew`, which no longer exists in this app direction.
+- Replaced it with an Expo-era authority receipt gate and added `npm run check:provider-standalone-authority`.
+- The gate now runs live Notion scenario proof, live Google Sheets scenario proof, and direct app writeback in one output directory, then produces one redacted JSON/HTML/PNG receipt.
+- Fresh passed evidence:
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.json`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.html`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof.png`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784833963/provider-standalone-authority-proof-mobile.png`
+- Receipt result: `all_authority_checks_passed=true`; Notion and Sheets both prove seed export, provider edit readback, archive readback, undo archive readback, repair, create/update/archive write delivery, and no token/secret visibility.
+- Honest boundary: this closes a stale automated authority proof gap; it is not a manual direct-browser UX inspection of the user's production Notion/Sheets surfaces.

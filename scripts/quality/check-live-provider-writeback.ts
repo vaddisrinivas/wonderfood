@@ -8,7 +8,9 @@ import { MemoryDb } from '../../tests/helpers/memory-db';
 
 type Json = Record<string, unknown>;
 
-const evidenceDir = join(process.cwd(), 'app', 'build', 'evidence', 'live-workspace');
+const evidenceDir = process.env.PROVIDER_WRITEBACK_OUT
+  ? join(process.cwd(), process.env.PROVIDER_WRITEBACK_OUT)
+  : join(process.cwd(), 'app', 'build', 'evidence', 'live-workspace');
 mkdirSync(evidenceDir, { recursive: true });
 const stamp = Math.floor(Date.now() / 1000);
 const evidencePath = join(evidenceDir, `direct_provider_writeback-${stamp}.json`);
