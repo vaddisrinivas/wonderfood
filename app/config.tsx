@@ -615,8 +615,8 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Now card" detail="Show the primary daily card." value={settings.runtime.surfaceConfig.home.showNowCard} onValueChange={(showNowCard) => updateSurfaceConfig('home', { showNowCard })} />
                 <ToggleRow title="Review queue" detail="Show items that need attention." value={settings.runtime.surfaceConfig.home.showReviewQueue} onValueChange={(showReviewQueue) => updateSurfaceConfig('home', { showReviewQueue })} />
                 <Field label="Review cards" value={settings.runtime.surfaceConfig.home.reviewLimit} onChangeText={(reviewLimit) => updateSurfaceConfig('home', { reviewLimit })} />
-                <ToggleRow title="Recent graph" detail="Show latest source-backed records." value={settings.runtime.surfaceConfig.home.showRecentGraph} onValueChange={(showRecentGraph) => updateSurfaceConfig('home', { showRecentGraph })} />
-                <Field label="Recent graph cards" value={settings.runtime.surfaceConfig.home.recentLimit} onChangeText={(recentLimit) => updateSurfaceConfig('home', { recentLimit })} />
+                <ToggleRow title="Recent updates" detail="Show latest source-backed records." value={settings.runtime.surfaceConfig.home.showRecentGraph} onValueChange={(showRecentGraph) => updateSurfaceConfig('home', { showRecentGraph })} />
+                <Field label="Recent update cards" value={settings.runtime.surfaceConfig.home.recentLimit} onChangeText={(recentLimit) => updateSurfaceConfig('home', { recentLimit })} />
                 <ToggleRow title="Life spaces section" detail="Show active/add-domain cards." value={settings.runtime.surfaceConfig.home.showLifeSpaces} onValueChange={(showLifeSpaces) => updateSurfaceConfig('home', { showLifeSpaces })} />
                 <ToggleRow title="Source trust section" detail="Show Notion/Sheets/local trust cards." value={settings.runtime.surfaceConfig.home.showSourceTrust} onValueChange={(showSourceTrust) => updateSurfaceConfig('home', { showSourceTrust })} />
                 <ToggleRow title="Control card" detail="Show Settings/Config entry point." value={settings.runtime.surfaceConfig.home.showControlCard} onValueChange={(showControlCard) => updateSurfaceConfig('home', { showControlCard })} />
@@ -664,7 +664,7 @@ export default function ConfigStudioScreen() {
                 <Field label="Section order" value={settings.runtime.surfaceConfig.search.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('search', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show search positioning copy." value={settings.runtime.surfaceConfig.search.showHero} onValueChange={(showHero) => updateSurfaceConfig('search', { showHero })} />
                 <ToggleRow title="Quick actions" detail="Show Chat, Capture and Settings commands." value={settings.runtime.surfaceConfig.search.showQuickActions} onValueChange={(showQuickActions) => updateSurfaceConfig('search', { showQuickActions })} />
-                <ToggleRow title="Results" detail="Show local graph matches." value={settings.runtime.surfaceConfig.search.showResults} onValueChange={(showResults) => updateSurfaceConfig('search', { showResults })} />
+                <ToggleRow title="Results" detail="Show saved item matches." value={settings.runtime.surfaceConfig.search.showResults} onValueChange={(showResults) => updateSurfaceConfig('search', { showResults })} />
                 <Field label="Result cards" value={settings.runtime.surfaceConfig.search.resultLimit} onChangeText={(resultLimit) => updateSurfaceConfig('search', { resultLimit })} />
                 <Field label="Empty hint" value={settings.runtime.surfaceConfig.search.emptyHint} onChangeText={(emptyHint) => updateSurfaceConfig('search', { emptyHint })} multiline />
               </SurfaceConfigCard>

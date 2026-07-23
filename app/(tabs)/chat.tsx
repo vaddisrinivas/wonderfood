@@ -56,6 +56,20 @@ function countSetting(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function displayCollection(collection: string) {
+  return collection
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .replace(/^Inventory Lot$/, 'Kitchen Lot')
+    .replace(/^Shopping Item$/, 'Shopping');
+}
+
+function displaySource(provider: string) {
+  if (provider === 'sqlite') return 'Device';
+  if (provider === 'google_sheets') return 'Sheets';
+  return provider.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 const CHAT_SECTIONS = ['threads', 'sources', 'messages', 'promptRail', 'context'] as const;
 type ChatSection = typeof CHAT_SECTIONS[number];
 const WORKSPACE_CHAT_SECTIONS = new Set<ChatSection>(['threads', 'sources', 'messages', 'promptRail']);
@@ -372,7 +386,7 @@ export default function ChatScreen() {
         {isWide ? (
           <View style={styles.threadFoot}>
             <Pill tone="moss">{domainLabel} context on</Pill>
-            <Text style={[styles.threadFootText, { color: theme.colors.muted }]}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+            <Text style={[styles.threadFootText, { color: theme.colors.muted }]}>{sourceRecords.length} saved items available. Chat cites sources it reads.</Text>
             <Text style={[styles.threadFootText, { color: theme.colors.muted }]}>Open source cards and Undo reversible actions when a write receipt exists.</Text>
           </View>
         ) : null}
@@ -385,12 +399,12 @@ export default function ChatScreen() {
       case 'sources':
         return chatConfig.showSources ? (
           <View key={section} style={[styles.sourceStrip, { backgroundColor: theme.colors.canvas }]}>
-            <Text style={[styles.sourceStripTitle, { color: theme.colors.muted }]}>{sourceRecords.length} source records loaded</Text>
+            <Text style={[styles.sourceStripTitle, { color: theme.colors.muted }]}>{sourceRecords.length} sources ready</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
               {sourceRecords.slice(0, sourceLimit).map((record) => (
                 <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
                   <Text style={[styles.sourcePillTitle, { color: theme.colors.ink }]} numberOfLines={1}>{record.title}</Text>
-                  <Text style={[styles.sourcePillMeta, { color: theme.colors.muted }]} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
+                  <Text style={[styles.sourcePillMeta, { color: theme.colors.muted }]} numberOfLines={1}>{displayCollection(record.collection)} · {displaySource(record.source.provider)}</Text>
                 </Pressable>
               ))}
               {!sourceRecords.length ? <Text style={[styles.sourceEmpty, { color: theme.colors.muted }]}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
