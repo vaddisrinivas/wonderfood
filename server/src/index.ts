@@ -51,7 +51,7 @@ const DEFAULT_AUTH_TOKEN = process.env.LIFEOS_SERVER_TOKEN;
 const CORS_ORIGINS = new Set(
   (process.env.LIFEOS_CORS_ORIGINS ?? 'http://localhost:8094,http://127.0.0.1:8094,http://localhost:8093,http://127.0.0.1:8093')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin: string) => origin.trim())
     .filter(Boolean),
 );
 
