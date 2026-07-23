@@ -10,6 +10,27 @@
 - Export success, local contract checks, one screenshot, or one live scenario proves only that slice. It does not close a phase.
 - No phase is complete until its exact functional, portability, recovery, security, accessibility, and visual gates pass with durable evidence.
 
+## Portable control-plane track (added 2026-07-23)
+
+This track closes the missing pillar from the LifeOS v5 plan: schemas/config are data, but they are not household records.
+
+Non-negotiables:
+
+- Control plane and data plane stay separate. Config sources define domains, screens, schemas, skills, actions, icons, and settings. Data homes hold records.
+- Config may come from local files, GitHub, URL, Notion, or Sheets. None of those config fetchers may directly create household records.
+- Config writes use one reversible/audited path against config records only.
+- Remote config is proposed, validated, previewed, then accepted before it governs the app.
+- Default change mode is additive. Renames/removals need explicit reversible migration.
+
+| Track | Status | Evidence | Blocker | Next action |
+|---|---|---|---|---|
+| C0 — Control-plane storage contract | DONE — DB + TYPES + SEPARATION TESTED | `src/config/types.ts`, DB v5 `config_sources`, `config_snapshots`, `config_conflicts`, `npm run check:control-plane-c0`, `npm run typecheck`, `npm run config:validate`, `git diff --check` | None for C0 | Commit C0, then build C1 fetcher registry |
+| C1 — Config fetchers and registry | TODO | None | Needs local/GitHub/URL/Notion/Sheets fetcher contracts | Implement fetchers with no data-plane writes |
+| C2 — Validate/merge/apply/undo | TODO | None | Needs conflict model, additive merge, migration-required mode, undo receipt | Build proposal/apply engine |
+| C3 — Sync and separation guard | TODO | None | Needs guard proving config source cannot mutate `records` | Add recurring/manual sync and invariant tests |
+| C4 — In-app Config Sources screen | TODO | None | Needs product UI for adding/removing/reordering config sources | Add `config-sources` UX from Settings/Config Studio |
+| C5 — AI-assisted config authoring | TODO | None | Needs typed config proposals, preview, accept, rollback | Route AI through same config write path |
+
 ## Progress (2026-07-22)
 
 | Phase | Owner | Status | Evidence | Blocker | Next action |
@@ -165,6 +186,7 @@ Entries below preserve what was executed. A historical PASS applies only to the 
 - `2026-07-23`: Added provider writeback queue and direct delivery contract in `src/providers/writeback.ts`. Applied operations can enqueue duplicate-safe Notion/Sheets write payloads; Undo inverse operations enqueue the inverse write; native delivery uses in-app provider tokens and browser delivery blocks safely for CORS. `tests/providers/writeback.test.ts` covers create/update/archive, Undo writeback, direct delivery success, web block, and failed provider response accounting. `npm run check:provider-writeback` is now in `check:product` and `quality`.
 - `2026-07-23`: Added live direct provider writeback proof in `scripts/quality/check-live-provider-writeback.ts` and wired it into `npm run check:live-providers`. Agent-env-backed run passed: Notion app-outbox delivery created a real page, read it back and archived cleanup; Google Sheets app-outbox delivery appended a row, read it back and cleared cleanup. Evidence: `app/build/evidence/live-workspace/direct_provider_writeback-1784829258.json`, plus live scenario proofs `notion_scenarios-1784829229.json` and `google_sheets_scenarios-1784829248.json`.
 - `2026-07-23`: Sources screen now renders a configurable `Needs review` section backed by pending `sync_conflicts`. Users can keep the app value, use the provider value, or dismiss; remote resolution calls `resolveSyncConflict()` and remains audited through `applyOperation`. `npm run check:web-product` now asserts the Sources clear-state copy so the review inbox cannot disappear silently.
+- `2026-07-23`: Added LifeOS v5 portable control-plane C0. `src/config/types.ts` defines config source/snapshot/conflict/control-plane contracts. SQLite `DATABASE_VERSION` is now 5 and creates `config_sources`, `config_snapshots`, and `config_conflicts` separately from household `records`. `tests/db/migrations.test.ts` proves fresh DB creation, table/index presence, recovery export inclusion, and no config columns/statements touching the data-plane records table. Evidence: `npm run check:control-plane-c0`, `npm run typecheck`, `npm run config:validate`, and `git diff --check`.
 
 ## Historical slice gates executed
 

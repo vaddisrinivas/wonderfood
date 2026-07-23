@@ -8,6 +8,7 @@ class MigrationMemoryDb {
   userVersion = 0;
   tables = new Map<string, { columns: string[]; rows: Row[] }>();
   indexes = new Set<string>();
+  statements: string[] = [];
 
   async withTransactionAsync(fn: () => Promise<void>) {
     await fn();
@@ -15,6 +16,7 @@ class MigrationMemoryDb {
 
   async execAsync(sql: string) {
     const compact = sql.replace(/\s+/g, ' ').trim();
+    this.statements.push(compact);
     const userVersion = compact.match(/^PRAGMA user_version = (\d+)$/i);
     if (userVersion) {
       this.userVersion = Number(userVersion[1]);
@@ -107,13 +109,16 @@ class MigrationMemoryDb {
 }
 
 describe('database migrations', () => {
-  it('fresh install reaches current schema with operation and conflict tables', async () => {
+  it('fresh install reaches current schema with operation, sync, and control-plane tables', async () => {
     const db = new MigrationMemoryDb();
     await runMigrations(db as any);
 
     expect(db.userVersion).toBe(DATABASE_VERSION);
     expect(db.tables.has('operations')).toBe(true);
     expect(db.tables.has('sync_conflicts')).toBe(true);
+    expect(db.tables.has('config_sources')).toBe(true);
+    expect(db.tables.has('config_snapshots')).toBe(true);
+    expect(db.tables.has('config_conflicts')).toBe(true);
     const recordColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(records)');
     expect(recordColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
       'revision',
@@ -125,6 +130,22 @@ describe('database migrations', () => {
     expect(db.indexes.has('operations_idem_idx')).toBe(true);
     expect(db.indexes.has('operations_record_idx')).toBe(true);
     expect(db.indexes.has('sync_conflicts_record_idx')).toBe(true);
+    expect(db.indexes.has('config_sources_enabled_precedence_idx')).toBe(true);
+    expect(db.indexes.has('config_conflicts_status_idx')).toBe(true);
+  });
+
+  it('keeps control-plane config separate from data-plane records', async () => {
+    const db = new MigrationMemoryDb();
+    await runMigrations(db as any);
+
+    const recordColumns = (await db.getAllAsync<{ name: string }>('PRAGMA table_info(records)')).map((column) => column.name);
+    expect(recordColumns).not.toEqual(expect.arrayContaining([
+      'config_source_id',
+      'config_snapshot_hash',
+      'config_conflict_id',
+      'location_json',
+    ]));
+    expect(db.statements.filter((statement) => /config_/i.test(statement) && /\brecords\b/i.test(statement))).toEqual([]);
   });
 
   it('upgrades v1 records with envelope defaults', async () => {
@@ -157,12 +178,18 @@ describe('database migrations', () => {
     });
   });
 
-  it('exports operations and sync conflicts in recovery snapshots', async () => {
+  it('exports operations, sync conflicts, and control-plane tables in recovery snapshots', async () => {
     const db = new MigrationMemoryDb();
     await runMigrations(db as any);
 
     const snapshot = await exportRecoverySnapshot(db as any);
     expect(snapshot.schema_version).toBe(DATABASE_VERSION);
-    expect(snapshot.tables.map((table) => table.name)).toEqual(expect.arrayContaining(['operations', 'sync_conflicts']));
+    expect(snapshot.tables.map((table) => table.name)).toEqual(expect.arrayContaining([
+      'operations',
+      'sync_conflicts',
+      'config_sources',
+      'config_snapshots',
+      'config_conflicts',
+    ]));
   });
 });

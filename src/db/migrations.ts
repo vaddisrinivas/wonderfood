@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 3;
+export const DATABASE_VERSION = 5;
 
 const TABLES = {
   meta: 'meta',
@@ -16,6 +16,9 @@ const TABLES = {
   actions: 'action_events',
   operations: 'operations',
   sync_conflicts: 'sync_conflicts',
+  config_sources: 'config_sources',
+  config_snapshots: 'config_snapshots',
+  config_conflicts: 'config_conflicts',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
   agent_runs: 'agent_runs',
@@ -334,6 +337,66 @@ const MIGRATIONS: Migration[] = [
     down: async (db) => {
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.sync_conflicts}`);
       await db.execAsync(`PRAGMA user_version = 2`);
+    },
+  },
+  {
+    version: 5,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.config_sources} (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK(kind IN ('local','github','url','notion','sheets')),
+          label TEXT NOT NULL,
+          location_json TEXT NOT NULL,
+          auto_refresh INTEGER NOT NULL DEFAULT 0,
+          refresh_minutes INTEGER NOT NULL DEFAULT 60,
+          precedence INTEGER NOT NULL DEFAULT 0,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.config_sources}_enabled_precedence_idx
+          ON ${TABLES.config_sources}(enabled, precedence)
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.config_snapshots} (
+          source_id TEXT NOT NULL,
+          fetched_at TEXT NOT NULL,
+          content_hash TEXT NOT NULL,
+          etag TEXT,
+          raw TEXT NOT NULL,
+          validation_status TEXT NOT NULL DEFAULT 'unvalidated'
+            CHECK(validation_status IN ('unvalidated','valid','invalid')),
+          error_json TEXT,
+          PRIMARY KEY (source_id, content_hash),
+          FOREIGN KEY (source_id) REFERENCES ${TABLES.config_sources}(id) ON DELETE CASCADE
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.config_conflicts} (
+          id TEXT PRIMARY KEY,
+          key TEXT NOT NULL,
+          sources_json TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'needs_review'
+            CHECK(status IN ('needs_review','resolved','dismissed')),
+          created_at TEXT NOT NULL,
+          resolved_at TEXT
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.config_conflicts}_status_idx
+          ON ${TABLES.config_conflicts}(status, created_at)
+      `);
+      await db.execAsync(`PRAGMA user_version = 5`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.config_conflicts}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.config_snapshots}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.config_sources}`);
+      await db.execAsync(`PRAGMA user_version = 3`);
     },
   },
 ];

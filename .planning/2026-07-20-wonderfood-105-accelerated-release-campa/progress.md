@@ -16,6 +16,8 @@
 - Current rollup: `60 PASS / 0 BLOCKED / 16 TODO`
 - Next action: continue remaining gesture/visual/live-provider/device/release proof rows, avoiding parallel Gradle unit-test tasks that write the same XML result files.
 
+- 2026-07-23 LifeOS control-plane addendum: added the v5 portable control-plane track to `docs/lifeos/implementation-ledger.md` and implemented hard C0 first. `src/config/types.ts` now defines config-source/snapshot/conflict/control-plane contracts. SQLite `DATABASE_VERSION` is now 5 and creates `config_sources`, `config_snapshots`, and `config_conflicts` separately from household `records`. Verified `npm run check:control-plane-c0`, `npm run typecheck`, `npm run config:validate`, and `git diff --check`. Next action: C1 config fetcher registry for local/GitHub/URL/Notion/Sheets with no data-plane writes.
+
 - Latest acceleration: added non-secret release/device row triage for `E01`, `E07`, `E09`, and `E12`-`E16`. The helper is read-only and records matrix status, scoped dirty state, ADB visibility, connected proof tasks, existing release APK/checksum candidates, and read-only GitHub PR/CI/release state when `gh` is available. It explicitly does not use signing secrets, install builds, create PRs, publish tags/releases, or mark rows PASS.
 
 - Latest milestone: AppFunctionService now has focused canonical write evidence tests.
