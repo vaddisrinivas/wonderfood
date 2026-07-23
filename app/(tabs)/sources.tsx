@@ -7,7 +7,7 @@ import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { DirectSyncReceipt, clearProviderLocalCopy, restoreClearedProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
-import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
+import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings, saveLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { mergeVisualIdentity, visualAccent, visualGlyph } from '@/src/domain/visual-identity';
 
@@ -173,6 +173,23 @@ export default function SourcesScreen() {
     setSyncing(null);
   };
 
+  const disconnectProvider = async (provider: DirectSyncReceipt['provider']) => {
+    setSyncing(provider);
+    const loadedSettings = await loadLifeOSSettings();
+    const nextSettings = provider === 'notion'
+      ? { ...loadedSettings, notion: { ...loadedSettings.notion, enabled: false } }
+      : { ...loadedSettings, sheets: { ...loadedSettings.sheets, enabled: false } };
+    const saved = await saveLifeOSSettings(nextSettings);
+    const clearResult = await clearProviderLocalCopy({ db, provider });
+    setSettings(saved);
+    setReceipts([{
+      ...clearResult,
+      message: `Disconnected ${provider === 'notion' ? 'Notion' : 'Sheets'} in this app and cleared the local copy. Provider data was not changed.${clearResult.restoreToken ? ' You can restore the local copy for 15 minutes.' : ''}`,
+    }]);
+    await refreshRows();
+    setSyncing(null);
+  };
+
   const restoreLocalProvider = async (receipt: DirectSyncReceipt) => {
     setSyncing(receipt.provider);
     const result = await restoreClearedProviderLocalCopy({ db, restoreToken: receipt.restoreToken });
@@ -305,6 +322,17 @@ export default function SourcesScreen() {
                         >
                           <Text style={[styles.clearAction, { color: theme.colors.muted }]}>Clear local copy</Text>
                           <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>⌫</Text>
+                        </Pressable>
+                      ) : null}
+                      {normalized === 'notion' || normalized === 'google_sheets' ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={Boolean(syncing)}
+                          onPress={() => void disconnectProvider(normalized)}
+                          style={styles.clearActionRow}
+                        >
+                          <Text style={[styles.clearAction, { color: theme.colors.muted }]}>Disconnect in app</Text>
+                          <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>⏻</Text>
                         </Pressable>
                       ) : null}
                     </View>

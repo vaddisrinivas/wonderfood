@@ -228,7 +228,7 @@ const routes = [
         },
       },
     },
-    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 citeable homes', 'notion', 'google_sheets', 'Clear local copy'],
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 citeable homes', 'notion', 'google_sheets', 'Clear local copy', 'Disconnect in app'],
   },
   {
     name: 'sources-configured-order',
