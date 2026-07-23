@@ -80,6 +80,18 @@ const recentSync = [
   ['03', 'SQLite replica', 'Persists records, source snapshots and chat citations on device'],
 ] as const;
 
+const defaultSourceSectionOrder = ['hero', 'metrics', 'dataHomes', 'citations', 'syncPlan', 'policy', 'configLink'] as const;
+type SourceSectionId = typeof defaultSourceSectionOrder[number];
+
+function orderedSourceSections(sectionOrder: string): SourceSectionId[] {
+  const allowed = new Set<string>(defaultSourceSectionOrder);
+  const requested = sectionOrder
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item): item is SourceSectionId => allowed.has(item));
+  return [...requested, ...defaultSourceSectionOrder.filter((item) => !requested.includes(item))];
+}
+
 function toneColor(tone: Tone, palette = colors) {
   return {
     moss: palette.moss,
@@ -152,85 +164,62 @@ export default function SourcesScreen() {
 
   const configuredCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
   const latestReceipt = receipts[0];
+  const renderSourceSection = (section: SourceSectionId) => {
+    if (section === 'hero') {
+      return sourcesConfig.showHero ? (
+        <>
+          <PageHeader
+            eyebrow="One graph · Your chosen homes"
+            title={`${domainLabel} data stays legible.`}
+            subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
+          />
 
-  return (
-    <Page>
-      <ScrollView contentInsetAdjustmentBehavior="automatic">
-        <View style={sharedStyles.content}>
-          <View style={styles.contextBar}>
-            <View>
-              <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / SOURCES</Text>
-              <Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} authority, sync and citation health</Text>
-            </View>
-            <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
-          </View>
-
-          {sourcesConfig.showHero ? (
-            <>
-              <PageHeader
-                eyebrow="One graph · Your chosen homes"
-                title={`${domainLabel} data stays legible.`}
-                subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
-              />
-
-              <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
-                <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
-                  <Pill tone="blue">DIRECT SYNC READY</Pill>
-                  <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
-                  <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
-                    Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
-                  </Text>
-                  <View style={styles.syncActions}>
-                    <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
-                      <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
-                    </Pressable>
-                    <Link href="/settings" asChild>
-                      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
-                        <Text style={[styles.secondarySyncText, { color: theme.colors.ink }]}>Connections</Text>
-                      </Pressable>
-                    </Link>
-                  </View>
-                </View>
-                <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
-                  <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
-                  <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-                  <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
-                  <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-                  <View style={styles.flowDestinations}>
-                    <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
-                    <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
-                  </View>
-                </View>
-              </Card>
-            </>
-          ) : null}
-
-          {sourcesConfig.showMetrics ? <View style={styles.metrics}>
-            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>sources known</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Configured homes and links</Text></Card>
-            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{configuredCount}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>enabled settings</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Editable in app</Text></Card>
-            <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull rows</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
-          </View> : null}
-
-          {receipts.length ? (
-            <Card style={styles.receiptCard}>
-              <Text style={styles.sectionLead}>Latest sync receipts</Text>
-              <View style={styles.receiptList}>
-                {receipts.map((receipt) => (
-                  <View key={`${receipt.provider}-${receipt.observedAt}`} style={styles.receiptRow}>
-                    <Pill tone={receipt.status === 'synced' ? 'moss' : receipt.status === 'blocked' ? 'blue' : 'amber'}>{receipt.status.toUpperCase()}</Pill>
-                    <View style={styles.receiptCopy}>
-                      <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
-                      <Text style={styles.receiptMessage}>{receipt.message}</Text>
-                    </View>
-                    <Text style={styles.receiptCount}>{receipt.records} rows</Text>
-                  </View>
-                ))}
+          <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
+            <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
+              <Pill tone="blue">DIRECT SYNC READY</Pill>
+              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
+              <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
+                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
+              </Text>
+              <View style={styles.syncActions}>
+                <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
+                  <Text style={[styles.primarySyncText, { color: theme.colors.paper }]}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
+                </Pressable>
+                <Link href="/settings" asChild>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.secondarySyncText, { color: theme.colors.ink }]}>Connections</Text>
+                  </Pressable>
+                </Link>
               </View>
-            </Card>
-          ) : null}
-
-          {sourcesConfig.showDataHomes ? <SectionTitle title="Data homes & surfaces" /> : null}
-          {sourcesConfig.showDataHomes && !sourceRows.length ? (
+            </View>
+            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
+              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
+              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
+              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
+              <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
+              <View style={styles.flowDestinations}>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
+              </View>
+            </View>
+          </Card>
+        </>
+      ) : null;
+    }
+    if (section === 'metrics') {
+      return sourcesConfig.showMetrics ? (
+        <View style={styles.metrics}>
+          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>sources known</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Configured homes and links</Text></Card>
+          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{configuredCount}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>enabled settings</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>Editable in app</Text></Card>
+          <Card style={styles.metric}><Text style={[styles.metricValue, { color: theme.colors.ink }]}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={[styles.metricLabel, { color: theme.colors.ink }]}>last pull rows</Text><Text style={[styles.metricFoot, { color: theme.colors.muted }]}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
+        </View>
+      ) : null;
+    }
+    if (section === 'dataHomes') {
+      return sourcesConfig.showDataHomes ? (
+        <>
+          <SectionTitle title="Data homes & surfaces" />
+          {!sourceRows.length ? (
             <Card>
               <Text style={styles.emptyTitle}>No sources connected in this session</Text>
               <Text style={styles.emptyBody}>
@@ -247,7 +236,7 @@ export default function SourcesScreen() {
             </Card>
           ) : null}
 
-          {sourcesConfig.showDataHomes ? <View style={styles.sourceGrid}>
+          <View style={styles.sourceGrid}>
             {sourceRows.map((sourceRow) => {
               const normalized = normalizeSourceName(sourceRow.name);
               const meta = normalized === 'other'
@@ -289,10 +278,15 @@ export default function SourcesScreen() {
                 </View>
               );
             })}
-          </View> : null}
-
-          {sourcesConfig.showCitations ? <SectionTitle title={`What ${domainLabel} Chat can cite`} /> : null}
-          {sourcesConfig.showCitations ? <Card style={styles.citationCard}>
+          </View>
+        </>
+      ) : null;
+    }
+    if (section === 'citations') {
+      return sourcesConfig.showCitations ? (
+        <>
+          <SectionTitle title={`What ${domainLabel} Chat can cite`} />
+          <Card style={styles.citationCard}>
             <View style={styles.citationHeader}>
               <View>
                 <Text style={styles.sectionLead}>Source-backed by default</Text>
@@ -312,52 +306,97 @@ export default function SourcesScreen() {
                 </View>
               ))}
             </View>
-          </Card> : null}
+          </Card>
+        </>
+      ) : null;
+    }
+    if (section === 'syncPlan') {
+      return sourcesConfig.showSyncPlan ? (
+        <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
+          <SectionTitle title="Sync implementation order" />
+          <Card style={styles.timelineCard}>
+            {recentSync.map(([time, title, detail], index) => (
+              <View key={`${time}-${title}`} style={styles.timelineRow}>
+                <View style={styles.timelineRail}>
+                  <View style={[styles.timelineDot, index === 0 ? styles.timelineDotActive : null]} />
+                  {index < recentSync.length - 1 ? <View style={styles.timelineLine} /> : null}
+                </View>
+                <View style={styles.timelineCopy}>
+                  <View style={styles.timelineTitleRow}><Text style={styles.timelineTitle}>{title}</Text><Text style={styles.timelineTime}>STEP {time}</Text></View>
+                  <Text style={styles.timelineDetail}>{detail}</Text>
+                </View>
+              </View>
+            ))}
+          </Card>
+        </View>
+      ) : null;
+    }
+    if (section === 'policy') {
+      return sourcesConfig.showPolicy ? (
+        <View style={[styles.detailSide, compact ? styles.detailFull : null]}>
+          <SectionTitle title="Sync policy" />
+          <Card tone="moss" style={styles.policyCard}>
+            <Pill tone="moss">CALM BY DEFAULT</Pill>
+            <Text style={styles.policyTitle}>One authority. No sync loops.</Text>
+            <View style={styles.policyList}>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>SQLite remains available offline.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Exact source versions stay attached to answers.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Unknown provider fields are preserved.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Credentials never appear here.</Text></View>
+            </View>
+          </Card>
+        </View>
+      ) : null;
+    }
+    return sourcesConfig.showConfigLink ? (
+      <Link href="/config" asChild>
+        <Pressable accessibilityRole="button" style={({ pressed }) => [styles.systemAction, pressed ? styles.pressed : null]}>
+          <View>
+            <Text style={styles.systemActionEyebrow}>CONFIG MAP</Text>
+            <Text style={styles.systemActionTitle}>See domains, skills and agents</Text>
+            <Text style={styles.systemActionBody}>Edit the packages and schemas that decide how sources become LifeOS pages.</Text>
+          </View>
+          <Text style={styles.systemActionArrow}>→</Text>
+        </Pressable>
+      </Link>
+    ) : null;
+  };
 
-          {sourcesConfig.showSyncPlan || sourcesConfig.showPolicy ? <View style={styles.detailGrid}>
-            {sourcesConfig.showSyncPlan ? <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
-              <SectionTitle title="Sync implementation order" />
-              <Card style={styles.timelineCard}>
-                {recentSync.map(([time, title, detail], index) => (
-                  <View key={`${time}-${title}`} style={styles.timelineRow}>
-                    <View style={styles.timelineRail}>
-                      <View style={[styles.timelineDot, index === 0 ? styles.timelineDotActive : null]} />
-                      {index < recentSync.length - 1 ? <View style={styles.timelineLine} /> : null}
+  return (
+    <Page>
+      <ScrollView contentInsetAdjustmentBehavior="automatic">
+        <View style={sharedStyles.content}>
+          <View style={styles.contextBar}>
+            <View>
+              <Text style={[styles.brand, { color: theme.colors.blue }]}>LIFEOS / SOURCES</Text>
+              <Text style={[styles.context, { color: theme.colors.muted }]}>{domainLabel} authority, sync and citation health</Text>
+            </View>
+            <View style={[styles.liveBadge, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><View style={[styles.liveDot, { backgroundColor: theme.colors.moss }]} /><Text style={[styles.liveText, { color: theme.colors.ink }]}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
+          </View>
+
+          {orderedSourceSections(sourcesConfig.sectionOrder).map((section) => (
+            <View key={section}>
+              {renderSourceSection(section)}
+            </View>
+          ))}
+
+          {receipts.length ? (
+            <Card style={styles.receiptCard}>
+              <Text style={styles.sectionLead}>Latest sync receipts</Text>
+              <View style={styles.receiptList}>
+                {receipts.map((receipt) => (
+                  <View key={`${receipt.provider}-${receipt.observedAt}`} style={styles.receiptRow}>
+                    <Pill tone={receipt.status === 'synced' ? 'moss' : receipt.status === 'blocked' ? 'blue' : 'amber'}>{receipt.status.toUpperCase()}</Pill>
+                    <View style={styles.receiptCopy}>
+                      <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
+                      <Text style={styles.receiptMessage}>{receipt.message}</Text>
                     </View>
-                    <View style={styles.timelineCopy}>
-                      <View style={styles.timelineTitleRow}><Text style={styles.timelineTitle}>{title}</Text><Text style={styles.timelineTime}>STEP {time}</Text></View>
-                      <Text style={styles.timelineDetail}>{detail}</Text>
-                    </View>
+                    <Text style={styles.receiptCount}>{receipt.records} rows</Text>
                   </View>
                 ))}
-              </Card>
-            </View> : null}
-
-            {sourcesConfig.showPolicy ? <View style={[styles.detailSide, compact ? styles.detailFull : null]}>
-              <SectionTitle title="Sync policy" />
-              <Card tone="moss" style={styles.policyCard}>
-                <Pill tone="moss">CALM BY DEFAULT</Pill>
-                <Text style={styles.policyTitle}>One authority. No sync loops.</Text>
-                <View style={styles.policyList}>
-                  <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>SQLite remains available offline.</Text></View>
-                  <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Exact source versions stay attached to answers.</Text></View>
-                  <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Unknown provider fields are preserved.</Text></View>
-                  <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Credentials never appear here.</Text></View>
-                </View>
-              </Card>
-            </View> : null}
-          </View> : null}
-
-          {sourcesConfig.showConfigLink ? <Link href="/config" asChild>
-            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.systemAction, pressed ? styles.pressed : null]}>
-              <View>
-                <Text style={styles.systemActionEyebrow}>CONFIG MAP</Text>
-                <Text style={styles.systemActionTitle}>See domains, skills and agents</Text>
-                <Text style={styles.systemActionBody}>Edit the packages and schemas that decide how sources become LifeOS pages.</Text>
               </View>
-              <Text style={styles.systemActionArrow}>→</Text>
-            </Pressable>
-          </Link> : null}
+            </Card>
+          ) : null}
         </View>
       </ScrollView>
     </Page>

@@ -129,6 +129,21 @@ const routes = [
     must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 source packs'],
   },
   {
+    name: 'sources-configured-order',
+    path: '/sources',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          sources: {
+            sectionOrder: 'citations,hero,metrics,dataHomes,syncPlan,policy,configLink',
+          },
+        },
+      },
+    },
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', 'Food data stays legible'],
+    orderedBefore: ['What Food Chat can cite', 'Food data stays legible'],
+  },
+  {
     name: 'sources-health-active',
     path: '/sources',
     localSettings: {
@@ -262,6 +277,12 @@ for (const viewport of viewports) {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
       const text = await page.locator('body').innerText({ timeout: 8000 });
       result.missing = route.must.filter((needle) => !text.includes(needle));
+      if (route.orderedBefore) {
+        const [first, second] = route.orderedBefore;
+        if (text.indexOf(first) < 0 || text.indexOf(second) < 0 || text.indexOf(first) > text.indexOf(second)) {
+          result.missing.push(`${first} before ${second}`);
+        }
+      }
       result.consoleErrors = consoleErrors;
       result.horizontalOverflow = await page.evaluate(() => {
         const root = document.scrollingElement || document.documentElement;
