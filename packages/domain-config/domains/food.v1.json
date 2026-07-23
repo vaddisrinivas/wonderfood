@@ -44,6 +44,12 @@
     "nutrition_observation",
     "source_record"
   ],
+  "rich_detail_schema": "schemas/food-detail.v1.schema.json",
+  "provider_template_fields": {
+    "required": ["id", "title", "collection", "status", "meta", "body"],
+    "rich_detail_json": ["Food detail", "food_detail", "Food Detail", "Detail JSON", "detail_json"],
+    "relations_json": ["Relations", "relations", "Related records", "related_records"]
+  },
   "relations": [
     { "from": "inventory", "to": "ingredient", "name": "represents" },
     { "from": "recipe", "to": "ingredient", "name": "uses" },

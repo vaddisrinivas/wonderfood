@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wonderfood.app/schemas/food-detail.v1.schema.json",
+  "title": "LifeOS Food rich detail",
+  "type": "object",
+  "required": ["nutrition", "ingredients", "instructions", "logs", "variations"],
+  "properties": {
+    "nutrition": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pair" }
+    },
+    "ingredients": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ingredient" }
+    },
+    "instructions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "logs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pair" }
+    },
+    "variations": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "pair": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "string", "minLength": 1 },
+        { "type": "string", "minLength": 1 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "ingredient": {
+      "type": "object",
+      "required": ["name", "amount", "state"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "amount": { "type": "string" },
+        "state": { "enum": ["available", "needed", "shopping", "previous"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

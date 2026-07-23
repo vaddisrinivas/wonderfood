@@ -34,6 +34,9 @@ for (const domain of catalog.domains) {
   for (const id of manifest.workflows) {
     if (!workflowIds.has(id)) throw new Error(`Missing workflow for ${domain.id}: ${id}`);
   }
+  if (manifest.rich_detail_schema && !existsSync(resolve(root, manifest.rich_detail_schema))) {
+    throw new Error(`Missing rich detail schema for ${domain.id}: ${manifest.rich_detail_schema}`);
+  }
   manifests.set(domain.id, manifest);
 }
 

@@ -34,6 +34,12 @@ export interface DomainManifest {
   skills: string[];
   workflows: string[];
   data_homes: string[];
+  rich_detail_schema?: string;
+  provider_template_fields?: {
+    required?: string[];
+    rich_detail_json?: string[];
+    relations_json?: string[];
+  };
   mcp: {
     resources: string[];
     tools: string[];
@@ -141,6 +147,12 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
 
   const mcp = raw.mcp as Record<string, unknown>;
   assertCondition(isObject(mcp), `Expected mcp object at ${path}.mcp`);
+  const providerTemplateFields = raw.provider_template_fields;
+  const parsedProviderTemplateFields = isObject(providerTemplateFields) ? {
+    required: Array.isArray(providerTemplateFields.required) ? (providerTemplateFields.required as string[]) : undefined,
+    rich_detail_json: Array.isArray(providerTemplateFields.rich_detail_json) ? (providerTemplateFields.rich_detail_json as string[]) : undefined,
+    relations_json: Array.isArray(providerTemplateFields.relations_json) ? (providerTemplateFields.relations_json as string[]) : undefined,
+  } : undefined;
 
   return {
     schema_version: 'lifeos.domain.v1',
@@ -153,6 +165,8 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     skills: parseStringArray(raw.skills, `${path}.skills`),
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
+    rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
+    provider_template_fields: parsedProviderTemplateFields,
     mcp: {
       resources: parseStringArray(mcp.resources, `${path}.mcp.resources`),
       tools: parseStringArray(mcp.tools, `${path}.mcp.tools`),

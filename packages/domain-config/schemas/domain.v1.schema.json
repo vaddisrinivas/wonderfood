@@ -15,6 +15,16 @@
     "skills": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "workflows": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "data_homes": { "type": "array", "items": { "enum": ["notion", "google_sheets", "sqlite", "postgres"] }, "uniqueItems": true },
+    "rich_detail_schema": { "type": "string" },
+    "provider_template_fields": {
+      "type": "object",
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "rich_detail_json": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "relations_json": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
     "mcp": { "type": "object", "required": ["resources", "tools"] }
   },
   "additionalProperties": false
