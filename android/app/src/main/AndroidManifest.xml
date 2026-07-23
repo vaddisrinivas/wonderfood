@@ -4,12 +4,13 @@
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
-  <!-- Health Connect: least-privilege, read-only context for Food/Health insights. -->
+  <!-- Health Connect: least-privilege context plus Hydration write for disposable round-trip proof. -->
   <uses-permission android:name="android.permission.health.READ_NUTRITION"/>
   <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
   <uses-permission android:name="android.permission.health.READ_STEPS"/>
   <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
   <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
+  <uses-permission android:name="android.permission.health.WRITE_HYDRATION"/>
   <queries>
     <package android:name="com.google.android.apps.healthdata" />
     <package android:name="com.google.android.healthconnect.controller" />

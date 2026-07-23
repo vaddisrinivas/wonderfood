@@ -4,6 +4,8 @@ import {
   getGrantedPermissions,
   getSdkStatus,
   initialize,
+  insertRecords,
+  deleteRecordsByUuids,
   readRecords,
   requestPermission,
 } from 'react-native-health-connect';
@@ -14,6 +16,7 @@ export const LIFEOS_HEALTH_PERMISSIONS = [
   { accessType: 'read', recordType: 'Steps' },
   { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
   { accessType: 'read', recordType: 'Weight' },
+  { accessType: 'write', recordType: 'Hydration' },
 ] as const;
 
 export type HealthConnectAvailability =
@@ -56,6 +59,16 @@ export type HealthConnectSnapshotSummary = {
     weight: number;
   };
   content_hash: string;
+};
+
+export type HealthConnectRoundTripProof = {
+  status: 'passed' | 'failed' | 'unsupported';
+  message: string;
+  clientRecordId: string;
+  insertedIds: string[];
+  readBeforeDelete: number;
+  readAfterDelete: number;
+  observedAt: string;
 };
 
 function unsupportedStatus(): HealthConnectStatus {
@@ -213,6 +226,75 @@ export async function readLifeOSHealthSnapshot(
     ...base,
     records: { nutrition, hydration, steps, activeCalories, weight },
   };
+}
+
+export async function runLifeOSHealthRoundTripProof(): Promise<HealthConnectRoundTripProof> {
+  const observedAt = new Date().toISOString();
+  const clientRecordId = `lifeos-health-proof-${Date.now()}`;
+  if (Platform.OS !== 'android') {
+    return {
+      status: 'unsupported',
+      message: 'Health Connect round-trip proof is Android only.',
+      clientRecordId,
+      insertedIds: [],
+      readBeforeDelete: 0,
+      readAfterDelete: 0,
+      observedAt,
+    };
+  }
+
+  const start = new Date(Date.now() - 60_000).toISOString();
+  const end = new Date(Date.now() + 60_000).toISOString();
+  const proofRecord = {
+    recordType: 'Hydration' as const,
+    startTime: start,
+    endTime: end,
+    volume: { value: 250, unit: 'milliliters' as const },
+    metadata: { clientRecordId, clientRecordVersion: 1, recordingMethod: 3 },
+  };
+  const readProofRecords = async () => {
+    const result = await readRecords('Hydration', {
+      timeRangeFilter: { operator: 'between', startTime: start, endTime: end },
+    });
+    return (result.records ?? []).filter((record) => record.metadata?.clientRecordId === clientRecordId);
+  };
+
+  try {
+    const initialized = await initialize();
+    if (!initialized) throw new Error('Health Connect could not be initialized.');
+    const status = await getLifeOSHealthStatus();
+    for (const required of ['read:Hydration', 'write:Hydration']) {
+      if (!status.granted.includes(required)) throw new Error(`Missing Health Connect permission: ${required}`);
+    }
+
+    const insertedIds = await insertRecords([proofRecord]);
+    const before = await readProofRecords();
+    await deleteRecordsByUuids('Hydration', insertedIds, [clientRecordId]);
+    const after = await readProofRecords();
+
+    const passed = before.length > 0 && after.length === 0;
+    return {
+      status: passed ? 'passed' : 'failed',
+      message: passed
+        ? 'Health Connect write → read → delete round trip passed.'
+        : 'Health Connect round trip did not prove read/delete.',
+      clientRecordId,
+      insertedIds,
+      readBeforeDelete: before.length,
+      readAfterDelete: after.length,
+      observedAt,
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      message: error instanceof Error ? error.message : 'Health Connect round trip failed.',
+      clientRecordId,
+      insertedIds: [],
+      readBeforeDelete: 0,
+      readAfterDelete: 0,
+      observedAt,
+    };
+  }
 }
 
 export async function syncLifeOSHealthSnapshot(input: {

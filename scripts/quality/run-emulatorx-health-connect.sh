@@ -44,7 +44,7 @@ done
 [[ "$boot" == "1" ]] || { echo "emulatorx check: boot did not complete" >&2; exit 1; }
 
 "$adb_bin" -s "$serial" install -r "$apk" >/dev/null
-for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_BURNED READ_WEIGHT; do
+for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_BURNED READ_WEIGHT WRITE_HYDRATION; do
   "$adb_bin" -s "$serial" shell pm grant "$package_name" "android.permission.health.$permission"
 done
 
@@ -68,16 +68,42 @@ for label in "WonderFood LifeOS" "Allow all" "Nutrition" "Hydration" "Steps" "We
   }
 done
 
-grants="$("$adb_bin" -s "$serial" shell dumpsys package "$package_name" | grep -E 'android.permission.health.(READ_NUTRITION|READ_HYDRATION|READ_STEPS|READ_ACTIVE_CALORIES_BURNED|READ_WEIGHT): granted=true' | tr -d '\r' || true)"
-for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_BURNED READ_WEIGHT; do
+grants="$("$adb_bin" -s "$serial" shell dumpsys package "$package_name" | grep -E 'android.permission.health.(READ_NUTRITION|READ_HYDRATION|READ_STEPS|READ_ACTIVE_CALORIES_BURNED|READ_WEIGHT|WRITE_HYDRATION): granted=true' | tr -d '\r' || true)"
+for permission in READ_NUTRITION READ_HYDRATION READ_STEPS READ_ACTIVE_CALORIES_BURNED READ_WEIGHT WRITE_HYDRATION; do
   grep -q "android.permission.health.$permission: granted=true" <<<"$grants" || {
     echo "emulatorx check: missing granted scope $permission" >&2
     exit 1
   }
 done
 
-printf '{\n  "avd": "%s",\n  "serial": "%s",\n  "package": "%s",\n  "permissions_granted": true,\n  "deep_link": "wonderfood://health-connect",\n  "screenshot": "%s"\n}\n' \
-  "$avd_name" "$serial" "$package_name" "$evidence_dir/emulatorx-healthconnect-script.png" \
+"$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
+"$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d wonderfood:///health-diagnostics "$package_name" >/dev/null
+roundtrip_dump=""
+for _ in $(seq 1 30); do
+  "$adb_bin" -s "$serial" shell uiautomator dump "$ui_dump_path" >/dev/null 2>&1 || true
+  roundtrip_dump="$("$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
+  grep -q 'text="PASSED"' <<<"$roundtrip_dump" && break
+  sleep 1
+done
+"$adb_bin" -s "$serial" exec-out screencap -p >"$evidence_dir/emulatorx-healthconnect-roundtrip.png"
+grep -q 'text="PASSED"' <<<"$roundtrip_dump" || {
+  echo "emulatorx check: Health Connect round trip did not pass" >&2
+  exit 1
+}
+grep -q 'HC_ROUNDTRIP status=passed' <<<"$roundtrip_dump" || {
+  echo "emulatorx check: Health Connect proof missing machine-readable pass" >&2
+  exit 1
+}
+grep -q 'before=1' <<<"$roundtrip_dump" || {
+  echo "emulatorx check: Health Connect proof did not read inserted record" >&2
+  exit 1
+}
+grep -q 'after=0' <<<"$roundtrip_dump" || {
+  echo "emulatorx check: Health Connect proof did not verify delete" >&2
+  exit 1
+}
+printf '{\n  "avd": "%s",\n  "serial": "%s",\n  "package": "%s",\n  "permissions_granted": true,\n  "deep_link": "wonderfood://health-connect",\n  "round_trip": "passed",\n  "settings_screenshot": "%s",\n  "roundtrip_screenshot": "%s"\n}\n' \
+  "$avd_name" "$serial" "$package_name" "$evidence_dir/emulatorx-healthconnect-script.png" "$evidence_dir/emulatorx-healthconnect-roundtrip.png" \
   >"$evidence_dir/emulatorx-healthconnect-script.json"
 
-echo "emulatorx Health Connect script: PASS ($serial; API 34 permissions + deep link)"
+echo "emulatorx Health Connect script: PASS ($serial; API 34 permissions + write/read/delete round trip)"
