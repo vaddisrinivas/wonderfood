@@ -114,6 +114,35 @@ describe('config runtime', () => {
     });
   });
 
+  it('marks nested destructive config as migration-required by default', () => {
+    const proposal = buildConfigProposal({
+      now,
+      snapshots: [
+        {
+          source: source('remote', 1),
+          snapshot: snapshot('remote', JSON.stringify({
+            domains: {
+              food: {
+                collections: {
+                  inventory: {
+                    remove: ['expiry_date'],
+                  },
+                },
+              },
+            },
+          })),
+        },
+      ],
+    });
+
+    expect(proposal.mode).toBe('migration_required');
+    expect(proposal.conflicts[0]).toMatchObject({
+      key: 'migration',
+      reason: expect.stringContaining('Additive mode cannot apply'),
+    });
+    expect(applyConfigProposal(proposal).ok).toBe(false);
+  });
+
   it('applies clean proposals and undoes to the previous control-plane state', () => {
     const previous: ControlPlaneState = {
       sources: [source('previous', 1)],

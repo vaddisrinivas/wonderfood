@@ -846,3 +846,26 @@
 - Current blockers in the evidence: `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
 - Missing Android release env names: `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`.
 - Missing Apple release env names: `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, `APPLE_TEAM_ID`.
+
+## 2026-07-23 follow-up guard/workflow audit
+
+- Continued the `2cb4386` review by auditing load-bearing `apply.ts`, `ai/runtime.ts`, and `config/*` boundaries against current code, not commit summaries.
+- Found and fixed a direct operation-domain hole: `applyOperation` now rejects operations whose `op.domain` does not match the loaded manifest before any record write.
+- Found and fixed a nested config migration hole: destructive `remove`/`delete`/`rename`/`migrations` keys are now detected anywhere inside config documents, not only at the root.
+- Hardened workflow runtime:
+  - cancelled/failed/completed runs reject new step writes until resume;
+  - unsafe cancellation of a non-cancellable active step marks the run `failed`;
+  - resume resets cancelled/failed pending work and preserves completed receipts.
+- Added `scripts/quality/check-workflow-resume-cancel.ts` and `npm run phase7:check:workflow-resume-cancel`; evidence path: `app/build/evidence/workflow/workflow-resume-cancel-proof.json`.
+- Fixed brittle accessibility smoke behavior: route checks now wait for rendered `body` after `domcontentloaded` instead of `networkidle`, which had timed out on mobile record pages despite zero actual accessibility failures.
+- Verified focused gates:
+  - `npm run check:operation-boundary` ✅
+  - `npm run check:control-plane` ✅
+  - `npm run check:ai-runtime` ✅
+  - `npm run check:workflow-runtime` ✅
+  - `npm run phase7:check:workflow-resume-cancel` ✅
+  - `npm run check:accessibility-smoke` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Verified integrated gate: `NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run check:product` ✅ with `16` Vitest files / `65` tests plus config/control/schema/template/web/accessibility/roundtrip/sync/provider/workflow/export/chat gates.
+- Refreshed `npm run phase8:check:release-readiness` as an audit: `release_ready=false`; current blockers include stale Android release artifacts for the pre-commit build, debug-signed APK, unsigned AAB, Android signing env missing, and iOS release env missing.

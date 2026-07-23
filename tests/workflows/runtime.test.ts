@@ -131,6 +131,70 @@ describe('workflow runtime', () => {
     expect(new Set(summary.operation_ids).size).toBe(summary.operation_ids.length);
   });
 
+  it('blocks writes after cancel until resume restores pending steps', async () => {
+    const db = new MemoryDb();
+    await startWorkflowRun({
+      db: db as any,
+      id: 'blocked-after-cancel-run',
+      domain: 'food',
+      workflowId: 'meal-plan-to-shopping',
+      steps,
+    });
+    await cancelWorkflowRun({
+      db: db as any,
+      runId: 'blocked-after-cancel-run',
+      reason: 'Stop before writing.',
+    });
+
+    await expect(recordWorkflowStep({
+      db: db as any,
+      runId: 'blocked-after-cancel-run',
+      stepId: 'choose-dinner',
+      status: 'completed',
+      receipt: { operation_ids: ['op-should-not-write'] },
+    })).rejects.toThrow('resume before recording');
+
+    const resumed = await resumeWorkflowRun({ db: db as any, runId: 'blocked-after-cancel-run' });
+    expect(resumed.row.status).toBe('running');
+    const recorded = await recordWorkflowStep({
+      db: db as any,
+      runId: 'blocked-after-cancel-run',
+      stepId: 'choose-dinner',
+      status: 'completed',
+      receipt: { operation_ids: ['op-after-resume'] },
+    });
+
+    expect(recorded.row.status).toBe('running');
+    expect(recorded.checkpoint.completed_operation_ids).toEqual(['op-after-resume']);
+  });
+
+  it('marks unsafe cancellation failed when a non-cancellable step is active', async () => {
+    const db = new MemoryDb();
+    await startWorkflowRun({
+      db: db as any,
+      id: 'unsafe-cancel-run',
+      domain: 'food',
+      workflowId: 'unsafe-workflow',
+      steps: [
+        { id: 'write-provider', title: 'Write provider', cancellable: false },
+        { id: 'notify', title: 'Notify' },
+      ],
+    });
+
+    const cancelled = await cancelWorkflowRun({
+      db: db as any,
+      runId: 'unsafe-cancel-run',
+      reason: 'User stopped while provider write is unsafe.',
+    });
+
+    expect(cancelled.row.status).toBe('failed');
+    expect(cancelled.checkpoint.steps.map((step) => step.status)).toEqual(['failed', 'cancelled']);
+    expect(cancelled.checkpoint.steps[0]?.error).toBe('Step is not cancellation safe.');
+    const resumed = await resumeWorkflowRun({ db: db as any, runId: 'unsafe-cancel-run' });
+    expect(resumed.row.status).toBe('running');
+    expect(resumed.checkpoint.steps.map((step) => step.status)).toEqual(['pending', 'pending']);
+  });
+
   it('keeps completed workflows immutable when cancel or resume is requested later', async () => {
     const db = new MemoryDb();
     await startWorkflowRun({

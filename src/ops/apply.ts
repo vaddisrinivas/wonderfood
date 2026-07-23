@@ -246,6 +246,9 @@ async function rejectOperation(
 
 export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifest, op: Operation, options: ApplyOperationOptions = {}): Promise<OperationResult> {
   const dryRun = options.dryRun === true;
+  if (op.domain !== manifest.id) {
+    return rejectOperation(db, op, null, `domain_scope_rejected:${op.domain}`, dryRun);
+  }
   if (!dryRun && op.idempotency_key) {
     const duplicate = await db.getFirstAsync<OperationRow>('SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?', [op.idempotency_key]);
     if (duplicate?.status === 'applied' || duplicate?.status === 'undone') {

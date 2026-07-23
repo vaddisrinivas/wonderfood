@@ -162,4 +162,29 @@ describe('applyOperation', () => {
     expect(db.records.has('bad-record')).toBe(false);
     expect(db.operations.get('bad-collection')?.status).toBe('rejected');
   });
+
+  it('rejects operations outside the loaded domain manifest before record writes', async () => {
+    const db = new MemoryDb() as any;
+    const rejected = await applyOperation(db, manifest, {
+      op_id: 'cross-domain-create',
+      kind: 'create',
+      domain: 'health',
+      collection: 'inventory',
+      record_id: 'cross-domain-record',
+      record: {
+        title: 'Wrong domain',
+        properties: { body: 'Should not write' },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'cross-domain-record', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    expect(rejected.status).toBe('rejected');
+    expect(rejected.reject_reason).toBe('domain_scope_rejected:health');
+    expect(db.records.has('cross-domain-record')).toBe(false);
+    expect(db.operations.get('cross-domain-create')?.status).toBe('rejected');
+  });
 });

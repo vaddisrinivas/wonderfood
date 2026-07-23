@@ -134,6 +134,9 @@ export async function recordWorkflowStep(input: {
   error?: string;
 }): Promise<WorkflowRunSnapshot> {
   const snapshot = await requireSnapshot(input.db, input.runId);
+  if (snapshot.row.status === 'completed' || snapshot.row.status === 'cancelled' || snapshot.row.status === 'failed') {
+    throw new Error(`Workflow run is ${snapshot.row.status}; resume before recording more steps.`);
+  }
   const checkpoint = cloneCheckpoint(snapshot.checkpoint);
   const step = checkpoint.steps.find((item) => item.id === input.stepId);
   if (!step) {
@@ -189,7 +192,8 @@ export async function cancelWorkflowRun(input: {
   checkpoint.updated_at = now;
   checkpoint.cursor = nextCursor(checkpoint.steps);
 
-  await updateWorkflowRun(input.db, input.runId, { status: 'cancelled', payload: checkpoint });
+  const status = checkpoint.steps.some((step) => step.status === 'failed') ? 'failed' : 'cancelled';
+  await updateWorkflowRun(input.db, input.runId, { status, payload: checkpoint });
   return requireSnapshot(input.db, input.runId);
 }
 

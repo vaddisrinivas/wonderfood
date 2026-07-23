@@ -304,7 +304,11 @@ function unionArray(left: unknown[], right: unknown[]) {
 }
 
 function containsDestructiveIntent(document: ConfigDocument): boolean {
-  return Object.keys(document).some((key) => ['delete', 'remove', 'rename', 'migrations'].includes(key));
+  return Object.entries(document).some(([key, value]) => (
+    ['delete', 'remove', 'rename', 'migrations'].includes(key)
+    || (isObject(value) && containsDestructiveIntent(value))
+    || (Array.isArray(value) && value.some((item) => isObject(item) && containsDestructiveIntent(item)))
+  ));
 }
 
 function isObject(value: unknown): value is ConfigDocument {

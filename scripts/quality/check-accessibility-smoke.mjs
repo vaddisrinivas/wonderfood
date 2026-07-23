@@ -87,7 +87,8 @@ for (const viewport of viewports) {
     try {
       await page.goto(`${baseUrl}/_sitemap`, { waitUntil: 'domcontentloaded', timeout: 20000 });
       await page.evaluate(() => localStorage.removeItem('lifeos.settings.v1'));
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForSelector('body', { state: 'visible', timeout: 10000 });
       await page.waitForTimeout(250);
       const audit = await page.evaluate(() => {
         function textFromLabelledBy(el) {

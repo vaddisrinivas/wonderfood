@@ -85,6 +85,10 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - One-write-path had a create-overwrite hole: `create` on an existing record could mutate without an expected revision if the idempotency key did not catch it. This is now rejected.
 - Provider local-copy clear/disconnect directly deletes local provider-owned rows by design. The operation-boundary gate now explicitly allowlists that lifecycle exception so future broad direct deletes are visible.
 - Config merge had a precedence semantics bug: scalar disagreements always conflicted. Runtime now tracks path ownership so higher-precedence sources win and equal-precedence disagreements go to review.
+- Direct operation apply also needed its own domain guard; AI checked domain scope, but non-AI callers could still pass an operation for another domain into the active manifest path. `applyOperation` now rejects `domain_scope_rejected:<domain>` before record writes.
+- Destructive config detection must recurse. A top-level-only check misses realistic package edits such as `domains.food.collections.inventory.remove`. Nested destructive keys now force migration review.
+- Workflow cancellation cannot be a soft visual state. After cancellation, step writes must be rejected until resume; cancellation during a non-cancellable active step should leave a failed run, not a false cancelled success.
+- Browser accessibility smoke should not use `networkidle` as product readiness. The mobile record page timed out despite zero unlabeled controls, zero severe touch failures, and zero console errors; rendered DOM is the correct smoke anchor.
 
 ## Standalone Provider Authority Findings
 
