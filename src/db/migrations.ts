@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 
 const TABLES = {
   meta: 'meta',
@@ -15,6 +15,7 @@ const TABLES = {
   outbox: 'outbox_events',
   actions: 'action_events',
   operations: 'operations',
+  sync_conflicts: 'sync_conflicts',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
   agent_runs: 'agent_runs',
@@ -300,6 +301,39 @@ const MIGRATIONS: Migration[] = [
     down: async (db) => {
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.operations}`);
       await db.execAsync(`PRAGMA user_version = 1`);
+    },
+  },
+  {
+    version: 3,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.sync_conflicts} (
+          id TEXT PRIMARY KEY,
+          domain TEXT NOT NULL,
+          collection TEXT NOT NULL,
+          record_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          external_id TEXT NOT NULL,
+          fields_json TEXT NOT NULL,
+          base_json TEXT,
+          local_json TEXT NOT NULL,
+          remote_json TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'needs_review'
+            CHECK(status IN ('needs_review','resolved','dismissed')),
+          resolution_op_id TEXT,
+          created_at TEXT NOT NULL,
+          resolved_at TEXT
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.sync_conflicts}_record_idx
+          ON ${TABLES.sync_conflicts}(record_id, status, created_at)
+      `);
+      await db.execAsync(`PRAGMA user_version = 3`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.sync_conflicts}`);
+      await db.execAsync(`PRAGMA user_version = 2`);
     },
   },
 ];

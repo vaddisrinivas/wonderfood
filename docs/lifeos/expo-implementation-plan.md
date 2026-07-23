@@ -290,7 +290,50 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - No native-only exclusive transaction in shared web code.
 - No provider field loss.
 
-## 7. Phase 2: generic domain renderer
+## 7. Phase 1.5: operation boundary, local Undo, and recovery
+
+This phase is blocking for provider polish, Android polish, and workflow polish. The app can render many surfaces, but records mutate through one truth layer.
+
+### Files
+
+- src/db/migrations.ts
+- src/db/records.ts
+- src/db/recovery.ts
+- src/domain/runtime.ts
+- src/ops/operation.ts
+- src/ops/apply.ts
+- src/ops/inverse.ts
+- src/ops/undo.ts
+- scripts/quality/check-operation-boundary-grep.sh
+- scripts/quality/check-provider-clear-restore.ts
+- scripts/quality/check-roundtrip.ts
+
+### Tasks
+
+1. Add the v2 record envelope: revision, schema_version, deleted, privacy, provenance.
+2. Add the operations ledger.
+3. Route `upsertRecord` and `archiveRecord` through `applyOperation`.
+4. Reject stale writes by revision.
+5. Return duplicate results for repeated idempotency keys.
+6. Compute and apply local inverse operations with no server dependency.
+7. Preserve operation rows and deleted tombstones through recovery export/import.
+8. Keep direct `records`/`record_relations` mutation forbidden outside `src/ops/apply.ts`.
+
+### Verification
+
+- `npm run check:operation-boundary`
+- `npm run check:roundtrip`
+- `npm run typecheck`
+- `npm run config:validate`
+
+### Anti-pattern guards
+
+- No direct `INSERT INTO records`, `UPDATE records`, or direct relation rewrite outside `src/ops/apply.ts`.
+- No fabricated confidence values.
+- No physical row delete for user-level delete; use deleted tombstones.
+- No server requirement for local Undo.
+
+## 8. Phase 2: generic domain renderer
 
 ### Files
 
@@ -323,7 +366,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Today, Food, Chat, Search, Capture, Record, Sources, and System pass the visual quality gate in every supported state.
 - Dates, identity, source status, record counts, adapter state, and capability labels come from runtime state rather than demo constants.
 
-## 8. Phase 3: direct AI chat
+## 9. Phase 3: direct AI chat
 
 ### Files
 
@@ -508,7 +551,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - No append without returned-range tracking.
 - No silent multi-master conflict resolution.
 
-## 12. Phase 7: commands, Undo, and workflows
+## 12. Phase 7: workflows, command parity, and provider/device Undo
 
 ### Files
 
@@ -525,7 +568,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 ### Tasks
 
-1. Use one command boundary for UI, Chat, MCP, sync, import, and workflows.
+1. Use Phase 1.5 `applyOperation` as the record mutation boundary for UI, Chat, MCP, sync, import, and workflows.
 2. Implement action risk classes and tool exposure.
 3. Add action receipt with actor, domain, tool, source IDs, record IDs, before and after versions, timestamp, idempotency key, and Undo deadline.
 4. Run weekly reset, receipt-to-kitchen, and meal-plan-to-shopping workflows.
@@ -538,7 +581,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 ### Verification
 
 - Every entry path creates the same event shape.
-- Undo is atomic and conflict-aware.
+- Undo is atomic, conflict-aware, and falls back to local `undoOperation` when no server URL is configured.
 - Interrupted workflow resumes or compensates.
 - Receipt workflow accounts for every line.
 - No hidden review queue appears.
@@ -695,6 +738,7 @@ Repository gates:
 Product gates:
 
 - SQLite migration, rollback, recovery, process-death tests.
+- Operation boundary grep, stale-write, idempotency, local Undo, and recovery roundtrip tests.
 - Domain package fixture install.
 - Ten-turn chat and thread-resume tests.
 - Citation exactness and source-change tests.
