@@ -82,6 +82,36 @@
         "additionalProperties": false
       }
     },
+    "render": {
+      "type": "object",
+      "properties": {
+        "answer_label": { "type": "string" },
+        "empty_intro": { "type": "string" },
+        "default_title": { "type": "string" },
+        "default_intro": { "type": "string" },
+        "default_columns": { "type": "array", "items": { "type": "string" } },
+        "default_fields": { "type": "array", "items": { "type": "string" } },
+        "card_bullets": { "type": "array", "items": { "type": "string" } },
+        "source_quote_fields": { "type": "array", "items": { "type": "string" } },
+        "source_exclude_fields": { "type": "array", "items": { "type": "string" } },
+        "intents": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "terms": { "type": "array", "items": { "type": "string" } },
+              "title": { "type": "string" },
+              "intro": { "type": "string" },
+              "columns": { "type": "array", "items": { "type": "string" } },
+              "fields": { "type": "array", "items": { "type": "string" } },
+              "boost_collections": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "mcp": { "type": "object", "required": ["resources", "tools"] }
   },
   "$defs": {

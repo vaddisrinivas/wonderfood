@@ -57,6 +57,28 @@ export type DashboardBlock = {
   href: string;
 };
 
+export type DomainRenderIntent = {
+  terms?: string[];
+  title?: string;
+  intro?: string;
+  columns?: string[];
+  fields?: string[];
+  boost_collections?: string[];
+};
+
+export type DomainRenderContract = {
+  answer_label?: string;
+  empty_intro?: string;
+  default_title?: string;
+  default_intro?: string;
+  default_columns?: string[];
+  default_fields?: string[];
+  card_bullets?: string[];
+  source_quote_fields?: string[];
+  source_exclude_fields?: string[];
+  intents?: Record<string, DomainRenderIntent>;
+};
+
 export type ManifestRelation = {
   from: string;
   to: string;
@@ -76,6 +98,7 @@ export interface DomainManifest {
   workflows: string[];
   data_homes: string[];
   dashboard_blocks?: DashboardBlock[];
+  render?: DomainRenderContract;
   rich_detail_schema?: string;
   provider_template_fields?: {
     required?: string[];
@@ -244,6 +267,38 @@ function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | 
   });
 }
 
+function parseRenderContract(value: unknown): DomainRenderContract | undefined {
+  if (!isObject(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const intents: Record<string, DomainRenderIntent> = {};
+  if (isObject(raw.intents)) {
+    for (const [key, intent] of Object.entries(raw.intents)) {
+      if (!isObject(intent)) continue;
+      const item = intent as Record<string, unknown>;
+      intents[key] = {
+        terms: Array.isArray(item.terms) ? (item.terms as string[]) : undefined,
+        title: typeof item.title === 'string' ? item.title : undefined,
+        intro: typeof item.intro === 'string' ? item.intro : undefined,
+        columns: Array.isArray(item.columns) ? (item.columns as string[]) : undefined,
+        fields: Array.isArray(item.fields) ? (item.fields as string[]) : undefined,
+        boost_collections: Array.isArray(item.boost_collections) ? (item.boost_collections as string[]) : undefined,
+      };
+    }
+  }
+  return {
+    answer_label: typeof raw.answer_label === 'string' ? raw.answer_label : undefined,
+    empty_intro: typeof raw.empty_intro === 'string' ? raw.empty_intro : undefined,
+    default_title: typeof raw.default_title === 'string' ? raw.default_title : undefined,
+    default_intro: typeof raw.default_intro === 'string' ? raw.default_intro : undefined,
+    default_columns: Array.isArray(raw.default_columns) ? (raw.default_columns as string[]) : undefined,
+    default_fields: Array.isArray(raw.default_fields) ? (raw.default_fields as string[]) : undefined,
+    card_bullets: Array.isArray(raw.card_bullets) ? (raw.card_bullets as string[]) : undefined,
+    source_quote_fields: Array.isArray(raw.source_quote_fields) ? (raw.source_quote_fields as string[]) : undefined,
+    source_exclude_fields: Array.isArray(raw.source_exclude_fields) ? (raw.source_exclude_fields as string[]) : undefined,
+    intents: Object.keys(intents).length ? intents : undefined,
+  };
+}
+
 function parseDomainManifest(value: unknown, path: string): DomainManifest {
   assertCondition(isObject(value), `Expected object at ${path}`);
   const raw = value as Record<string, unknown>;
@@ -296,6 +351,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
     dashboard_blocks: parseDashboardBlocks(raw.dashboard_blocks, `${path}.dashboard_blocks`),
+    render: parseRenderContract(raw.render),
     rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
     provider_template_fields: parsedProviderTemplateFields,
     mcp: {

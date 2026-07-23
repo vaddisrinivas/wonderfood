@@ -111,6 +111,35 @@
   "skills": ["plants"],
   "workflows": [],
   "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
+  "render": {
+    "answer_label": "Plants",
+    "empty_intro": "No matching local Plant records were loaded. Connect a source or add plants, care tasks, and observations, then ask again.",
+    "default_title": "Local Plants answer",
+    "default_intro": "I found {count} local Plant record{plural} tied to this question.",
+    "default_columns": ["Record", "Status", "Context"],
+    "default_fields": ["title", "status", "body"],
+    "card_bullets": ["status", "body", "meta"],
+    "source_quote_fields": ["body", "meta", "status"],
+    "source_exclude_fields": ["tone", "food_detail"],
+    "intents": {
+      "care": {
+        "terms": ["water", "light", "care", "feed", "rotate", "today"],
+        "title": "Local Plant care answer",
+        "intro": "I found {count} local Plant care record{plural} with relevant next actions.",
+        "columns": ["Record", "Care state", "Context"],
+        "fields": ["title", "status", "body"],
+        "boost_collections": ["plant", "care_task", "plant_journal"]
+      },
+      "supplies": {
+        "terms": ["soil", "pot", "fertilizer", "supply", "buy", "low"],
+        "title": "Local Plant supplies answer",
+        "intro": "I found {count} local Plant supply record{plural}.",
+        "columns": ["Record", "Status", "Context"],
+        "fields": ["title", "status", "body"],
+        "boost_collections": ["plant_supply"]
+      }
+    }
+  },
   "mcp": {
     "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],
     "tools": ["search", "read_record", "create_record", "update_record", "archive_record"]

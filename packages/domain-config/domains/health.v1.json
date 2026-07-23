@@ -112,6 +112,35 @@
   "skills": ["health"],
   "workflows": [],
   "data_homes": ["notion", "google_sheets", "sqlite", "postgres"],
+  "render": {
+    "answer_label": "Health",
+    "empty_intro": "No matching local Health records were loaded. Connect Health Connect, Notion, Sheets, or add records, then ask again.",
+    "default_title": "Local Health answer",
+    "default_intro": "I found {count} local Health record{plural} tied to this question.",
+    "default_columns": ["Record", "Signal", "Context"],
+    "default_fields": ["title", "status", "body"],
+    "card_bullets": ["status", "body", "meta"],
+    "source_quote_fields": ["body", "meta", "status"],
+    "source_exclude_fields": ["tone", "food_detail"],
+    "intents": {
+      "today": {
+        "terms": ["today", "sleep", "steps", "heart", "symptom", "hydration", "weight"],
+        "title": "Local Health signal",
+        "intro": "I found {count} local Health record{plural} with relevant signals and context.",
+        "columns": ["Record", "Signal", "Context"],
+        "fields": ["title", "status", "body"],
+        "boost_collections": ["health_observation", "health_measurement", "health_note"]
+      },
+      "goals": {
+        "terms": ["goal", "plan", "trend", "progress", "review"],
+        "title": "Local Health goals answer",
+        "intro": "I found {count} local Health goal/planning record{plural}.",
+        "columns": ["Record", "Status", "Plan"],
+        "fields": ["title", "status", "body"],
+        "boost_collections": ["health_goal", "health_plan"]
+      }
+    }
+  },
   "mcp": {
     "resources": ["domain_manifest", "schema", "record", "source_snapshot", "conversation"],
     "tools": ["search", "read_record", "create_record", "update_record", "archive_record"]

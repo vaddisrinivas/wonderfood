@@ -1,4 +1,4 @@
-import { loadCatalog } from '@/src/domain/catalog';
+import { getDomainManifest, loadCatalog, type DomainManifest, type DomainRenderContract, type DomainRenderIntent } from '@/src/domain/catalog';
 import { listConversations, getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
@@ -130,24 +130,35 @@ export async function listChatThreads(db: SQLiteDatabase | null): Promise<ChatTh
   return threads;
 }
 
+function manifestForDomain(domainId: string): DomainManifest {
+  const catalog = loadCatalog();
+  return getDomainManifest(catalog.catalog.domains, domainId) ?? catalog.activeManifest;
+}
+
+function inferManifest(records: CanonicalRecord[], label?: string): DomainManifest {
+  const domainId = records[0]?.domain;
+  if (domainId) return manifestForDomain(domainId);
+  const catalog = loadCatalog();
+  const byLabel = catalog.catalog.domains.find((entry) => entry.label === label);
+  return byLabel ? getDomainManifest(catalog.catalog.domains, byLabel.id) ?? catalog.activeManifest : catalog.activeManifest;
+}
+
 export function makeWelcomeAnswer(records: CanonicalRecord[], domainLabel = 'Food'): ChatAnswer {
+  const manifest = inferManifest(records, domainLabel);
+  const render = getRenderContract(manifest);
   const selectedRecords = records.slice(0, 4);
-  const rows = selectedRecords.map((record) => {
-    const detail = readFoodDetail(record);
-    const available = detail.ingredients.filter((item) => item.state === 'available').slice(0, 3).map((item) => item.name).join(', ') || 'not captured';
-    const open = detail.ingredients.filter((item) => item.state === 'needed' || item.state === 'shopping').slice(0, 3).map((item) => item.name).join(', ') || 'none visible';
-    return { cells: [record.title, available, open] };
-  });
+  const fields = render.default_fields ?? ['title', 'status', 'body'];
+  const rows = selectedRecords.map((record) => ({ cells: fields.map((field) => readRenderField(record, field)) }));
 
   return {
-    title: `${domainLabel} source briefing`,
+    title: `${render.answer_label ?? domainLabel} source briefing`,
     intro: selectedRecords.length
-      ? `I loaded ${selectedRecords.length} source-backed ${domainLabel} records. Ask a follow-up and I will keep using this thread context.`
-      : `Connect Notion, Sheets, SQLite or another source, then I will answer from exact ${domainLabel} records.`,
-    columns: rows.length ? ['Record', 'Available', 'Needed / shopping'] : undefined,
+      ? formatRenderText(`I loaded {count} source-backed ${render.answer_label ?? domainLabel} record{plural}. Ask a follow-up and I will keep using this thread context.`, selectedRecords.length, render)
+      : render.empty_intro ?? `Connect Notion, Sheets, SQLite or another source, then I will answer from exact ${render.answer_label ?? domainLabel} records.`,
+    columns: rows.length ? render.default_columns ?? fields.map(labelizeField) : undefined,
     rows,
-    sourceCards: selectedRecords.map(recordToSourceCard),
-    recordCards: selectedRecords.map(recordToAnswerCard),
+    sourceCards: selectedRecords.map((record) => recordToSourceCard(record, manifest)),
+    recordCards: selectedRecords.map((record) => recordToAnswerCard(record, manifest)),
     citations: selectedRecords.map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
       detail: record.source.external_id || record.collection,
@@ -160,13 +171,14 @@ export function makeWelcomeAnswer(records: CanonicalRecord[], domainLabel = 'Foo
 export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendResult> {
   const catalog = loadCatalog();
   const domainId = input.domainId || catalog.activeDomainId;
+  const manifest = getDomainManifest(catalog.catalog.domains, domainId) ?? catalog.activeManifest;
   const conversationId = input.conversationId ?? nowId('thread');
   const userId = nowId('msg');
   const text = input.text.trim();
   const db = input.db;
   const retryOf = input.retryOfMessageId?.trim();
 
-  const offlineAnswer = makeOfflineAnswer(text);
+  const offlineAnswer = makeOfflineAnswer(text, [], manifest);
   const offlineWarnings: string[] = [];
   const settings = await loadLifeOSSettings();
   const { serverUrl: configuredServerUrl, serverToken: configuredServerToken } = await resolveChatServerConfig(input);
@@ -203,7 +215,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
         conversationId,
         thread: {
           id: conversationId,
-          title: 'Food context · local briefing',
+          title: `${manifest.label} context · local briefing`,
           detail: 'Local source answer',
           messages: [
             { id: userId, role: 'user', text },
@@ -249,7 +261,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
         serverError: 'Server unavailable in this environment.',
         thread: {
           id: conversationId,
-          title: 'Food context · local briefing',
+          title: `${manifest.label} context · local briefing`,
           detail: 'Local source answer',
           messages: [
             { id: userId, role: 'user', text },
@@ -280,7 +292,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       warnings: serverResult.warnings,
       thread: {
         id: conversationId,
-        title: serverResult.thread?.title || 'Food context · active',
+        title: serverResult.thread?.title || `${manifest.label} context · active`,
         detail: serverResult.thread?.detail || 'Live mode',
         messages: [
           { id: userId, role: 'user', text },
@@ -304,7 +316,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   const existing = await getConversation(db, conversationId);
   if (!existing) {
     const title = text.slice(0, 40) || 'New conversation';
-    const detail = catalog.activeDomainId === domainId ? 'Food context on' : 'Domain context on';
+    const detail = `${manifest.label} context on`;
     await createConversation(db, {
       id: conversationId,
       domain: domainId,
@@ -347,7 +359,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     });
     if (direct.text) {
       const answerId = nowId('asst');
-      const answer = makeDirectAnswer(direct.text, direct.provider, sourceRecords);
+      const answer = makeDirectAnswer(direct.text, direct.provider, sourceRecords, manifest);
       await appendMessage(db, {
         id: answerId,
         conversation_id: conversationId,
@@ -376,7 +388,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   }
 
   if (!configuredServerUrl) {
-    const answer = makeOfflineAnswer(text, sourceRecords);
+    const answer = makeOfflineAnswer(text, sourceRecords, manifest);
     const answerId = nowId('asst');
     await appendMessage(db, {
       id: answerId,
@@ -431,7 +443,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     });
 
   if (!serverResult) {
-    const fallback = makeOfflineAnswer(text, sourceRecords);
+    const fallback = makeOfflineAnswer(text, sourceRecords, manifest);
     const fallbackId = nowId('asst');
     await appendMessage(db, {
       id: fallbackId,
@@ -463,7 +475,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     };
   }
 
-  const fallback = makeOfflineAnswer(text, sourceRecords);
+  const fallback = makeOfflineAnswer(text, sourceRecords, manifest);
   const latest = serverResult.messages.at(-1) ?? {
     id: nowId('asst'),
     role: 'assistant',
@@ -573,17 +585,17 @@ function buildDirectSourceContext(records: CanonicalRecord[]): string {
   return `\n\nLocal LifeOS source excerpts:\n${lines.join('\n')}`;
 }
 
-function makeDirectAnswer(text: string, provider: string | undefined, records: CanonicalRecord[]): ChatAnswer {
+function makeDirectAnswer(text: string, provider: string | undefined, records: CanonicalRecord[], manifest: DomainManifest): ChatAnswer {
   const table = parseMarkdownTable(text);
   const intro = table.intro || text;
-  const selectedRecords = pickRelevantRecords(text, records);
+  const selectedRecords = pickRelevantRecords(text, records, manifest);
   return {
     title: provider ? `Answer from ${provider}` : 'LifeOS answer',
     intro,
     columns: table.columns,
     rows: table.rows,
-    sourceCards: selectedRecords.map(recordToSourceCard),
-    recordCards: selectedRecords.map(recordToAnswerCard),
+    sourceCards: selectedRecords.map((record) => recordToSourceCard(record, manifest)),
+    recordCards: selectedRecords.map((record) => recordToAnswerCard(record, manifest)),
     citations: selectedRecords.slice(0, 5).map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
       detail: record.source.external_id || record.collection,
@@ -903,33 +915,26 @@ export async function undoServerAction(input: {
   }
 }
 
-function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): ChatAnswer {
-  const lower = input.toLowerCase();
-  const isShopping = lower.includes('shop') || lower.includes('buy') || lower.includes('grocery');
-  const isRecipe = lower.includes('recipe') || lower.includes('cook') || lower.includes('ingredient') || lower.includes('nutrition');
-  const selectedRecords = pickRelevantRecords(input, records);
-  const rows = selectedRecords.slice(0, 5).map((record) => {
-    const detail = readFoodDetail(record);
-    const missing = detail.ingredients.filter((item) => item.state === 'needed' || item.state === 'shopping').map((item) => item.name).join(', ') || 'none visible';
-    const available = detail.ingredients.filter((item) => item.state === 'available').map((item) => item.name).join(', ') || 'not captured';
-    return {
-      cells: [
-        record.title,
-        available,
-        missing,
-      ],
-    };
-  });
+function makeOfflineAnswer(input: string, records: CanonicalRecord[] = [], manifest = loadCatalog().activeManifest): ChatAnswer {
+  const render = getRenderContract(manifest);
+  const intent = selectRenderIntent(input, render);
+  const fields = intent?.fields ?? render.default_fields ?? ['title', 'status', 'body'];
+  const selectedRecords = pickRelevantRecords(input, records, manifest);
+  const rows = selectedRecords.slice(0, 5).map((record) => ({
+    cells: fields.map((field) => readRenderField(record, field)),
+  }));
 
   return {
-    title: selectedRecords.length ? `Local ${isShopping ? 'shopping' : isRecipe ? 'food planning' : 'Food'} answer` : `Local ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
+    title: selectedRecords.length
+      ? formatRenderText(intent?.title ?? render.default_title ?? `Local ${render.answer_label} answer`, selectedRecords.length, render)
+      : render.default_title ?? `Local ${render.answer_label} answer`,
     intro: selectedRecords.length
-      ? buildOfflineIntro({ isShopping, isRecipe, count: selectedRecords.length })
-      : 'No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.',
-    columns: rows.length ? ['Record', 'Available', 'Missing / shopping'] : undefined,
+      ? formatRenderText(intent?.intro ?? render.default_intro ?? 'I found {count} local record{plural} tied to this question.', selectedRecords.length, render)
+      : render.empty_intro,
+    columns: rows.length ? intent?.columns ?? render.default_columns ?? fields.map(labelizeField) : undefined,
     rows,
-    sourceCards: selectedRecords.map(recordToSourceCard),
-    recordCards: selectedRecords.map(recordToAnswerCard),
+    sourceCards: selectedRecords.map((record) => recordToSourceCard(record, manifest)),
+    recordCards: selectedRecords.map((record) => recordToAnswerCard(record, manifest)),
     citations: selectedRecords.slice(0, 5).map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
       detail: record.source.external_id || record.collection,
@@ -939,26 +944,23 @@ function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): Chat
   };
 }
 
-function pickRelevantRecords(query: string, records: CanonicalRecord[]) {
+function pickRelevantRecords(query: string, records: CanonicalRecord[], manifest = loadCatalog().activeManifest) {
   const lower = query.toLowerCase();
+  const render = getRenderContract(manifest);
+  const intent = selectRenderIntent(query, render);
   const tokens = lower
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length > 2)
     .filter((token) => !['what', 'with', 'from', 'should', 'could', 'would', 'about', 'today', 'tonight'].includes(token));
   const scored = records.map((record) => {
     const text = `${record.title} ${record.collection} ${JSON.stringify(record.properties)}`.toLowerCase();
-    const detail = readFoodDetail(record);
-    const hasNeeded = detail.ingredients.some((item) => item.state === 'needed' || item.state === 'shopping');
-    const hasAvailable = detail.ingredients.some((item) => item.state === 'available');
+    const boostCollections = intent?.boost_collections ?? [];
     const score = tokens.reduce((sum, token) => {
       if (record.title.toLowerCase().includes(token)) return sum + 5;
       if (record.collection.toLowerCase().includes(token)) return sum + 3;
       return sum + (text.includes(token) ? 2 : 0);
     }, 0)
-      + (/recipe|cook|dinner|meal|ingredient|nutrition/.test(lower) && ['recipe', 'meal_plan', 'meal_log'].includes(record.collection) ? 3 : 0)
-      + (/shop|buy|grocery|missing/.test(lower) && ['shopping_item', 'purchase'].includes(record.collection) ? 4 : 0)
-      + (/what.*have|available|pantry|kitchen/.test(lower) && hasAvailable ? 2 : 0)
-      + (/missing|need|shop|buy/.test(lower) && hasNeeded ? 2 : 0)
+      + (boostCollections.includes(record.collection) ? 4 : 0)
       + (/soon|expire|use/.test(lower) && /use|soon|expire|days/i.test(`${record.properties.status} ${record.properties.meta}`) ? 3 : 0);
     return { record, score };
   });
@@ -969,17 +971,7 @@ function pickRelevantRecords(query: string, records: CanonicalRecord[]) {
   return (ranked.length ? ranked : records).slice(0, 4);
 }
 
-function buildOfflineIntro(input: { isShopping: boolean; isRecipe: boolean; count: number }) {
-  if (input.isShopping) {
-    return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} that explain what to buy and why.`;
-  }
-  if (input.isRecipe) {
-    return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} with ingredients, availability, and next cooking steps.`;
-  }
-  return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} tied to this question.`;
-}
-
-type FoodDetail = {
+type RichDetail = {
   nutrition: Array<[string, string]>;
   ingredients: Array<{ name: string; amount: string; state: string }>;
   instructions: string[];
@@ -987,10 +979,36 @@ type FoodDetail = {
   variations: string[];
 };
 
-function readFoodDetail(record: CanonicalRecord): FoodDetail {
+function getRenderContract(manifest: DomainManifest): Required<Pick<DomainRenderContract, 'answer_label' | 'empty_intro'>> & DomainRenderContract {
+  return {
+    answer_label: manifest.render?.answer_label ?? manifest.label,
+    empty_intro: manifest.render?.empty_intro ?? `No matching local ${manifest.label} records were loaded. Connect a source or add records, then ask again.`,
+    ...manifest.render,
+  };
+}
+
+function selectRenderIntent(query: string, render: DomainRenderContract): DomainRenderIntent | undefined {
+  const lower = query.toLowerCase();
+  return Object.values(render.intents ?? {}).find((intent) => (intent.terms ?? []).some((term) => lower.includes(term.toLowerCase())));
+}
+
+function formatRenderText(template: string, count: number, render: DomainRenderContract) {
+  return template
+    .replace(/\{count\}/g, String(count))
+    .replace(/\{plural\}/g, count === 1 ? '' : 's')
+    .replace(/\{label\}/g, render.answer_label ?? 'LifeOS');
+}
+
+function labelizeField(field: string) {
+  return field
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function readRichDetail(record: CanonicalRecord): RichDetail {
   const raw = record.properties.food_detail;
   if (raw && typeof raw === 'object') {
-    const detail = raw as Partial<FoodDetail>;
+    const detail = raw as Partial<RichDetail>;
     return {
       nutrition: Array.isArray(detail.nutrition) ? detail.nutrition : [],
       ingredients: Array.isArray(detail.ingredients) ? detail.ingredients : [],
@@ -1002,13 +1020,28 @@ function readFoodDetail(record: CanonicalRecord): FoodDetail {
   return { nutrition: [], ingredients: [], instructions: [], logs: [], variations: [] };
 }
 
-function recordToAnswerCard(record: CanonicalRecord): NonNullable<ChatAnswer['recordCards']>[number] {
-  const detail = readFoodDetail(record);
-  const bullets = [
-    detail.nutrition.slice(0, 3).map(([label, value]) => `${label}: ${value}`).join(' · '),
-    detail.ingredients.filter((item) => item.state === 'available').slice(0, 3).map((item) => item.name).join(', '),
-    detail.instructions[0],
-  ].filter(Boolean);
+function readRenderField(record: CanonicalRecord, field: string) {
+  const detail = readRichDetail(record);
+  if (field === 'title') return record.title;
+  if (field === 'collection') return record.collection;
+  if (field === 'source') return `${record.source.provider} · ${record.source.external_id}`;
+  if (field === 'nutrition') return detail.nutrition.slice(0, 3).map(([label, value]) => `${label}: ${value}`).join(' · ');
+  if (field === 'available_ingredients') return detail.ingredients.filter((item) => item.state === 'available').slice(0, 5).map((item) => item.name).join(', ') || 'not captured';
+  if (field === 'missing_ingredients') return detail.ingredients.filter((item) => item.state === 'needed' || item.state === 'shopping').slice(0, 5).map((item) => item.name).join(', ') || 'none visible';
+  if (field === 'ingredients') return detail.ingredients.slice(0, 5).map((item) => `${item.name} (${item.state})`).join(', ');
+  if (field === 'first_instruction') return detail.instructions[0] ?? '';
+  const value = record.properties[field];
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
+function recordToAnswerCard(record: CanonicalRecord, manifest = loadCatalog().activeManifest): NonNullable<ChatAnswer['recordCards']>[number] {
+  const render = getRenderContract(manifest);
+  const bullets = (render.card_bullets ?? ['status', 'body', 'meta'])
+    .map((field) => readRenderField(record, field))
+    .filter(Boolean);
   return {
     id: record.id,
     title: record.title,
@@ -1020,20 +1053,17 @@ function recordToAnswerCard(record: CanonicalRecord): NonNullable<ChatAnswer['re
   };
 }
 
-function recordToSourceCard(record: CanonicalRecord): NonNullable<ChatAnswer['sourceCards']>[number] {
-  const detail = readFoodDetail(record);
+function recordToSourceCard(record: CanonicalRecord, manifest = loadCatalog().activeManifest): NonNullable<ChatAnswer['sourceCards']>[number] {
+  const render = getRenderContract(manifest);
+  const excluded = new Set(render.source_exclude_fields ?? ['tone']);
   const fields = Object.entries(record.properties)
-    .filter(([key, value]) => typeof value === 'string' && value.trim().length > 0 && !['tone', 'food_detail'].includes(key))
+    .filter(([key, value]) => typeof value === 'string' && value.trim().length > 0 && !excluded.has(key))
     .slice(0, 4)
     .map(([key]) => key);
-  const quote = [
-    String(record.properties.body ?? '').trim(),
-    String(record.properties.meta ?? '').trim(),
-    detail.ingredients.length
-      ? `Ingredients: ${detail.ingredients.slice(0, 5).map((item) => `${item.name} (${item.state})`).join(', ')}`
-      : '',
-    detail.instructions[0] ? `Next step: ${detail.instructions[0]}` : '',
-  ].filter(Boolean).join('\n');
+  const quote = (render.source_quote_fields ?? ['body', 'meta', 'status'])
+    .map((field) => readRenderField(record, field))
+    .filter(Boolean)
+    .join('\n');
   return {
     id: record.id,
     label: record.title,
