@@ -312,6 +312,7 @@ export default function RecordScreen() {
   const [saved, setSaved] = useState({ title: '', body: '' });
   const [linkedRecords, setLinkedRecords] = useState<Record<string, CanonicalRecord>>({});
   const [notice, setNotice] = useState('');
+  const [actionPanelOpen, setActionPanelOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,6 +387,12 @@ export default function RecordScreen() {
     ? `${ingredientsByState.available.length} available · ${openIngredientCount} to resolve`
     : '';
   const primaryNutritionSummary = primaryNutrition.slice(0, 2);
+  const nextStep = foodDetail?.instructions[0] ?? 'Add instructions in your source graph.';
+  const missingSummary = [...ingredientsByState.needed, ...ingredientsByState.shopping]
+    .slice(0, 3)
+    .map((ingredient) => ingredient.name)
+    .join(', ') || 'nothing blocking';
+  const readySummary = ingredientsByState.available.slice(0, 3).map((ingredient) => ingredient.name).join(', ') || 'not captured';
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -451,20 +458,31 @@ export default function RecordScreen() {
 
   const handlePrimaryFoodAction = async () => {
     if (!record || !foodDetail) return;
+    setActionPanelOpen((open) => !open);
+  };
+
+  const appendFoodLog = async (label: string, value: string, nextStatus?: string) => {
+    if (!record || !foodDetail) return;
     const stamped = new Date().toLocaleString();
     const nextDetail = {
       ...foodDetail,
       logs: [
-        ['Logged in app', stamped],
-        ...foodDetail.logs.filter(([label]) => label !== 'Logged in app'),
+        [label, `${value} · ${stamped}`] as [string, string],
+        ...foodDetail.logs.filter(([existing]) => existing !== label),
       ],
     };
     await persistRecordPatch({
       properties: {
         food_detail: nextDetail,
-        status: foodDetail.kind === 'shopping' ? 'Review' : 'Logged',
+        status: nextStatus ?? (foodDetail.kind === 'shopping' ? 'Review' : 'Logged'),
       },
     });
+    setActionPanelOpen(false);
+  };
+
+  const noteUnsupportedAction = (message: string) => {
+    setNotice(message);
+    setActionPanelOpen(false);
   };
 
   if (loading) {
@@ -532,6 +550,29 @@ export default function RecordScreen() {
           <ActionButton label={foodDetail?.kind === 'recipe' || foodDetail?.kind === 'meal' ? 'Cook / log' : 'Use / update'} quiet onPress={() => { void handlePrimaryFoodAction(); }} />
           <ActionButton label="Add missing" quiet onPress={() => router.push('/(tabs)/food')} />
         </View>
+        {actionPanelOpen && foodDetail ? (
+          <Card style={styles.actionPanel}>
+            <View style={styles.actionPanelHead}>
+              <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>What happened?</Text>
+              <Pressable accessibilityRole="button" onPress={() => setActionPanelOpen(false)} hitSlop={8}><Text style={[styles.actionClose, { color: theme.colors.muted }]}>Close</Text></Pressable>
+            </View>
+            <View style={styles.actionGrid}>
+              <ActionButton label={foodDetail.kind === 'shopping' ? 'Bought it' : 'Cooked this'} quiet onPress={() => { void appendFoodLog(foodDetail.kind === 'shopping' ? 'Bought in app' : 'Cooked in app', foodDetail.kind === 'shopping' ? 'Moved from shopping to kitchen memory' : 'Completed meal/recipe', foodDetail.kind === 'shopping' ? 'Bought' : 'Cooked'); }} />
+              <ActionButton label="Skipped" quiet onPress={() => { void appendFoodLog('Skipped in app', 'Not done today', 'Skipped'); }} />
+              <ActionButton label="Substituted" quiet onPress={() => { void appendFoodLog('Substitution note', 'Substitution used; edit details in source note', 'Needs review'); }} />
+              <ActionButton label="Changed serving" quiet onPress={() => { void appendFoodLog('Serving change', 'Serving changed; update source nutrition if needed', 'Needs review'); }} />
+              <ActionButton label="Add photo" quiet onPress={() => noteUnsupportedAction('Photo attachment needs native capture wiring next; no fake upload was created.')} />
+              <ActionButton label="Ask AI with this" quiet onPress={() => router.push('/chat')} />
+            </View>
+          </Card>
+        ) : null}
+        {foodDetail ? (
+          <View style={styles.attackStrip}>
+            <PlanCard label="Ready now" value={readySummary} tone="moss" />
+            <PlanCard label={openIngredientCount ? 'Resolve before cooking' : 'No blocker'} value={missingSummary} tone={openIngredientCount ? 'amber' : 'moss'} />
+            <PlanCard label="Next move" value={nextStep} tone="blue" />
+          </View>
+        ) : null}
       </Card>
     ) : null
   );
@@ -542,6 +583,12 @@ export default function RecordScreen() {
         return foodDetail && recordConfig.showNutrition ? (
           <View key={section}>
             <SectionTitle title="Nutrition profile" />
+            <View style={styles.sectionNoteRow}>
+              <Pill tone={structuredFoodDetail ? 'moss' : 'amber'}>{structuredFoodDetail ? 'Source-backed' : 'Inferred'}</Pill>
+              <Text style={[styles.sectionNote, { color: theme.colors.muted }]}>
+                {structuredFoodDetail ? 'Loaded from food_detail in the active graph.' : 'Estimated from title/body until Notion, Sheets or SQLite provides food_detail.'}
+              </Text>
+            </View>
             <View style={styles.nutritionGrid}>
               {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
                 <Card key={label} style={styles.nutritionCard}>
@@ -762,6 +809,16 @@ function IngredientGroup({ title, items, tone }: {
   );
 }
 
+function PlanCard({ label, value, tone }: { label: string; value: string; tone: 'moss' | 'amber' | 'blue' | 'plum' }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.planCard, planToneStyle(tone, theme.colors)]}>
+      <Text style={[styles.planLabel, { color: theme.colors.muted }]}>{label}</Text>
+      <Text style={[styles.planValue, { color: theme.colors.ink }]} numberOfLines={3}>{value}</Text>
+    </View>
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   const theme = useLifeOSTheme();
   return (
@@ -772,9 +829,16 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+function planToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof colors) {
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft, borderColor: themed.line };
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft, borderColor: themed.line };
+  if (tone === 'plum') return { backgroundColor: themed.plumSoft, borderColor: themed.line };
+  return { backgroundColor: themed.mossSoft, borderColor: themed.line };
+}
+
 const styles = StyleSheet.create({
   pageContent: { width: '100%', maxWidth: 1380, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 120 },
-  hero: { marginTop: 18, padding: 26, minHeight: 230 },
+  hero: { marginTop: 18, padding: 24, minHeight: 210 },
   workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: 18 },
   workspaceCompact: { flexDirection: 'column' },
   mainColumn: { flex: 1, minWidth: 0 },
@@ -783,7 +847,7 @@ const styles = StyleSheet.create({
   sideCard: { gap: 0 },
   statusRow: { paddingTop: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   sync: { color: colors.muted, fontSize: 11 },
-  title: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1, marginTop: 22, padding: 0 },
+  title: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1, marginTop: 18, padding: 0 },
   meta: { color: colors.muted, fontSize: 13, marginTop: 8 },
   heroBody: { color: colors.ink, fontSize: 16, lineHeight: 24, marginTop: 14, maxWidth: 820 },
   heroEvidence: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
@@ -793,9 +857,20 @@ const styles = StyleSheet.create({
   editor: { minHeight: 150, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 16, color: colors.ink, fontSize: 15, lineHeight: 23 },
   actions: { flexDirection: 'row', gap: 9, marginTop: 12 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
+  actionPanel: { marginTop: 14, padding: 14 },
+  actionPanelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
+  actionTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  actionClose: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  attackStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
+  planCard: { flexGrow: 1, flexBasis: 220, minHeight: 86, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 13, justifyContent: 'center' },
+  planLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.9, textTransform: 'uppercase' },
+  planValue: { color: colors.ink, fontSize: 14, lineHeight: 19, fontWeight: '900', marginTop: 7 },
   dataWarning: { marginTop: 18 },
   warningTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
   warningBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  sectionNoteRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 },
+  sectionNote: { color: colors.muted, fontSize: 12, lineHeight: 17, flex: 1, minWidth: 180 },
   nutritionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   nutritionCard: { flexGrow: 1, flexBasis: 130, minHeight: 92 },
   nutritionValue: { color: colors.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
