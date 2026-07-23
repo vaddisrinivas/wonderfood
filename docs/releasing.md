@@ -56,8 +56,9 @@ export ANDROID_KEY_PASSWORD=...
 ```
 
 The collector writes a timestamped directory under `build/evidence/` with release
-APK verification output, SHA-256 sums, signing fingerprints, OAuth placeholder
-status, assetlinks status, and connected-device evidence when ADB sees a device.
+APK verification output, SHA-256 sums, signing fingerprints, Google auth status
+for the current direct-settings app, assetlinks status, and connected-device
+evidence when ADB sees a device.
 5. Validate release signing fingerprint and App Links manifest:
 
 ```bash

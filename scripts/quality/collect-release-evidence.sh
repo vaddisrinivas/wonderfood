@@ -55,7 +55,7 @@ if [[ "$missing_signing" -eq 0 ]]; then
     > "$OUT_DIR/signing-key.txt"
   awk '/SHA1:|SHA256:|SHA512:/{print}' "$OUT_DIR/signing-key.txt" | tee "$OUT_DIR/signing-fingerprints.txt" >/dev/null
   record "signing_fingerprints=$OUT_DIR/signing-fingerprints.txt"
-  ./gradlew --no-daemon :app:assembleFossRelease :app:assemblePlayRelease | tee "$OUT_DIR/gradle-release-build.log"
+  (cd android && ./gradlew --no-daemon :app:assembleRelease) | tee "$OUT_DIR/gradle-release-build.log"
 else
   record "signing_env=missing"
   record "release_build=skipped_missing_signing_env"
@@ -78,13 +78,20 @@ if [[ "${#release_apks[@]}" -gt 0 ]]; then
   apksigner="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
   [[ -x "$apksigner" ]] || fail "Could not find apksigner under ANDROID_HOME/build-tools"
   : > "$OUT_DIR/SHA256SUMS.txt"
-  for apk in "${release_apks[@]}"; do
-    base="$(basename "$apk")"
-    cp "$apk" "$OUT_DIR/$base"
-    shasum -a 256 "$OUT_DIR/$base" >> "$OUT_DIR/SHA256SUMS.txt"
-    "$apksigner" verify --verbose --print-certs "$apk" > "$OUT_DIR/$base.apksigner.txt"
-    record "verified_apk=$OUT_DIR/$base"
-  done
+  if [[ "$missing_signing" -eq 0 ]]; then
+    for apk in "${release_apks[@]}"; do
+      base="$(basename "$apk")"
+      cp "$apk" "$OUT_DIR/$base"
+      shasum -a 256 "$OUT_DIR/$base" >> "$OUT_DIR/SHA256SUMS.txt"
+      "$apksigner" verify --verbose --print-certs "$apk" > "$OUT_DIR/$base.apksigner.txt"
+      record "verified_apk=$OUT_DIR/$base"
+    done
+  else
+    for apk in "${release_apks[@]}"; do
+      record "release_apk_candidate_ignored_missing_signing_env=$apk"
+    done
+    record "verified_apk=none_missing_signing_env"
+  fi
 else
   record "verified_apk=none"
 fi
@@ -147,7 +154,7 @@ version_code=$version_code
 package=$package_name
 signing_env=$([[ "$missing_signing" -eq 0 ]] && echo present || echo missing)
 google_web_client_id=$google_auth_status
-release_apk_count=${#release_apks[@]}
+release_apk_count=$([[ "$missing_signing" -eq 0 ]] && echo "${#release_apks[@]}" || echo 0)
 MANIFEST
 
 record "manifest=$OUT_DIR/manifest.txt"
