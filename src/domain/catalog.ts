@@ -13,8 +13,28 @@ export type CollectionId = string;
 export type Surface = {
   id: string;
   label: string;
+  icon?: string;
+  image_url?: string;
   views?: string[];
   collections: string[];
+};
+
+export type VisualToken = {
+  icon?: string;
+  emoji?: string;
+  image_url?: string;
+  accent?: DashboardBlockTone;
+};
+
+export type DomainVisualIdentity = {
+  domain?: VisualToken;
+  surfaces?: Record<string, VisualToken>;
+  collections?: Record<string, VisualToken>;
+  statuses?: Record<string, VisualToken>;
+  actions?: Record<string, VisualToken>;
+  sources?: Record<string, VisualToken>;
+  skills?: Record<string, VisualToken>;
+  agents?: Record<string, VisualToken>;
 };
 
 export type DashboardBlockKind = 'spotlight' | 'metric' | 'list' | 'action';
@@ -48,6 +68,7 @@ export interface DomainManifest {
   home_surface?: string;
   surfaces: Surface[];
   collections: CollectionId[];
+  visual_identity?: DomainVisualIdentity;
   relations: ManifestRelation[];
   skills: string[];
   workflows: string[];
@@ -145,6 +166,43 @@ function parseOptionalStringArray(value: unknown, path: string): string[] | unde
   return parseStringArray(value, path);
 }
 
+function parseVisualToken(value: unknown): VisualToken | undefined {
+  if (!isObject(value)) return undefined;
+  const token = value as Record<string, unknown>;
+  const accent = token.accent;
+  return {
+    icon: typeof token.icon === 'string' ? token.icon : undefined,
+    emoji: typeof token.emoji === 'string' ? token.emoji : undefined,
+    image_url: typeof token.image_url === 'string' ? token.image_url : undefined,
+    accent: accent === 'neutral' || accent === 'moss' || accent === 'amber' || accent === 'plum' || accent === 'blue' ? accent : undefined,
+  };
+}
+
+function parseVisualTokenMap(value: unknown): Record<string, VisualToken> | undefined {
+  if (!isObject(value)) return undefined;
+  const parsed: Record<string, VisualToken> = {};
+  for (const [key, token] of Object.entries(value)) {
+    const visual = parseVisualToken(token);
+    if (visual) parsed[key] = visual;
+  }
+  return parsed;
+}
+
+function parseVisualIdentity(value: unknown): DomainVisualIdentity | undefined {
+  if (!isObject(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    domain: parseVisualToken(raw.domain),
+    surfaces: parseVisualTokenMap(raw.surfaces),
+    collections: parseVisualTokenMap(raw.collections),
+    statuses: parseVisualTokenMap(raw.statuses),
+    actions: parseVisualTokenMap(raw.actions),
+    sources: parseVisualTokenMap(raw.sources),
+    skills: parseVisualTokenMap(raw.skills),
+    agents: parseVisualTokenMap(raw.agents),
+  };
+}
+
 function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | undefined {
   if (value === undefined) return undefined;
   const blocks = parseObjectArray(value, path);
@@ -194,6 +252,8 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     return {
       id: parseString(s.id, `${path}.surfaces[${index}].id`),
       label: parseString(s.label, `${path}.surfaces[${index}].label`),
+      icon: typeof s.icon === 'string' ? s.icon : undefined,
+      image_url: typeof s.image_url === 'string' ? s.image_url : undefined,
       views: Array.isArray(s.views) ? (s.views as string[]) : undefined,
       collections: parseStringArray(s.collections, `${path}.surfaces[${index}].collections`),
     };
@@ -226,6 +286,7 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     home_surface: typeof raw.home_surface === 'string' ? raw.home_surface : undefined,
     surfaces: parsedSurfaces,
     collections: parseStringArray(raw.collections, `${path}.collections`),
+    visual_identity: parseVisualIdentity(raw.visual_identity),
     relations: parsedRelations,
     skills: parseStringArray(raw.skills, `${path}.skills`),
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),

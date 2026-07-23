@@ -71,8 +71,16 @@ Every domain gets the same structure:
 
 5. Collection detail
    - One generic screen per managed collection.
-   - Shows records, review count, schema relations, source homes and actions.
+   - Shows records, view mode, filter, sort, review count, schema relations, source homes and actions.
+   - Exposes a property kit and visual identity from the manifest so Notion/Sheets/local fields, icons and image slots stay visible.
    - Works from the active domain manifest; adding a domain should not require a new route.
+
+## Visual identity
+
+- Domain packages own visual identity for domains, surfaces, collections, statuses, actions, sources, skills and agents.
+- Every token can carry `emoji`, `icon`, optional `image_url` and accent tone.
+- UI must read these tokens first and fall back only when config is missing.
+- Notion template icons/covers and Sheets dashboard symbols should use the same token map.
 
 ## Home page
 

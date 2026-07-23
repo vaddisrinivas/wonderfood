@@ -8,24 +8,28 @@
     {
       "id": "food.overview",
       "label": "Overview",
+      "icon": "🏡",
       "views": ["next_meal", "use_soon", "shopping_summary", "food_graph"],
       "collections": []
     },
     {
       "id": "food.meals",
       "label": "Meals",
+      "icon": "🍽️",
       "views": ["planner", "week_view", "meal_history", "nutrition_summary", "recipe_revisions"],
       "collections": ["meal_plan", "meal_log", "meal_consumption", "recipe", "recipe_revision", "recipe_step"]
     },
     {
       "id": "food.kitchen",
       "label": "Kitchen",
+      "icon": "🥬",
       "views": ["pantry", "lots", "movements", "products", "pantry_stats", "inventory_trends"],
       "collections": ["food_item", "product", "inventory", "inventory_lot", "inventory_movement", "ingredient", "purchase_line"]
     },
     {
       "id": "food.shopping",
       "label": "Shopping",
+      "icon": "🛒",
       "views": ["list", "demand", "stores", "budget", "status_board", "receipt_review"],
       "collections": ["shopping_list", "shopping_item", "shopping_demand", "purchase", "purchase_line", "store"]
     }
@@ -66,6 +70,78 @@
     "required": ["id", "title", "collection", "status", "meta", "body"],
     "rich_detail_json": ["Food detail", "food_detail", "Food Detail", "Detail JSON", "detail_json"],
     "relations_json": ["Relations", "relations", "Related records", "related_records"]
+  },
+  "visual_identity": {
+    "domain": { "emoji": "🍲", "accent": "moss" },
+    "surfaces": {
+      "food.overview": { "emoji": "🏡", "accent": "moss" },
+      "food.meals": { "emoji": "🍽️", "accent": "amber" },
+      "food.kitchen": { "emoji": "🥬", "accent": "moss" },
+      "food.shopping": { "emoji": "🛒", "accent": "blue" }
+    },
+    "collections": {
+      "household": { "emoji": "🏠", "accent": "moss" },
+      "member": { "emoji": "🙂", "accent": "plum" },
+      "food_item": { "emoji": "🍎", "accent": "moss" },
+      "product": { "emoji": "🏷️", "accent": "blue" },
+      "inventory": { "emoji": "🧺", "accent": "moss" },
+      "inventory_lot": { "emoji": "📦", "accent": "amber" },
+      "inventory_movement": { "emoji": "↻", "accent": "blue" },
+      "ingredient": { "emoji": "🧄", "accent": "moss" },
+      "recipe": { "emoji": "📖", "accent": "amber" },
+      "recipe_revision": { "emoji": "✍️", "accent": "plum" },
+      "recipe_step": { "emoji": "🔥", "accent": "amber" },
+      "recipe_tool": { "emoji": "🍳", "accent": "blue" },
+      "meal_template": { "emoji": "🧩", "accent": "plum" },
+      "meal_plan": { "emoji": "📅", "accent": "moss" },
+      "meal_log": { "emoji": "✅", "accent": "moss" },
+      "meal_consumption": { "emoji": "🥣", "accent": "amber" },
+      "shopping_list": { "emoji": "📝", "accent": "blue" },
+      "shopping_item": { "emoji": "🛒", "accent": "blue" },
+      "shopping_demand": { "emoji": "❗", "accent": "amber" },
+      "purchase": { "emoji": "🧾", "accent": "plum" },
+      "purchase_line": { "emoji": "💳", "accent": "plum" },
+      "store": { "emoji": "🏪", "accent": "blue" },
+      "preference": { "emoji": "♡", "accent": "plum" },
+      "nutrition_goal": { "emoji": "🎯", "accent": "moss" },
+      "nutrition_profile": { "emoji": "⚖️", "accent": "moss" },
+      "nutrition_observation": { "emoji": "📈", "accent": "blue" },
+      "attachment": { "emoji": "📎", "accent": "neutral" },
+      "audit_event": { "emoji": "🧭", "accent": "neutral" },
+      "source_record": { "emoji": "🔗", "accent": "neutral" }
+    },
+    "statuses": {
+      "planned": { "emoji": "📅", "accent": "plum" },
+      "tonight": { "emoji": "🌙", "accent": "moss" },
+      "to buy": { "emoji": "🛒", "accent": "blue" },
+      "use soon": { "emoji": "⏳", "accent": "amber" },
+      "available": { "emoji": "✅", "accent": "moss" },
+      "review": { "emoji": "👀", "accent": "amber" }
+    },
+    "actions": {
+      "add_record": { "emoji": "＋", "accent": "moss" },
+      "ask_with_collection": { "emoji": "✦", "accent": "plum" },
+      "search": { "emoji": "⌕", "accent": "blue" },
+      "open_sources": { "emoji": "🔗", "accent": "neutral" }
+    },
+    "sources": {
+      "notion": { "emoji": "◨", "accent": "neutral" },
+      "google_sheets": { "emoji": "▦", "accent": "moss" },
+      "sqlite": { "emoji": "▣", "accent": "blue" },
+      "postgres": { "emoji": "⬢", "accent": "plum" },
+      "web": { "emoji": "🌐", "accent": "blue" },
+      "user": { "emoji": "🙂", "accent": "moss" }
+    },
+    "skills": {
+      "food": { "emoji": "🍲", "accent": "moss" },
+      "weekly_food_reset": { "emoji": "↻", "accent": "amber" },
+      "source_verifier": { "emoji": "🔎", "accent": "blue" }
+    },
+    "agents": {
+      "food_brain": { "emoji": "✦", "accent": "plum" },
+      "source_steward": { "emoji": "🔗", "accent": "blue" },
+      "weekly_reset": { "emoji": "↻", "accent": "amber" }
+    }
   },
   "dashboard_blocks": [
     {

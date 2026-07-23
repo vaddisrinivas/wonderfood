@@ -101,7 +101,7 @@ const routes = [
   {
     name: 'collection-recipe',
     path: '/collection/recipe',
-    must: ['LIFEOS / FOOD COLLECTION', 'Recipe', '1 loaded records', 'Records', 'Sheet-pan tandoori chicken', 'Schema relations', 'Source trust', 'Sqlite'],
+    must: ['LIFEOS / FOOD COLLECTION', 'Recipe', '1 loaded records', 'Records', 'View / Filter / Sort', 'Source-backed', 'Sheet-pan tandoori chicken', 'Schema relations', 'Property kit', 'Visual identity', 'food_detail', 'Source trust', 'Sqlite'],
     forbidden: ['Collection not found', 'Record not found'],
   },
   {
