@@ -149,6 +149,7 @@ export default function ConfigStudioScreen() {
           {activeManifest ? (
             <>
               <SectionTitle title="Active package contract" />
+              <Text style={styles.contractIntro}>Collections, relations, surfaces, provider fields and MCP contract are visible before you activate a package.</Text>
               <View style={[styles.contractGrid, compact && styles.stack]}>
                 <Card style={styles.contractCard}>
                   <Text style={styles.contractLabel}>Collections</Text>
@@ -381,6 +382,7 @@ const styles = StyleSheet.create({
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },
   grid: { flexDirection: 'row', gap: 12 },
   contractGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  contractIntro: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: -4, marginBottom: 12 },
   contractCard: { flex: 1, minWidth: 240, minHeight: 180 },
   contractLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   contractNumber: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '900', letterSpacing: -1, marginTop: 10, marginBottom: 12 },

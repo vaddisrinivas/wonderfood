@@ -41,6 +41,7 @@
     "doctor": "npx --yes expo-doctor",
     "export:web": "expo export --platform web --output-dir dist/web",
     "export:android": "expo export --platform android --output-dir dist/android",
+    "check:web-product": "node scripts/quality/check-web-product-smoke.mjs",
     "quality": "npm run config:validate && npm run typecheck && npm run doctor && npm run export:web && npm run export:android",
     "phase4:check:mcp-workflow-replay": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay.ts",
     "phase4:check:mcp-workflow-replay:http": "./server/node_modules/.bin/tsx scripts/quality/check-phase4-mcp-workflow-replay-http.ts",

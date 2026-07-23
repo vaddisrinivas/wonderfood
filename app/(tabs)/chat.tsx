@@ -22,6 +22,8 @@ import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
 import { loadLifeOSSettings, usableAiProfiles, useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
+import { listRecordsForDomain } from '@/src/db/records';
+import type { CanonicalRecord } from '@/src/domain/runtime';
 
 type MessageSourceMode = 'server' | 'direct' | 'offline';
 
@@ -37,9 +39,16 @@ const seedThreads: ChatThread[] = [
 ];
 
 const seedModeNotice = {
-  title: 'Offline mode',
-  detail: 'No server endpoint configured. Messages are local and not source-grounded.',
+  title: 'Local source mode',
+  detail: 'No model key yet. Hearth still answers from local LifeOS records and shows citations.',
 };
+
+const promptBank = [
+  'What can I cook tonight from what I already have?',
+  'Show a table of available vs missing ingredients.',
+  'What should I buy for green dal and tandoori chicken?',
+  'Summarize nutrition and previous cooking notes.',
+];
 
 export default function ChatScreen() {
   const { width } = useWindowDimensions();
@@ -58,6 +67,7 @@ export default function ChatScreen() {
   const [mode, setMode] = useState<MessageSourceMode>('offline');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [sourceRecords, setSourceRecords] = useState<CanonicalRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +79,10 @@ export default function ChatScreen() {
       const settings = await loadLifeOSSettings();
       const directReady = usableAiProfiles(settings).length > 0;
       const nextMode: MessageSourceMode = directReady ? 'direct' : 'offline';
+      const localRecords = db ? await listRecordsForDomain(db, activeDomainId).catch(() => [] as CanonicalRecord[]) : [];
+      if (!cancelled) {
+        setSourceRecords(localRecords);
+      }
 
       if (dbThreads.length) {
         setThreads(dbThreads);
@@ -91,7 +105,7 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [db, domainLabel]);
+  }, [activeDomainId, db, domainLabel]);
 
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
 
@@ -179,18 +193,25 @@ export default function ChatScreen() {
     setActiveRunId(null);
     setWarnings([]);
     const streamRunId = `stream-${Date.now()}`;
+    const userMessageId = `user-${streamRunId}`;
     const streamMessageId = `asst-${streamRunId}`;
+
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      role: 'user' as ChatRole,
+      text,
+    };
 
     const placeholder: ChatMessage = {
       id: streamMessageId,
       role: 'assistant' as ChatRole,
-      text: '',
-      answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] },
+      text: 'Reading your Food graph…',
+      answer: { title: 'Working from sources', intro: 'Reading your Food graph…', rows: [], citations: [] },
     };
 
     const withPlaceholder: ChatThread = {
       ...activeThread,
-      messages: [...activeThread.messages, placeholder],
+      messages: [...activeThread.messages, userMessage, placeholder],
     };
     appendOrReplaceThread(withPlaceholder);
 
@@ -297,7 +318,12 @@ export default function ChatScreen() {
                     </Pressable>;
                   })}
                 </ScrollView>
-                {isWide ? <View style={styles.threadFoot}><Pill tone="moss">{domainLabel} context on</Pill><Text style={styles.threadFootText}>Chat cites sources it reads.</Text></View> : null}
+                {isWide ? (
+                  <View style={styles.threadFoot}>
+                    <Pill tone="moss">{domainLabel} context on</Pill>
+                    <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+                  </View>
+                ) : null}
               </Card>
 
               <Card style={styles.chatPanel}>
@@ -311,6 +337,18 @@ export default function ChatScreen() {
                   </Pressable>
                 </View>
 
+                <View style={styles.sourceStrip}>
+                  <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
+                    {sourceRecords.slice(0, 8).map((record) => (
+                      <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
+                        <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
+                        <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
+                      </Pressable>
+                    ))}
+                    {!sourceRecords.length ? <Text style={styles.sourceEmpty}>Connect Notion, Sheets, or local records to ground answers.</Text> : null}
+                  </ScrollView>
+                </View>
                 <View style={styles.divider} />
                 <View style={styles.messages}>
                   {activeThread.messages.map((message: MessageRow) => (
@@ -319,6 +357,13 @@ export default function ChatScreen() {
                 </View>
 
                 <View style={styles.composerWrap}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
+                    {promptBank.map((prompt) => (
+                      <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
+                        <Text style={styles.promptText}>{prompt}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                   <View style={styles.composer}>
                     <TextInput
                       accessibilityLabel="Chat message"
@@ -336,7 +381,10 @@ export default function ChatScreen() {
                     </Pressable>
                     {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><Text style={styles.sendText}>Retry</Text></Pressable> : null}
                   </View>
-                  <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses enabled domains, skill instructions, and available source records.</Text><Text style={styles.shortcut}>{settings.runtime.webSearch ? 'web on' : 'web off'}</Text></View>
+                  <View style={styles.composerFoot}>
+                    <Text style={styles.composerHint}>Uses enabled domains, skill instructions, source records, and model keys stored in app settings.</Text>
+                    <Text style={styles.shortcut}>{activeRunId ? 'running' : settings.runtime.webSearch ? 'web on' : 'web off'}</Text>
+                  </View>
                 </View>
               </Card>
             </View>
@@ -419,8 +467,20 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
 }
 
 function CitationChip({ citation }: { citation: Citation }) {
+  const router = useRouter();
+  const openCitation = () => {
+    const recordId = citation.href.startsWith('wonderfood://record/')
+      ? citation.href.replace('wonderfood://record/', '')
+      : '';
+    if (recordId) {
+      router.push(`/record/${recordId}`);
+      return;
+    }
+    void Linking.openURL(citation.href);
+  };
+
   return (
-    <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(citation.href); }} style={({ pressed }) => [styles.citation, citationToneStyle(citation.tone), pressed && styles.pressed]}>
+    <Pressable accessibilityRole="link" onPress={openCitation} style={({ pressed }) => [styles.citation, citationToneStyle(citation.tone), pressed && styles.pressed]}>
       <Text style={styles.citationLabel}>{citation.label}</Text><Text numberOfLines={1} style={styles.citationDetail}>{citation.detail} ↗</Text>
     </Pressable>
   );
@@ -505,6 +565,16 @@ const styles = StyleSheet.create({
   citationLabel: { color: colors.ink, fontSize: 10, fontWeight: '900' },
   citationDetail: { color: colors.muted, fontSize: 10, marginTop: 1 },
   composerWrap: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, padding: 12, backgroundColor: '#FEFEFA' },
+  sourceStrip: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FBFBF4' },
+  sourceStripTitle: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 7 },
+  sourcePills: { gap: 8, paddingRight: 8 },
+  sourcePill: { width: 150, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 10, paddingVertical: 8 },
+  sourcePillTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  sourcePillMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  sourceEmpty: { color: colors.muted, fontSize: 12, paddingVertical: 8 },
+  promptRail: { gap: 8, paddingBottom: 10 },
+  promptChip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 8 },
+  promptText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   composer: { minHeight: 51, borderWidth: 1, borderColor: '#CBCBC0', borderRadius: 14, paddingLeft: 12, paddingRight: 7, paddingVertical: 6, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: { minWidth: 0, color: colors.ink, fontSize: 14, lineHeight: 20, paddingTop: 7, paddingBottom: 7, flex: 1, minHeight: 34, maxHeight: 102 },
   send: { backgroundColor: colors.moss, borderRadius: 10, minHeight: 35, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },

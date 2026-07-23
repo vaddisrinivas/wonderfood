@@ -1,6 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 
 export type AiProviderKind = 'openai_compatible' | 'azure_openai' | 'anthropic';
 
@@ -56,6 +54,29 @@ export type LifeOSSettings = {
 
 const STORAGE_KEY = 'lifeos.settings.v1';
 const listeners = new Set<(settings: LifeOSSettings) => void>();
+
+type SecureStoreModule = {
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY?: string;
+  getItemAsync: (key: string) => Promise<string | null>;
+  setItemAsync: (key: string, value: string, options?: Record<string, unknown>) => Promise<void>;
+};
+
+function platformOS() {
+  try {
+    const reactNative = require('react-native') as { Platform?: { OS?: string } };
+    return reactNative.Platform?.OS ?? 'node';
+  } catch {
+    return typeof window === 'undefined' ? 'node' : 'web';
+  }
+}
+
+function secureStore(): SecureStoreModule | null {
+  try {
+    return require('expo-secure-store') as SecureStoreModule;
+  } catch {
+    return null;
+  }
+}
 
 export const defaultLifeOSSettings: LifeOSSettings = {
   ai: {
@@ -189,19 +210,31 @@ function normalizeSettings(input: Partial<LifeOSSettings> | null): LifeOSSetting
 }
 
 async function readRaw(): Promise<string | null> {
-  if (Platform.OS === 'web') {
+  const os = platformOS();
+  if (os === 'web') {
     return typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
   }
-  return SecureStore.getItemAsync(STORAGE_KEY);
+  if (os === 'node') {
+    return null;
+  }
+  return secureStore()?.getItemAsync(STORAGE_KEY) ?? null;
 }
 
 async function writeRaw(value: string): Promise<void> {
-  if (Platform.OS === 'web') {
+  const os = platformOS();
+  if (os === 'web') {
     if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, value);
     return;
   }
-  await SecureStore.setItemAsync(STORAGE_KEY, value, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  if (os === 'node') {
+    return;
+  }
+  const store = secureStore();
+  if (!store) {
+    return;
+  }
+  await store.setItemAsync(STORAGE_KEY, value, {
+    keychainAccessible: store.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
 }
 

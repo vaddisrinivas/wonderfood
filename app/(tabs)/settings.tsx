@@ -163,7 +163,7 @@ export default function SettingsScreen() {
               </View>
             </Card>
 
-            <SectionTitle title="Model providers" />
+            <SectionTitle title="AI providers" />
             <View style={[styles.providerGrid, compact && styles.stack]}>
               <ProviderCard
                 title="Primary"

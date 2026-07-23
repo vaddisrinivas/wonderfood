@@ -882,9 +882,9 @@ function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): Chat
   });
 
   return {
-    title: selectedRecords.length ? 'Local LifeOS answer' : `Offline ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
+    title: selectedRecords.length ? `Local ${isShopping ? 'shopping' : isRecipe ? 'food planning' : 'Food'} answer` : `Offline ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
     intro: selectedRecords.length
-      ? 'I found this in your local Food graph. This is source-grounded locally; connect a model for deeper reasoning or web lookup.'
+      ? buildOfflineIntro({ isShopping, isRecipe, count: selectedRecords.length })
       : 'No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.',
     columns: rows.length ? ['Record', 'Available', 'Missing / shopping'] : undefined,
     rows,
@@ -900,12 +900,25 @@ function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): Chat
 
 function pickRelevantRecords(query: string, records: CanonicalRecord[]) {
   const lower = query.toLowerCase();
-  const tokens = lower.split(/[^a-z0-9]+/).filter((token) => token.length > 2);
+  const tokens = lower
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2)
+    .filter((token) => !['what', 'with', 'from', 'should', 'could', 'would', 'about', 'today', 'tonight'].includes(token));
   const scored = records.map((record) => {
     const text = `${record.title} ${record.collection} ${JSON.stringify(record.properties)}`.toLowerCase();
-    const score = tokens.reduce((sum, token) => sum + (text.includes(token) ? 2 : 0), 0)
-      + (/recipe|cook|ingredient|nutrition/.test(lower) && ['recipe', 'meal_plan', 'meal_log'].includes(record.collection) ? 2 : 0)
-      + (/shop|buy|grocery/.test(lower) && ['shopping_item', 'purchase'].includes(record.collection) ? 3 : 0);
+    const detail = readFoodDetail(record);
+    const hasNeeded = detail.ingredients.some((item) => item.state === 'needed' || item.state === 'shopping');
+    const hasAvailable = detail.ingredients.some((item) => item.state === 'available');
+    const score = tokens.reduce((sum, token) => {
+      if (record.title.toLowerCase().includes(token)) return sum + 5;
+      if (record.collection.toLowerCase().includes(token)) return sum + 3;
+      return sum + (text.includes(token) ? 2 : 0);
+    }, 0)
+      + (/recipe|cook|dinner|meal|ingredient|nutrition/.test(lower) && ['recipe', 'meal_plan', 'meal_log'].includes(record.collection) ? 3 : 0)
+      + (/shop|buy|grocery|missing/.test(lower) && ['shopping_item', 'purchase'].includes(record.collection) ? 4 : 0)
+      + (/what.*have|available|pantry|kitchen/.test(lower) && hasAvailable ? 2 : 0)
+      + (/missing|need|shop|buy/.test(lower) && hasNeeded ? 2 : 0)
+      + (/soon|expire|use/.test(lower) && /use|soon|expire|days/i.test(`${record.properties.status} ${record.properties.meta}`) ? 3 : 0);
     return { record, score };
   });
   const ranked = scored
@@ -913,6 +926,16 @@ function pickRelevantRecords(query: string, records: CanonicalRecord[]) {
     .sort((left, right) => right.score - left.score)
     .map((item) => item.record);
   return (ranked.length ? ranked : records).slice(0, 4);
+}
+
+function buildOfflineIntro(input: { isShopping: boolean; isRecipe: boolean; count: number }) {
+  if (input.isShopping) {
+    return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} that explain what to buy and why.`;
+  }
+  if (input.isRecipe) {
+    return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} with ingredients, availability, and next cooking steps.`;
+  }
+  return `I found ${input.count} local Food record${input.count === 1 ? '' : 's'} tied to this question.`;
 }
 
 type FoodDetail = {
