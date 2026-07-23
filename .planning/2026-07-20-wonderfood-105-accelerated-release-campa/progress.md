@@ -774,3 +774,10 @@
   - `npm exec -- vitest run tests/ops/apply.test.ts tests/ops/writer-boundary.test.ts tests/ai/runtime.test.ts` ✅
   - `npm run typecheck` ✅
   - `git diff --check` ✅
+
+## 2026-07-23 final product gate after audit hardening
+
+- Re-ran `npm run check:product` after the create-overwrite guard and operation-boundary grep hardening.
+- Result: PASS ✅.
+- Notable current counts: full Vitest suite `16 passed / 58 tests`, config valid with 3 domains, 29 Food collections, 5 workflows, 7 agents.
+- Exports passed again for web, Android, and iOS; chat send, rollback idempotency, and cross-surface client proof also passed.
