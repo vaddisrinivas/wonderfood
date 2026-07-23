@@ -73,3 +73,4 @@ Every `tools/call` response payload is a deterministic object (`tool result`) an
 - SSE should include `data:` JSON envelopes for tool/resource responses.
 - `methods` and `tools/call` must work in both JSON and stream modes.
 - `initialize`, `tools/list`, `tools/call`, and `notifications/initialized` are required in both transport modes.
+- Static resource paths resolve from the repository root even when the server starts through `npm --prefix server`; hosted resource reads must expose the same catalog, skill, and schema files as local MCP.

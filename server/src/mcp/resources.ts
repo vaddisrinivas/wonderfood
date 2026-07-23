@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadCatalog } from '@/src/domain/catalog';
 import { findWorkflow, getActionEvent, listActionEvents, listActionUris, listRecordUris, listRecords, listWorkflows } from './state';
 import { listConversations } from '../conversations';
@@ -18,7 +19,15 @@ type McpResourceRecord = {
   mode: 'file' | 'dynamic';
 };
 
-const PROJECT_ROOT = process.cwd();
+const MODULE_ROOT = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = [
+  process.env.LIFEOS_PROJECT_ROOT,
+  process.cwd(),
+  resolve(MODULE_ROOT, '../../..'),
+]
+  .filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
+  .find((candidate) => existsSync(join(candidate, 'packages/domain-config/domain-catalog.v1.json')))
+  ?? process.cwd();
 
 function resolvePath(relativePath: string) {
   return join(PROJECT_ROOT, relativePath);
