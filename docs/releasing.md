@@ -2,7 +2,7 @@
 
 The `Android Release` workflow publishes a signed APK and SHA-256 checksum when a
 semantic-version tag such as `v1.0.0` is pushed. The tag must exactly match the
-`versionName` in `app/build.gradle.kts`.
+`versionName` in `android/app/build.gradle`.
 
 ### Trust and reproducibility expectations
 
@@ -40,7 +40,7 @@ reject future APKs.
 
 ## Release checklist
 
-1. Increment `versionCode` and `versionName` in `app/build.gradle.kts`.
+1. Increment `versionCode` and `versionName` in `android/app/build.gradle`.
 2. Move user-visible entries from `Unreleased` into a dated changelog section.
 3. Run `./scripts/quality/android-harness.sh local`.
 4. Capture release evidence (commands run, checksums, signing fingerprints, app and

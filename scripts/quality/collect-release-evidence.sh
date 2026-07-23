@@ -17,12 +17,16 @@ record() {
   printf '%s\n' "$*" | tee -a "$OUT_DIR/release-evidence.txt" >/dev/null
 }
 
-version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
-version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' app/build.gradle.kts | head -n 1)"
+gradle_file="android/app/build.gradle"
+if [[ ! -f "$gradle_file" && -f "app/build.gradle.kts" ]]; then
+  gradle_file="app/build.gradle.kts"
+fi
+version_name="$(sed -n 's/^[[:space:]]*versionName[[:space:]=]*(\{0,1\}"\([^"]*\)".*/\1/p' "$gradle_file" | head -n 1)"
+version_code="$(sed -n 's/^[[:space:]]*versionCode[[:space:]=]*(\{0,1\}\([0-9][0-9]*\).*/\1/p' "$gradle_file" | head -n 1)"
 package_name="com.wonderfood.app"
 
-test -n "$version_name" || fail "Could not read versionName from app/build.gradle.kts"
-test -n "$version_code" || fail "Could not read versionCode from app/build.gradle.kts"
+test -n "$version_name" || fail "Could not read versionName from $gradle_file"
+test -n "$version_code" || fail "Could not read versionCode from $gradle_file"
 
 record "WonderFood release evidence"
 record "timestamp=$STAMP"
@@ -58,9 +62,17 @@ else
 fi
 
 release_apks=()
+apk_roots=()
+for dir in android/app/build/outputs/apk app/build/outputs/apk; do
+  [[ -d "$dir" ]] && apk_roots+=("$dir")
+done
 while IFS= read -r apk; do
   release_apks+=("$apk")
-done < <(find app/build/outputs/apk -path '*/release/*.apk' ! -name '*unsigned*' -type f 2>/dev/null | sort)
+done < <(
+  if [[ "${#apk_roots[@]}" -gt 0 ]]; then
+    find "${apk_roots[@]}" -path '*/release/*.apk' ! -name '*unsigned*' -type f 2>/dev/null | sort
+  fi
+)
 
 if [[ "${#release_apks[@]}" -gt 0 ]]; then
   apksigner="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
@@ -77,8 +89,20 @@ else
   record "verified_apk=none"
 fi
 
-client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' app/src/main/res/values/google_auth.xml | head -n 1)"
-if [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
+google_auth_file=""
+for file in android/app/src/main/res/values/google_auth.xml app/src/main/res/values/google_auth.xml; do
+  if [[ -f "$file" ]]; then
+    google_auth_file="$file"
+    break
+  fi
+done
+client_id=""
+if [[ -n "$google_auth_file" ]]; then
+  client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' "$google_auth_file" | head -n 1)"
+fi
+if [[ -z "$google_auth_file" ]]; then
+  record "google_web_client_id=missing_file"
+elif [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
   record "google_web_client_id=placeholder"
 else
   record "google_web_client_id=configured_public_value"
