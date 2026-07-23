@@ -23,7 +23,7 @@ fi
 "$adb_bin" start-server >/dev/null
 serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
 if [[ -z "$serial" ]]; then
-  log_file="$(mktemp /tmp/lifeos-emulatorx.XXXXXX.log)"
+  log_file="$(mktemp -t lifeos-emulatorx.XXXXXX)"
   "$emulator_bin" -avd "$avd_name" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
   for _ in $(seq 1 120); do
     serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"

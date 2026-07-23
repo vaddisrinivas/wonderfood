@@ -131,10 +131,10 @@ export default function TodayScreen() {
               <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
             </View>
             <View style={styles.commandDeck}>
-              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? `Open ${catalog.activeManifest.label}`} detail={dinnerRecord?.meta ?? `Choose the next ${catalog.activeManifest.label.toLowerCase()} move`} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
-              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No active risk'} detail={riskRecord?.meta ?? 'Nothing urgent'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
-              <HomeCommandCard label="Gap" title={shoppingRecord?.title ?? 'No blockers'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
-              <HomeCommandCard label="Assistant" title="Ask AI" detail="Use sources, tables, receipts" tone="plum" href="/chat" />
+              <HomeCommandCard label="Tonight" title={dinnerRecord?.title ?? `Open ${catalog.activeManifest.label}`} detail={dinnerRecord?.meta ?? `Choose the next ${catalog.activeManifest.label.toLowerCase()} move`} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
+              <HomeCommandCard label="Use first" title={riskRecord?.title ?? 'No active risk'} detail={riskRecord?.meta ?? 'Nothing urgent'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
+              <HomeCommandCard label="Need" title={shoppingRecord?.title ?? 'No blockers'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
+              <HomeCommandCard label="Ask" title="Food AI" detail="Answer with tables + sources" tone="plum" href="/chat" />
             </View>
           </Card>
         ) : null;
@@ -163,14 +163,14 @@ export default function TodayScreen() {
       case 'lifeSpaces':
         return homeConfig.showLifeSpaces ? (
           <View key={section}>
-            <SectionTitle title="Life spaces" />
+            <SectionTitle title="Life spaces" action="Add domain" href="/config" />
             <View style={sharedStyles.grid}>
               <Link href="/(tabs)/food" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
                   <Card tone="moss" style={styles.spaceCard}>
                     <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>F</Text>
                     <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>{catalog.activeManifest.label}</Text>
-                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} saved ${catalog.activeManifest.label.toLowerCase()} items.` : `${catalog.activeManifest.label} is ready to set up.`}</Text>
+                <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records, ${catalog.activeManifest.relations.length} relations, ${catalog.activeManifest.data_homes.length} source homes.` : `${catalog.activeManifest.label} is ready to set up.`}</Text>
                   </Card>
                 </Pressable>
               </Link>
@@ -178,8 +178,8 @@ export default function TodayScreen() {
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
               <Card tone="plum" style={styles.spaceCard}>
                 <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>+</Text>
-                <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Add a domain</Text>
-                <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Add Health, Plants or any future life space from Settings.</Text>
+                <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Portable packages</Text>
+                <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Health, Plants or any future life space should arrive from config, schemas and skills.</Text>
                   </Card>
                 </Pressable>
               </Link>
@@ -208,11 +208,11 @@ export default function TodayScreen() {
       case 'sourceTrust':
         return homeConfig.showSourceTrust ? (
           <View key={section}>
-            <SectionTitle title="Connected sources" />
+            <SectionTitle title="Source trust" />
             <View style={sharedStyles.grid}>
               <Card tone="blue" style={styles.trustCard}>
                 <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>Notion and Sheets are optional homes</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Use the app alone, or bring in Notion and Sheets when you want richer pages and rows.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Run local-first, or add Notion and Sheets as richer data homes. Same records, citations and actions.</Text>
                 <Link href="/sources" style={[styles.cardLink, { color: theme.colors.ink }]}>Open trust center →</Link>
               </Card>
               <Card tone="amber" style={styles.trustCard}>
@@ -291,22 +291,22 @@ function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: type
 }
 
 const styles = StyleSheet.create({
-  content: { alignSelf: 'center', maxWidth: 1080, paddingBottom: 44 },
+  content: { alignSelf: 'center', maxWidth: 1120, paddingHorizontal: 18, paddingBottom: 120 },
   topbar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 2 },
   date: { color: colors.muted, fontSize: 12, marginTop: 3 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 17 },
   topIcon: { color: colors.ink, fontSize: 27 },
   avatar: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', textAlign: 'center', lineHeight: 32, backgroundColor: colors.ink, color: '#FFF', fontWeight: '800', fontSize: 11 },
-  nowCard: { minHeight: 226, padding: 22, overflow: 'hidden' },
+  nowCard: { minHeight: 226, padding: 24, overflow: 'hidden' },
   nowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   nowDate: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  nowTitle: { color: colors.ink, fontSize: 29, lineHeight: 34, fontWeight: '900', letterSpacing: -1, marginTop: 22, maxWidth: 660 },
+  nowTitle: { color: colors.ink, fontSize: 32, lineHeight: 37, fontWeight: '900', letterSpacing: -1.1, marginTop: 22, maxWidth: 720 },
   nowTitleCompact: { fontSize: 25, lineHeight: 30, maxWidth: 300 },
   nowBody: { color: colors.ink, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 680 },
   nowActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 20 },
   commandDeck: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
-  commandCard: { flexGrow: 1, flexBasis: 190, minHeight: 88, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12, justifyContent: 'center' },
+  commandCard: { flexGrow: 1, flexBasis: 190, minHeight: 96, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14, justifyContent: 'center' },
   commandLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   commandTitle: { color: colors.ink, fontSize: 15, fontWeight: '900', marginTop: 8 },
   commandDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   emptyReviewTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
   emptyReviewBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
   spacePress: { flexGrow: 1, flexBasis: 260 },
-  spaceCard: { minHeight: 168 },
+  spaceCard: { minHeight: 160 },
   spaceGlyph: { width: 42, height: 42, borderRadius: 14, overflow: 'hidden', textAlign: 'center', lineHeight: 42, backgroundColor: colors.ink, color: '#FFF', fontSize: 18, fontWeight: '900' },
   spaceTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 18 },
   spaceBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },

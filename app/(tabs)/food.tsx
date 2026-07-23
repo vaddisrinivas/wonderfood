@@ -16,8 +16,8 @@ type FoodRecordView = DomainRecordViewModel;
 
 const viewCopy: Record<string, { title: string; subtitle: string; empty: string }> = {
   Overview: {
-    title: 'Food command center',
-    subtitle: 'Tonight, use-soon food, review queue and recent kitchen changes.',
+    title: 'Food home',
+    subtitle: 'Dinner, pantry, shopping and source-backed cooking memory.',
     empty: 'Capture a meal, pantry item or receipt to wake up this food space.',
   },
   Meals: {
@@ -182,7 +182,7 @@ export default function FoodScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
-  const contentWidth = compact ? Math.max(width - 32, 280) : Math.max(width - 128, 900);
+  const contentWidth = compact ? Math.max(width - 32, 280) : Math.min(Math.max(width - 96, 900), 1280);
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeDomainId, activeManifest } = loadCatalog();
@@ -296,7 +296,7 @@ export default function FoodScreen() {
                     <CommandStep index="01" title="Dinner" detail={todayMeal?.title ?? 'Pick tonight'} tone="moss" href={todayMeal ? `/record/${todayMeal.id}` : '/chat'} />
                     <CommandStep index="02" title="Pantry risk" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
                     <CommandStep index="03" title="Shopping gap" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
-                    <CommandStep index="04" title="Prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
+                    <CommandStep index="04" title="AI prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
                   </>
                 ) : surfaceColumns.map((surface, index) => (
                   <CommandStep key={surface.id} index={String(index + 1).padStart(2, '0')} title={surface.title} detail={surface.subtitle} tone={index === 0 ? 'moss' : index === 1 ? 'blue' : 'plum'} href="/config" />
@@ -346,7 +346,7 @@ export default function FoodScreen() {
       case 'manifest':
         return active === 'Overview' && foodConfig.showManifestBlocks && manifestBlocks.length ? (
           <View key={section}>
-            <SectionTitle title={`${domainLabel} dashboard`} action="Tune" href="/config" />
+            <SectionTitle title={`${domainLabel} dashboard`} action="Tune layout" href="/config" />
             <View style={[styles.manifestGrid, compact && styles.boardCompact]}>
               {manifestBlocks.map((block) => (
                 <ManifestDashboardBlock
@@ -361,7 +361,7 @@ export default function FoodScreen() {
       case 'workspace':
         return active === 'Overview' && foodConfig.showWorkspace ? (
           <View key={section}>
-              <SectionTitle title={`${domainLabel} workspace`} action="Ask" href="/chat" />
+              <SectionTitle title={`${domainLabel} operating board`} action="Ask Food AI" href="/chat" />
             <View style={[styles.board, compact && styles.boardCompact]}>
               {isFoodDomain ? (
                 <>
@@ -388,7 +388,7 @@ export default function FoodScreen() {
       case 'attention':
         return active === 'Overview' && foodConfig.showAttention ? (
           <View key={section}>
-            <SectionTitle title="Review before writing" />
+            <SectionTitle title="Review before anything writes" />
             <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
               {reviewRows.length ? reviewRows.map((row) => (
                 <MiniRecord key={row.id} record={row} />
@@ -426,7 +426,7 @@ export default function FoodScreen() {
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
               <Text style={[styles.configTitle, { color: theme.colors.ink }]}>{domainLabel} can be customized</Text>
-              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, cards, source rules and assistant behavior are editable from Settings.</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, card counts, operating boards, sources, skills and assistant behavior are editable from Settings.</Text>
             </View>
             <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Tune</Link>
           </Card>
@@ -562,7 +562,7 @@ function DinnerAssemblyTable({ meals, kitchen, shopping, compact }: {
       <View style={styles.assemblyHead}>
         <View>
           <Text style={[styles.operatingLabel, { color: theme.colors.muted }]}>Tonight operating table</Text>
-          <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Plan, pantry, shopping and next action</Text>
+          <Text style={[styles.operatingTitle, { color: theme.colors.ink }]}>Cook decision, pantry state, shopping gap, next move</Text>
         </View>
         <Link href="/chat" style={[styles.assemblyAsk, { color: theme.colors.moss }]}>Ask with this table →</Link>
       </View>
@@ -779,7 +779,7 @@ function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: type
 }
 
 const styles = StyleSheet.create({
-  content: { alignSelf: 'center', maxWidth: 1480, paddingBottom: 140 },
+  content: { alignSelf: 'center', maxWidth: 1280, paddingHorizontal: 18, paddingBottom: 140 },
   topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   date: { color: colors.muted, fontSize: 12, marginTop: 3 },
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
   avatar: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', textAlign: 'center', lineHeight: 32, backgroundColor: colors.ink, color: '#FFF', fontWeight: '800', fontSize: 11 },
   dashboard: { flexDirection: 'row', gap: 16, alignItems: 'stretch' },
   dashboardCompact: { flexDirection: 'column' },
-  hero: { flex: 1, minHeight: 260, padding: 28, overflow: 'hidden' },
+  hero: { flex: 1, minHeight: 280, padding: 30, overflow: 'hidden', borderRadius: radius.lg },
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   heroMeta: { color: colors.muted, fontSize: 12, fontWeight: '800' },
   heroTitle: { color: colors.ink, fontSize: 32, lineHeight: 36, fontWeight: '900', letterSpacing: -1.1, marginTop: 22, maxWidth: 680 },
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
   commandCopy: { flex: 1, minWidth: 0 },
   commandTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
   commandDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
-  todayRail: { width: 320, gap: 12 },
+  todayRail: { width: 340, gap: 12 },
   todayRailCompact: { width: '100%' },
   segments: { backgroundColor: '#EAE9E0', padding: 4, borderRadius: radius.pill, marginTop: 18, marginBottom: 20 },
   segment: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill },
@@ -822,8 +822,8 @@ const styles = StyleSheet.create({
   widgetDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
   widgetRoute: { color: colors.moss, fontSize: 11, fontWeight: '900', marginTop: 14 },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  manifestBlockPress: { flexGrow: 1, flexBasis: 260 },
-  manifestBlock: { minHeight: 188, padding: 18 },
+  manifestBlockPress: { flexGrow: 1, flexBasis: 280 },
+  manifestBlock: { minHeight: 198, padding: 20, borderRadius: radius.lg },
   manifestBlockTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   manifestBlockKind: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
   manifestBlockTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
   manifestBlockRoute: { color: colors.moss, fontSize: 10, fontWeight: '900', marginTop: 'auto', paddingTop: 14 },
   board: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   boardCompact: { flexDirection: 'column' },
-  column: { flex: 1, minHeight: 320 },
+  column: { flex: 1, minHeight: 320, borderRadius: radius.lg },
   columnTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
   columnSubtitle: { color: colors.muted, fontSize: 12, marginTop: 4, marginBottom: 12 },
   columnRecords: { gap: 10 },
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
   operatingCard: { flex: 1, minHeight: 230 },
   operatingLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   operatingTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 8, marginBottom: 10 },
-  assemblyCard: { flex: 1.35, minHeight: 250 },
+  assemblyCard: { flex: 1.45, minHeight: 260, borderRadius: radius.lg },
   assemblyCardCompact: { flex: 0, minHeight: 0 },
   assemblyHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   assemblyAsk: { color: colors.moss, fontSize: 12, fontWeight: '900', paddingTop: 2 },

@@ -227,7 +227,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     density: 'comfortable',
     surfaceConfig: {
       home: {
-        sectionOrder: 'now,review,recent,sourceTrust,lifeSpaces,control',
+        sectionOrder: 'now,review,lifeSpaces,recent,sourceTrust,control',
         showNowCard: true,
         showReviewQueue: true,
         reviewLimit: '2',
@@ -238,13 +238,13 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: false,
       },
       food: {
-        sectionOrder: 'hero,tabs,workspace,manifest,attention,widgets,view,package',
+        sectionOrder: 'hero,tabs,manifest,workspace,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
         showManifestBlocks: true,
         dashboardBlocks: '',
         showWidgets: true,
-        widgets: 'Dinner assistant|Ask with pantry, recipe, shopping and nutrition context.|plum|/chat\nConnected sources|See exactly what Notion, Sheets and the phone can cite.|blue|/sources',
+        widgets: 'Ask Food AI|Use pantry, recipes, shopping and nutrition context in one thread.|plum|/chat\nReview sources|See exactly what Notion, Sheets and this device can cite.|blue|/sources',
         showWorkspace: true,
         showOperatingViews: true,
         operatingViewOrder: 'assemblyTable,weekPlan,pantryTimeline,shoppingChecklist',
