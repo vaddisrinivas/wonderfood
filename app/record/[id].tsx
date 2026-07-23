@@ -10,6 +10,7 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
 import { getRecordsByIds, upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 
 type FoodDetail = {
   kind: 'meal' | 'recipe' | 'inventory' | 'shopping' | 'generic';
@@ -332,6 +333,7 @@ export default function RecordScreen() {
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
   const settings = useLifeOSSettingsSnapshot();
+  const visualIdentity = mergeVisualIdentity(catalog.activeManifest, settings.runtime.visualIdentityOverrides);
   const theme = useLifeOSTheme();
 
   const [record, setRecord] = useState<CanonicalRecord | null>(null);
@@ -848,8 +850,8 @@ export default function RecordScreen() {
           <View key={section}>
             <SectionTitle title="Provenance" />
             <Card>
-              <Row icon="S" title={sourceLabel} detail="Canonical source" />
-              <Row icon="⌁" title="Food structure v1" detail="Properties and relations" />
+              <Row icon={visualGlyph(visualIdentity.sources?.[sourceLabel.toLowerCase().replace(/\s+/g, '_')], '🔗')} title={sourceLabel} detail="Canonical source" />
+              <Row icon={visualGlyph(visualIdentity.domain, '◇')} title={`${catalog.activeManifest.label} structure v1`} detail="Properties and relations" />
             </Card>
           </View>
         ) : null;

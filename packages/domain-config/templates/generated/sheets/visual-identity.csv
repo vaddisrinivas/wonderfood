@@ -39,10 +39,23 @@ statuses,to buy,🛒,,,blue,🛒,🛒,Shared statuses visual token
 statuses,use soon,⏳,,,amber,⏳,⏳,Shared statuses visual token
 statuses,available,✅,,,moss,✅,✅,Shared statuses visual token
 statuses,review,👀,,,amber,👀,👀,Shared statuses visual token
+actions,home,⌂,,,moss,⌂,⌂,Shared actions visual token
 actions,add_record,＋,,,moss,＋,＋,Shared actions visual token
+actions,capture,＋,,,moss,＋,＋,Shared actions visual token
 actions,ask_with_collection,✦,,,plum,✦,✦,Shared actions visual token
+actions,chat,✦,,,plum,✦,✦,Shared actions visual token
 actions,search,⌕,,,blue,⌕,⌕,Shared actions visual token
 actions,open_sources,🔗,,,neutral,🔗,🔗,Shared actions visual token
+actions,settings,⚙,,,neutral,⚙,⚙,Shared actions visual token
+actions,add_domain,＋,,,plum,＋,＋,Shared actions visual token
+actions,review,👀,,,amber,👀,👀,Shared actions visual token
+actions,refresh,↻,,,blue,↻,↻,Shared actions visual token
+actions,capture_note,✎,,,neutral,✎,✎,Shared actions visual token
+actions,capture_food,🍲,,,moss,🍲,🍲,Shared actions visual token
+actions,capture_photo,▧,,,blue,▧,▧,Shared actions visual token
+actions,capture_receipt,🧾,,,plum,🧾,🧾,Shared actions visual token
+actions,capture_voice,◖,,,amber,◖,◖,Shared actions visual token
+actions,capture_link,⌁,,,blue,⌁,⌁,Shared actions visual token
 sources,notion,◨,,,neutral,◨,◨,Shared sources visual token
 sources,google_sheets,▦,,,moss,▦,▦,Shared sources visual token
 sources,sqlite,▣,,,blue,▣,▣,Shared sources visual token

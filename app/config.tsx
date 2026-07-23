@@ -55,7 +55,7 @@ const screenBlueprints = [
     title: 'Workspace',
     route: '/food',
     intent: 'Near-Notion domain surface: hero, view tabs, operating views, manifest dashboard blocks, widgets, board and attention queue.',
-    editable: ['section order', 'hero', 'tabs', 'dashboard blocks', 'widgets', 'operating views', 'board columns', 'attention cards'],
+    editable: ['section order', 'hero', 'tabs', 'dashboard blocks', 'card sizes', 'widgets', 'operating views', 'board columns', 'attention cards'],
   },
   {
     id: 'chat',
@@ -689,7 +689,7 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
                 <ToggleRow title="Manifest dashboard blocks" detail="Render cards declared by the active domain package." value={settings.runtime.surfaceConfig.food.showManifestBlocks} onValueChange={(showManifestBlocks) => updateSurfaceConfig('food', { showManifestBlocks })} />
                 <ToggleRow title="Collection atlas" detail="Show every managed collection grouped by workspace view." value={settings.runtime.surfaceConfig.food.showCollectionAtlas} onValueChange={(showCollectionAtlas) => updateSurfaceConfig('food', { showCollectionAtlas })} />
-                <Field label="Dashboard blocks" value={settings.runtime.surfaceConfig.food.dashboardBlocks} onChangeText={(dashboardBlocks) => updateSurfaceConfig('food', { dashboardBlocks })} placeholder="Leave empty to use manifest. Or one per line: id|title|subtitle|kind|tone|collections|match|limit|href" multiline />
+                <Field label="Dashboard blocks" value={settings.runtime.surfaceConfig.food.dashboardBlocks} onChangeText={(dashboardBlocks) => updateSurfaceConfig('food', { dashboardBlocks })} placeholder="Leave empty to use manifest. Or one per line: id|title|subtitle|kind|tone|collections|match|limit|href|size. Size: compact, standard, wide, feature." multiline />
                 <ToggleRow title="Profile widgets" detail="Show custom cards defined by profile." value={settings.runtime.surfaceConfig.food.showWidgets} onValueChange={(showWidgets) => updateSurfaceConfig('food', { showWidgets })} />
                 <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
                 <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />

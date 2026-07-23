@@ -39,6 +39,7 @@ export type DomainVisualIdentity = {
 
 export type DashboardBlockKind = 'spotlight' | 'metric' | 'list' | 'action';
 export type DashboardBlockTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
+export type DashboardBlockSize = 'compact' | 'standard' | 'wide' | 'feature';
 
 export type DashboardBlock = {
   id: string;
@@ -47,6 +48,7 @@ export type DashboardBlock = {
   subtitle?: string;
   kind: DashboardBlockKind;
   tone: DashboardBlockTone;
+  size?: DashboardBlockSize;
   query: {
     collections?: string[];
     match?: string;
@@ -209,6 +211,7 @@ function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | 
   return blocks.map((block, index) => {
     const kind = block.kind;
     const tone = block.tone;
+    const size = block.size;
     const query = isObject(block.query) ? block.query : {};
     assertCondition(
       kind === 'spotlight' || kind === 'metric' || kind === 'list' || kind === 'action',
@@ -230,6 +233,7 @@ function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | 
       subtitle: typeof block.subtitle === 'string' ? block.subtitle : undefined,
       kind: parsedKind,
       tone: parsedTone,
+      size: size === 'compact' || size === 'standard' || size === 'wide' || size === 'feature' ? size : undefined,
       query: {
         collections: parseOptionalStringArray(query.collections, `${path}[${index}].query.collections`),
         match: typeof query.match === 'string' ? query.match : undefined,

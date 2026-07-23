@@ -173,10 +173,23 @@ Use these same tokens for Notion page icons/covers, Sheets dashboard symbols, ap
 - ⏳ **statuses.use soon** · accent: amber
 - ✅ **statuses.available** · accent: moss
 - 👀 **statuses.review** · accent: amber
+- ⌂ **actions.home** · accent: moss
 - ＋ **actions.add_record** · accent: moss
+- ＋ **actions.capture** · accent: moss
 - ✦ **actions.ask_with_collection** · accent: plum
+- ✦ **actions.chat** · accent: plum
 - ⌕ **actions.search** · accent: blue
 - 🔗 **actions.open_sources** · accent: neutral
+- ⚙ **actions.settings** · accent: neutral
+- ＋ **actions.add_domain** · accent: plum
+- 👀 **actions.review** · accent: amber
+- ↻ **actions.refresh** · accent: blue
+- ✎ **actions.capture_note** · accent: neutral
+- 🍲 **actions.capture_food** · accent: moss
+- ▧ **actions.capture_photo** · accent: blue
+- 🧾 **actions.capture_receipt** · accent: plum
+- ◖ **actions.capture_voice** · accent: amber
+- ⌁ **actions.capture_link** · accent: blue
 - ◨ **sources.notion** · accent: neutral
 - ▦ **sources.google_sheets** · accent: moss
 - ▣ **sources.sqlite** · accent: blue

@@ -163,6 +163,7 @@ function parseDashboardBlockOverrides(value: string, domainId: string): Dashboar
         match = '',
         limit = '3',
         href = '/config',
+        size = 'standard',
       ] = line.split('|').map((part) => part.trim());
       const parsedLimit = Number.parseInt(limit, 10);
       return {
@@ -172,6 +173,7 @@ function parseDashboardBlockOverrides(value: string, domainId: string): Dashboar
         subtitle: subtitle || 'Configured from the app profile.',
         kind: kind === 'spotlight' || kind === 'metric' || kind === 'action' ? kind : 'list',
         tone: tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue' ? tone : 'neutral',
+        size: size === 'compact' || size === 'wide' || size === 'feature' ? size : 'standard',
         query: {
           collections: collections ? collections.split(',').map((item) => item.trim()).filter(Boolean) : undefined,
           match: match || undefined,
@@ -543,7 +545,12 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   return (
     <Link href={href as never} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [styles.manifestBlockPress, pressed && styles.pressed]}>
-        <Card tone={block.tone === 'neutral' ? undefined : block.tone} style={styles.manifestBlock}>
+        <Card tone={block.tone === 'neutral' ? undefined : block.tone} style={[
+          styles.manifestBlock,
+          block.size === 'compact' && styles.manifestBlockCompact,
+          block.size === 'wide' && styles.manifestBlockWide,
+          block.size === 'feature' && styles.manifestBlockFeature,
+        ]}>
           <View style={styles.manifestBlockTop}>
             <Text style={[styles.manifestBlockKind, { color: theme.colors.muted }]}>{block.kind.toUpperCase()}</Text>
             <Pill tone={block.tone}>{records.length ? `${records.length} hit${records.length === 1 ? '' : 's'}` : 'config'}</Pill>
@@ -968,8 +975,11 @@ const styles = StyleSheet.create({
   collectionChipName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   collectionChipCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  manifestBlockPress: { flexGrow: 1, flexBasis: 280 },
-  manifestBlock: { minHeight: 198, padding: 20, borderRadius: radius.lg },
+  manifestBlockPress: { flexGrow: 1, flexBasis: 300 },
+  manifestBlock: { minHeight: 220, padding: 20, borderRadius: radius.lg },
+  manifestBlockCompact: { minHeight: 164 },
+  manifestBlockWide: { minHeight: 220, minWidth: 420 },
+  manifestBlockFeature: { minHeight: 280, minWidth: 560 },
   manifestBlockTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   manifestBlockKind: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
   manifestBlockTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },

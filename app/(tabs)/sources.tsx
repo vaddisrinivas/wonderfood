@@ -9,6 +9,7 @@ import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { DirectSyncReceipt, clearProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
+import { mergeVisualIdentity, visualAccent, visualGlyph } from '@/src/domain/visual-identity';
 
 type SourceRow = {
   name: string;
@@ -111,6 +112,7 @@ export default function SourcesScreen() {
   const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeManifest } = loadCatalog();
+  const visualIdentity = mergeVisualIdentity(activeManifest, settings.runtime.visualIdentityOverrides);
   const domainLabel = activeManifest.label;
   const sourcesConfig = settings.runtime.surfaceConfig.sources;
   const citationLimit = Math.max(1, Math.min(12, Number.parseInt(sourcesConfig.citationLimit, 10) || 4));
@@ -249,8 +251,11 @@ export default function SourcesScreen() {
             {sourceRows.map((sourceRow) => {
               const normalized = normalizeSourceName(sourceRow.name);
               const meta = normalized === 'other'
-                ? { icon: '◉', tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source was found by the app.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
+                ? { icon: visualGlyph(visualIdentity.sources?.user, '◉'), tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source was found by the app.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
                 : sourceMeta[normalized];
+              const sourceVisual = normalized === 'other' ? undefined : visualIdentity.sources?.[normalized];
+              const sourceIcon = visualGlyph(sourceVisual, meta.icon);
+              const sourceTone = visualAccent(sourceVisual) as Tone;
               const isReady = normalized === 'postgres';
               const displayRole = normalized === 'sqlite' ? `${domainLabel} on this device` : meta.role;
               const displaySummary = meta.summary
@@ -260,7 +265,7 @@ export default function SourcesScreen() {
                 <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
                     <View style={styles.sourceTop}>
-                      <View style={[styles.sourceIcon, { backgroundColor: toneColor(meta.tone, theme.colors) }]}><Text style={[styles.sourceIconText, { color: theme.colors.paper }]}>{meta.icon}</Text></View>
+                      <View style={[styles.sourceIcon, { backgroundColor: toneColor(sourceTone, theme.colors) }]}><Text style={[styles.sourceIconText, { color: theme.colors.paper }]}>{sourceIcon}</Text></View>
                       <Pill tone={isReady ? 'amber' : meta.tone}>{sourceRow.status.toUpperCase()}</Pill>
                     </View>
                     <Text style={[styles.sourceName, { color: theme.colors.ink }]}>{sourceRow.name}</Text>

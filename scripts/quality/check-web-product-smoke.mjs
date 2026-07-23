@@ -56,12 +56,32 @@ const routes = [
       runtime: {
         surfaceConfig: {
           food: {
-            dashboardBlocks: 'food:chef|Chef board|Custom app-edited block.|action|plum|recipe|chicken|1|/chat',
+            dashboardBlocks: 'food:chef|Chef board|Custom app-edited feature block.|action|plum|recipe|chicken|1|/chat|feature',
           },
         },
       },
     },
-    must: ['Chef board', 'Custom app-edited block.'],
+    must: ['Chef board', 'Custom app-edited feature block.'],
+  },
+  {
+    name: 'search-configured-visuals',
+    path: '/search',
+    localSettings: {
+      runtime: {
+        visualIdentityOverrides: '{"actions":{"search":{"emoji":"🔍","accent":"blue"},"chat":{"emoji":"🤖","accent":"plum"},"capture":{"emoji":"🧺","accent":"moss"},"settings":{"emoji":"🛠️","accent":"neutral"}},"collections":{"meal_plan":{"emoji":"🍛","accent":"moss"}}}',
+      },
+    },
+    must: ['LIFEOS / SEARCH', '🔍', '🤖', '🧺', '🛠️'],
+  },
+  {
+    name: 'capture-configured-visuals',
+    path: '/capture',
+    localSettings: {
+      runtime: {
+        visualIdentityOverrides: '{"domain":{"emoji":"🌮","accent":"moss"},"actions":{"capture_note":{"emoji":"📝","accent":"neutral"},"capture_food":{"emoji":"🌮","accent":"moss"},"capture_photo":{"emoji":"📸","accent":"blue"},"capture_receipt":{"emoji":"🧾","accent":"plum"},"capture_voice":{"emoji":"🎙️","accent":"amber"},"capture_link":{"emoji":"🔗","accent":"blue"}}}',
+      },
+    },
+    must: ['LIFEOS / ADD', '📝', '🌮', '📸', '🧾', '🎙️', '🔗'],
   },
   {
     name: 'health-active-workspace',

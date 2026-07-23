@@ -9,6 +9,7 @@ import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 
 function countSetting(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
@@ -65,6 +66,7 @@ export default function TodayScreen() {
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const catalog = loadCatalog();
+  const visualIdentity = mergeVisualIdentity(catalog.activeManifest, settings.runtime.visualIdentityOverrides);
   const theme = useLifeOSTheme();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
@@ -146,7 +148,7 @@ export default function TodayScreen() {
               {reviewRows.length ? reviewRows.map((row, index) => (
                 <Row
                   key={row.id}
-                  icon={index === 0 ? '!' : '↻'}
+                  icon={index === 0 ? visualGlyph(visualIdentity.actions?.review, '👀') : visualGlyph(visualIdentity.actions?.refresh, '↻')}
                   title={index === 0 ? `Review ${row.title}` : row.title}
                   detail={row.meta || `${row.collection} · ${row.status}`}
                   href={{ pathname: '/record/[id]', params: { id: row.id } }}
@@ -168,7 +170,7 @@ export default function TodayScreen() {
               <Link href="/(tabs)/food" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
                   <Card tone="moss" style={styles.spaceCard}>
-                    <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>F</Text>
+                    <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>{visualGlyph(visualIdentity.domain, catalog.activeManifest.label.slice(0, 1))}</Text>
                     <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>{catalog.activeManifest.label}</Text>
                 <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records, ${catalog.activeManifest.relations.length} relations, ${catalog.activeManifest.data_homes.length} source homes.` : `${catalog.activeManifest.label} is ready to set up.`}</Text>
                   </Card>
@@ -177,7 +179,7 @@ export default function TodayScreen() {
               <Link href="/config" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
               <Card tone="plum" style={styles.spaceCard}>
-                <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>+</Text>
+                <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>{visualGlyph(visualIdentity.actions?.add_domain ?? visualIdentity.actions?.add_record, '+')}</Text>
                 <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Portable packages</Text>
                 <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Health, Plants or any future life space should arrive from config, schemas and skills.</Text>
                   </Card>
@@ -194,13 +196,13 @@ export default function TodayScreen() {
               {recentRows.length ? recentRows.map((row) => (
                 <Row
                   key={row.id}
-                  icon="◉"
+                  icon={visualGlyph(visualIdentity.collections?.[row.collection], '◉')}
                   title={row.title}
                   detail={row.meta || row.status}
                   href={{ pathname: '/record/[id]', params: { id: row.id } }}
                 />
               )) : (
-                <Row icon="▣" title="Food history ready" detail="Connect Notion or Sheets, or add your first item." href="/sources" />
+                <Row icon={visualGlyph(visualIdentity.actions?.open_sources, '▣')} title={`${catalog.activeManifest.label} history ready`} detail="Connect Notion or Sheets, or add your first item." href="/sources" />
               )}
             </Card>
           </View>

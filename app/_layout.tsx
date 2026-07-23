@@ -5,14 +5,17 @@ import { StatusBar } from 'expo-status-bar';
 
 import { colors, darkColors, LifeOSColors } from '@/src/theme';
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
-import { setActiveDomainOverride } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
 
-function HeaderActions({ palette }: { palette: LifeOSColors }) {
+function HeaderActions({ palette, settings }: { palette: LifeOSColors; settings: LifeOSSettings }) {
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const visualIdentity = mergeVisualIdentity(loadCatalog().activeManifest, settings.runtime.visualIdentityOverrides);
   return (
     <View style={styles.actions}>
-      <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={[styles.icon, { color: palette.ink }]}>⌕</Text></Pressable></Link>
-      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={[styles.icon, { color: palette.ink }]}>＋</Text></Pressable></Link>
+      <Link href="/search" asChild><Pressable accessibilityLabel="Search"><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text></Pressable></Link>
+      <Link href="/capture" asChild><Pressable accessibilityLabel="Capture"><Text style={[styles.icon, { color: palette.ink }]}>{visualGlyph(visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, '＋')}</Text></Pressable></Link>
       <Link href="/settings" asChild><Pressable accessibilityLabel="Settings"><Text style={[styles.avatar, { backgroundColor: palette.ink, color: palette.paper }]}>SV</Text></Pressable></Link>
     </View>
   );
@@ -58,7 +61,7 @@ export default function RootLayout() {
           headerTintColor: activeColors.ink,
           headerTitleStyle: { fontWeight: '800' },
           contentStyle: { backgroundColor: activeColors.canvas },
-          headerRight: () => <HeaderActions palette={activeColors} />,
+          headerRight: () => <HeaderActions palette={activeColors} settings={settings} />,
         }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="record/[id]" options={{ headerShown: false }} />

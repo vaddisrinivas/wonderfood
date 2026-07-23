@@ -9,6 +9,7 @@ import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { DomainManifest } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 
 type CaptureType = string;
 const CAPTURE_SECTIONS = ['hero', 'typePicker', 'editor', 'routeCard'] as const;
@@ -32,9 +33,17 @@ function mapCaptureCollection(captureType: CaptureType, manifest: DomainManifest
   return primaryCollection(manifest);
 }
 
-function captureTypesFor(manifest: DomainManifest): Array<[string, string]> {
-  const domainIcon = manifest.id === 'food' ? '◉' : manifest.id === 'health' ? '♡' : manifest.id === 'plants' ? '⌁' : '◇';
-  return [['Note', '✎'], [manifest.label, domainIcon], ['Photo', '▧'], ['Voice', '◖'], ['Link', '⌁']];
+function captureTypesFor(manifest: DomainManifest, overrideText: string): Array<[string, string]> {
+  const visualIdentity = mergeVisualIdentity(manifest, overrideText);
+  const domainIcon = visualGlyph(visualIdentity.actions?.capture_food ?? visualIdentity.domain, '◇');
+  return [
+    ['Note', visualGlyph(visualIdentity.actions?.capture_note, '✎')],
+    [manifest.label, domainIcon],
+    ['Photo', visualGlyph(visualIdentity.actions?.capture_photo, '▧')],
+    ['Receipt', visualGlyph(visualIdentity.actions?.capture_receipt, '🧾')],
+    ['Voice', visualGlyph(visualIdentity.actions?.capture_voice, '◖')],
+    ['Link', visualGlyph(visualIdentity.actions?.capture_link, '⌁')],
+  ];
 }
 
 function placeholderFor(type: CaptureType, domainLabel: string) {
@@ -63,7 +72,8 @@ export default function CaptureScreen() {
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const catalog = loadCatalog();
-  const captureTypes = useMemo(() => captureTypesFor(catalog.activeManifest), [catalog.activeManifest]);
+  const visualIdentity = mergeVisualIdentity(catalog.activeManifest, settings.runtime.visualIdentityOverrides);
+  const captureTypes = useMemo(() => captureTypesFor(catalog.activeManifest, settings.runtime.visualIdentityOverrides), [catalog.activeManifest, settings.runtime.visualIdentityOverrides]);
 
   const [type, setType] = useState<CaptureType>('Note');
   const [value, setValue] = useState('');
@@ -248,13 +258,13 @@ export default function CaptureScreen() {
             {captureConfig.showAttachments ? (
               <View style={[styles.attachments, { borderTopColor: theme.colors.line }]}>
                 <Pressable accessibilityRole="button" onPress={() => void pickPhoto('camera')} style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}>
-                  <Text style={[styles.attachment, { color: theme.colors.ink }]}>▧ Camera</Text>
+                  <Text style={[styles.attachment, { color: theme.colors.ink }]}>{visualGlyph(visualIdentity.actions?.capture_photo, '▧')} Camera</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={() => void pickPhoto('library')} style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}>
-                  <Text style={[styles.attachment, { color: theme.colors.ink }]}>▧ Library</Text>
+                  <Text style={[styles.attachment, { color: theme.colors.ink }]}>{visualGlyph(visualIdentity.actions?.capture_photo, '▧')} Library</Text>
                 </Pressable>
-                <Text style={[styles.attachment, { color: theme.colors.muted }]}>⌁ Link</Text>
-                <Text style={[styles.attachment, { color: theme.colors.muted }]}>◖ Record</Text>
+                <Text style={[styles.attachment, { color: theme.colors.muted }]}>{visualGlyph(visualIdentity.actions?.capture_link, '⌁')} Link</Text>
+                <Text style={[styles.attachment, { color: theme.colors.muted }]}>{visualGlyph(visualIdentity.actions?.capture_voice, '◖')} Record</Text>
               </View>
             ) : null}
             {photos.length ? (

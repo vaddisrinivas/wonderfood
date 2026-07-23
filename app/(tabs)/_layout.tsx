@@ -3,20 +3,21 @@ import { StyleSheet, Text } from 'react-native';
 
 import { useLifeOSTheme } from '@/src/theme';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
-
-const icons: Record<string, string> = {
-  index: '⌂',
-  food: '◉',
-  chat: '✦',
-  sources: '▣',
-  settings: '⚙',
-};
 
 export default function TabLayout() {
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
   const domain = loadCatalog().activeManifest;
+  const visualIdentity = mergeVisualIdentity(domain, settings.runtime.visualIdentityOverrides);
+  const icons: Record<string, string> = {
+    index: visualGlyph(visualIdentity.actions?.home, '⌂'),
+    food: visualGlyph(visualIdentity.domain, domain.label.slice(0, 1)),
+    chat: visualGlyph(visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, '✦'),
+    sources: visualGlyph(visualIdentity.actions?.open_sources, '▣'),
+    settings: visualGlyph(visualIdentity.actions?.settings, '⚙'),
+  };
   const theme = useLifeOSTheme();
   return (
     <Tabs screenOptions={({ route }) => ({

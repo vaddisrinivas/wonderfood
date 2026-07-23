@@ -8,6 +8,7 @@ import { searchDomainRecords } from '@/src/domain/queries';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
 
 export default function SearchScreen() {
   const theme = useLifeOSTheme();
@@ -15,6 +16,7 @@ export default function SearchScreen() {
   setActiveDomainOverride(settings.runtime.activeDomain);
   const catalog = loadCatalog();
   const domainLabel = catalog.activeManifest.label;
+  const visualIdentity = mergeVisualIdentity(catalog.activeManifest, settings.runtime.visualIdentityOverrides);
   const [query, setQuery] = useState('');
   const db = useLifeOSDatabase();
   const [results, setResults] = useState<DomainRecordViewModel[]>([]);
@@ -49,9 +51,9 @@ export default function SearchScreen() {
   const hasQuery = query.trim().length > 0;
   const visibleResults = results.slice(0, resultLimit);
   const commands = [
-    { id: 'ask', title: `Ask ${domainLabel} AI`, detail: `Search ${domainLabel} sources, saved data and the web`, href: '/(tabs)/chat' as const, icon: '✦' },
-    { id: 'capture', title: `Add ${domainLabel.toLowerCase()}`, detail: `Note, receipt, photo, link or quick thought`, href: '/capture' as const, icon: '＋' },
-    { id: 'settings', title: 'Open Settings', detail: 'AI, sources, domains and app behavior', href: '/settings' as const, icon: '⚙' },
+    { id: 'ask', title: `Ask ${domainLabel} AI`, detail: `Search ${domainLabel} sources, saved data and the web`, href: '/(tabs)/chat' as const, icon: visualGlyph(visualIdentity.actions?.chat ?? visualIdentity.actions?.ask_with_collection, '✦') },
+    { id: 'capture', title: `Add ${domainLabel.toLowerCase()}`, detail: `Note, receipt, photo, link or quick thought`, href: '/capture' as const, icon: visualGlyph(visualIdentity.actions?.capture ?? visualIdentity.actions?.add_record, '＋') },
+    { id: 'settings', title: 'Open Settings', detail: 'AI, sources, domains and app behavior', href: '/settings' as const, icon: visualGlyph(visualIdentity.actions?.settings, '⚙') },
   ];
 
   const renderSection = (section: SearchSection) => {
@@ -96,7 +98,7 @@ export default function SearchScreen() {
                     const status = record.status ?? 'Active';
                     return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
                       <Pressable style={styles.result}>
-                        <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>◉</Text></View>
+                        <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>{visualGlyph(visualIdentity.collections?.[record.collection], '◉')}</Text></View>
                         <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{record.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{record.meta ?? ''}</Text></View>
                         <Pill tone={tone}>{status}</Pill>
                       </Pressable>
@@ -117,7 +119,7 @@ export default function SearchScreen() {
   return <Page><View style={sharedStyles.content}>
     <ScrollView keyboardShouldPersistTaps="handled">
       {sections.includes('hero') ? renderSection('hero') : null}
-      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder={`Search meals, pantry, recipes, shopping…`} placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder={`Search meals, pantry, recipes, shopping…`} placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
       {sections.filter((section) => section !== 'hero').map(renderSection)}
     </ScrollView>
   </View></Page>;
