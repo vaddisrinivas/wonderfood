@@ -361,7 +361,7 @@ export default function ChatScreen() {
           </View>
         );
       case 'promptRail':
-        return chatConfig.promptRail ? (
+        return chatConfig.promptRail && isWide ? (
           <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
             {promptBank.map((prompt) => (
               <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
@@ -369,6 +369,14 @@ export default function ChatScreen() {
               </Pressable>
             ))}
           </ScrollView>
+        ) : chatConfig.promptRail ? (
+          <View key={section} style={styles.promptRailMobile}>
+            {promptBank.slice(0, 3).map((prompt) => (
+              <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChipMobile, pressed && styles.pressed]}>
+                <Text style={styles.promptText}>{prompt}</Text>
+              </Pressable>
+            ))}
+          </View>
         ) : null;
       default:
         return null;
@@ -630,6 +638,8 @@ const styles = StyleSheet.create({
   sourceEmpty: { color: colors.muted, fontSize: 12, paddingVertical: 8 },
   promptRail: { gap: 8, paddingBottom: 10 },
   promptChip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 8 },
+  promptRailMobile: { gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  promptChipMobile: { borderRadius: 13, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 12, paddingVertical: 10 },
   promptText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   composer: { minHeight: 51, borderWidth: 1, borderColor: '#CBCBC0', borderRadius: 14, paddingLeft: 12, paddingRight: 7, paddingVertical: 6, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: { minWidth: 0, color: colors.ink, fontSize: 14, lineHeight: 20, paddingTop: 7, paddingBottom: 7, flex: 1, minHeight: 34, maxHeight: 102 },
