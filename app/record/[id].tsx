@@ -342,6 +342,8 @@ export default function RecordScreen() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [saved, setSaved] = useState({ title: '', body: '' });
+  const [propertiesDraft, setPropertiesDraft] = useState('{}');
+  const [savedPropertiesDraft, setSavedPropertiesDraft] = useState('{}');
   const [linkedRecords, setLinkedRecords] = useState<Record<string, CanonicalRecord>>({});
   const [notice, setNotice] = useState('');
   const [actionPanelOpen, setActionPanelOpen] = useState(false);
@@ -384,6 +386,9 @@ export default function RecordScreen() {
       setTitle(canonical.title);
       setBody(String(canonical.properties.body ?? ''));
       setSaved({ title: canonical.title, body: String(canonical.properties.body ?? '') });
+      const nextPropertiesDraft = JSON.stringify(canonical.properties ?? {}, null, 2);
+      setPropertiesDraft(nextPropertiesDraft);
+      setSavedPropertiesDraft(nextPropertiesDraft);
       setLoading(false);
     };
 
@@ -394,6 +399,7 @@ export default function RecordScreen() {
   }, [db, id, catalog]);
 
   const dirty = title !== saved.title || body !== saved.body;
+  const propertiesDirty = propertiesDraft !== savedPropertiesDraft;
   const meta = record ? String(record.properties.meta ?? '') : '';
   const sourceLabel = record
     ? `${record.source.provider}${record.source.external_id ? ` · ${record.source.external_id}` : ''}`
@@ -478,6 +484,43 @@ export default function RecordScreen() {
   const handleUndo = () => {
     setTitle(saved.title);
     setBody(saved.body);
+  };
+
+  const handleSaveProperties = async () => {
+    if (!record || !db) {
+      setSavedPropertiesDraft(propertiesDraft);
+      setNotice('Saved locally in this view. Open Settings to connect a writable source.');
+      return;
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      const value = JSON.parse(propertiesDraft) as unknown;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Properties must be a JSON object.');
+      }
+      parsed = value as Record<string, unknown>;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Properties JSON is invalid.');
+      return;
+    }
+
+    await upsertRecord(db, loadCatalog().activeManifest, {
+      ...record,
+      title: String(parsed.title ?? record.title),
+      properties: parsed,
+      updated_at: new Date().toISOString(),
+    });
+    const refreshed = await getDomainRecordCanonical(db, record.id);
+    const nextRecord = refreshed ?? { ...record, properties: parsed };
+    const nextDraft = JSON.stringify(nextRecord.properties ?? {}, null, 2);
+    setRecord(nextRecord);
+    setPropertiesDraft(nextDraft);
+    setSavedPropertiesDraft(nextDraft);
+    setTitle(nextRecord.title);
+    setBody(String(nextRecord.properties.body ?? ''));
+    setSaved({ title: nextRecord.title, body: String(nextRecord.properties.body ?? '') });
+    setNotice('Saved record properties.');
   };
 
   const persistRecordPatch = async (patch: Partial<CanonicalRecord>) => {
@@ -798,6 +841,24 @@ export default function RecordScreen() {
               <Fact label="Updated" value={updatedAt} />
               <Fact label="Detail" value={structuredFoodDetail ? 'Structured food_detail' : 'Inferred fallback'} />
             </Card>
+            <SectionTitle title="Record properties" />
+            <Card style={styles.sideCard}>
+              <Text style={[styles.propertyHelp, { color: theme.colors.muted }]}>Edit the canonical properties for this collection. Notion, Sheets, SQLite and Chat preserve this object.</Text>
+              <TextInput
+                accessibilityLabel="Record properties JSON"
+                value={propertiesDraft}
+                onChangeText={setPropertiesDraft}
+                multiline
+                autoCapitalize="none"
+                autoCorrect={false}
+                textAlignVertical="top"
+                style={[styles.propertyEditor, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line, color: theme.colors.ink }]}
+              />
+              <View style={styles.actions}>
+                <ActionButton label={propertiesDirty ? 'Save properties' : 'Properties saved'} onPress={handleSaveProperties} />
+                {propertiesDirty ? <ActionButton label="Undo" quiet onPress={() => setPropertiesDraft(savedPropertiesDraft)} /> : null}
+              </View>
+            </Card>
             {recordConfig.showNutrition && primaryNutrition.length ? (
               <>
                 <SectionTitle title="At a glance" />
@@ -1041,6 +1102,8 @@ const styles = StyleSheet.create({
   sideFact: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   sideFactLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
   sideFactValue: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: 4 },
+  propertyHelp: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  propertyEditor: { minHeight: 180, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.canvas, padding: 12, color: colors.ink, fontFamily: 'monospace', fontSize: 12, lineHeight: 18 },
   relationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   relationCard: { flexGrow: 1, flexBasis: 240, minHeight: 128, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 14 },
   relationTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' },

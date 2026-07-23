@@ -128,6 +128,8 @@ const routes = [
       'Cooking log and variations',
       'Previous notes',
       'Variations',
+      'Record properties',
+      'Properties saved',
       'Connected records',
       'Provenance',
     ],
