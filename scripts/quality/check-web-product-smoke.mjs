@@ -37,12 +37,58 @@ function chromeExecutable() {
 }
 
 const routes = [
-  { name: 'home', path: '/', must: ['LIFEOS / HOME', 'Food'] },
-  { name: 'food', path: '/food', must: ['Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping'] },
-  { name: 'record-green-dal', path: '/record/meal-green-dal', must: ['Nutrition profile', 'Ingredients and availability', 'Connected records'] },
-  { name: 'chat', path: '/chat', must: ['Talk to your life', 'Chat cites sources'] },
-  { name: 'config', path: '/config', must: ['Active package contract', 'COLLECTIONS', 'MCP CONTRACT', 'Theme and density apply', 'Portable profile', 'Load YAML'] },
-  { name: 'settings', path: '/settings', must: ['AI providers', 'Data sources', 'LifeOS behavior'] },
+  {
+    name: 'home',
+    path: '/',
+    must: ['LIFEOS / HOME', 'Review queue', 'Life spaces', 'Recent graph', 'Source trust', 'Control lives in Settings'],
+  },
+  {
+    name: 'food',
+    path: '/food',
+    must: ['Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food is the active package'],
+  },
+  {
+    name: 'record-green-dal',
+    path: '/record/meal-green-dal',
+    must: [
+      'Nutrition profile',
+      'Ingredients and availability',
+      'Available',
+      'Shopping',
+      'Previous / substitute',
+      'Instructions',
+      'Cooking log and variations',
+      'Previous notes',
+      'Variations',
+      'Connected records',
+      'Provenance',
+    ],
+  },
+  {
+    name: 'chat',
+    path: '/chat',
+    must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Undo', 'Open source'],
+  },
+  {
+    name: 'config',
+    path: '/config',
+    must: [
+      'Active package contract',
+      'Collections',
+      'MCP contract',
+      'Screen composition',
+      'Every main screen gets runtime knobs',
+      'Portable profile',
+      'Load YAML',
+      'Apply profile',
+      'Schemas & advanced overrides',
+    ],
+  },
+  {
+    name: 'settings',
+    path: '/settings',
+    must: ['AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
+  },
 ];
 
 const { chromium } = requirePlaywright();

@@ -328,6 +328,7 @@ export default function ChatScreen() {
           <View style={styles.threadFoot}>
             <Pill tone="moss">{domainLabel} context on</Pill>
             <Text style={styles.threadFootText}>{sourceRecords.length} local records available. Chat cites sources it reads.</Text>
+            <Text style={styles.threadFootText}>Open source cards and Undo reversible actions when a write receipt exists.</Text>
           </View>
         ) : null}
       </Card>
@@ -445,7 +446,7 @@ export default function ChatScreen() {
             {chatConfig.showContextCard ? (
               <Card tone="blue" style={styles.contextCard}>
                 <View style={styles.contextIcon}><Text>⌁</Text></View>
-                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · open conversation resume in order · citations inline when available.</Text></View>
+                <View style={styles.contextCopy}><Text style={styles.contextTitle}>What Hearth can see</Text><Text style={sharedStyles.muted}>{activeThread.messages.length} messages loaded · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
                 <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
               </Card>
             ) : null}

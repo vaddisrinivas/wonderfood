@@ -209,7 +209,7 @@ export default function FoodScreen() {
       case 'attention':
         return active === 'Overview' && foodConfig.showAttention ? (
           <View key={section}>
-            <SectionTitle title="Needs attention" />
+            <SectionTitle title="Review before writing" />
             <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
               {reviewRows.length ? reviewRows.map((row) => (
                 <MiniRecord key={row.id} record={row} />

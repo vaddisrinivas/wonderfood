@@ -154,7 +154,7 @@ export default function SettingsScreen() {
               <Text style={styles.principleKicker}>PORTABLE BY DESIGN</Text>
               <Text style={styles.principleTitle}>Direct on device. Fallback when needed.</Text>
               <Text style={styles.principleBody}>
-                The app tries Primary, then Fallback, then stays local. No shared public endpoint, Mac service, or hidden build-time config.
+                The app tries Primary, then Fallback, then stays local. Direct tokens stay on this device; no shared public endpoint, Mac service, or hidden build-time config.
               </Text>
               <View style={styles.flow}>
                 <Pill tone="moss">Primary</Pill><Text style={styles.arrow}>→</Text>
