@@ -7,6 +7,7 @@ import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { DirectSyncReceipt, clearProviderLocalCopy, restoreClearedProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
+import { listSyncConflicts, resolveSyncConflict, type SyncConflict } from '@/src/providers/merge';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings, saveLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { mergeVisualIdentity, visualAccent, visualGlyph } from '@/src/domain/visual-identity';
@@ -82,7 +83,7 @@ const recentSync = [
   ['04', 'Review changes', 'Conflicts and provider-owned fields stay visible before anything important is overwritten.'],
 ] as const;
 
-const defaultSourceSectionOrder = ['hero', 'metrics', 'dataHomes', 'citations', 'syncPlan', 'policy', 'configLink'] as const;
+const defaultSourceSectionOrder = ['hero', 'metrics', 'needsReview', 'dataHomes', 'citations', 'syncPlan', 'policy', 'configLink'] as const;
 type SourceSectionId = typeof defaultSourceSectionOrder[number];
 
 function orderedSourceSections(sectionOrder: string): SourceSectionId[] {
@@ -118,6 +119,9 @@ export default function SourcesScreen() {
   const citationLimit = Math.max(1, Math.min(12, Number.parseInt(sourcesConfig.citationLimit, 10) || 4));
   const citationSources = citationSourcesFor(domainLabel, activeManifest.collections).slice(0, citationLimit);
   const [receipts, setReceipts] = useState<DirectSyncReceipt[]>([]);
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<DirectSyncReceipt['provider'] | 'all' | null>(null);
   const hasDb = Boolean(db);
@@ -126,9 +130,13 @@ export default function SourcesScreen() {
     setLoading(true);
     const loadedSettings = await loadLifeOSSettings();
     setActiveDomainOverride(loadedSettings.runtime.activeDomain);
-    const rows = await listSourceRows(db);
+    const [rows, pendingConflicts] = await Promise.all([
+      listSourceRows(db),
+      db ? listSyncConflicts(db) : Promise.resolve([]),
+    ]);
     setSettings(loadedSettings);
     setSourceRows(mergeConfiguredRows(rows, loadedSettings));
+    setConflicts(pendingConflicts);
     setLoading(false);
   };
 
@@ -137,10 +145,14 @@ export default function SourcesScreen() {
     const run = async () => {
       const loadedSettings = await loadLifeOSSettings();
       setActiveDomainOverride(loadedSettings.runtime.activeDomain);
-      const rows = await listSourceRows(db);
+      const [rows, pendingConflicts] = await Promise.all([
+        listSourceRows(db),
+        db ? listSyncConflicts(db) : Promise.resolve([]),
+      ]);
       if (!cancelled) {
         setSettings(loadedSettings);
         setSourceRows(mergeConfiguredRows(rows, loadedSettings));
+        setConflicts(pendingConflicts);
         setLoading(false);
       }
     };
@@ -196,6 +208,29 @@ export default function SourcesScreen() {
     setReceipts([result]);
     await refreshRows();
     setSyncing(null);
+  };
+
+  const resolveConflict = async (conflict: SyncConflict, resolution: 'local' | 'remote' | 'dismiss') => {
+    if (!db) return;
+    setReviewing(conflict.id);
+    const result = await resolveSyncConflict({
+      db,
+      manifest: activeManifest,
+      conflictId: conflict.id,
+      resolution,
+      actor: 'user',
+    });
+    setReviewMessage(
+      result.status === 'resolved'
+        ? resolution === 'remote'
+          ? `Used the ${conflict.provider.replace('_', ' ')} value for ${conflict.local.title}.`
+          : `Kept the app value for ${conflict.local.title}.`
+        : result.status === 'dismissed'
+          ? `Dismissed review for ${conflict.local.title}.`
+          : `Could not resolve ${conflict.local.title}: ${result.reject_reason}`,
+    );
+    await refreshRows();
+    setReviewing(null);
   };
 
   const configuredCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
@@ -341,6 +376,54 @@ export default function SourcesScreen() {
               );
             })}
           </View>
+        </>
+      ) : null;
+    }
+    if (section === 'needsReview') {
+      return sourcesConfig.showNeedsReview ? (
+        <>
+          <SectionTitle title="Needs review" />
+          <Card style={styles.reviewCard}>
+            <View style={styles.reviewHeader}>
+              <View>
+                <Text style={styles.sectionLead}>{conflicts.length ? `${conflicts.length} source conflict${conflicts.length === 1 ? '' : 's'}` : 'No source conflicts'}</Text>
+                <Text style={styles.sectionDetail}>
+                  When the app and a provider change the same important field, LifeOS keeps your app value and asks before applying the provider value.
+                </Text>
+              </View>
+              <Pill tone={conflicts.length ? 'amber' : 'moss'}>{conflicts.length ? 'REVIEW' : 'CLEAR'}</Pill>
+            </View>
+            {reviewMessage ? <Text style={styles.reviewMessage}>{reviewMessage}</Text> : null}
+            <View style={styles.reviewList}>
+              {conflicts.length ? conflicts.map((conflict) => (
+                <View key={conflict.id} style={styles.reviewRow}>
+                  <View style={styles.reviewGlyph}><Text style={styles.reviewGlyphText}>!</Text></View>
+                  <View style={styles.reviewCopy}>
+                    <Text style={styles.reviewTitle}>{conflict.local.title}</Text>
+                    <Text style={styles.reviewMeta}>{conflict.provider.replace('_', ' ')} · {conflict.external_id}</Text>
+                    <Text style={styles.reviewFields}>Changed fields: {conflict.fields.join(', ') || 'record'}</Text>
+                    <Text style={styles.reviewCompare}>App: {summarizeConflictRecord(conflict.local, conflict.fields)} · Source: {summarizeConflictRecord(conflict.remote, conflict.fields)}</Text>
+                    <View style={styles.reviewActions}>
+                      <Pressable accessibilityRole="button" disabled={reviewing === conflict.id} onPress={() => void resolveConflict(conflict, 'local')} style={({ pressed }) => [styles.reviewButton, pressed && styles.pressed]}>
+                        <Text style={styles.reviewButtonText}>Keep app</Text>
+                      </Pressable>
+                      <Pressable accessibilityRole="button" disabled={reviewing === conflict.id} onPress={() => void resolveConflict(conflict, 'remote')} style={({ pressed }) => [styles.reviewButtonPrimary, pressed && styles.pressed]}>
+                        <Text style={styles.reviewButtonPrimaryText}>{reviewing === conflict.id ? 'Applying…' : 'Use source'}</Text>
+                      </Pressable>
+                      <Pressable accessibilityRole="button" disabled={reviewing === conflict.id} onPress={() => void resolveConflict(conflict, 'dismiss')} style={({ pressed }) => [styles.reviewButtonGhost, pressed && styles.pressed]}>
+                        <Text style={styles.reviewButtonGhostText}>Dismiss</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              )) : (
+                <View style={styles.reviewEmpty}>
+                  <Text style={styles.reviewEmptyTitle}>Source writes are calm right now.</Text>
+                  <Text style={styles.reviewEmptyBody}>Pull Notion or Sheets any time. If a provider and the app disagree on a high-risk field, it will appear here before anything is overwritten.</Text>
+                </View>
+              )}
+            </View>
+          </Card>
         </>
       ) : null;
     }
@@ -495,6 +578,19 @@ function mergeConfiguredRows(rows: SourceRow[], settings: LifeOSSettings): Sourc
   return next;
 }
 
+function summarizeConflictRecord(record: SyncConflict['local'], fields: string[]) {
+  const field = fields[0] ?? 'title';
+  if (field === 'title') return record.title;
+  if (field === 'archived_at') return record.archived_at ? 'archived' : 'active';
+  if (field === 'deleted') return record.deleted ? 'deleted' : 'active';
+  if (field === 'privacy') return record.privacy;
+  if (field === 'relations') return `${record.relations.length} relation${record.relations.length === 1 ? '' : 's'}`;
+  const value = record.properties[field];
+  if (value == null) return 'blank';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value).slice(0, 80);
+}
+
 const styles = StyleSheet.create({
   contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   brand: { color: colors.blue, fontSize: 12, fontWeight: '900', letterSpacing: 1.6 },
@@ -538,6 +634,28 @@ const styles = StyleSheet.create({
   restoreAction: { alignSelf: 'flex-start', minHeight: 34, borderRadius: radius.pill, backgroundColor: colors.mossSoft, paddingHorizontal: 12, marginTop: 9, justifyContent: 'center' },
   restoreActionText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   receiptCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
+  reviewCard: { padding: 20 },
+  reviewHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
+  reviewMessage: { color: colors.moss, fontSize: 12, fontWeight: '800', marginTop: 12 },
+  reviewList: { marginTop: 16 },
+  reviewRow: { minHeight: 120, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: 14, paddingBottom: 14 },
+  reviewGlyph: { width: 38, height: 38, borderRadius: 14, backgroundColor: colors.amberSoft, alignItems: 'center', justifyContent: 'center' },
+  reviewGlyphText: { color: colors.ink, fontSize: 17, fontWeight: '900' },
+  reviewCopy: { flex: 1, minWidth: 0 },
+  reviewTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  reviewMeta: { color: colors.moss, fontSize: 11, fontWeight: '800', marginTop: 3, textTransform: 'capitalize' },
+  reviewFields: { color: colors.ink, fontSize: 12, fontWeight: '800', marginTop: 8 },
+  reviewCompare: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  reviewActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  reviewButton: { minHeight: 34, borderRadius: radius.pill, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, justifyContent: 'center' },
+  reviewButtonText: { color: colors.ink, fontSize: 11, fontWeight: '900' },
+  reviewButtonPrimary: { minHeight: 34, borderRadius: radius.pill, backgroundColor: colors.ink, paddingHorizontal: 12, justifyContent: 'center' },
+  reviewButtonPrimaryText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+  reviewButtonGhost: { minHeight: 34, borderRadius: radius.pill, paddingHorizontal: 10, justifyContent: 'center' },
+  reviewButtonGhostText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
+  reviewEmpty: { minHeight: 74, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: 14 },
+  reviewEmptyTitle: { color: colors.ink, fontSize: 14, fontWeight: '900' },
+  reviewEmptyBody: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
   sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   sourceCell: { minWidth: 280, flexGrow: 1, flexBasis: '47%' },
   sourceCellCompact: { flexBasis: '100%', minWidth: 0 },

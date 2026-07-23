@@ -126,6 +126,7 @@ export type LifeOSSettings = {
         sectionOrder: string;
         showHero: boolean;
         showMetrics: boolean;
+        showNeedsReview: boolean;
         showDataHomes: boolean;
         showCitations: boolean;
         citationLimit: string;
@@ -302,9 +303,10 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         destinationHint: 'Saves to Food on this device with no network dependency.',
       },
       sources: {
-        sectionOrder: 'hero,metrics,dataHomes,citations,syncPlan,policy,configLink',
+        sectionOrder: 'hero,metrics,needsReview,dataHomes,citations,syncPlan,policy,configLink',
         showHero: true,
         showMetrics: true,
+        showNeedsReview: true,
         showDataHomes: true,
         showCitations: true,
         citationLimit: '4',
@@ -505,6 +507,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       sectionOrder: normalizeOrderString(config.sources?.sectionOrder, defaults.sources.sectionOrder),
       showHero: config.sources?.showHero !== false,
       showMetrics: config.sources?.showMetrics !== false,
+      showNeedsReview: config.sources?.showNeedsReview !== false,
       showDataHomes: config.sources?.showDataHomes !== false,
       showCitations: config.sources?.showCitations !== false,
       citationLimit: normalizePositiveString(config.sources?.citationLimit, defaults.sources.citationLimit),

@@ -204,7 +204,7 @@ const routes = [
   {
     name: 'sources',
     path: '/sources',
-    must: ['LIFEOS / SOURCES', 'Your food data homes.', 'LOCAL FIRST', 'Pull what you want. Keep control.', 'Manual pulls keep the graph understandable and portable.', 'data homes', 'What Food Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Your food data homes.', 'LOCAL FIRST', 'Pull what you want. Keep control.', 'Manual pulls keep the graph understandable and portable.', 'Needs review', 'No source conflicts', 'Source writes are calm right now.', 'data homes', 'What Food Chat can cite'],
   },
   {
     name: 'sources-configured-citations',
