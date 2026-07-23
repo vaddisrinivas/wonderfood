@@ -144,6 +144,18 @@ const routes = [
     name: 'sources-configured-citations',
     path: '/sources',
     localSettings: {
+      notion: {
+        enabled: true,
+        token: 'test-notion-token',
+        pageId: 'test-page',
+        dataSourceIds: 'test-source',
+      },
+      sheets: {
+        enabled: true,
+        token: 'test-sheets-token',
+        workbookId: 'test-workbook',
+        sheetName: 'LifeOS Canonical',
+      },
       runtime: {
         surfaceConfig: {
           sources: {
@@ -152,7 +164,7 @@ const routes = [
         },
       },
     },
-    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 citeable homes'],
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', '2 citeable homes', 'notion', 'google_sheets', 'Clear local copy'],
   },
   {
     name: 'sources-configured-order',

@@ -6,7 +6,7 @@ import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/
 import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
-import { DirectSyncReceipt, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
+import { DirectSyncReceipt, clearProviderLocalCopy, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
@@ -163,6 +163,14 @@ export default function SourcesScreen() {
     setSyncing(null);
   };
 
+  const clearLocalProvider = async (provider: DirectSyncReceipt['provider']) => {
+    setSyncing(provider);
+    const result = await clearProviderLocalCopy({ db, provider });
+    setReceipts([result]);
+    await refreshRows();
+    setSyncing(null);
+  };
+
   const configuredCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
   const latestReceipt = receipts[0];
   const renderSourceSection = (section: SourceSectionId) => {
@@ -262,19 +270,32 @@ export default function SourcesScreen() {
                       <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>FRESHNESS</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{sourceRow.freshness}</Text></View>
                       <View><Text style={[styles.factLabel, { color: theme.colors.muted }]}>SCOPE</Text><Text style={[styles.factValue, { color: theme.colors.ink }]}>{meta.scope}</Text></View>
                     </View>
-                    <Pressable
-                      accessibilityRole={meta.href ? 'link' : 'button'}
-                      disabled={Boolean(syncing)}
-                      onPress={() => {
-                        if (normalized === 'notion') void runSync('notion');
-                        else if (normalized === 'google_sheets') void runSync('google_sheets');
-                        else if (meta.href) void Linking.openURL(meta.href);
-                      }}
-                      style={[styles.sourceActionRow, { borderTopColor: theme.colors.line }]}
-                    >
-                      <Text style={[styles.sourceAction, { color: theme.colors.ink }]}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull latest' : meta.action}</Text>
-                      <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
-                    </Pressable>
+                    <View style={[styles.sourceActionsBlock, { borderTopColor: theme.colors.line }]}>
+                      <Pressable
+                        accessibilityRole={meta.href ? 'link' : 'button'}
+                        disabled={Boolean(syncing)}
+                        onPress={() => {
+                          if (normalized === 'notion') void runSync('notion');
+                          else if (normalized === 'google_sheets') void runSync('google_sheets');
+                          else if (meta.href) void Linking.openURL(meta.href);
+                        }}
+                        style={styles.sourceActionRow}
+                      >
+                        <Text style={[styles.sourceAction, { color: theme.colors.ink }]}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull latest' : meta.action}</Text>
+                        <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
+                      </Pressable>
+                      {normalized === 'notion' || normalized === 'google_sheets' ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={Boolean(syncing)}
+                          onPress={() => void clearLocalProvider(normalized)}
+                          style={styles.clearActionRow}
+                        >
+                          <Text style={[styles.clearAction, { color: theme.colors.muted }]}>Clear local copy</Text>
+                          <Text style={[styles.sourceActionArrow, { color: theme.colors.muted }]}>⌫</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </Card>
                 </View>
               );
@@ -387,12 +408,12 @@ export default function SourcesScreen() {
               <View style={styles.receiptList}>
                 {receipts.map((receipt) => (
                   <View key={`${receipt.provider}-${receipt.observedAt}`} style={styles.receiptRow}>
-                    <Pill tone={receipt.status === 'synced' ? 'moss' : receipt.status === 'blocked' ? 'blue' : 'amber'}>{receipt.status.toUpperCase()}</Pill>
+                    <Pill tone={receipt.status === 'synced' ? 'moss' : receipt.status === 'blocked' || receipt.status === 'cleared' ? 'blue' : 'amber'}>{receipt.status.toUpperCase()}</Pill>
                     <View style={styles.receiptCopy}>
                       <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
                       <Text style={styles.receiptMessage}>{receipt.message}</Text>
                     </View>
-                    <Text style={styles.receiptCount}>{receipt.records} records</Text>
+                    <Text style={styles.receiptCount}>{receipt.status === 'cleared' ? `${receipt.records} cleared` : `${receipt.records} records`}</Text>
                   </View>
                 ))}
               </View>
@@ -483,8 +504,11 @@ const styles = StyleSheet.create({
   sourceFacts: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 20 },
   factLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.9 },
   factValue: { color: colors.ink, fontSize: 11, fontWeight: '800', marginTop: 4 },
-  sourceActionRow: { marginTop: 'auto', paddingTop: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  sourceActionsBlock: { marginTop: 'auto', paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, gap: 8 },
+  sourceActionRow: { minHeight: 36, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  clearActionRow: { minHeight: 34, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sourceAction: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  clearAction: { color: colors.muted, fontSize: 11, fontWeight: '800' },
   sourceActionArrow: { color: colors.muted, fontSize: 17, fontWeight: '800' },
   sourceStateDot: { width: 7, height: 7, borderRadius: 4 },
   citationCard: { padding: 20 },
