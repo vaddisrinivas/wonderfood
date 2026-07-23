@@ -40,7 +40,7 @@ const routes = [
   {
     name: 'home',
     path: '/',
-    must: ['LIFEOS / HOME', 'Review queue', 'Life spaces', 'Recent graph', 'Source trust', 'Control lives in Settings'],
+    must: ['LIFEOS / HOME', 'Review queue', 'Life spaces', 'Recent graph', 'Source trust', 'Control lives in Settings', 'Every screen is profile-driven.', 'Food has', 'Record has'],
   },
   {
     name: 'food',
@@ -76,6 +76,10 @@ const routes = [
     name: 'record-green-dal',
     path: '/record/meal-green-dal',
     must: [
+      'FOOD INTELLIGENCE',
+      'Nutrition, availability, shopping and memory in one page.',
+      'NEED / BUY',
+      'MEMORY',
       'Nutrition profile',
       'Ingredients and availability',
       'Available',

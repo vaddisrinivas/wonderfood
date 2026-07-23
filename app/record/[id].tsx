@@ -581,6 +581,26 @@ export default function RecordScreen() {
     ) : null
   );
 
+  const renderFoodIntelPanel = () => (
+    foodDetail ? (
+      <Card tone="moss" style={styles.intelPanel}>
+        <View style={styles.intelHead}>
+          <View>
+            <Text style={[styles.intelKicker, { color: theme.colors.moss }]}>FOOD INTELLIGENCE</Text>
+            <Text style={[styles.intelTitle, { color: theme.colors.ink }]}>Nutrition, availability, shopping and memory in one page.</Text>
+          </View>
+          <Pill tone={structuredFoodDetail ? 'moss' : 'amber'}>{structuredFoodDetail ? 'Source-backed' : 'Inferred until source sync'}</Pill>
+        </View>
+        <View style={styles.intelGrid}>
+          <PlanCard label="Nutrition" value={primaryNutrition.map(([label, value]) => `${label}: ${value}`).join(' · ') || 'not captured'} tone="moss" />
+          <PlanCard label="Available" value={readySummary} tone="moss" />
+          <PlanCard label="Need / buy" value={missingSummary} tone={openIngredientCount ? 'amber' : 'moss'} />
+          <PlanCard label="Memory" value={`${foodDetail.logs.length} logs · ${foodDetail.variations.length} variations · ${foodDetail.instructions.length} steps`} tone="plum" />
+        </View>
+      </Card>
+    ) : null
+  );
+
   const renderMainSection = (section: RecordSection) => {
     switch (section) {
       case 'nutrition':
@@ -757,6 +777,7 @@ export default function RecordScreen() {
       <ScrollView keyboardShouldPersistTaps="handled">
         <View style={styles.pageContent}>
           {recordSections.includes('hero') ? renderHeroSection() : null}
+          {renderFoodIntelPanel()}
 
           <View style={[styles.workspace, compact && styles.workspaceCompact]}>
             <View style={styles.mainColumn}>
@@ -843,6 +864,11 @@ function planToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof 
 const styles = StyleSheet.create({
   pageContent: { width: '100%', maxWidth: 1380, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 120 },
   hero: { marginTop: 18, padding: 24, minHeight: 210 },
+  intelPanel: { marginTop: 14, padding: 18 },
+  intelHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 },
+  intelKicker: { color: colors.moss, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  intelTitle: { color: colors.ink, fontSize: 18, lineHeight: 23, fontWeight: '900', marginTop: 5, maxWidth: 720 },
+  intelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
   workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: 18 },
   workspaceCompact: { flexDirection: 'column' },
   mainColumn: { flex: 1, minWidth: 0 },

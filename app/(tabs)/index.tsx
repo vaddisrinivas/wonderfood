@@ -74,6 +74,17 @@ export default function TodayScreen() {
   const compact = width < 760;
   const contentWidth = compact ? Math.max(width - 36, 280) : '100%';
   const homeSections = orderedSections(homeConfig.sectionOrder, HOME_SECTIONS);
+  const visibleHomeSections = homeSections.filter((section) => {
+    if (section === 'now') return homeConfig.showNowCard;
+    if (section === 'review') return homeConfig.showReviewQueue;
+    if (section === 'lifeSpaces') return homeConfig.showLifeSpaces;
+    if (section === 'recent') return homeConfig.showRecentGraph;
+    if (section === 'sourceTrust') return homeConfig.showSourceTrust;
+    if (section === 'control') return homeConfig.showControlCard;
+    return false;
+  }).length;
+  const visibleFoodSections = settings.runtime.surfaceConfig.food.sectionOrder.split(',').filter(Boolean).length;
+  const visibleRecordSections = settings.runtime.surfaceConfig.record.sectionOrder.split(',').filter(Boolean).length;
 
   const renderHomeSection = (section: HomeSection) => {
     switch (section) {
@@ -191,8 +202,8 @@ export default function TodayScreen() {
             <SectionTitle title="Control lives in Settings" />
             <Card style={styles.controlCard}>
               <View style={styles.controlCopy}>
-                <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Providers, domains, skills, schemas, screens and MCP are editable from the app.</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Settings holds the machinery. Home stays useful.</Text>
+                <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Every screen is profile-driven.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Home shows {visibleHomeSections} sections. Food has {visibleFoodSections} ordered blocks. Record has {visibleRecordSections} page sections. Change order, card counts, domains, skills, schemas, providers and MCP from the app.</Text>
               </View>
               <View style={styles.controlActions}>
                   <Link href="/settings" style={[styles.controlLink, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>Settings</Link>
