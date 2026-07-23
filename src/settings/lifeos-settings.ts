@@ -142,6 +142,8 @@ export type LifeOSSettings = {
 
 const STORAGE_KEY = 'lifeos.settings.v1';
 const listeners = new Set<(settings: LifeOSSettings) => void>();
+const oldFoodWidgetsDefault = 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings';
+const oldCaptureDestinationDefault = 'Writes to Food local graph with no network dependency.';
 
 type SecureStoreModule = {
   WHEN_UNLOCKED_THIS_DEVICE_ONLY?: string;
@@ -230,7 +232,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         recentLimit: '4',
         showLifeSpaces: true,
         showSourceTrust: true,
-        showControlCard: true,
+        showControlCard: false,
       },
       food: {
         sectionOrder: 'hero,tabs,manifest,workspace,attention,widgets,view,package',
@@ -239,7 +241,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showManifestBlocks: true,
         dashboardBlocks: '',
         showWidgets: true,
-        widgets: 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings',
+        widgets: 'Dinner assistant|Ask with pantry, recipe, shopping and nutrition context.|plum|/chat\nConnected sources|See exactly what Notion, Sheets and the phone can cite.|blue|/sources',
         showWorkspace: true,
         showAttention: true,
         showPackageCard: true,
@@ -254,7 +256,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         promptRail: true,
         promptPresets: 'What can I cook tonight from what I already have?\nShow a table of available vs missing ingredients.\nWhat should I buy for green dal and tandoori chicken?\nSummarize nutrition and previous cooking notes.',
         showContextCard: true,
-        contextNote: 'Uses enabled domains, skill instructions, source records, and model keys stored in app settings.',
+        contextNote: 'Answers from the active life space first, cites source cards, and uses provider keys only when you enable them.',
       },
       record: {
         sectionOrder: 'hero,nutrition,ingredients,instructions,history,editableNote,properties,relations,provenance',
@@ -287,7 +289,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showAttachments: true,
         showRouteCard: true,
         defaultType: 'Note',
-        destinationHint: 'Writes to Food local graph with no network dependency.',
+        destinationHint: 'Saves to Food on this device with no network dependency.',
       },
       sources: {
         sectionOrder: 'hero,metrics,dataHomes,citations,syncPlan,policy,configLink',
@@ -424,7 +426,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showManifestBlocks: config.food?.showManifestBlocks !== false,
       dashboardBlocks: typeof config.food?.dashboardBlocks === 'string' ? config.food.dashboardBlocks : defaults.food.dashboardBlocks,
       showWidgets: config.food?.showWidgets !== false,
-      widgets: typeof config.food?.widgets === 'string' ? config.food.widgets : defaults.food.widgets,
+      widgets: typeof config.food?.widgets === 'string' && config.food.widgets !== oldFoodWidgetsDefault ? config.food.widgets : defaults.food.widgets,
       showWorkspace: config.food?.showWorkspace !== false,
       showAttention: config.food?.showAttention !== false,
       showPackageCard: config.food?.showPackageCard !== false,
@@ -472,7 +474,7 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showAttachments: config.capture?.showAttachments !== false,
       showRouteCard: config.capture?.showRouteCard !== false,
       defaultType: typeof config.capture?.defaultType === 'string' ? config.capture.defaultType : defaults.capture.defaultType,
-      destinationHint: typeof config.capture?.destinationHint === 'string' ? config.capture.destinationHint : defaults.capture.destinationHint,
+      destinationHint: typeof config.capture?.destinationHint === 'string' && config.capture.destinationHint !== oldCaptureDestinationDefault ? config.capture.destinationHint : defaults.capture.destinationHint,
     },
     sources: {
       sectionOrder: normalizeOrderString(config.sources?.sectionOrder, defaults.sources.sectionOrder),

@@ -391,7 +391,7 @@ export default function RecordScreen() {
     ? `${ingredientsByState.available.length} available · ${openIngredientCount} to resolve`
     : '';
   const primaryNutritionSummary = primaryNutrition.slice(0, 2);
-  const nextStep = foodDetail?.instructions[0] ?? 'Add instructions in your source graph.';
+  const nextStep = foodDetail?.instructions[0] ?? 'Add instructions in the source note.';
   const missingSummary = [...ingredientsByState.needed, ...ingredientsByState.shopping]
     .slice(0, 3)
     .map((ingredient) => ingredient.name)
@@ -440,7 +440,7 @@ export default function RecordScreen() {
 
   const persistRecordPatch = async (patch: Partial<CanonicalRecord>) => {
     if (!record || !db) {
-      setNotice('Saved locally in this view. Open Settings to connect a writable graph.');
+      setNotice('Saved locally in this view. Open Settings to connect a writable source.');
       return;
     }
 
@@ -507,7 +507,7 @@ export default function RecordScreen() {
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
             <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Record not found</Text>
-            <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>This record is not in the current domain graph.</Text>
+            <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>This item is not available in the current life space.</Text>
             <Pressable onPress={() => router.back()} style={styles.close}>
               <Text style={[styles.closeText, { color: theme.colors.muted }]}>Close</Text>
             </Pressable>
@@ -520,6 +520,15 @@ export default function RecordScreen() {
   const recordSections = orderedRecordSections(recordConfig.sectionOrder);
   const mainRecordSections = orderedRecordSubset(recordConfig.mainSectionOrder || recordConfig.sectionOrder, MAIN_RECORD_SECTIONS);
   const sideRecordSections = orderedRecordSubset(recordConfig.sideSectionOrder || recordConfig.sectionOrder, SIDE_RECORD_SECTIONS);
+  const pageLabel = record.collection === 'meal_plan'
+    ? 'Meal plan'
+    : record.collection === 'recipe'
+      ? 'Recipe'
+      : record.collection === 'inventory' || record.collection === 'inventory_lot'
+        ? 'Kitchen item'
+        : record.collection === 'shopping_item' || record.collection === 'shopping_demand'
+          ? 'Shopping item'
+          : 'Food page';
 
   const renderHeroSection = () => (
     recordConfig.showHero ? (
@@ -529,7 +538,7 @@ export default function RecordScreen() {
           <Text style={[styles.sync, { color: theme.colors.muted }]}>Updated {updatedAt}</Text>
         </View>
         <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={[styles.title, { color: theme.colors.ink }]} multiline />
-        <Text style={[styles.meta, { color: theme.colors.muted }]}>{record.collection} · {meta}</Text>
+        <Text style={[styles.meta, { color: theme.colors.muted }]}>{pageLabel} · {meta}</Text>
         <Text style={[styles.heroBody, { color: theme.colors.ink }]}>{body || 'No note yet.'}</Text>
         {foodDetail ? (
           <View style={styles.heroEvidence}>
@@ -610,7 +619,7 @@ export default function RecordScreen() {
             <View style={styles.sectionNoteRow}>
               <Pill tone={structuredFoodDetail ? 'moss' : 'amber'}>{structuredFoodDetail ? 'Source-backed' : 'Inferred'}</Pill>
               <Text style={[styles.sectionNote, { color: theme.colors.muted }]}>
-                {structuredFoodDetail ? 'Loaded from food_detail in the active graph.' : 'Estimated from title/body until Notion, Sheets or SQLite provides food_detail.'}
+                {structuredFoodDetail ? 'Loaded from this item’s saved detail.' : 'Estimated from title/body until Notion, Sheets or the device provides food detail.'}
               </Text>
             </View>
             <View style={styles.nutritionGrid}>
@@ -705,7 +714,7 @@ export default function RecordScreen() {
             <SectionTitle title="Properties" />
             <Card style={styles.sideCard}>
               <Fact label="Status" value={status} />
-              <Fact label="Collection" value={record.collection} />
+              <Fact label="Collection" value={pageLabel} />
               <Fact label="Source" value={sourceLabel} />
               <Fact label="Updated" value={updatedAt} />
               <Fact label="Detail" value={structuredFoodDetail ? 'Structured food_detail' : 'Inferred fallback'} />
@@ -744,7 +753,7 @@ export default function RecordScreen() {
                       <Text style={[styles.relationDetail, { color: theme.colors.muted }]}>
                         {linked
                           ? `${linked.collection} · ${String(linked.properties.meta ?? linked.source.provider)}`
-                          : 'Linked record not loaded in this local graph yet.'}
+                          : 'Linked item is not loaded on this device yet.'}
                       </Text>
                     </Pressable>
                   );
@@ -763,7 +772,7 @@ export default function RecordScreen() {
             <SectionTitle title="Provenance" />
             <Card>
               <Row icon="S" title={sourceLabel} detail="Canonical source" />
-              <Row icon="⌁" title="LifeOS Food schema v1" detail="Record shape and relations" />
+              <Row icon="⌁" title="Food structure v1" detail="Properties and relations" />
             </Card>
           </View>
         ) : null;
@@ -776,6 +785,10 @@ export default function RecordScreen() {
     <Page>
       <ScrollView keyboardShouldPersistTaps="handled">
         <View style={styles.pageContent}>
+          <View style={styles.pageHead}>
+            <Text style={[styles.pageKicker, { color: theme.colors.moss }]}>LIFEOS / FOOD</Text>
+            <Text style={[styles.pageTitle, { color: theme.colors.ink }]}>{pageLabel}</Text>
+          </View>
           {recordSections.includes('hero') ? renderHeroSection() : null}
           {renderFoodIntelPanel()}
 
@@ -863,6 +876,9 @@ function planToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof 
 
 const styles = StyleSheet.create({
   pageContent: { width: '100%', maxWidth: 1380, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 120 },
+  pageHead: { paddingTop: 20 },
+  pageKicker: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.6 },
+  pageTitle: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8, marginTop: 6 },
   hero: { marginTop: 18, padding: 24, minHeight: 210 },
   intelPanel: { marginTop: 14, padding: 18 },
   intelHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 },

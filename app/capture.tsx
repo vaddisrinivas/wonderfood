@@ -79,8 +79,8 @@ export default function CaptureScreen() {
   const hasLocalGraph = Boolean(db);
   const configuredDestinationHint = captureConfig.destinationHint.replace(/\bFood\b/g, catalog.activeManifest.label);
   const destinationHint = configuredDestinationHint || (hasLocalGraph
-    ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
-    : `Local graph is starting. Capture stays as a ${catalog.activeManifest.label} draft on this screen until storage is ready.`);
+    ? `Saves to ${catalog.activeManifest.label} on this device with no network dependency.`
+    : `${catalog.activeManifest.label} storage is starting. Capture stays as a draft on this screen until storage is ready.`);
 
   useEffect(() => {
     const requested = typeof params.type === 'string' ? params.type : '';
@@ -187,13 +187,13 @@ export default function CaptureScreen() {
         return captureConfig.showHero ? (
           <View key={section}>
             <View style={styles.contextBar}>
-              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CAPTURE</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Fast inbox · source preserved</Text></View>
-              <Pill tone="moss">{catalog.activeManifest.label} graph</Pill>
+              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / ADD</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Fast inbox · organize later</Text></View>
+              <Pill tone="moss">{catalog.activeManifest.label}</Pill>
             </View>
             <PageHeader
               eyebrow="Inbox first"
-              title="Capture anything."
-              subtitle={`Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to ${catalog.activeManifest.label} records, relations and source-backed Chat.`}
+              title={`Add ${catalog.activeManifest.label.toLowerCase()}.`}
+              subtitle={`Save a note, photo, receipt or link. LifeOS keeps the original and can organize it into ${catalog.activeManifest.label} when you are ready.`}
             />
           </View>
         ) : null;
@@ -223,7 +223,7 @@ export default function CaptureScreen() {
           <Card key={section} style={styles.editorCard}>
             <View style={styles.editorTop}>
               <Pill tone="moss">{type.toUpperCase()}</Pill>
-              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} local draft`}</Text>
+              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? catalog.activeManifest.label : `${catalog.activeManifest.label} draft`}</Text>
             </View>
             <TextInput
               value={value}
@@ -266,7 +266,7 @@ export default function CaptureScreen() {
         return captureConfig.showRouteCard ? (
           <Card key={section} tone="blue" style={styles.routeCard}>
             <Text style={[styles.routeTitle, { color: theme.colors.ink }]}>What happens next</Text>
-            <Text style={[styles.routeBody, { color: theme.colors.muted }]}>Classify → preserve source → link relations → show in Chat citations.</Text>
+            <Text style={[styles.routeBody, { color: theme.colors.muted }]}>Save now. Review later. Use it from Food and Chat.</Text>
           </Card>
         ) : null;
       default:
@@ -287,7 +287,7 @@ export default function CaptureScreen() {
           {saved ? (
             <Card tone="moss" style={styles.success}>
               <Text style={styles.successTitle}>Captured</Text>
-              <Text style={sharedStyles.muted}>Stored in {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} local draft`}{savedPhotoCount ? ` with ${savedPhotoCount} photo${savedPhotoCount === 1 ? '' : 's'}` : ''}.</Text>
+          <Text style={sharedStyles.muted}>Stored in {hasLocalGraph ? catalog.activeManifest.label : `${catalog.activeManifest.label} draft`}{savedPhotoCount ? ` with ${savedPhotoCount} photo${savedPhotoCount === 1 ? '' : 's'}` : ''}.</Text>
             </Card>
           ) : null}
           <View style={styles.actions}>

@@ -40,12 +40,14 @@ const routes = [
   {
     name: 'home',
     path: '/',
-    must: ['LIFEOS / HOME', 'Review queue', 'Life spaces', 'Recent graph', 'Source trust', 'Control lives in Settings', 'Every screen is profile-driven.', 'Food has', 'Record has'],
+    must: ['LIFEOS / HOME', 'Green dal + rice', 'Open today', 'Ask with context', 'Review queue', 'Recent updates', 'Open Sources'],
+    forbidden: ['Record not found', '0 food records'],
   },
   {
     name: 'food',
     path: '/food',
-    must: ['Package dashboard', 'Tonight decision', 'Nutrition lens', 'Shopping gaps', 'Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food is the active package'],
+    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food workspace', 'Meals', 'Kitchen', 'Shopping', 'Review before writing', 'Food can be customized'],
+    forbidden: ['0 food records', 'Record not found'],
   },
   {
     name: 'food-configured-dashboard',
@@ -59,7 +61,7 @@ const routes = [
         },
       },
     },
-    must: ['Package dashboard', 'Chef board', 'Custom app-edited block.', 'food.overview · food:chef'],
+    must: ['Chef board', 'Custom app-edited block.'],
   },
   {
     name: 'health-active-workspace',
@@ -70,7 +72,7 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / HEALTH', 'Run your health workspace from one graph.', 'Today health signal', 'Health workspace', 'Health is the active package'],
+    must: ['LIFEOS / HEALTH', 'Run your health workspace.', 'Health sources', 'Overview', 'Journal', 'Plans'],
   },
   {
     name: 'record-green-dal',
@@ -92,6 +94,7 @@ const routes = [
       'Connected records',
       'Provenance',
     ],
+    forbidden: ['Record not found'],
   },
   {
     name: 'record-configured-order',
@@ -113,7 +116,7 @@ const routes = [
   {
     name: 'chat',
     path: '/chat',
-    must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Source evidence', 'Undo', 'Open source'],
+    must: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.', 'Sources in context', 'Assistant route', 'Undo', 'THREADS'],
   },
   {
     name: 'chat-configured-prompts',
@@ -133,7 +136,7 @@ const routes = [
   {
     name: 'sources',
     path: '/sources',
-    must: ['LIFEOS / SOURCES', 'Food data stays legible', 'DIRECT SYNC READY', 'Data homes & surfaces', 'sqlite', 'Food local replica', 'What Food Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Where food comes from.', 'SYNC READY', 'Bring sources onto this device.', 'No hosted bridge is required', 'sources known', 'What Food Chat can cite'],
   },
   {
     name: 'sources-configured-citations',
@@ -161,8 +164,8 @@ const routes = [
         },
       },
     },
-    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', 'Food data stays legible'],
-    orderedBefore: ['What Food Chat can cite', 'Food data stays legible'],
+    must: ['LIFEOS / SOURCES', 'What Food Chat can cite', 'Where food comes from.'],
+    orderedBefore: ['What Food Chat can cite', 'Where food comes from.'],
   },
   {
     name: 'sources-health-active',
@@ -173,7 +176,7 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / SOURCES', 'Health data stays legible', 'Pull Health sources into one local graph', 'Health local replica', 'What Health Chat can cite'],
+    must: ['LIFEOS / SOURCES', 'Where health comes from.', 'Bring sources onto this device.', 'What Health Chat can cite'],
   },
   {
     name: 'config',
@@ -218,7 +221,7 @@ const routes = [
   {
     name: 'settings',
     path: '/settings',
-    must: ['Control center', 'AI ROUTE', 'DATA HOMES', 'RUNTIME', 'AI providers', 'Data sources', 'LifeOS behavior', 'Direct tokens stay on this device', 'Health Connect'],
+    must: ['LIFEOS / CONNECTIONS', 'Choose AI and data sources.', 'Local answers first', 'No external sources', 'APP BEHAVIOR', 'Direct tokens stay on this device', 'Health Connect'],
   },
   {
     name: 'health-diagnostics',
@@ -248,7 +251,7 @@ const routes = [
   {
     name: 'search',
     path: '/search',
-    must: ['LIFEOS / SEARCH', 'Search Food.', 'Quick actions', 'Ask Food AI', 'Create Food record'],
+    must: ['LIFEOS / SEARCH', 'Search food.', 'Quick actions', 'Ask Food AI', 'Add food'],
   },
   {
     name: 'search-health-active',
@@ -259,12 +262,12 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / SEARCH', 'Search Health.', 'Health records, commands', 'Ask Health AI', 'Create Health record'],
+    must: ['LIFEOS / SEARCH', 'Search health.', 'Ask Health AI', 'Add health'],
   },
   {
     name: 'capture',
     path: '/capture',
-    must: ['LIFEOS / CAPTURE', 'Capture anything', 'INBOX FIRST', 'Food graph', 'Save capture'],
+    must: ['LIFEOS / ADD', 'Add food.', 'INBOX FIRST', 'Food', 'Save capture'],
     forbidden: ['this phase', 'inbox (preview)', 'session fallback'],
   },
   {
@@ -276,7 +279,7 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / CAPTURE', 'Health graph', 'Health records', 'Health local graph', 'Save capture'],
+    must: ['LIFEOS / ADD', 'Add health.', 'Health', 'Save capture'],
     forbidden: ['this phase', 'inbox (preview)', 'session fallback'],
   },
 ];

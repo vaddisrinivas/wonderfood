@@ -40,8 +40,8 @@ const seedThreads: ChatThread[] = [
 ];
 
 const seedModeNotice = {
-  title: 'Local source mode',
-  detail: 'No model key yet. Hearth still answers from local LifeOS records and shows citations.',
+  title: 'Local answer mode',
+  detail: 'No model key yet. LifeOS still briefs from local records and shows citations.',
 };
 
 function parsePromptPresets(value: string) {
@@ -156,7 +156,7 @@ export default function ChatScreen() {
     const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: mode === 'direct' ? 'Direct model' : 'Local source mode',
+      detail: mode === 'direct' ? 'AI ready' : 'Local answers',
       messages: [{ id: `${id}-welcome`, role: 'assistant', text: `${domainLabel} context is on. I can help with records, sources, and next actions.` }],
     };
 
@@ -242,8 +242,8 @@ export default function ChatScreen() {
     const placeholder: ChatMessage = {
       id: streamMessageId,
       role: 'assistant' as ChatRole,
-      text: 'Reading your Food graph…',
-      answer: { title: 'Working from sources', intro: 'Reading your Food graph…', rows: [], citations: [] },
+      text: 'Reading your Food records…',
+      answer: { title: 'Working from sources', intro: 'Reading your Food records…', rows: [], citations: [] },
     };
 
     const withPlaceholder: ChatThread = {
@@ -435,30 +435,30 @@ export default function ChatScreen() {
             <View style={styles.topbar}>
               <View>
                 <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CHAT</Text>
-                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'local source mode'}</Text>
+                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'AI ready' : 'local answers'}</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
                 <Text style={[styles.newThreadText, { color: theme.colors.paper }]}>＋ New thread</Text>
               </Pressable>
             </View>
-            <PageHeader eyebrow="Connected conversation" title="Talk to your life, not a blank prompt." subtitle={`Hearth reasons over ${domainLabel} records and keeps source cards close to the answer.`} />
-            <View style={styles.capabilityGrid}>
+            <PageHeader eyebrow="Source-backed conversation" title="Ask, compare, plan, then act." subtitle={`LifeOS reasons over ${domainLabel} records and keeps citations beside the answer.`} />
+            {isWide ? <View style={styles.capabilityGrid}>
               <Card tone="moss" style={styles.capabilityCard}>
                 <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{sourceRecords.length}</Text>
                 <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Sources in context</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Chat cites sources, opens records, and keeps answers tied to exact graph items.</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Answers can render tables, record cards and exact citations.</Text>
               </Card>
               <Card tone={mode === 'direct' ? 'plum' : 'blue'} style={styles.capabilityCard}>
                 <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{mode === 'direct' ? 'AI' : 'Local'}</Text>
-                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Model route</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>{mode === 'direct' ? 'Direct provider keys from Settings.' : 'No provider key yet; source briefing still works locally.'}</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Assistant route</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>{mode === 'direct' ? 'Using your enabled provider keys from Settings.' : 'Works locally now; add a provider when you want live model answers.'}</Text>
               </Card>
               <Card tone="amber" style={styles.capabilityCard}>
-                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>MCP</Text>
-                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Same contract</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>App chat, skills and external clients share schemas, sources and reversible actions.</Text>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>Undo</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Safe actions</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Writes return receipts, sources and Undo instead of hidden edits.</Text>
               </Card>
-            </View>
+            </View> : null}
 
             {warnings.length ? <Card style={[styles.modeNote, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>{warnings.map((item) => <Text key={item} style={[styles.modeText, { color: theme.colors.muted }]}>{item}</Text>)}</Card> : null}
 
@@ -468,7 +468,7 @@ export default function ChatScreen() {
               <Card style={styles.chatPanel}>
                 <View style={styles.chatHeader}>
                   <View style={[styles.assistantMark, { backgroundColor: theme.colors.plumSoft }]}><Text style={[styles.assistantMarkText, { color: theme.colors.plum }]}>✦</Text></View>
-                  <View style={styles.chatHeaderCopy}><Text style={[styles.chatTitle, { color: theme.colors.ink }]}>{activeThread.title}</Text><Text style={[styles.chatDetail, { color: theme.colors.muted }]}>Hearth · {domainLabel} workspace available</Text></View>
+                  <View style={styles.chatHeaderCopy}><Text style={[styles.chatTitle, { color: theme.colors.ink }]}>{activeThread.title}</Text><Text style={[styles.chatDetail, { color: theme.colors.muted }]}>LifeOS · {domainLabel} workspace available</Text></View>
                   <Pressable accessibilityRole="button" onPress={() => router.push('/settings')}>
                     <Pill tone={mode === 'direct' ? 'plum' : 'blue'}>
                       {mode === 'direct' ? 'Direct' : 'Set up AI'}
@@ -508,10 +508,27 @@ export default function ChatScreen() {
             {chatConfig.showContextCard ? (
               <Card tone="blue" style={styles.contextCard}>
                 <View style={[styles.contextIcon, { backgroundColor: theme.colors.blueSoft }]}><Text>⌁</Text></View>
-                <View style={styles.contextCopy}><Text style={[styles.contextTitle, { color: theme.colors.ink }]}>What Hearth can see</Text><Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{activeThread.messages.length} messages loaded · Chat cites sources · Open source cards from citations · Undo appears on reversible write receipts.</Text></View>
+                <View style={styles.contextCopy}><Text style={[styles.contextTitle, { color: theme.colors.ink }]}>What LifeOS can see</Text><Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{activeThread.messages.length} messages loaded · source cards open records · Undo appears on reversible write receipts.</Text></View>
                 <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
               </Card>
             ) : null}
+            {!isWide ? <View style={styles.capabilityGrid}>
+              <Card tone="moss" style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{sourceRecords.length}</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Sources in context</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Answers can render tables, record cards and exact citations.</Text>
+              </Card>
+              <Card tone={mode === 'direct' ? 'plum' : 'blue'} style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{mode === 'direct' ? 'AI' : 'Local'}</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Assistant route</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>{mode === 'direct' ? 'Using your enabled provider keys from Settings.' : 'Works locally now; add a provider when you want live model answers.'}</Text>
+              </Card>
+              <Card tone="amber" style={styles.capabilityCard}>
+                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>Undo</Text>
+                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Safe actions</Text>
+                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Writes return receipts, sources and Undo instead of hidden edits.</Text>
+              </Card>
+            </View> : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -531,7 +548,7 @@ function MessageBubble({ message, undoing, onUndo }: { message: MessageRow; undo
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
       {assistant ? <View style={[styles.smallMark, { backgroundColor: theme.colors.plumSoft }]}><Text style={[styles.smallMarkText, { color: theme.colors.plum }]}>✦</Text></View> : null}
       <View style={[styles.messageBlock, !assistant && styles.userMessageBlock]}>
-        <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'Hearth' : 'You'}</Text>
+        <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'LifeOS' : 'You'}</Text>
         <View style={[styles.bubble, { backgroundColor: theme.colors.canvas }, !assistant && styles.userBubble, !assistant && { backgroundColor: theme.colors.ink }]}><Text style={[styles.bubbleText, { color: theme.colors.ink }, !assistant && styles.userBubbleText, !assistant && { color: theme.colors.paper }]}>{visibleText}</Text></View>
         {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
         {assistant && message.actionReceipt ? <ActionReceiptCard receipt={message.actionReceipt} /> : null}

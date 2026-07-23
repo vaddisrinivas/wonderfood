@@ -45,17 +45,17 @@ const providerPresets: Array<{
 }> = [
   {
     label: 'OpenAI',
-    detail: 'Live smoke passed',
+    detail: 'Common default',
     patch: { provider: 'openai_compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiVersion: '' },
   },
   {
     label: 'Gemini',
-    detail: 'Live smoke passed',
+    detail: 'OpenAI-compatible',
     patch: { provider: 'openai_compatible', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', apiVersion: '' },
   },
   {
     label: 'Anthropic',
-    detail: 'Key found; billing blocked',
+    detail: 'Bring your key',
     patch: { provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-4-5-20251001', apiVersion: '2023-06-01' },
   },
   {
@@ -172,7 +172,7 @@ export default function SettingsScreen() {
             <View style={styles.contextBar}>
               <View>
                 <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONNECTIONS</Text>
-                <Text style={[styles.context, { color: theme.colors.muted }]}>Your providers · your credentials · your choice</Text>
+                <Text style={[styles.context, { color: theme.colors.muted }]}>AI · sources · app behavior</Text>
               </View>
               <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
                 {settings.ai.primary.enabled ? 'AI READY' : 'LOCAL FIRST'}
@@ -180,30 +180,30 @@ export default function SettingsScreen() {
             </View>
 
             <PageHeader
-              eyebrow="No mandatory cloud"
-              title="Bring the intelligence you trust."
-              subtitle="Use providers directly and choose every data surface yourself. Everything is optional; local records remain usable without any connection."
+              eyebrow="Local first"
+              title="Choose AI and data sources."
+              subtitle="Paste your own keys, connect your own Notion or Sheets, or keep using local records with no external source."
             />
 
-            <SectionTitle title="Control center" />
+            <SectionTitle title="Status" />
             <View style={[styles.statusGrid, compact && styles.stack]}>
               <SettingsStatusCard
                 tone={enabledAiCount ? 'moss' : 'blue'}
-                label="AI route"
+                label="AI"
                 title={enabledAiCount ? `${enabledAiCount} provider${enabledAiCount === 1 ? '' : 's'} enabled` : 'Local answers first'}
                 detail={enabledAiCount ? 'Primary/fallback model routing is ready for Chat.' : 'Paste a key when you want live model answers.'}
               />
               <SettingsStatusCard
                 tone={enabledSourceCount ? 'plum' : 'amber'}
-                label="Data homes"
-                title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external homes'}
-                detail="Notion, Sheets, Postgres and MCP are optional, provider-scoped, and editable here."
+                label="Food data"
+                title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external sources'}
+                detail="Notion, Sheets and Postgres are optional and editable here."
               />
               <SettingsStatusCard
                 tone="moss"
-                label="Runtime"
+                label="App behavior"
                 title={`${settings.runtime.activeDomain} · ${settings.runtime.density}`}
-                detail="Domains, skills, agents, schemas, screen order and card counts live in Config Studio."
+                detail="Active domain, screen order, card counts and assistant behavior live in Customize."
               />
               <SettingsStatusCard
                 tone={healthReady ? 'moss' : 'blue'}
@@ -214,7 +214,7 @@ export default function SettingsScreen() {
             </View>
 
             <Card tone="moss" style={styles.principleCard}>
-              <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE BY DESIGN</Text>
+              <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE</Text>
               <Text style={[styles.principleTitle, { color: theme.colors.ink }]}>Direct on device. Fallback when needed.</Text>
               <Text style={[styles.principleBody, { color: theme.colors.muted }]}>
                 The app tries Primary, then Fallback, then stays local. Direct tokens stay on this device; no shared public endpoint, Mac service, or hidden build-time config.
@@ -341,7 +341,7 @@ export default function SettingsScreen() {
               </View>
               <Link href="/config" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
-                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Open Config Studio</Text>
+                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Customize app</Text>
                   <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
                 </Pressable>
               </Link>

@@ -22,6 +22,32 @@ function pickRecord(records: DomainRecordViewModel[], pattern: RegExp, fallbackI
   return records.find((item) => pattern.test(`${item.collection} ${item.status} ${item.meta} ${item.title} ${item.body}`)) ?? records[fallbackIndex];
 }
 
+const homePriority: Record<string, number> = {
+  meal_plan: 100,
+  recipe: 92,
+  inventory: 82,
+  shopping_item: 74,
+  shopping_demand: 70,
+  inventory_lot: 66,
+  meal_log: 54,
+  purchase: 48,
+  product: 34,
+  nutrition_profile: 26,
+  purchase_line: 24,
+  inventory_movement: 18,
+  meal_consumption: 12,
+  source_record: 4,
+};
+
+function productRanked(records: DomainRecordViewModel[]) {
+  return [...records].sort((left, right) => (homePriority[right.collection] ?? 40) - (homePriority[left.collection] ?? 40));
+}
+
+function pickCollection(records: DomainRecordViewModel[], collections: string[], fallbackIndex: number) {
+  const wanted = new Set(collections);
+  return records.find((item) => wanted.has(item.collection)) ?? records[fallbackIndex];
+}
+
 function orderedSections(value: string, defaults: readonly HomeSection[]) {
   const allowed = new Set(defaults);
   const requested = value
@@ -62,13 +88,14 @@ export default function TodayScreen() {
   const homeConfig = settings.runtime.surfaceConfig.home;
   const reviewLimit = countSetting(homeConfig.reviewLimit, 2);
   const recentLimit = countSetting(homeConfig.recentLimit, 4);
-  const rhythmRows = records.slice(0, 3);
-  const reviewRows = records.slice(1, 1 + reviewLimit);
-  const recentRows = records.slice(0, recentLimit);
+  const rankedRecords = productRanked(records);
+  const rhythmRows = rankedRecords.slice(0, 3);
+  const reviewRows = rankedRecords.filter((item) => !['inventory_movement', 'meal_consumption', 'source_record', 'nutrition_profile'].includes(item.collection)).slice(0, reviewLimit);
+  const recentRows = rankedRecords.slice(0, recentLimit);
   const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-  const dinnerRecord = pickRecord(records, /\b(meal|dinner|tonight|planned)\b/i, 0);
-  const riskRecord = pickRecord(records, /\b(use soon|pantry|expire|inventory|yogurt)\b/i, 1);
-  const shoppingRecord = pickRecord(records, /\b(shopping|buy|to buy|missing)\b/i, 2);
+  const dinnerRecord = pickCollection(rankedRecords, ['meal_plan', 'recipe'], 0) ?? pickRecord(rankedRecords, /\b(meal|dinner|tonight|planned)\b/i, 0);
+  const riskRecord = pickCollection(rankedRecords, ['inventory', 'inventory_lot'], 1) ?? pickRecord(rankedRecords, /\b(use soon|pantry|expire|inventory|yogurt)\b/i, 1);
+  const shoppingRecord = pickCollection(rankedRecords, ['shopping_item', 'shopping_demand'], 2) ?? pickRecord(rankedRecords, /\b(shopping|buy|to buy|missing)\b/i, 2);
   const firstRecord = dinnerRecord ?? rhythmRows[0];
   const secondRecord = riskRecord ?? rhythmRows[1];
   const compact = width < 760;
@@ -97,15 +124,15 @@ export default function TodayScreen() {
             </View>
             <Text style={[styles.nowTitle, compact && styles.nowTitleCompact, { color: theme.colors.ink }]}>{firstRecord?.title ?? `Set up today's ${catalog.activeManifest.label.toLowerCase()} loop`}</Text>
             <Text style={[styles.nowBody, { color: theme.colors.ink }]}>
-              {firstRecord?.body || firstRecord?.meta || `Start with a ${catalog.activeManifest.label.toLowerCase()} record, source, or question. Home should show daily work, not internal machinery.`}
+              {firstRecord?.body || firstRecord?.meta || `Start with today’s ${catalog.activeManifest.label.toLowerCase()} decision.`}
             </Text>
             <View style={styles.nowActions}>
-              <ActionButton label={firstRecord ? 'Open now card' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
+              <ActionButton label={firstRecord ? 'Open today' : 'Capture first item'} onPress={() => router.push(firstRecord ? `/record/${firstRecord.id}` : '/capture')} />
               <ActionButton label="Ask with context" quiet onPress={() => router.push('/chat')} />
             </View>
             <View style={styles.commandDeck}>
-              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? `Open ${catalog.activeManifest.label}`} detail={dinnerRecord?.meta ?? `Choose from ${catalog.activeManifest.label} graph`} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
-              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No active risk'} detail={riskRecord?.meta ?? 'Graph looks calm'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
+              <HomeCommandCard label="Today decision" title={dinnerRecord?.title ?? `Open ${catalog.activeManifest.label}`} detail={dinnerRecord?.meta ?? `Choose the next ${catalog.activeManifest.label.toLowerCase()} move`} tone="moss" href={dinnerRecord ? `/record/${dinnerRecord.id}` : '/chat'} />
+              <HomeCommandCard label="Risk" title={riskRecord?.title ?? 'No active risk'} detail={riskRecord?.meta ?? 'Nothing urgent'} tone="amber" href={riskRecord ? `/record/${riskRecord.id}` : '/sources'} />
               <HomeCommandCard label="Gap" title={shoppingRecord?.title ?? 'No blockers'} detail={shoppingRecord?.meta ?? 'No missing items'} tone="blue" href={shoppingRecord ? `/record/${shoppingRecord.id}` : '/capture'} />
               <HomeCommandCard label="Assistant" title="Ask AI" detail="Use sources, tables, receipts" tone="plum" href="/chat" />
             </View>
@@ -127,7 +154,7 @@ export default function TodayScreen() {
               )) : (
                 <View style={styles.emptyReview}>
                   <Text style={[styles.emptyReviewTitle, { color: theme.colors.ink }]}>No review items yet</Text>
-                  <Text style={[styles.emptyReviewBody, { color: theme.colors.muted }]}>Receipts, source conflicts and AI proposals will land here before anything writes to your graph.</Text>
+                  <Text style={[styles.emptyReviewBody, { color: theme.colors.muted }]}>Receipts, conflicts and AI suggestions land here before they change your food.</Text>
                 </View>
               )}
             </Card>
@@ -143,16 +170,16 @@ export default function TodayScreen() {
                   <Card tone="moss" style={styles.spaceCard}>
                     <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>F</Text>
                     <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>{catalog.activeManifest.label}</Text>
-                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} records in your active ${catalog.activeManifest.label.toLowerCase()} graph.` : `${catalog.activeManifest.label} surfaces render from config.`}</Text>
+                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>{records.length || loading ? `${loading ? 'Loading' : records.length} saved ${catalog.activeManifest.label.toLowerCase()} items.` : `${catalog.activeManifest.label} is ready to set up.`}</Text>
                   </Card>
                 </Pressable>
               </Link>
               <Link href="/config" asChild>
                 <Pressable accessibilityRole="button" style={({ pressed }) => [styles.spacePress, pressed && styles.pressed]}>
-                  <Card tone="plum" style={styles.spaceCard}>
-                    <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>+</Text>
-                    <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Add a domain</Text>
-                    <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Health, Plants or any future package should arrive by config, not app rebuild.</Text>
+              <Card tone="plum" style={styles.spaceCard}>
+                <Text style={[styles.spaceGlyph, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>+</Text>
+                <Text style={[styles.spaceTitle, { color: theme.colors.ink }]}>Add a domain</Text>
+                <Text style={[styles.spaceBody, { color: theme.colors.muted }]}>Add Health, Plants or any future life space from Settings.</Text>
                   </Card>
                 </Pressable>
               </Link>
@@ -162,18 +189,18 @@ export default function TodayScreen() {
       case 'recent':
         return homeConfig.showRecentGraph ? (
           <View key={section}>
-            <SectionTitle title="Recent graph" action="Open Sources" href="/sources" />
+            <SectionTitle title="Recent updates" action="Open Sources" href="/sources" />
             <Card style={styles.timelineCard}>
               {recentRows.length ? recentRows.map((row) => (
                 <Row
                   key={row.id}
                   icon="◉"
                   title={row.title}
-                  detail={`${row.collection} · ${row.source}`}
+                  detail={row.meta || row.status}
                   href={{ pathname: '/record/[id]', params: { id: row.id } }}
                 />
               )) : (
-                <Row icon="▣" title="Local graph ready" detail="Connect Notion or Sheets, or capture a record to start the timeline." href="/sources" />
+                <Row icon="▣" title="Food history ready" detail="Connect Notion or Sheets, or add your first item." href="/sources" />
               )}
             </Card>
           </View>
@@ -181,11 +208,11 @@ export default function TodayScreen() {
       case 'sourceTrust':
         return homeConfig.showSourceTrust ? (
           <View key={section}>
-            <SectionTitle title="Source trust" />
+            <SectionTitle title="Connected sources" />
             <View style={sharedStyles.grid}>
               <Card tone="blue" style={styles.trustCard}>
                 <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>Notion and Sheets are optional homes</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>The app can run local-first, then pull chosen providers into one source-backed graph.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Use the app alone, or bring in Notion and Sheets when you want richer pages and rows.</Text>
                 <Link href="/sources" style={[styles.cardLink, { color: theme.colors.ink }]}>Open trust center →</Link>
               </Card>
               <Card tone="amber" style={styles.trustCard}>
@@ -199,11 +226,11 @@ export default function TodayScreen() {
       case 'control':
         return homeConfig.showControlCard ? (
           <View key={section}>
-            <SectionTitle title="Control lives in Settings" />
+            <SectionTitle title="Settings shape this app" />
             <Card style={styles.controlCard}>
               <View style={styles.controlCopy}>
-                <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Every screen is profile-driven.</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Home shows {visibleHomeSections} sections. Food has {visibleFoodSections} ordered blocks. Record has {visibleRecordSections} page sections. Change order, card counts, domains, skills, schemas, providers and MCP from the app.</Text>
+                <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Make LifeOS yours.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Choose sections, card counts, domains, providers, skills and assistant behavior from the app. Current profile: {visibleHomeSections} Home sections, {visibleFoodSections} Food blocks, {visibleRecordSections} page sections.</Text>
               </View>
               <View style={styles.controlActions}>
                   <Link href="/settings" style={[styles.controlLink, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>Settings</Link>

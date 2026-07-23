@@ -65,7 +65,7 @@ export default function RootLayout() {
           <Stack.Screen name="search" options={{ title: 'Search', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="capture" options={{ title: 'Quick capture', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="system" options={{ title: 'LifeOS system', headerRight: undefined }} />
-          <Stack.Screen name="config" options={{ title: 'Config Studio', headerRight: undefined }} />
+          <Stack.Screen name="config" options={{ title: 'Customize app', headerRight: undefined }} />
           <Stack.Screen name="+not-found" options={{ title: 'Not found', headerRight: undefined }} />
         </Stack>
       </>

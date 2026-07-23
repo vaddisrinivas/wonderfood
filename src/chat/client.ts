@@ -531,7 +531,7 @@ async function tryDirectProviders(input: {
   const system = {
     role: 'system' as const,
     content:
-      `You are Hearth, the LifeOS assistant for the ${input.domainId} domain. ` +
+      `You are LifeOS, the source-backed assistant for the ${input.domainId} domain. ` +
       'Use the conversation context, state uncertainty plainly, never invent source claims, and keep answers useful and concise. ' +
       'When records or source excerpts are absent, say what information is missing. ' +
       'When a table would help, use a compact Markdown table.' +

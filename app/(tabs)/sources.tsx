@@ -41,10 +41,10 @@ const sourceMeta: Record<string, { icon: string; tone: Tone; role: string; summa
   sqlite: {
     icon: '▣',
     tone: 'plum' as Tone,
-    role: 'Local device replica',
-    summary: 'Fast offline graph, outbox, source snapshots and recovery.',
+    role: 'On this device',
+    summary: 'Fast offline records, recent changes, citations and recovery.',
     scope: 'Encrypted · on device',
-    action: 'Inspect local graph',
+    action: 'Inspect device copy',
     href: null,
   },
   postgres: {
@@ -69,15 +69,15 @@ function citationSourcesFor(domainLabel: string, collections: string[]) {
   return [
     [`[${domainLabel} Notion]`, 'Pages, properties, relations and exact block quotes', 'When connected'],
     [`[${domainLabel} Sheets]`, 'Rows, cells, formulas and workbook timestamps', 'When connected'],
-    [`[${domainLabel} app snapshot]`, `Local ${collectionSummary}, source snapshots and recent actions`, 'On device'],
-    [`[${domainLabel} MCP schema]`, 'Domain catalog, skill rules and tool contracts', 'Versioned'],
+    [`[${domainLabel} app]`, `Local ${collectionSummary}, saved citations and recent actions`, 'On device'],
+    [`[${domainLabel} rules]`, 'What the assistant is allowed to read, cite and change', 'Versioned'],
   ] as const;
 }
 
 const recentSync = [
-  ['01', 'Notion direct pull', 'Reads user data sources into canonical records from in-app credentials'],
-  ['02', 'Sheets direct pull', 'Reads workbook rows into the same canonical graph from in-app credentials'],
-  ['03', 'SQLite replica', 'Persists records, source snapshots and chat citations on device'],
+  ['01', 'Notion pull', 'Reads your selected Notion data sources from in-app credentials'],
+  ['02', 'Sheets pull', 'Reads workbook rows from in-app credentials'],
+  ['03', 'Device copy', 'Keeps records, citations and chat context available offline'],
 ] as const;
 
 const defaultSourceSectionOrder = ['hero', 'metrics', 'dataHomes', 'citations', 'syncPlan', 'policy', 'configLink'] as const;
@@ -169,17 +169,17 @@ export default function SourcesScreen() {
       return sourcesConfig.showHero ? (
         <>
           <PageHeader
-            eyebrow="One graph · Your chosen homes"
-            title={`${domainLabel} data stays legible.`}
-            subtitle={`LifeOS keeps one clear ${domainLabel.toLowerCase()} authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work.`}
+            eyebrow="Connected sources"
+            title={`Where ${domainLabel.toLowerCase()} comes from.`}
+            subtitle={`Use the app alone, or bring in Notion and Sheets when you want richer pages and rows. Chat cites the exact source it used.`}
           />
 
           <Card tone="blue" style={[styles.loopCard, compact ? styles.loopCardCompact : null]}>
             <View style={[styles.loopCopy, compact ? styles.loopCopyCompact : null]}>
-              <Pill tone="blue">DIRECT SYNC READY</Pill>
-              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Pull {domainLabel} sources into one local graph.</Text>
+              <Pill tone="blue">SYNC READY</Pill>
+              <Text style={[styles.loopTitle, { color: theme.colors.ink }]}>Bring sources onto this device.</Text>
               <Text style={[styles.loopBody, { color: theme.colors.muted }]}>
-                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server. Same contract works for every domain.
+                Start locally, then pull your own Notion data sources or Sheets workbook. No hosted bridge is required.
               </Text>
               <View style={styles.syncActions}>
                 <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, { backgroundColor: theme.colors.ink }, syncing && styles.disabled, pressed && styles.pressed]}>
@@ -192,14 +192,14 @@ export default function SourcesScreen() {
                 </Link>
               </View>
             </View>
-            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
-              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Your source</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
+            <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion or Sheets can sync into LifeOS and stay available on this device">
+              <View style={[styles.flowNode, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.flowNodeLabel, { color: theme.colors.ink }]}>Notion / Sheets</Text><Text style={[styles.flowNodeRole, { color: theme.colors.muted }]}>Optional</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
-              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Graph</Text></View>
+              <View style={[styles.flowNode, styles.flowNodeCore, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}><Text style={[styles.flowNodeCoreLabel, { color: theme.colors.paper }]}>{domainLabel}</Text><Text style={[styles.flowNodeCoreRole, { color: theme.colors.mossSoft }]}>Records</Text></View>
               <Text style={[styles.flowArrow, { color: theme.colors.blue }]}>→</Text>
               <View style={styles.flowDestinations}>
-                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>{domainLabel} local replica</Text>
-                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Providers · optional</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>On-device copy</Text>
+                <Text style={[styles.flowDestination, { color: theme.colors.blue, backgroundColor: theme.colors.paper }]}>Citations</Text>
               </View>
             </View>
           </Card>
@@ -218,14 +218,14 @@ export default function SourcesScreen() {
     if (section === 'dataHomes') {
       return sourcesConfig.showDataHomes ? (
         <>
-          <SectionTitle title="Data homes & surfaces" />
+          <SectionTitle title="Connected homes" />
           {!sourceRows.length ? (
             <Card>
-              <Text style={styles.emptyTitle}>No sources connected in this session</Text>
+              <Text style={styles.emptyTitle}>No external sources connected</Text>
               <Text style={styles.emptyBody}>
                 {hasDb
-                  ? 'Adapter links are not loaded yet. Connect Notion and/or Sheets in Settings to begin sync capture.'
-                  : 'LifeOS loaded without a local graph yet. Add your first authority in Settings.'}
+                  ? 'Connect Notion or Sheets in Settings when you want source-backed pages and rows.'
+                  : 'The app is ready. Add Notion or Sheets in Settings when you want.'}
               </Text>
               <Link href="/settings" asChild>
                 <Pressable style={styles.openSystem}>
@@ -240,13 +240,13 @@ export default function SourcesScreen() {
             {sourceRows.map((sourceRow) => {
               const normalized = normalizeSourceName(sourceRow.name);
               const meta = normalized === 'other'
-                ? { icon: '◉', tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source discovered at runtime.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
+                ? { icon: '◉', tone: 'blue' as Tone, role: 'Unknown source', summary: `${sourceRow.name} source was found by the app.`, scope: sourceRow.freshness, action: 'Inspect source', href: null }
                 : sourceMeta[normalized];
               const isReady = normalized === 'postgres';
-              const displayRole = normalized === 'sqlite' ? `${domainLabel} local replica` : meta.role;
+              const displayRole = normalized === 'sqlite' ? `${domainLabel} on this device` : meta.role;
               const displaySummary = meta.summary
                 .replace('meals, kitchen, recipes and planning', `${domainLabel.toLowerCase()} pages, records and planning`)
-                .replace('Fast offline graph', `Fast offline ${domainLabel.toLowerCase()} graph`);
+                .replace('Fast offline graph', `Fast offline ${domainLabel.toLowerCase()} records`);
               return (
                 <View key={sourceRow.name} style={[styles.sourceCell, compact ? styles.sourceCellCompact : null]}>
                   <Card style={styles.sourceCard}>
@@ -313,7 +313,7 @@ export default function SourcesScreen() {
     if (section === 'syncPlan') {
       return sourcesConfig.showSyncPlan ? (
         <View style={[styles.detailMain, compact ? styles.detailFull : null]}>
-          <SectionTitle title="Sync implementation order" />
+          <SectionTitle title="How sync works" />
           <Card style={styles.timelineCard}>
             {recentSync.map(([time, title, detail], index) => (
               <View key={`${time}-${title}`} style={styles.timelineRow}>
@@ -339,9 +339,9 @@ export default function SourcesScreen() {
             <Pill tone="moss">CALM BY DEFAULT</Pill>
             <Text style={styles.policyTitle}>One authority. No sync loops.</Text>
             <View style={styles.policyList}>
-              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>SQLite remains available offline.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Your device stays available offline.</Text></View>
               <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Exact source versions stay attached to answers.</Text></View>
-              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Unknown provider fields are preserved.</Text></View>
+              <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Extra source fields are preserved.</Text></View>
               <View style={styles.policyRow}><Text style={styles.policyCheck}>✓</Text><Text style={styles.policyText}>Credentials never appear here.</Text></View>
             </View>
           </Card>
@@ -352,9 +352,9 @@ export default function SourcesScreen() {
       <Link href="/config" asChild>
         <Pressable accessibilityRole="button" style={({ pressed }) => [styles.systemAction, pressed ? styles.pressed : null]}>
           <View>
-            <Text style={styles.systemActionEyebrow}>CONFIG MAP</Text>
-            <Text style={styles.systemActionTitle}>See domains, skills and agents</Text>
-            <Text style={styles.systemActionBody}>Edit the packages and schemas that decide how sources become LifeOS pages.</Text>
+            <Text style={styles.systemActionEyebrow}>CUSTOMIZE</Text>
+            <Text style={styles.systemActionTitle}>Choose domains, skills and agents</Text>
+            <Text style={styles.systemActionBody}>Tune how sources become LifeOS pages.</Text>
           </View>
           <Text style={styles.systemActionArrow}>→</Text>
         </Pressable>

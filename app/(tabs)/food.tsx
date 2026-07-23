@@ -43,13 +43,40 @@ function copyForView(domainLabel: string, view: string) {
   }
   return {
     title: view === 'Overview' ? `${domainLabel} command center` : view,
-    subtitle: `Views, records and actions from the active ${domainLabel} package.`,
-    empty: `Connect sources or capture a ${domainLabel.toLowerCase()} record to wake up this space.`,
+    subtitle: `${domainLabel} views, records and actions.`,
+    empty: `Connect sources or add a ${domainLabel.toLowerCase()} item to wake up this space.`,
   };
 }
 
 function pickByNeed(records: FoodRecordView[], needle: string, fallbackIndex: number) {
   return records.find((item) => `${item.collection} ${item.meta} ${item.title}`.toLowerCase().includes(needle)) ?? records[fallbackIndex];
+}
+
+function pickByCollections(records: FoodRecordView[], collections: string[], fallbackIndex: number) {
+  const wanted = new Set(collections);
+  return records.find((item) => wanted.has(item.collection)) ?? records[fallbackIndex];
+}
+
+const foodPriority: Record<string, number> = {
+  meal_plan: 100,
+  recipe: 94,
+  inventory: 84,
+  shopping_item: 76,
+  shopping_demand: 72,
+  inventory_lot: 68,
+  meal_log: 56,
+  purchase: 48,
+  product: 38,
+  nutrition_profile: 30,
+  recipe_step: 28,
+  purchase_line: 24,
+  inventory_movement: 18,
+  meal_consumption: 12,
+  source_record: 4,
+};
+
+function productRank(records: FoodRecordView[]) {
+  return [...records].sort((left, right) => (foodPriority[right.collection] ?? 40) - (foodPriority[left.collection] ?? 40));
 }
 
 function countSetting(value: string, fallback: number) {
@@ -184,24 +211,25 @@ export default function FoodScreen() {
     );
   }, [active, records]);
 
-  const todayMeal = pickByNeed(records, 'meal', 0);
-  const kitchenItem = pickByNeed(records, 'pantry', 1);
-  const shoppingItem = pickByNeed(records, 'shopping', 2);
+  const rankedRecords = productRank(records);
+  const todayMeal = pickByCollections(rankedRecords, ['meal_plan', 'recipe'], 0) ?? pickByNeed(rankedRecords, 'meal', 0);
+  const kitchenItem = pickByCollections(rankedRecords, ['inventory', 'inventory_lot'], 1) ?? pickByNeed(rankedRecords, 'pantry', 1);
+  const shoppingItem = pickByCollections(rankedRecords, ['shopping_item', 'shopping_demand'], 2) ?? pickByNeed(rankedRecords, 'shopping', 2);
   const activeCopy = copyForView(domainLabel, active);
   const foodConfig = settings.runtime.surfaceConfig.food;
   const columnLimit = countSetting(foodConfig.columnLimit, 4);
   const attentionLimit = countSetting(foodConfig.attentionLimit, 3);
-  const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, columnLimit);
-  const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
-  const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, columnLimit);
+  const mealRecords = rankedRecords.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, columnLimit);
+  const kitchenRecords = rankedRecords.filter((item) => ['inventory', 'inventory_lot', 'product', 'inventory_movement', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
+  const shoppingRecords = rankedRecords.filter((item) => ['shopping_item', 'shopping_demand', 'purchase', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
   const surfaceColumns = activeManifest.surfaces.slice(0, 3).map((surface) => ({
     id: surface.id,
     title: surface.label,
-    subtitle: surface.views?.slice(0, 3).join(' · ') || surface.collections.join(' · ') || 'Package surface',
+    subtitle: surface.views?.slice(0, 3).join(' · ') || surface.collections.join(' · ') || 'Workspace view',
     records: records.filter((record) => surface.collections.includes(record.collection)).slice(0, columnLimit),
     empty: `No ${surface.label.toLowerCase()} records yet.`,
   }));
-  const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
+  const reviewRows = rankedRecords.filter((item) => /use|planned|buy|tonight|open|review/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
   const widgets = parseFoodWidgets(foodConfig.widgets);
   const configuredBlocks = parseDashboardBlockOverrides(foodConfig.dashboardBlocks, activeDomainId);
@@ -241,14 +269,14 @@ export default function FoodScreen() {
                 <Text style={[styles.heroMeta, { color: theme.colors.muted }]}>{loading ? `Loading ${domainLabel.toLowerCase()}...` : `${records.length} ${domainLabel.toLowerCase()} records`}</Text>
               </View>
               <Text style={[styles.heroTitle, { color: theme.colors.ink }, compact && styles.heroTitleCompact]}>
-                {todayMeal?.title ?? `Run your ${domainLabel.toLowerCase()} workspace from one graph.`}
+                {isFoodDomain && todayMeal ? `Tonight: ${todayMeal.title}` : todayMeal?.title ?? `Run your ${domainLabel.toLowerCase()} workspace.`}
               </Text>
               <Text style={[styles.heroBody, { color: theme.colors.ink }, compact && styles.heroBodyCompact]}>
-                {todayMeal?.body || todayMeal?.meta || `Views, records, sources, skills and MCP tools come from the active ${domainLabel} package.`}
+                {todayMeal?.body || todayMeal?.meta || `Open a view, ask with context, or add the next ${domainLabel.toLowerCase()} item.`}
               </Text>
               <View style={styles.heroActions}>
                 <ActionButton label={todayMeal ? `Open ${isFoodDomain ? 'dinner' : 'record'}` : `Ask ${domainLabel} AI`} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
-                <ActionButton label="Edit package" quiet onPress={() => router.push('/config')} />
+                <ActionButton label={`Ask ${domainLabel} AI`} quiet onPress={() => router.push('/chat')} />
               </View>
               <View style={styles.commandLane}>
                 {isFoodDomain ? (
@@ -266,7 +294,7 @@ export default function FoodScreen() {
 
             <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
               <FeatureCard tone="amber" label={isFoodDomain ? 'Use soon' : 'First surface'} item={isFoodDomain ? kitchenItem : surfaceColumns[0]?.records[0]} fallbackTitle={isFoodDomain ? 'Nothing urgent' : surfaceColumns[0]?.title ?? 'No records yet'} fallbackBody={isFoodDomain ? 'Use-soon pantry items will appear here.' : surfaceColumns[0]?.subtitle ?? 'Connect a source or capture a record.'} />
-              <FeatureCard tone="blue" label={isFoodDomain ? 'Shopping' : 'Sources'} item={isFoodDomain ? shoppingItem : undefined} fallbackTitle={isFoodDomain ? 'No shopping pressure' : `${domainLabel} sources`} fallbackBody={isFoodDomain ? 'Missing ingredients and receipt items will appear here.' : 'Notion, Sheets, SQLite and Postgres can feed this package.'} />
+              <FeatureCard tone="blue" label={isFoodDomain ? 'Shopping' : 'Sources'} item={isFoodDomain ? shoppingItem : undefined} fallbackTitle={isFoodDomain ? 'No shopping pressure' : `${domainLabel} sources`} fallbackBody={isFoodDomain ? 'Missing ingredients and receipt items will appear here.' : 'Notion, Sheets and device records can feed this space.'} />
             </View>
           </View>
         ) : null;
@@ -289,14 +317,14 @@ export default function FoodScreen() {
       case 'widgets':
         return foodConfig.showWidgets && widgets.length ? (
           <View key={section}>
-            <SectionTitle title="Profile widgets" action="Edit" href="/config" />
+            <SectionTitle title="Shortcuts" action="Edit" href="/config" />
             <View style={[styles.widgetGrid, compact && styles.boardCompact]}>
               {widgets.map((widget) => (
                 <Pressable key={`${widget.title}-${widget.href}`} accessibilityRole="button" onPress={() => router.push(widget.href as never)} style={({ pressed }) => [styles.widgetPress, pressed && styles.pressed]}>
                   <Card tone={widget.tone === 'neutral' ? undefined : widget.tone} style={styles.widgetCard}>
                     <Text style={[styles.widgetTitle, { color: theme.colors.ink }]}>{widget.title}</Text>
                     <Text style={[styles.widgetDetail, { color: theme.colors.muted }]}>{widget.detail}</Text>
-                    <Text style={[styles.widgetRoute, { color: theme.colors.moss }]}>{widget.href}</Text>
+                    <Text style={[styles.widgetRoute, { color: theme.colors.moss }]}>Open →</Text>
                   </Card>
                 </Pressable>
               ))}
@@ -306,7 +334,7 @@ export default function FoodScreen() {
       case 'manifest':
         return active === 'Overview' && foodConfig.showManifestBlocks && manifestBlocks.length ? (
           <View key={section}>
-            <SectionTitle title="Package dashboard" action="Edit package" href="/config" />
+            <SectionTitle title={`${domainLabel} dashboard`} action="Tune" href="/config" />
             <View style={[styles.manifestGrid, compact && styles.boardCompact]}>
               {manifestBlocks.map((block) => (
                 <ManifestDashboardBlock
@@ -321,7 +349,7 @@ export default function FoodScreen() {
       case 'workspace':
         return active === 'Overview' && foodConfig.showWorkspace ? (
           <View key={section}>
-            <SectionTitle title={`${domainLabel} workspace`} action="Ask" href="/chat" />
+              <SectionTitle title={`${domainLabel} workspace`} action="Ask" href="/chat" />
             <View style={[styles.board, compact && styles.boardCompact]}>
               {isFoodDomain ? (
                 <>
@@ -346,7 +374,7 @@ export default function FoodScreen() {
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing needs review</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>AI proposals, source conflicts and reviewable changes land here before they change your graph.</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>AI suggestions, source conflicts and reviewable changes land here before they change your {domainLabel.toLowerCase()} graph.</Text>
                 </Card>
               )}
             </View>
@@ -376,10 +404,10 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>{domainLabel} is the active package</Text>
-              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, dashboard blocks, skills, schemas and MCP tools come from the active package.</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>{domainLabel} can be customized</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, cards, source rules and assistant behavior are editable from Settings.</Text>
             </View>
-            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Edit package</Link>
+            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Tune</Link>
           </Card>
         ) : null;
       default:
@@ -441,7 +469,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
               {!records.length ? <Text style={[styles.manifestBlockEmpty, { color: theme.colors.muted }]}>Add matching records or edit the block query.</Text> : null}
             </View>
           ) : null}
-          <Text style={[styles.manifestBlockRoute, { color: theme.colors.moss }]}>{block.surface} · {block.id}</Text>
+          <Text style={[styles.manifestBlockRoute, { color: theme.colors.moss }]}>Open →</Text>
         </Card>
       </Pressable>
     </Link>

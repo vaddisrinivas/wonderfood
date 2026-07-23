@@ -59,3 +59,31 @@ LifeOS is materially cleaner, but still not visually great. The next product-gra
 - Data homes
 
 This pass removed bad proof/config language and reduced the default architecture dump. It still needs a stronger visual design pass before it feels like GPT + Notion in one place.
+
+## 2026-07-23 product screenshot pass
+
+Captured by `npm run check:web-product` across 42 desktop/mobile route screenshots.
+
+What changed:
+
+- Home now starts with dinner, use-soon risk, shopping gap and review queue; it no longer opens with config/runtime copy.
+- Food now renders 15 bundled local Food records from the restored schema bridge, including inventory lots, movements, purchase lines, shopping demand, nutrition profiles, meal logs and source records.
+- Record detail for `Green dal + rice` now shows nutrition, availability, blockers, instructions, cooking logs, variations, relations and provenance instead of a thin note page.
+- Sources now says “Where food comes from” and “No hosted bridge is required” instead of webhook/server language.
+- Settings now says “Choose AI and data sources” and keeps provider/source controls in the right place.
+- Search and Capture now use user nouns: search food, add food, notes, receipts, photos, links.
+- Daily Home/Food copy now avoids `MCP`, `schema`, `runtime`, `package`, `provider`, and source IDs. Those words remain only in advanced Config/System where the user explicitly edits machinery.
+
+Evidence:
+
+- `app/build/evidence/web-product-smoke/home-mobile.png`
+- `app/build/evidence/web-product-smoke/food-mobile.png`
+- `app/build/evidence/web-product-smoke/record-green-dal-mobile.png`
+- `app/build/evidence/web-product-smoke/chat-mobile.png`
+- `app/build/evidence/web-product-smoke/sources-mobile.png`
+- `app/build/evidence/web-product-smoke/settings-mobile.png`
+- `app/build/evidence/web-product-smoke/web-product-smoke.json`
+
+Remaining design issue:
+
+- This is finally testable product UI, not proof UI. It is still not “single greatest” visually. Next visual leap should be premium components: meal calendar, pantry expiry timeline, shopping checklist, macro/source charts, bottom-sheet record actions, stronger typography, better icons and less beige.
