@@ -55,6 +55,7 @@
     "test:server:webhook-ingress": "./server/node_modules/.bin/tsx server/test/provider-webhook-ingress.ts",
     "test:server:webhook-retry": "./server/node_modules/.bin/tsx server/test/provider-webhook-retry.ts",
     "test:server:openai-web-search": "./server/node_modules/.bin/tsx server/test/openai-web-search.ts",
+    "test:server:multiturn": "./server/node_modules/.bin/tsx server/test/multiturn-conversation-contract.ts",
     "test:server:health-snapshot": "./server/node_modules/.bin/tsx server/test/health-snapshot-sync.ts",
     "phase5:check:notion-adapter": "./server/node_modules/.bin/tsx scripts/quality/check-phase5-notion-adapter.ts",
     "phase5:check": "npm run test:server:notion && npm run test:contract:notion && npm run phase5:check:notion-adapter && npm run test:server:webhook-ingress",

@@ -1,1 +1,8 @@
-export { appendServerMessage, ensureConversation, getConversation, listConversations, upsertConversation } from './conversations';
+export {
+  appendServerMessage,
+  ensureConversation,
+  getConversation,
+  listConversations,
+  setConversationResponseId,
+  upsertConversation,
+} from './conversations';

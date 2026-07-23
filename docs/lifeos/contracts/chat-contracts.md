@@ -53,6 +53,8 @@ Rules:
 - Input accepts `mode: stream` or `preview` and the same envelope fields as `/chat/send`.
 - `preview: true` disables mutating effects (executor may still validate and build policy responses without commits).
 - `/chat/send` never emits synthetic/fixture model answers; model output may be unavailable and is reported in `warnings`.
+- Conversation persistence stores the latest OpenAI `previous_response_id`; after a server restart, `/chat/send` resumes that chain when the client does not provide one.
+- The server also sends a bounded, structured summary of the last eight turns (including answer rows and source labels) as explicit model context, so multi-turn behavior remains recoverable even when provider response chaining is unavailable.
 - Web search is opt-in through `OPENAI_WEB_SEARCH_ENABLED=true`; when unset,
   explicit `online`, `latest`, `current`, `source`, and similar queries enable
   the tool. URL/title annotations are normalized into clickable source cards.

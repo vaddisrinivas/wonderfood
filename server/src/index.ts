@@ -29,6 +29,7 @@ import {
   upsertConversation,
   listConversations,
   getConversation,
+  setConversationResponseId,
 } from './chat-storage';
 import { ChatStreamEvent } from './responses';
 import { getActionEvent, runUndo } from './mcp/state';
@@ -307,6 +308,7 @@ async function runServerChat(params: {
 
   if (response.run?.previous_response_id) {
     previousResponseByConversation.set(conversationId, response.run.previous_response_id);
+    setConversationResponseId(conversationId, response.run.previous_response_id);
   }
 
   runByConversation.delete(conversationId);
@@ -833,7 +835,9 @@ const server = createServer(async (req: any, res: any) => {
       });
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const idempotencyKey = parsed.idempotencyKey;
-      const previousResponseId = parsed.previousResponseId ?? previousResponseByConversation.get(conversation.id);
+      const previousResponseId = parsed.previousResponseId
+        ?? previousResponseByConversation.get(conversation.id)
+        ?? conversation.last_response_id;
       const existing = idempotencyCache.get(idempotencyKey);
       if (existing) {
         const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
@@ -977,7 +981,9 @@ const server = createServer(async (req: any, res: any) => {
       });
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const idempotencyKey = parsed.idempotencyKey;
-      const previousResponseId = parsed.previousResponseId ?? previousResponseByConversation.get(conversation.id);
+      const previousResponseId = parsed.previousResponseId
+        ?? previousResponseByConversation.get(conversation.id)
+        ?? conversation.last_response_id;
       const existing = idempotencyCache.get(idempotencyKey);
       if (existing) {
         const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);

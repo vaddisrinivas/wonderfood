@@ -193,6 +193,28 @@ export type ServerChatResponse = {
   };
 };
 
+export function buildConversationContext(conversation: ReturnType<typeof getConversation>): string {
+  if (!conversation) {
+    return '';
+  }
+  return conversation.messages
+    .slice(-8)
+    .map((message: ServerChatMessage) => {
+      const answerText = message.answer
+        ? [
+          message.answer.intro,
+          ...message.answer.rows.map((row) => `${row.meal}: ${row.use} (${row.next})`),
+        ].filter(Boolean).join('\n')
+        : '';
+      const sourceText = message.answer?.citations?.length
+        ? `Sources: ${message.answer.citations.map((citation) => citation.label).join(', ')}`
+        : '';
+      return `${message.role.toUpperCase()}: ${[message.text, answerText, sourceText].filter(Boolean).join('\n')}`;
+    })
+    .join('\n')
+    .slice(-12000);
+}
+
 function parseStructuredModel(inputText: string, modelText: string): ChatStructuredAnswer | undefined {
   if (!modelText) {
     return undefined;
@@ -379,14 +401,7 @@ export async function handleServerChat(input: {
 }): Promise<ServerChatResponse> {
   const domain = input.domainId || 'food';
   const conversation = getConversation(input.conversationId);
-  const threadContext = conversation
-    ? conversation.messages
-      .slice(-6)
-      .map((message: { role: 'assistant' | 'user'; text?: string; body?: string }) =>
-        `${message.role.toUpperCase()}: ${message.text ?? message.body ?? ''}`,
-      )
-      .join('\n')
-    : '';
+  const threadContext = buildConversationContext(conversation);
 
   const orchestrated = await runChatOrchestrator({
     conversationId: input.conversationId,
@@ -397,6 +412,7 @@ export async function handleServerChat(input: {
     runId: input.runId,
     signal: input.signal,
     previousResponseId: input.previousResponseId,
+    conversationContext: threadContext,
     stream: input.stream,
     onModelToken: input.onModelToken,
     preview: input.preview,

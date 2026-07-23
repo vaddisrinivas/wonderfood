@@ -8,6 +8,7 @@ type PersistedConversationEnvelope = {
   messages: ServerChatMessage[];
   title: string;
   detail: string;
+  last_response_id?: string;
 };
 
 type PersistedFile = {
@@ -29,6 +30,7 @@ type ConversationEnvelope = {
   messages: ServerChatMessage[];
   title: string;
   detail: string;
+  last_response_id?: string;
 };
 
 const conversations = new Map<string, ConversationEnvelope>();
@@ -45,6 +47,7 @@ function cloneConversation(conversation: ConversationEnvelope): ConversationEnve
     messages: [...conversation.messages],
     title: conversation.title,
     detail: conversation.detail,
+    ...(conversation.last_response_id ? { last_response_id: conversation.last_response_id } : {}),
   };
 }
 
@@ -85,6 +88,7 @@ function load() {
         messages: row.messages ?? [],
         title: row.title,
         detail: row.detail,
+        ...(row.last_response_id ? { last_response_id: row.last_response_id } : {}),
       });
     }
   } catch {
@@ -151,6 +155,17 @@ export function appendServerMessage(id: string, message: ServerChatMessage): Con
   conversations.set(id, conversation);
   persist();
   return conversation;
+}
+
+export function setConversationResponseId(id: string, responseId: string) {
+  load();
+  const conversation = conversations.get(id);
+  if (!conversation || !responseId.trim()) {
+    return;
+  }
+  conversation.last_response_id = responseId.trim();
+  conversations.set(id, conversation);
+  persist();
 }
 
 export function listConversations() {
