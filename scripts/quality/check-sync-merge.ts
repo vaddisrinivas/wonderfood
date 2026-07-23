@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { loadCatalog } from '../../src/domain/catalog';
 import type { CanonicalRecord } from '../../src/domain/runtime';
 import { upsertRecord, getRecord } from '../../src/db/records';
-import { mergeRemoteRecord } from '../../src/providers/merge';
+import { listSyncConflicts, mergeRemoteRecord, resolveSyncConflict } from '../../src/providers/merge';
 
 type Row = Record<string, any>;
 
@@ -47,6 +47,16 @@ class MemoryDb {
       this.conflicts.set(id, { id, domain, collection, record_id, provider, external_id, fields_json, base_json, local_json, remote_json, status, resolution_op_id, created_at, resolved_at });
       return;
     }
+    if (compact === 'UPDATE sync_conflicts SET status = ?, resolution_op_id = ?, resolved_at = ? WHERE id = ?') {
+      const [status, resolution_op_id, resolved_at, id] = params;
+      const row = this.conflicts.get(id);
+      if (row) {
+        row.status = status;
+        row.resolution_op_id = resolution_op_id;
+        row.resolved_at = resolved_at;
+      }
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 
@@ -57,6 +67,12 @@ class MemoryDb {
       const row = Array.from(this.operations.values()).find((item) => item.idempotency_key === params[0]);
       return (row ? { op_id: row.op_id, after_json: row.after_json, status: row.status } : null) as T | null;
     }
+    if (compact === 'SELECT * FROM operations WHERE op_id = ?') {
+      return (this.operations.get(params[0]) ?? null) as T | null;
+    }
+    if (compact === 'SELECT * FROM sync_conflicts WHERE id = ?') {
+      return (this.conflicts.get(params[0]) ?? null) as T | null;
+    }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
   }
 
@@ -64,6 +80,11 @@ class MemoryDb {
     const compact = sql.replace(/\s+/g, ' ').trim();
     if (compact === 'SELECT name, target_id FROM record_relations WHERE from_id = ?') {
       return this.recordRelations.filter((row) => row.from_id === params[0]).map((row) => ({ name: row.name, target_id: row.target_id })) as T[];
+    }
+    if (compact === 'SELECT * FROM sync_conflicts WHERE status = ? ORDER BY created_at DESC') {
+      return Array.from(this.conflicts.values())
+        .filter((row) => row.status === params[0])
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at))) as T[];
     }
     throw new Error(`Unsupported getAllAsync SQL: ${compact}`);
   }
@@ -141,6 +162,22 @@ function clone(record: CanonicalRecord): CanonicalRecord {
   assert(conflictCount === 1, `expected one conflict, got ${conflictCount}`);
   const conflictRow = Array.from(proofDb.conflicts.values())[0];
   assert(String(conflictRow.fields_json).includes('quantity'), 'conflict row did not name quantity');
+  const pending = await listSyncConflicts(db);
+  assert(pending.length === 1, `expected one pending conflict, got ${pending.length}`);
+  const operationCountBeforeResolve = proofDb.operations.size;
+  const resolved = await resolveSyncConflict({
+    db,
+    manifest,
+    conflictId: pending[0].id,
+    resolution: 'remote',
+  });
+  assert(resolved.status === 'resolved', `conflict resolve status ${resolved.status}`);
+  const afterResolve = await getRecord(db, 'merge-yogurt');
+  assert(afterResolve?.properties.quantity === 4, 'remote resolution did not apply provider quantity');
+  const resolvedRow = proofDb.conflicts.get(pending[0].id);
+  assert(resolvedRow?.status === 'resolved', 'conflict row not marked resolved');
+  assert(Boolean(resolvedRow?.resolution_op_id), 'conflict row missing resolution operation id');
+  assert(proofDb.operations.size === operationCountBeforeResolve + 1, 'remote resolution did not write exactly one operation');
 
   const outDir = join(process.cwd(), 'app', 'build', 'evidence', 'sync-merge');
   mkdirSync(outDir, { recursive: true });
@@ -157,6 +194,10 @@ function clone(record: CanonicalRecord): CanonicalRecord {
       fields: JSON.parse(conflictRow.fields_json),
       localQuantityPreserved: afterConflict?.properties.quantity,
       conflictRows: proofDb.conflicts.size,
+      pendingBeforeResolve: pending.length,
+      resolutionStatus: resolved.status,
+      resolvedQuantity: afterResolve?.properties.quantity,
+      resolutionOperationId: resolvedRow?.resolution_op_id,
     },
     operations: proofDb.operations.size,
     all_passed: true,

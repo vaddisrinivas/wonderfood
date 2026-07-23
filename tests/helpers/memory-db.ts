@@ -51,6 +51,16 @@ export class MemoryDb {
       this.conflicts.set(id, { id, domain, collection, record_id, provider, external_id, fields_json, base_json, local_json, remote_json, status, resolution_op_id, created_at, resolved_at });
       return;
     }
+    if (compact === 'UPDATE sync_conflicts SET status = ?, resolution_op_id = ?, resolved_at = ? WHERE id = ?') {
+      const [status, resolution_op_id, resolved_at, id] = params;
+      const row = this.conflicts.get(id);
+      if (row) {
+        row.status = status;
+        row.resolution_op_id = resolution_op_id;
+        row.resolved_at = resolved_at;
+      }
+      return;
+    }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
   }
 
@@ -66,6 +76,9 @@ export class MemoryDb {
     if (compact === 'SELECT * FROM operations WHERE op_id = ?') {
       return (this.operations.get(params[0]) ?? null) as T | null;
     }
+    if (compact === 'SELECT * FROM sync_conflicts WHERE id = ?') {
+      return (this.conflicts.get(params[0]) ?? null) as T | null;
+    }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
   }
 
@@ -73,6 +86,11 @@ export class MemoryDb {
     const compact = sql.replace(/\s+/g, ' ').trim();
     if (compact === 'SELECT name, target_id FROM record_relations WHERE from_id = ?') {
       return this.recordRelations.filter((row) => row.from_id === params[0]).map((row) => ({ name: row.name, target_id: row.target_id })) as T[];
+    }
+    if (compact === 'SELECT * FROM sync_conflicts WHERE status = ? ORDER BY created_at DESC') {
+      return Array.from(this.conflicts.values())
+        .filter((row) => row.status === params[0])
+        .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at))) as T[];
     }
     throw new Error(`Unsupported getAllAsync SQL: ${compact}`);
   }

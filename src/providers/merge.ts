@@ -6,11 +6,43 @@ import { applyOperation } from '@/src/ops/apply';
 import type { OperationResult } from '@/src/ops/operation';
 
 type ProviderName = CanonicalRecord['source']['provider'];
+type SyncConflictStatus = 'needs_review' | 'resolved' | 'dismissed';
 
 export type SyncMergeResult =
   | { status: 'no_change'; changedFields: string[] }
   | { status: 'applied'; changedFields: string[]; operation: OperationResult }
   | { status: 'needs_review'; changedFields: string[]; conflictId: string };
+
+export type SyncConflictRow = {
+  id: string;
+  domain: string;
+  collection: string;
+  record_id: string;
+  provider: ProviderName;
+  external_id: string;
+  fields_json: string;
+  base_json: string | null;
+  local_json: string;
+  remote_json: string;
+  status: SyncConflictStatus;
+  resolution_op_id: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type SyncConflict = Omit<SyncConflictRow, 'fields_json' | 'base_json' | 'local_json' | 'remote_json'> & {
+  fields: string[];
+  base: CanonicalRecord | null;
+  local: CanonicalRecord;
+  remote: CanonicalRecord;
+};
+
+export type SyncConflictResolution = 'local' | 'remote' | 'dismiss';
+
+export type SyncConflictResolutionResult =
+  | { status: 'resolved'; conflictId: string; operation?: OperationResult }
+  | { status: 'dismissed'; conflictId: string }
+  | { status: 'rejected'; conflictId: string; reject_reason: string };
 
 const highRiskHints = [
   'quantity',
@@ -103,6 +135,113 @@ function mergeRemoteIntoLocal(base: CanonicalRecord | null, local: CanonicalReco
 
 function conflictId(provider: ProviderName, externalId: string, recordId: string, fields: string[]) {
   return `conflict-${provider}-${externalId}-${recordId}-${fields.join('-')}`.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 180);
+}
+
+function parseJson<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseConflict(row: SyncConflictRow): SyncConflict {
+  return {
+    id: row.id,
+    domain: row.domain,
+    collection: row.collection,
+    record_id: row.record_id,
+    provider: row.provider,
+    external_id: row.external_id,
+    status: row.status,
+    resolution_op_id: row.resolution_op_id,
+    created_at: row.created_at,
+    resolved_at: row.resolved_at,
+    fields: parseJson<string[]>(row.fields_json, []),
+    base: parseJson<CanonicalRecord | null>(row.base_json, null),
+    local: parseJson<CanonicalRecord>(row.local_json, {} as CanonicalRecord),
+    remote: parseJson<CanonicalRecord>(row.remote_json, {} as CanonicalRecord),
+  };
+}
+
+async function markConflict(
+  db: SQLiteDatabase,
+  id: string,
+  status: SyncConflictStatus,
+  resolutionOpId: string | null,
+) {
+  await db.runAsync(
+    'UPDATE sync_conflicts SET status = ?, resolution_op_id = ?, resolved_at = ? WHERE id = ?',
+    [status, resolutionOpId, new Date().toISOString(), id],
+  );
+}
+
+export async function listSyncConflicts(
+  db: SQLiteDatabase,
+  status: SyncConflictStatus = 'needs_review',
+): Promise<SyncConflict[]> {
+  const rows = await db.getAllAsync<SyncConflictRow>(
+    'SELECT * FROM sync_conflicts WHERE status = ? ORDER BY created_at DESC',
+    [status],
+  );
+  return rows.map(parseConflict);
+}
+
+export async function getSyncConflict(db: SQLiteDatabase, id: string): Promise<SyncConflict | null> {
+  const row = await db.getFirstAsync<SyncConflictRow>('SELECT * FROM sync_conflicts WHERE id = ?', [id]);
+  return row ? parseConflict(row) : null;
+}
+
+export async function resolveSyncConflict(input: {
+  db: SQLiteDatabase;
+  manifest: DomainManifest;
+  conflictId: string;
+  resolution: SyncConflictResolution;
+  actor?: 'user' | 'sync' | 'agent' | 'api';
+}): Promise<SyncConflictResolutionResult> {
+  const conflict = await getSyncConflict(input.db, input.conflictId);
+  if (!conflict) {
+    return { status: 'rejected', conflictId: input.conflictId, reject_reason: 'conflict_not_found' };
+  }
+  if (conflict.status === 'resolved') {
+    return { status: 'resolved', conflictId: conflict.id };
+  }
+  if (conflict.status === 'dismissed') {
+    return { status: 'dismissed', conflictId: conflict.id };
+  }
+  if (input.resolution === 'dismiss') {
+    await markConflict(input.db, conflict.id, 'dismissed', null);
+    return { status: 'dismissed', conflictId: conflict.id };
+  }
+  if (input.resolution === 'local') {
+    await markConflict(input.db, conflict.id, 'resolved', null);
+    return { status: 'resolved', conflictId: conflict.id };
+  }
+
+  const operation = await applyOperation(input.db, input.manifest, {
+    op_id: `sync-resolve-${conflict.id}-${Date.now().toString(36)}`,
+    kind: 'update',
+    domain: input.manifest.id,
+    collection: conflict.collection,
+    record_id: conflict.record_id,
+    expected_revision: conflict.local.revision,
+    record: conflict.remote,
+    actor: input.actor ?? 'sync',
+    origin: 'sync',
+    idempotency_key: `sync-conflict-resolve:${conflict.id}:remote`,
+    evidence: [conflict.remote.source.external_id],
+    reason: `Resolved sync conflict ${conflict.id} by choosing remote.`,
+  });
+  if (operation.status === 'applied' || operation.status === 'duplicate') {
+    await markConflict(input.db, conflict.id, 'resolved', operation.op_id);
+    return { status: 'resolved', conflictId: conflict.id, operation };
+  }
+  return {
+    status: 'rejected',
+    conflictId: conflict.id,
+    reject_reason: operation.reject_reason ?? 'operation_rejected',
+  };
 }
 
 export async function mergeRemoteRecord(input: {
