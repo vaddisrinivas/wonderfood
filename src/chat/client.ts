@@ -6,6 +6,7 @@ import { sendDirectModelMessage } from '@/src/chat/direct-provider';
 import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
 import { listRecordsForDomain } from '@/src/db/records';
 import type { CanonicalRecord } from '@/src/domain/runtime';
+import { undoOperation } from '@/src/ops/undo';
 // Keep citations user-controlled to avoid fabricated defaults when model fallback is in effect.
 
 export type ServerResponseMessage = {
@@ -913,6 +914,82 @@ export async function undoServerAction(input: {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function undoChatAction(input: {
+  db: SQLiteDatabase | null;
+  receipt: NonNullable<ChatMessage['actionReceipt']>;
+  domainId: string;
+  baseUrl?: string;
+  token?: string;
+  idempotencyKey?: string;
+  actor?: string;
+}): Promise<ServerUndoResponse> {
+  const manifest = manifestForDomain(input.domainId);
+  const operationIds = Array.from(new Set([
+    ...(input.receipt.operation_ids ?? []),
+    input.receipt.operation_id,
+    input.receipt.id,
+  ].filter((id): id is string => typeof id === 'string' && id.trim().length > 0)));
+
+  if (input.db) {
+    for (const operationId of operationIds) {
+      const result = await undoOperation(input.db, manifest, operationId);
+      if (result.status === 'applied' || result.status === 'duplicate') {
+        return {
+          status: 'completed',
+          action_id: input.receipt.id,
+          undo_result: {
+            success: true,
+            message: result.status === 'duplicate' ? 'Action already undone' : 'Undo applied locally.',
+            actor: input.actor,
+            idempotency_key: input.idempotencyKey,
+            replayed: result.status === 'duplicate',
+          },
+        };
+      }
+      if (result.reject_reason && result.reject_reason !== 'operation_not_found') {
+        return {
+          status: 'failed',
+          action_id: input.receipt.id,
+          undo_result: {
+            success: false,
+            message: result.reject_reason === 'revision_conflict'
+              ? 'Undo needs review because the record changed after this action.'
+              : `Undo failed locally: ${result.reject_reason}`,
+            actor: input.actor,
+            idempotency_key: input.idempotencyKey,
+            replayed: false,
+          },
+        };
+      }
+    }
+  }
+
+  if (input.baseUrl) {
+    const server = await undoServerAction({
+      actionId: input.receipt.id,
+      baseUrl: input.baseUrl,
+      token: input.token,
+      actor: input.actor,
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (server) return server;
+  }
+
+  return {
+    status: 'failed',
+    action_id: input.receipt.id,
+    undo_result: {
+      success: false,
+      message: input.db
+        ? 'Undo failed. No matching local operation was found and no server undo was available.'
+        : 'Undo failed. Local database is unavailable and no server undo was available.',
+      actor: input.actor,
+      idempotency_key: input.idempotencyKey,
+      replayed: false,
+    },
+  };
 }
 
 function makeOfflineAnswer(input: string, records: CanonicalRecord[] = [], manifest = loadCatalog().activeManifest): ChatAnswer {

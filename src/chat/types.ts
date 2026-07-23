@@ -65,6 +65,8 @@ export type ChatMessage = {
     updated_at: string;
     undo_deadline_at?: string;
     idempotency_key?: string;
+    operation_id?: string;
+    operation_ids?: string[];
   };
 };
 
