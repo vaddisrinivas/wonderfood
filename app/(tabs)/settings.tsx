@@ -38,14 +38,41 @@ const providerOptions: Array<{ id: AiProviderKind; label: string }> = [
   { id: 'anthropic', label: 'Anthropic' },
 ];
 
+const providerPresets: Array<{
+  label: string;
+  detail: string;
+  patch: Pick<AiProviderProfile, 'provider' | 'baseUrl' | 'model' | 'apiVersion'>;
+}> = [
+  {
+    label: 'OpenAI',
+    detail: 'Live smoke passed',
+    patch: { provider: 'openai_compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiVersion: '' },
+  },
+  {
+    label: 'Gemini',
+    detail: 'Live smoke passed',
+    patch: { provider: 'openai_compatible', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', apiVersion: '' },
+  },
+  {
+    label: 'Anthropic',
+    detail: 'Key found; billing blocked',
+    patch: { provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-4-5-20251001', apiVersion: '2023-06-01' },
+  },
+  {
+    label: 'Azure',
+    detail: 'Bring deployment',
+    patch: { provider: 'azure_openai', baseUrl: '', model: '', apiVersion: '2024-10-21' },
+  },
+];
+
 function defaultsFor(provider: AiProviderKind) {
   if (provider === 'anthropic') {
-    return { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-6', apiVersion: '2023-06-01' };
+    return { baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-4-5-20251001', apiVersion: '2023-06-01' };
   }
   if (provider === 'azure_openai') {
     return { baseUrl: '', model: '', apiVersion: '2024-10-21' };
   }
-  return { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.4-mini', apiVersion: '' };
+  return { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiVersion: '' };
 }
 
 export default function SettingsScreen() {
@@ -101,6 +128,10 @@ export default function SettingsScreen() {
       model: !profile.model || profile.model === defaultsFor(profile.provider).model ? nextDefaults.model : profile.model,
       apiVersion: nextDefaults.apiVersion,
     });
+  };
+
+  const applyProviderPreset = (id: AiProviderProfile['id'], patch: Pick<AiProviderProfile, 'provider' | 'baseUrl' | 'model' | 'apiVersion'>) => {
+    updateProfile(id, patch);
   };
 
   const save = async () => {
@@ -172,6 +203,7 @@ export default function SettingsScreen() {
                 profile={settings.ai.primary}
                 onChange={(patch) => updateProfile('primary', patch)}
                 onChoose={(provider) => chooseProvider('primary', provider)}
+                onPreset={(patch) => applyProviderPreset('primary', patch)}
                 onTest={() => void test('primary')}
                 testing={testing === 'primary'}
               />
@@ -181,6 +213,7 @@ export default function SettingsScreen() {
                 profile={settings.ai.fallback}
                 onChange={(patch) => updateProfile('fallback', patch)}
                 onChoose={(provider) => chooseProvider('fallback', provider)}
+                onPreset={(patch) => applyProviderPreset('fallback', patch)}
                 onTest={() => void test('fallback')}
                 testing={testing === 'fallback'}
               />
@@ -314,6 +347,7 @@ function ProviderCard(props: {
   profile: AiProviderProfile;
   onChange: (patch: Partial<AiProviderProfile>) => void;
   onChoose: (provider: AiProviderKind) => void;
+  onPreset: (patch: Pick<AiProviderProfile, 'provider' | 'baseUrl' | 'model' | 'apiVersion'>) => void;
   onTest: () => void;
   testing: boolean;
 }) {
@@ -334,6 +368,23 @@ function ProviderCard(props: {
             trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
             thumbColor={profile.enabled ? theme.colors.moss : theme.colors.muted}
           />
+        </View>
+
+        <View style={styles.providerChoices}>
+          {providerPresets.map((preset) => {
+            const selected = profile.provider === preset.patch.provider && profile.baseUrl === preset.patch.baseUrl && profile.model === preset.patch.model;
+            return (
+              <Pressable
+                key={preset.label}
+                accessibilityRole="button"
+                onPress={() => props.onPreset(preset.patch)}
+                style={[styles.presetChoice, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, selected && { backgroundColor: theme.colors.mossSoft, borderColor: theme.colors.moss }]}
+              >
+                <Text style={[styles.presetTitle, { color: theme.colors.ink }]}>{preset.label}</Text>
+                <Text style={[styles.presetDetail, { color: theme.colors.muted }]}>{preset.detail}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         <View style={styles.providerChoices}>
@@ -461,6 +512,9 @@ const styles = StyleSheet.create({
   providerChoiceSelected: { backgroundColor: colors.ink, borderColor: colors.ink },
   providerChoiceText: { color: colors.muted, fontSize: 10, fontWeight: '800' },
   providerChoiceTextSelected: { color: '#FFF' },
+  presetChoice: { flexGrow: 1, flexBasis: 118, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.paper, padding: 10 },
+  presetTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  presetDetail: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   fields: { gap: 12, marginTop: 18 },
   field: { gap: 6 },
   fieldLabel: { color: colors.ink, fontSize: 11, fontWeight: '800' },
