@@ -31,6 +31,8 @@ type SheetValuesResponse = {
 };
 
 const NOTION_VERSION = '2026-03-11';
+const foodDetailKeys = ['Food detail', 'food_detail', 'Food Detail', 'Detail JSON', 'detail_json'];
+const relationKeys = ['Relations', 'relations', 'Related records', 'related_records'];
 
 export async function syncConfiguredSources(input: {
   db: SQLiteDatabase | null;
@@ -188,9 +190,10 @@ function notionPageToRecord(page: NotionPage, manifest: DomainManifest, observed
       meta: readPlainProperty(props.Meta) || readPlainProperty(props.Type) || collection,
       body: readPlainProperty(props.Body) || readPlainProperty(props.Notes) || readPlainProperty(props.Description) || title,
       source: 'Notion',
+      food_detail: readJsonProperty(props, foodDetailKeys),
       raw: props,
     },
-    relations: [],
+    relations: readRelations(props, relationKeys),
     source: {
       provider: 'notion',
       external_id: page.id || id,
@@ -224,10 +227,11 @@ function sheetValuesToRecords(values: unknown[][], manifest: DomainManifest, wor
           meta: stringField(object, ['meta', 'Meta', 'type', 'Type']) || collection,
           body: stringField(object, ['body', 'Body', 'notes', 'Notes', 'description', 'Description']) || title,
           source: 'Google Sheets',
+          food_detail: jsonField(object, foodDetailKeys),
           row: index + 2,
           raw: object,
         },
-        relations: [],
+        relations: relationField(object, relationKeys),
         source: {
           provider: 'google_sheets' as const,
           external_id: idRaw,
@@ -323,6 +327,70 @@ function readPlainProperty(value: unknown): string {
   }
   if (record.formula && typeof record.formula === 'object') return readPlainProperty(record.formula);
   return '';
+}
+
+function readJsonProperty(props: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const raw = readPlainProperty(props[key]);
+    const parsed = parseJson(raw);
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
+}
+
+function jsonField(object: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const parsed = parseJson(stringField(object, [key]));
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
+}
+
+function parseJson(value: string): unknown {
+  if (!value.trim()) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function readRelations(props: Record<string, unknown>, keys: string[]): CanonicalRecord['relations'] {
+  for (const key of keys) {
+    const raw = readPlainProperty(props[key]);
+    const parsed = parseRelations(raw);
+    if (parsed.length) return parsed;
+  }
+  return [];
+}
+
+function relationField(object: Record<string, unknown>, keys: string[]): CanonicalRecord['relations'] {
+  for (const key of keys) {
+    const parsed = parseRelations(stringField(object, [key]));
+    if (parsed.length) return parsed;
+  }
+  return [];
+}
+
+function parseRelations(value: string): CanonicalRecord['relations'] {
+  if (!value.trim()) return [];
+  const parsed = parseJson(value);
+  if (Array.isArray(parsed)) {
+    return parsed
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const relation = item as Record<string, unknown>;
+        const name = typeof relation.name === 'string' ? relation.name : '';
+        const targetId = typeof relation.target_id === 'string' ? relation.target_id : '';
+        return name && targetId ? { name, target_id: targetId } : null;
+      })
+      .filter((item): item is CanonicalRecord['relations'][number] => item !== null);
+  }
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((targetId) => ({ name: 'supports', target_id: targetId }));
 }
 
 function stringField(object: Record<string, unknown>, keys: string[]): string {
