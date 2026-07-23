@@ -93,6 +93,12 @@ function safeJsonParse(input: string) {
   }
 }
 
+function publicEnv(name: string) {
+  const env = typeof process !== 'undefined' ? process.env : undefined;
+  const value = env?.[name];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export async function listChatThreads(db: SQLiteDatabase | null): Promise<ChatThread[]> {
   if (!db) {
     return [];
@@ -155,8 +161,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   const offlineAnswer = makeOfflineAnswer(text);
   const offlineWarnings: string[] = [];
   const settings = await loadLifeOSSettings();
-  const configuredServerUrl = input.serverUrl?.trim() ?? '';
-  const configuredServerToken = input.serverToken?.trim() ?? '';
+  const configuredServerUrl = input.serverUrl?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_URL');
+  const configuredServerToken = input.serverToken?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_TOKEN');
   const directProfiles = usableAiProfiles(settings);
 
   if (!db) {
