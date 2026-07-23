@@ -71,7 +71,7 @@ describe('AI config authoring', () => {
     expect(acceptAiConfigDraft(preview).ok).toBe(false);
   });
 
-  it('keeps scalar conflicts in review instead of silently applying AI config', () => {
+  it('rejects destructive AI config migrations instead of silently applying them', () => {
     const previous: ControlPlaneState = {
       sources: [],
       snapshots: [],
@@ -83,10 +83,13 @@ describe('AI config authoring', () => {
     const preview = previewAiConfigDraft({
       now,
       previous,
-      draft: draft('activeDomain: health'),
+      draft: draft('remove:\n  - domains.food.collections.inventory'),
     });
 
     expect(preview.can_apply).toBe(false);
-    expect(preview.proposal.conflicts[0].key).toBe('activeDomain');
+    expect(preview.proposal.conflicts[0]).toMatchObject({
+      key: 'migration',
+      status: 'needs_review',
+    });
   });
 });

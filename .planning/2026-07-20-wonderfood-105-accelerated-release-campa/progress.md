@@ -781,3 +781,19 @@
 - Result: PASS ✅.
 - Notable current counts: full Vitest suite `16 passed / 58 tests`, config valid with 3 domains, 29 Food collections, 5 workflows, 7 agents.
 - Exports passed again for web, Android, and iOS; chat send, rollback idempotency, and cross-surface client proof also passed.
+
+## 2026-07-23 config precedence audit
+
+- Audited `src/config/runtime.ts` after the external review note called out `config/*` as load-bearing.
+- Found a real C2 semantics gap: scalar config changes conflicted regardless of precedence, even though the plan says higher precedence wins and equal precedence conflicts.
+- Fixed merge ownership tracking by config path:
+  - previous last-good manifests act as the low-precedence base;
+  - higher-precedence sources override scalar keys;
+  - equal-precedence scalar disagreement creates a `needs_review` conflict;
+  - arrays remain additive unions.
+- Updated tests for runtime, sync, and AI config behavior.
+- Verified:
+  - `npm run check:control-plane` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Re-ran `npm run check:product` after the precedence fix: PASS ✅ (`16 passed / 59 tests`, web/Android/iOS exports, chat send/rollback/cross-surface proofs).

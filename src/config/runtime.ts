@@ -24,6 +24,11 @@ export type ConfigProposal = {
   created_at: string;
 };
 
+type ConfigPathOwner = {
+  sourceId: string;
+  precedence: number;
+};
+
 export type ConfigApplyResult =
   | { ok: true; state: ControlPlaneState; undo: ConfigUndoReceipt }
   | { ok: false; errors: ConfigValidationError[]; conflicts: ConfigConflict[] };
@@ -58,6 +63,8 @@ export function buildConfigProposal(input: {
   const errors: ConfigValidationError[] = [];
   const conflicts: ConfigConflict[] = [];
   let merged: ConfigDocument = { ...(input.previous?.manifests ?? {}) };
+  const owners = new Map<string, ConfigPathOwner>();
+  seedOwners(merged, owners, 'previous', Number.NEGATIVE_INFINITY);
   let mode: ControlPlaneState['mode'] = 'additive';
 
   const ordered = [...input.snapshots].sort((left, right) => left.source.precedence - right.source.precedence);
@@ -80,7 +87,14 @@ export function buildConfigProposal(input: {
       });
       continue;
     }
-    const result = mergeAdditive(merged, validation.document, item.source.id, createdAt);
+    const result = mergeAdditive(
+      merged,
+      validation.document,
+      item.source.id,
+      item.source.precedence,
+      createdAt,
+      owners,
+    );
     merged = result.document;
     conflicts.push(...result.conflicts);
   }
@@ -198,36 +212,83 @@ function parseScalar(value: string): unknown {
   return trimmed.replace(/^['"]|['"]$/g, '');
 }
 
-function mergeAdditive(base: ConfigDocument, incoming: ConfigDocument, sourceId: string, createdAt: string) {
+function mergeAdditive(
+  base: ConfigDocument,
+  incoming: ConfigDocument,
+  sourceId: string,
+  precedence: number,
+  createdAt: string,
+  owners: Map<string, ConfigPathOwner>,
+  prefix = '',
+) {
   const conflicts: ConfigConflict[] = [];
   const document = { ...base };
   for (const [key, value] of Object.entries(incoming)) {
+    const path = prefix ? `${prefix}.${key}` : key;
     if (!(key in document)) {
       document[key] = value;
+      seedOwnersForValue(path, value, owners, sourceId, precedence);
       continue;
     }
     const current = document[key];
     if (isObject(current) && isObject(value)) {
-      const result = mergeAdditive(current, value, sourceId, createdAt);
+      const result = mergeAdditive(current, value, sourceId, precedence, createdAt, owners, path);
       document[key] = result.document;
-      conflicts.push(...result.conflicts.map((conflict) => ({ ...conflict, key: `${key}.${conflict.key}` })));
+      conflicts.push(...result.conflicts);
       continue;
     }
     if (Array.isArray(current) && Array.isArray(value)) {
       document[key] = unionArray(current, value);
+      owners.set(path, mergeOwner(owners.get(path), sourceId, precedence));
       continue;
     }
     if (JSON.stringify(current) === JSON.stringify(value)) continue;
+    const owner = owners.get(path);
+    if (!owner || precedence > owner.precedence) {
+      document[key] = value;
+      owners.set(path, { sourceId, precedence });
+      continue;
+    }
+    if (precedence < owner.precedence) continue;
     conflicts.push({
-      id: conflictId(sourceId, key),
-      key,
-      sources: [sourceId],
-      reason: `Config key "${key}" already has a different value.`,
+      id: conflictId(sourceId, path),
+      key: path,
+      sources: Array.from(new Set([owner.sourceId, sourceId])),
+      reason: `Config key "${path}" has two different values at the same precedence.`,
       status: 'needs_review',
       created_at: createdAt,
     });
   }
   return { document, conflicts };
+}
+
+function seedOwners(
+  document: ConfigDocument,
+  owners: Map<string, ConfigPathOwner>,
+  sourceId: string,
+  precedence: number,
+  prefix = '',
+) {
+  for (const [key, value] of Object.entries(document)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    seedOwnersForValue(path, value, owners, sourceId, precedence);
+  }
+}
+
+function seedOwnersForValue(
+  path: string,
+  value: unknown,
+  owners: Map<string, ConfigPathOwner>,
+  sourceId: string,
+  precedence: number,
+) {
+  owners.set(path, { sourceId, precedence });
+  if (isObject(value)) seedOwners(value, owners, sourceId, precedence, path);
+}
+
+function mergeOwner(current: ConfigPathOwner | undefined, sourceId: string, precedence: number): ConfigPathOwner {
+  if (!current || precedence > current.precedence) return { sourceId, precedence };
+  return current;
 }
 
 function unionArray(left: unknown[], right: unknown[]) {

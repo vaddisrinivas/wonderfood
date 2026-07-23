@@ -84,3 +84,4 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - The AI capability gate is real for current manifests: `DomainManifest.collections` is a string array, so collection scope checks are not a type illusion.
 - One-write-path had a create-overwrite hole: `create` on an existing record could mutate without an expected revision if the idempotency key did not catch it. This is now rejected.
 - Provider local-copy clear/disconnect directly deletes local provider-owned rows by design. The operation-boundary gate now explicitly allowlists that lifecycle exception so future broad direct deletes are visible.
+- Config merge had a precedence semantics bug: scalar disagreements always conflicted. Runtime now tracks path ownership so higher-precedence sources win and equal-precedence disagreements go to review.

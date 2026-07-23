@@ -65,7 +65,7 @@ describe('config runtime', () => {
     });
   });
 
-  it('refuses scalar conflicts until the user reviews them', () => {
+  it('lets higher precedence scalar config override lower precedence defaults', () => {
     const proposal = buildConfigProposal({
       now,
       snapshots: [
@@ -74,10 +74,26 @@ describe('config runtime', () => {
       ],
     });
 
+    expect(proposal.errors).toEqual([]);
+    expect(proposal.conflicts).toEqual([]);
+    expect(proposal.mode).toBe('additive');
+    expect(proposal.document.activeDomain).toBe('health');
+  });
+
+  it('refuses equal-precedence scalar conflicts until the user reviews them', () => {
+    const proposal = buildConfigProposal({
+      now,
+      snapshots: [
+        { source: source('base', 2), snapshot: snapshot('base', '{"activeDomain":"food"}') },
+        { source: source('remote', 2), snapshot: snapshot('remote', '{"activeDomain":"health"}') },
+      ],
+    });
+
     expect(proposal.mode).toBe('migration_required');
     expect(proposal.conflicts).toHaveLength(1);
     expect(proposal.conflicts[0]).toMatchObject({
       key: 'activeDomain',
+      sources: ['base', 'remote'],
       status: 'needs_review',
     });
     expect(applyConfigProposal(proposal).ok).toBe(false);

@@ -73,7 +73,7 @@ describe('config sync', () => {
       now,
       store,
       sources: [
-        source({ id: 'one', kind: 'local', precedence: 1, location: { path: 'one.json' } }),
+        source({ id: 'one', kind: 'local', precedence: 2, location: { path: 'one.json' } }),
         source({ id: 'two', kind: 'local', precedence: 2, location: { path: 'two.json' } }),
       ],
       localFiles: {
