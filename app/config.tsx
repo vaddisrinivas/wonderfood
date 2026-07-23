@@ -499,6 +499,8 @@ export default function ConfigStudioScreen() {
                 <Field label="Section order" value={settings.runtime.surfaceConfig.food.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('food', { sectionOrder })} />
                 <ToggleRow title="Hero" detail="Show tonight/use-soon command area." value={settings.runtime.surfaceConfig.food.showHero} onValueChange={(showHero) => updateSurfaceConfig('food', { showHero })} />
                 <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
+                <ToggleRow title="Profile widgets" detail="Show custom cards defined by profile." value={settings.runtime.surfaceConfig.food.showWidgets} onValueChange={(showWidgets) => updateSurfaceConfig('food', { showWidgets })} />
+                <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
                 <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />
                 <ToggleRow title="Attention section" detail="Show review cards." value={settings.runtime.surfaceConfig.food.showAttention} onValueChange={(showAttention) => updateSurfaceConfig('food', { showAttention })} />
                 <ToggleRow title="Package card" detail="Show edit-package footer." value={settings.runtime.surfaceConfig.food.showPackageCard} onValueChange={(showPackageCard) => updateSurfaceConfig('food', { showPackageCard })} />
@@ -638,14 +640,16 @@ function SurfaceConfigCard({ title, children }: { title: string; children: React
   );
 }
 
-function Field(props: { label: string; value: string; onChangeText: (value: string) => void }) {
+function Field(props: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean }) {
   return (
     <View style={styles.smallField}>
       <Text style={styles.fieldLabel}>{props.label}</Text>
       <TextInput
         value={props.value}
         onChangeText={props.onChangeText}
-        style={styles.input}
+        multiline={props.multiline}
+        textAlignVertical={props.multiline ? 'top' : undefined}
+        style={[styles.input, props.multiline && styles.textarea]}
       />
     </View>
   );

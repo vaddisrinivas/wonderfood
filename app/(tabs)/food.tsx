@@ -45,8 +45,9 @@ function countSetting(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-const FOOD_SECTIONS = ['hero', 'tabs', 'workspace', 'attention', 'view', 'package'] as const;
+const FOOD_SECTIONS = ['hero', 'tabs', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
 type FoodSection = typeof FOOD_SECTIONS[number];
+type FoodWidget = { title: string; detail: string; tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral'; href: string };
 
 function orderedFoodSections(value: string) {
   const allowed = new Set<string>(FOOD_SECTIONS);
@@ -56,6 +57,26 @@ function orderedFoodSections(value: string) {
     .filter((section): section is FoodSection => allowed.has(section));
   const missing = FOOD_SECTIONS.filter((section) => !requested.includes(section));
   return [...requested, ...missing];
+}
+
+function toWidgetTone(value: string): FoodWidget['tone'] {
+  return value === 'moss' || value === 'blue' || value === 'amber' || value === 'plum' || value === 'neutral' ? value : 'neutral';
+}
+
+function parseFoodWidgets(value: string): FoodWidget[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [title, detail, tone = 'neutral', href = '/config'] = line.split('|').map((part) => part.trim());
+      return {
+        title: title || 'Profile widget',
+        detail: detail || 'Configured from the portable LifeOS profile.',
+        tone: toWidgetTone(tone),
+        href: href.startsWith('/') ? href : '/config',
+      };
+    });
 }
 
 export default function FoodScreen() {
@@ -111,6 +132,7 @@ export default function FoodScreen() {
   const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, columnLimit);
   const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
   const foodSections = orderedFoodSections(foodConfig.sectionOrder);
+  const widgets = parseFoodWidgets(foodConfig.widgets);
 
   const renderFoodSection = (section: FoodSection) => {
     switch (section) {
@@ -155,6 +177,23 @@ export default function FoodScreen() {
               </Pressable>
             ))}
           </ScrollView>
+        ) : null;
+      case 'widgets':
+        return foodConfig.showWidgets && widgets.length ? (
+          <View key={section}>
+            <SectionTitle title="Profile widgets" action="Edit" href="/config" />
+            <View style={[styles.widgetGrid, compact && styles.boardCompact]}>
+              {widgets.map((widget) => (
+                <Pressable key={`${widget.title}-${widget.href}`} accessibilityRole="button" onPress={() => router.push(widget.href as never)} style={({ pressed }) => [styles.widgetPress, pressed && styles.pressed]}>
+                  <Card tone={widget.tone === 'neutral' ? undefined : widget.tone} style={styles.widgetCard}>
+                    <Text style={styles.widgetTitle}>{widget.title}</Text>
+                    <Text style={styles.widgetDetail}>{widget.detail}</Text>
+                    <Text style={styles.widgetRoute}>{widget.href}</Text>
+                  </Card>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         ) : null;
       case 'workspace':
         return active === 'Overview' && foodConfig.showWorkspace ? (
@@ -344,6 +383,12 @@ const styles = StyleSheet.create({
   featureLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   featureTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },
   featureBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  widgetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  widgetPress: { flexGrow: 1, flexBasis: 240 },
+  widgetCard: { minHeight: 132 },
+  widgetTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' },
+  widgetDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  widgetRoute: { color: colors.moss, fontSize: 11, fontWeight: '900', marginTop: 14 },
   board: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   boardCompact: { flexDirection: 'column' },
   column: { flex: 1, minHeight: 320 },

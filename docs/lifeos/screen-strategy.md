@@ -202,11 +202,19 @@ Current in-app section IDs:
 | Surface | `sectionOrder` values |
 |---|---|
 | Home | `now`, `review`, `lifeSpaces`, `recent`, `sourceTrust`, `control` |
-| Food | `hero`, `tabs`, `workspace`, `attention`, `view`, `package` |
+| Food | `hero`, `tabs`, `widgets`, `workspace`, `attention`, `view`, `package` |
 | Chat | `threads`, `sources`, `messages`, `promptRail`, `context` |
 | Record | `hero`, `nutrition`, `ingredients`, `instructions`, `history`, `editableNote`, `properties`, `relations`, `provenance` |
 
 Home, Food, Chat, and Record render from this order in app settings. The same profile model is the contract for future arbitrary widgets/views.
+
+Food supports profile widgets now. Each line in `runtime.surfaceConfig.food.widgets` is:
+
+```text
+Title|Detail|tone|/route
+```
+
+Example: `Food sources|Open provider trust.|blue|/sources`.
 
 ## Implementation order
 

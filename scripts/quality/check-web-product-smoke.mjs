@@ -38,7 +38,7 @@ function chromeExecutable() {
 
 const routes = [
   { name: 'home', path: '/', must: ['LIFEOS / HOME', 'Food'] },
-  { name: 'food', path: '/food', must: ['Food workspace', 'Meals', 'Kitchen', 'Shopping'] },
+  { name: 'food', path: '/food', must: ['Profile widgets', 'Food sources', 'Food workspace', 'Meals', 'Kitchen', 'Shopping'] },
   { name: 'record-green-dal', path: '/record/meal-green-dal', must: ['Nutrition profile', 'Ingredients and availability', 'Connected records'] },
   { name: 'chat', path: '/chat', must: ['Talk to your life', 'Chat cites sources'] },
   { name: 'config', path: '/config', must: ['Active package contract', 'COLLECTIONS', 'MCP CONTRACT', 'Portable profile', 'Load YAML'] },
