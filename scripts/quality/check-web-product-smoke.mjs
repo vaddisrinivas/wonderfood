@@ -162,6 +162,17 @@ const routes = [
     path: '/capture',
     must: ['LIFEOS / CAPTURE', 'Capture anything', 'INBOX FIRST', 'Food graph', 'Save capture'],
   },
+  {
+    name: 'capture-health-active',
+    path: '/capture',
+    localSettings: {
+      runtime: {
+        activeDomain: 'health',
+        enabledDomains: ['food', 'health'],
+      },
+    },
+    must: ['LIFEOS / CAPTURE', 'Health graph', 'Health records', 'Health local graph', 'Save capture'],
+  },
 ];
 
 const { chromium } = requirePlaywright();

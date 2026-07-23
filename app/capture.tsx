@@ -1,25 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { useLifeOSDatabase } from '@/src/db/provider';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
+import { DomainManifest } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
-const types = [['Note', '✎'], ['Food', '◉'], ['Receipt', '▤'], ['Photo', '▧'], ['Voice', '◖'], ['Link', '⌁']] as const;
-
-type CaptureType = (typeof types)[number][0];
+type CaptureType = string;
 const CAPTURE_SECTIONS = ['hero', 'typePicker', 'editor', 'routeCard'] as const;
 type CaptureSection = typeof CAPTURE_SECTIONS[number];
 
-function mapCaptureCollection(captureType: CaptureType): string {
-  if (captureType === 'Food') return 'shopping_item';
-  if (captureType === 'Receipt' || captureType === 'Voice') return 'purchase';
-  if (captureType === 'Photo') return 'source_record';
-  return 'source_record';
+function primaryCollection(manifest: DomainManifest) {
+  return manifest.collections.find((collection) => collection !== 'source_record') ?? manifest.collections[0] ?? 'source_record';
+}
+
+function sourceCollection(manifest: DomainManifest) {
+  return manifest.collections.includes('source_record') ? 'source_record' : primaryCollection(manifest);
+}
+
+function mapCaptureCollection(captureType: CaptureType, manifest: DomainManifest): string {
+  if (manifest.id === 'food') {
+    if (captureType === 'Food') return 'shopping_item';
+    if (captureType === 'Receipt' || captureType === 'Voice') return 'purchase';
+  }
+  if (captureType === manifest.label) return primaryCollection(manifest);
+  if (captureType === 'Photo' || captureType === 'Link') return sourceCollection(manifest);
+  return primaryCollection(manifest);
+}
+
+function captureTypesFor(manifest: DomainManifest): Array<[string, string]> {
+  const domainIcon = manifest.id === 'food' ? '◉' : manifest.id === 'health' ? '♡' : manifest.id === 'plants' ? '⌁' : '◇';
+  return [['Note', '✎'], [manifest.label, domainIcon], ['Photo', '▧'], ['Voice', '◖'], ['Link', '⌁']];
+}
+
+function placeholderFor(type: CaptureType, domainLabel: string) {
+  if (type === domainLabel) return `Add a ${domainLabel.toLowerCase()} record, observation, plan, task or note…`;
+  if (type === 'Photo') return `Attach a ${domainLabel.toLowerCase()} photo with context…`;
+  if (type === 'Voice') return `Paste or dictate a ${domainLabel.toLowerCase()} voice note…`;
+  if (type === 'Link') return `Paste a source link for ${domainLabel.toLowerCase()}…`;
+  return 'Type, paste, dictate or scan…';
 }
 
 function orderedSections(value: string) {
@@ -36,9 +59,11 @@ export default function CaptureScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ type?: string; targetRecordId?: string }>();
   const db = useLifeOSDatabase();
-  const catalog = loadCatalog();
   const theme = useLifeOSTheme();
   const settings = useLifeOSSettingsSnapshot();
+  setActiveDomainOverride(settings.runtime.activeDomain);
+  const catalog = loadCatalog();
+  const captureTypes = useMemo(() => captureTypesFor(catalog.activeManifest), [catalog.activeManifest]);
 
   const [type, setType] = useState<CaptureType>('Note');
   const [value, setValue] = useState('');
@@ -52,15 +77,17 @@ export default function CaptureScreen() {
 
   const title = value.trim().split('\n')[0]?.slice(0, 70) || (photos.length ? `${catalog.activeManifest.label} photo` : `${catalog.activeManifest.label} note`);
   const hasLocalGraph = Boolean(db);
-  const destinationHint = captureConfig.destinationHint || (hasLocalGraph
+  const configuredDestinationHint = captureConfig.destinationHint.replace(/\bFood\b/g, catalog.activeManifest.label);
+  const destinationHint = configuredDestinationHint || (hasLocalGraph
     ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
     : 'No local graph yet. Capture is kept in-session for this phase.');
 
   useEffect(() => {
     const requested = typeof params.type === 'string' ? params.type : '';
-    const configured = types.find(([name]) => name.toLowerCase() === (requested || captureConfig.defaultType).toLowerCase())?.[0];
+    const configured = captureTypes.find(([name]) => name.toLowerCase() === (requested || captureConfig.defaultType).toLowerCase())?.[0]
+      ?? captureTypes.find(([name]) => name === catalog.activeManifest.label)?.[0];
     if (configured) setType(configured);
-  }, [captureConfig.defaultType, params.type]);
+  }, [captureConfig.defaultType, captureTypes, catalog.activeManifest.label, params.type]);
 
   const pickPhoto = async (source: 'camera' | 'library') => {
     setNotice('');
@@ -114,11 +141,11 @@ export default function CaptureScreen() {
         {
           id: recordId,
           title,
-          collection: mapCaptureCollection(type),
+          collection: mapCaptureCollection(type, catalog.activeManifest),
           properties: {
             status: 'Active',
             tone: 'moss',
-            meta: `${type} capture from local inbox`,
+            meta: `${type} capture from ${catalog.activeManifest.label} inbox`,
             body: value.trim(),
             source: `${type} · ${hasLocalGraph ? 'SQLite' : 'fallback'}`,
             attachments: photos.map((photo) => ({
@@ -166,14 +193,14 @@ export default function CaptureScreen() {
             <PageHeader
               eyebrow="Inbox first"
               title="Capture anything."
-              subtitle="Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to meals, pantry, shopping or any future domain."
+              subtitle={`Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to ${catalog.activeManifest.label} records, relations and source-backed Chat.`}
             />
           </View>
         ) : null;
       case 'typePicker':
         return captureConfig.showTypePicker ? (
           <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.types}>
-            {types.map(([name, icon]) => (
+            {captureTypes.map(([name, icon]) => (
               <Pressable
                 key={name}
                 accessibilityRole="button"
@@ -196,7 +223,7 @@ export default function CaptureScreen() {
           <Card key={section} style={styles.editorCard}>
             <View style={styles.editorTop}>
               <Pill tone="moss">{type.toUpperCase()}</Pill>
-              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : 'Food inbox (preview)'}</Text>
+              <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : `${catalog.activeManifest.label} inbox (preview)`}</Text>
             </View>
             <TextInput
               value={value}
@@ -206,7 +233,7 @@ export default function CaptureScreen() {
               }}
               multiline
               autoFocus
-              placeholder={type === 'Food' ? 'Add 2 avocados and yogurt to shopping…' : 'Type, paste, dictate or scan…'}
+              placeholder={placeholderFor(type, catalog.activeManifest.label)}
               placeholderTextColor={theme.colors.muted}
               style={[styles.input, { color: theme.colors.ink }]}
               textAlignVertical="top"
