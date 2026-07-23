@@ -61,7 +61,7 @@ export default function RootLayout() {
           headerRight: () => <HeaderActions palette={activeColors} />,
         }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="record/[id]" options={{ title: 'Record', headerRight: undefined }} />
+          <Stack.Screen name="record/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="search" options={{ title: 'Search', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="capture" options={{ title: 'Quick capture', presentation: 'modal', headerRight: undefined }} />
           <Stack.Screen name="system" options={{ title: 'LifeOS system', headerRight: undefined }} />

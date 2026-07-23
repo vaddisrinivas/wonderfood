@@ -87,6 +87,8 @@ function countSetting(value: string, fallback: number) {
 const FOOD_SECTIONS = ['hero', 'tabs', 'manifest', 'widgets', 'workspace', 'attention', 'view', 'package'] as const;
 type FoodSection = typeof FOOD_SECTIONS[number];
 type FoodWidget = { title: string; detail: string; tone: 'moss' | 'blue' | 'amber' | 'plum' | 'neutral'; href: string };
+const OPERATING_VIEW_SECTIONS = ['weekPlan', 'pantryTimeline', 'shoppingChecklist'] as const;
+type OperatingViewSection = typeof OPERATING_VIEW_SECTIONS[number];
 
 function orderedFoodSections(value: string) {
   const allowed = new Set<string>(FOOD_SECTIONS);
@@ -95,6 +97,16 @@ function orderedFoodSections(value: string) {
     .map((section) => section.trim())
     .filter((section): section is FoodSection => allowed.has(section));
   const missing = FOOD_SECTIONS.filter((section) => !requested.includes(section));
+  return [...requested, ...missing];
+}
+
+function orderedOperatingViews(value: string) {
+  const allowed = new Set<string>(OPERATING_VIEW_SECTIONS);
+  const requested = value
+    .split(',')
+    .map((section) => section.trim())
+    .filter((section): section is OperatingViewSection => allowed.has(section));
+  const missing = OPERATING_VIEW_SECTIONS.filter((section) => !requested.includes(section));
   return [...requested, ...missing];
 }
 
@@ -361,7 +373,16 @@ export default function FoodScreen() {
                 <RecordColumn key={surface.id} title={surface.title} subtitle={surface.subtitle} records={surface.records} empty={surface.empty} />
               ))}
             </View>
-            {isFoodDomain ? <FoodOperatingViews meals={mealRecords} kitchen={kitchenRecords} shopping={shoppingRecords} compact={compact} onToggleShopping={toggleShoppingRecord} /> : null}
+            {isFoodDomain && foodConfig.showOperatingViews ? (
+              <FoodOperatingViews
+                meals={mealRecords}
+                kitchen={kitchenRecords}
+                shopping={shoppingRecords}
+                compact={compact}
+                order={orderedOperatingViews(foodConfig.operatingViewOrder)}
+                onToggleShopping={toggleShoppingRecord}
+              />
+            ) : null}
           </View>
         ) : null;
       case 'attention':
@@ -496,18 +517,23 @@ function RecordColumn({ title, subtitle, records, empty }: {
   );
 }
 
-function FoodOperatingViews({ meals, kitchen, shopping, compact, onToggleShopping }: {
+function FoodOperatingViews({ meals, kitchen, shopping, compact, order, onToggleShopping }: {
   meals: FoodRecordView[];
   kitchen: FoodRecordView[];
   shopping: FoodRecordView[];
   compact: boolean;
+  order: OperatingViewSection[];
   onToggleShopping: (record: FoodRecordView) => void;
 }) {
+  const renderView = (section: OperatingViewSection) => {
+    if (section === 'weekPlan') return <MealWeekPlan key={section} records={meals} />;
+    if (section === 'pantryTimeline') return <PantryTimeline key={section} records={kitchen} />;
+    return <ShoppingChecklist key={section} records={shopping} onToggle={onToggleShopping} />;
+  };
+
   return (
     <View style={[styles.operatingViews, compact && styles.operatingViewsCompact]}>
-      <MealWeekPlan records={meals} />
-      <PantryTimeline records={kitchen} />
-      <ShoppingChecklist records={shopping} onToggle={onToggleShopping} />
+      {order.map(renderView)}
     </View>
   );
 }

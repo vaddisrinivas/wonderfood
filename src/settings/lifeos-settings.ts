@@ -70,6 +70,8 @@ export type LifeOSSettings = {
         showWidgets: boolean;
         widgets: string;
         showWorkspace: boolean;
+        showOperatingViews: boolean;
+        operatingViewOrder: string;
         showAttention: boolean;
         showPackageCard: boolean;
         columnLimit: string;
@@ -243,6 +245,8 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showWidgets: true,
         widgets: 'Dinner assistant|Ask with pantry, recipe, shopping and nutrition context.|plum|/chat\nConnected sources|See exactly what Notion, Sheets and the phone can cite.|blue|/sources',
         showWorkspace: true,
+        showOperatingViews: true,
+        operatingViewOrder: 'weekPlan,pantryTimeline,shoppingChecklist',
         showAttention: true,
         showPackageCard: true,
         columnLimit: '4',
@@ -428,6 +432,8 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showWidgets: config.food?.showWidgets !== false,
       widgets: typeof config.food?.widgets === 'string' && config.food.widgets !== oldFoodWidgetsDefault ? config.food.widgets : defaults.food.widgets,
       showWorkspace: config.food?.showWorkspace !== false,
+      showOperatingViews: config.food?.showOperatingViews !== false,
+      operatingViewOrder: normalizeOrderString(config.food?.operatingViewOrder, defaults.food.operatingViewOrder),
       showAttention: config.food?.showAttention !== false,
       showPackageCard: config.food?.showPackageCard !== false,
       columnLimit: normalizePositiveString(config.food?.columnLimit, defaults.food.columnLimit),

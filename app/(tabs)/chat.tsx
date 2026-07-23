@@ -597,24 +597,38 @@ function ActionReceiptCard({ receipt }: { receipt: NonNullable<MessageRow['actio
 
 function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']> }) {
   const theme = useLifeOSTheme();
+  const { width } = useWindowDimensions();
+  const compact = width < 620;
+  const columns = answer.columns?.length ? answer.columns : ['When', 'Use', 'Next'];
+  const rows = answer.rows.map((row) => row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? '']);
   return (
     <View style={[styles.answer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
       <Text style={[styles.answerTitle, { color: theme.colors.ink }]}>{answer.title}</Text>
-      {answer.rows.length ? (
+      {rows.length && compact ? (
+        <View style={styles.mobileAnswerRows} accessibilityLabel="Structured answer cards">
+          {rows.map((cells, index) => (
+            <View key={`${index}-${cells.join('|')}`} style={[styles.answerRowCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }]}>
+              {columns.map((column, cellIndex) => (
+                <View key={`${column}-${cellIndex}`} style={[styles.answerRowLine, { borderTopColor: theme.colors.line }]}>
+                  <Text style={[styles.answerRowLabel, { color: theme.colors.muted }]}>{column}</Text>
+                  <Text style={[styles.answerRowValue, { color: theme.colors.ink }]}>{cells[cellIndex] ?? ''}</Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : rows.length ? (
         <View style={[styles.table, { borderColor: theme.colors.line }]} accessibilityLabel="Structured answer table">
           <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.line }]}>
-            {(answer.columns?.length ? answer.columns : ['When', 'Use', 'Next']).map((column) => (
+            {columns.map((column) => (
               <Text key={column} style={[styles.tableCell, styles.tableHeaderText, { color: theme.colors.muted }]}>{column.toUpperCase()}</Text>
             ))}
           </View>
-          {answer.rows.map((row, index) => {
-            const cells = row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? ''];
-            return (
-              <View key={`${index}-${cells.join('|')}`} style={[styles.tableRow, { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line }]}>
-                {cells.map((cell, cellIndex) => <Text key={`${cellIndex}-${cell}`} style={[styles.tableCell, { color: theme.colors.ink }]}>{cell}</Text>)}
-              </View>
-            );
-          })}
+          {rows.map((cells, index) => (
+            <View key={`${index}-${cells.join('|')}`} style={[styles.tableRow, { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line }]}>
+              {cells.map((cell, cellIndex) => <Text key={`${cellIndex}-${cell}`} style={[styles.tableCell, { color: theme.colors.ink }]}>{cell}</Text>)}
+            </View>
+          ))}
         </View>
       ) : null}
       {answer.recordCards?.length ? (
@@ -765,6 +779,11 @@ const styles = StyleSheet.create({
   userBubbleText: { color: '#FFF' },
   answer: { minWidth: 0, marginTop: 9, borderWidth: 1, borderColor: '#CBD8D0', backgroundColor: '#F9FCF8', borderRadius: 14, padding: 12 },
   answerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  mobileAnswerRows: { marginTop: 10, gap: 8 },
+  answerRowCard: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  answerRowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingVertical: 8 },
+  answerRowLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 0.7, textTransform: 'uppercase' },
+  answerRowValue: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '700', marginTop: 3 },
   table: { borderWidth: 1, borderColor: colors.line, borderRadius: 10, overflow: 'hidden' },
   tableRow: { minWidth: 0, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.paper },
   tableHeader: { borderTopWidth: 0, backgroundColor: '#ECEEE7' },

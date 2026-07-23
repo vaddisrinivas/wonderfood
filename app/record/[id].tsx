@@ -786,6 +786,9 @@ export default function RecordScreen() {
       <ScrollView keyboardShouldPersistTaps="handled">
         <View style={styles.pageContent}>
           <View style={styles.pageHead}>
+            <Pressable accessibilityRole="button" onPress={() => router.back()} style={({ pressed }) => [styles.backButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && { opacity: 0.68 }]}>
+              <Text style={[styles.backButtonText, { color: theme.colors.ink }]}>← Back</Text>
+            </Pressable>
             <Text style={[styles.pageKicker, { color: theme.colors.moss }]}>LIFEOS / FOOD</Text>
             <Text style={[styles.pageTitle, { color: theme.colors.ink }]}>{pageLabel}</Text>
           </View>
@@ -877,6 +880,8 @@ function planToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof 
 const styles = StyleSheet.create({
   pageContent: { width: '100%', maxWidth: 1380, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 120 },
   pageHead: { paddingTop: 20 },
+  backButton: { alignSelf: 'flex-start', minHeight: 40, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, backgroundColor: colors.paper, paddingHorizontal: 14, justifyContent: 'center', marginBottom: 18 },
+  backButtonText: { color: colors.ink, fontSize: 13, fontWeight: '900' },
   pageKicker: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.6 },
   pageTitle: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8, marginTop: 6 },
   hero: { marginTop: 18, padding: 24, minHeight: 210 },
