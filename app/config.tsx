@@ -639,6 +639,8 @@ export default function ConfigStudioScreen() {
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Record">
                 <Field label="Section order" value={settings.runtime.surfaceConfig.record.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('record', { sectionOrder })} />
+                <Field label="Main section order" value={settings.runtime.surfaceConfig.record.mainSectionOrder} onChangeText={(mainSectionOrder) => updateSurfaceConfig('record', { mainSectionOrder })} />
+                <Field label="Side section order" value={settings.runtime.surfaceConfig.record.sideSectionOrder} onChangeText={(sideSectionOrder) => updateSurfaceConfig('record', { sideSectionOrder })} />
                 <ToggleRow title="Hero" detail="Show title/status/action header." value={settings.runtime.surfaceConfig.record.showHero} onValueChange={(showHero) => updateSurfaceConfig('record', { showHero })} />
                 <ToggleRow title="Nutrition" detail="Show nutrition cards." value={settings.runtime.surfaceConfig.record.showNutrition} onValueChange={(showNutrition) => updateSurfaceConfig('record', { showNutrition })} />
                 <ToggleRow title="Ingredients" detail="Show availability board." value={settings.runtime.surfaceConfig.record.showIngredients} onValueChange={(showIngredients) => updateSurfaceConfig('record', { showIngredients })} />

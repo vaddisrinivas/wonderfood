@@ -90,6 +90,23 @@ const routes = [
     ],
   },
   {
+    name: 'record-configured-order',
+    path: '/record/meal-green-dal',
+    localSettings: {
+      runtime: {
+        surfaceConfig: {
+          record: {
+            mainSectionOrder: 'history,nutrition,ingredients,instructions,editableNote',
+            sideSectionOrder: 'provenance,properties,relations',
+          },
+        },
+      },
+    },
+    must: ['Cooking log and variations', 'Nutrition profile', 'Provenance', 'Properties'],
+    orderedBefore: ['Cooking log and variations', 'Nutrition profile'],
+    alsoOrderedBefore: ['Provenance', 'Properties'],
+  },
+  {
     name: 'chat',
     path: '/chat',
     must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Source evidence', 'Undo', 'Open source'],
@@ -279,6 +296,12 @@ for (const viewport of viewports) {
       result.missing = route.must.filter((needle) => !text.includes(needle));
       if (route.orderedBefore) {
         const [first, second] = route.orderedBefore;
+        if (text.indexOf(first) < 0 || text.indexOf(second) < 0 || text.indexOf(first) > text.indexOf(second)) {
+          result.missing.push(`${first} before ${second}`);
+        }
+      }
+      if (route.alsoOrderedBefore) {
+        const [first, second] = route.alsoOrderedBefore;
         if (text.indexOf(first) < 0 || text.indexOf(second) < 0 || text.indexOf(first) > text.indexOf(second)) {
           result.missing.push(`${first} before ${second}`);
         }

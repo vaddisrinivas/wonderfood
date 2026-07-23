@@ -42,6 +42,10 @@ function orderedRecordSections(value: string) {
   return [...requested, ...missing];
 }
 
+function orderedRecordSubset(value: string, subset: Set<RecordSection>) {
+  return orderedRecordSections(value).filter((section) => subset.has(section));
+}
+
 function fallbackCanonicalFromView(
   view: NonNullable<Awaited<ReturnType<typeof getDomainRecord>>>,
   domainId: string
@@ -514,8 +518,8 @@ export default function RecordScreen() {
   }
 
   const recordSections = orderedRecordSections(recordConfig.sectionOrder);
-  const mainRecordSections = recordSections.filter((section) => MAIN_RECORD_SECTIONS.has(section));
-  const sideRecordSections = recordSections.filter((section) => SIDE_RECORD_SECTIONS.has(section));
+  const mainRecordSections = orderedRecordSubset(recordConfig.mainSectionOrder || recordConfig.sectionOrder, MAIN_RECORD_SECTIONS);
+  const sideRecordSections = orderedRecordSubset(recordConfig.sideSectionOrder || recordConfig.sectionOrder, SIDE_RECORD_SECTIONS);
 
   const renderHeroSection = () => (
     recordConfig.showHero ? (

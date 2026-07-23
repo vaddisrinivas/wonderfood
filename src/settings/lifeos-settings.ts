@@ -87,6 +87,8 @@ export type LifeOSSettings = {
       };
       record: {
         sectionOrder: string;
+        mainSectionOrder: string;
+        sideSectionOrder: string;
         showHero: boolean;
         showNutrition: boolean;
         showIngredients: boolean;
@@ -249,6 +251,8 @@ export const defaultLifeOSSettings: LifeOSSettings = {
       },
       record: {
         sectionOrder: 'hero,nutrition,ingredients,instructions,history,editableNote,properties,relations,provenance',
+        mainSectionOrder: 'nutrition,ingredients,instructions,history,editableNote',
+        sideSectionOrder: 'properties,relations,provenance',
         showHero: true,
         showNutrition: true,
         showIngredients: true,
@@ -425,6 +429,8 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
     },
     record: {
       sectionOrder: normalizeOrderString(config.record?.sectionOrder, defaults.record.sectionOrder),
+      mainSectionOrder: normalizeOrderString(config.record?.mainSectionOrder, defaults.record.mainSectionOrder),
+      sideSectionOrder: normalizeOrderString(config.record?.sideSectionOrder, defaults.record.sideSectionOrder),
       showHero: config.record?.showHero !== false,
       showNutrition: config.record?.showNutrition !== false,
       showIngredients: config.record?.showIngredients !== false,
