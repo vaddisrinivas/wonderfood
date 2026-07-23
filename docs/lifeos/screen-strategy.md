@@ -51,6 +51,7 @@ Every domain gets the same structure:
    - Food examples: Overview, Kitchen, Meals, Recipes, Shopping.
    - Health examples: Overview, Metrics, Sleep, Activity, Labs, Meds.
    - Plants examples: Overview, Watering, Rooms, Species, Problems.
+   - Collection atlas chips open `/collection/[id]` pages for the active domain.
 
 3. Record detail
    - Notion-like page.
@@ -67,6 +68,11 @@ Every domain gets the same structure:
    - Sort/filter/group.
    - Source mappings.
    - AI/skill behavior.
+
+5. Collection detail
+   - One generic screen per managed collection.
+   - Shows records, review count, schema relations, source homes and actions.
+   - Works from the active domain manifest; adding a domain should not require a new route.
 
 ## Home page
 

@@ -99,6 +99,12 @@ const routes = [
     forbidden: ['Record not found'],
   },
   {
+    name: 'collection-recipe',
+    path: '/collection/recipe',
+    must: ['LIFEOS / FOOD COLLECTION', 'Recipe', '1 loaded records', 'Records', 'Sheet-pan tandoori chicken', 'Schema relations', 'Source trust', 'Sqlite'],
+    forbidden: ['Collection not found', 'Record not found'],
+  },
+  {
     name: 'record-configured-order',
     path: '/record/meal-green-dal',
     localSettings: {

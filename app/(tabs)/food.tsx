@@ -695,10 +695,12 @@ function CollectionGroup({ title, subtitle, collections, counts, tone }: {
         {collections.map((collection) => {
           const count = counts[collection] ?? 0;
           return (
-            <View key={collection} style={[styles.collectionChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
-              <Text style={[styles.collectionChipName, { color: theme.colors.ink }]}>{humanizeCollection(collection)}</Text>
-              <Text style={[styles.collectionChipCount, { color: count ? theme.colors.moss : theme.colors.muted }]}>{count ? `${count}` : '—'}</Text>
-            </View>
+            <Link key={collection} href={{ pathname: '/collection/[id]', params: { id: collection } }} asChild>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.collectionChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                <Text style={[styles.collectionChipName, { color: theme.colors.ink }]}>{humanizeCollection(collection)}</Text>
+                <Text style={[styles.collectionChipCount, { color: count ? theme.colors.moss : theme.colors.muted }]}>{count ? `${count}` : '—'}</Text>
+              </Pressable>
+            </Link>
           );
         })}
       </View>
