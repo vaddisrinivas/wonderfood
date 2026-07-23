@@ -15,6 +15,11 @@ It starts `scripts/runtime/start-hosted-lifeos.sh`, which:
 3. reads the bearer token from macOS Keychain (never Git); and
 4. starts the named Cloudflare connector with the remote ingress configuration.
 
+Conversation threads, MCP action state, Health Connect snapshots, and webhook
+replay cursors live under `server-data/hosted/` so service restarts do not erase
+the personal runtime. The launcher migrates the prior `/tmp` proof files once
+when a durable file does not yet exist.
+
 Useful checks:
 
 ```bash

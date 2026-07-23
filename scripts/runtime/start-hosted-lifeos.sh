@@ -5,6 +5,8 @@ ROOT="/Users/srinivasvaddi/Projects/wonderfood"
 BUNDLED_NODE="/Users/srinivasvaddi/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin"
 export PATH="$BUNDLED_NODE:/opt/homebrew/bin:/usr/bin:/bin"
 export NPM_CONFIG_CACHE="/tmp/wonderfood-server-npm-cache2"
+HOSTED_STATE_DIR="$ROOT/server-data/hosted"
+mkdir -p "$HOSTED_STATE_DIR"
 
 export PORT="8790"
 export LIFEOS_SERVER_HOST="0.0.0.0"
@@ -12,12 +14,27 @@ export OPENAI_MODEL="gpt-4o-mini"
 export NOTION_DATA_SOURCE_ID="3a7dace3-e35e-4ce9-b817-0b80af6e413c"
 export GOOGLE_SHEETS_TOKEN_FILE="$ROOT/build/evidence/live-workspace/google-sheets-token.json"
 export GOOGLE_SHEETS_SPREADSHEET_ID="1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU"
-export LIFEOS_CHAT_CONVERSATIONS_PATH="/tmp/wonderfood-lan-chat-final.json"
-export LIFEOS_MCP_STATE_PATH="/tmp/wonderfood-lan-mcp-final.json"
+export LIFEOS_CHAT_CONVERSATIONS_PATH="$HOSTED_STATE_DIR/conversations.json"
+export LIFEOS_MCP_STATE_PATH="$HOSTED_STATE_DIR/mcp-runtime.json"
+export LIFEOS_HEALTH_SNAPSHOTS_PATH="$HOSTED_STATE_DIR/health-connect-snapshots.json"
+export NOTION_WEBHOOK_REPLAY_PATH="$HOSTED_STATE_DIR/notion-webhook-replay.json"
+export SHEETS_WEBHOOK_REPLAY_PATH="$HOSTED_STATE_DIR/sheets-webhook-replay.json"
 export LIFEOS_SERVER_TOKEN="$(security find-generic-password -a "$USER" -s wonderfood-lifeos-server-token -w)"
 export LIFEOS_MCP_TOKEN="$LIFEOS_SERVER_TOKEN"
 
 mkdir -p "$NPM_CONFIG_CACHE"
+
+# Migrate the previous volatile proof state once, without overwriting a durable
+# file that already exists. These files contain runtime state, never secrets.
+migrate_state() {
+  local legacy_path="$1"
+  local durable_path="$2"
+  if [[ ! -s "$durable_path" && -s "$legacy_path" ]]; then
+    cp "$legacy_path" "$durable_path"
+  fi
+}
+migrate_state "/tmp/wonderfood-lan-chat-final.json" "$LIFEOS_CHAT_CONVERSATIONS_PATH"
+migrate_state "/tmp/wonderfood-lan-mcp-final.json" "$LIFEOS_MCP_STATE_PATH"
 
 # Keep the Mac-backed hosted connector from losing Sheets after the one-hour
 # access token expires. The refresh token and OAuth client values remain in the
