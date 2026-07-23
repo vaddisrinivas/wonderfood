@@ -70,6 +70,17 @@ function deterministicActionId(input: {
   return `orch-action:${deterministicHash(input).slice(0, 16)}`;
 }
 
+function shouldUseWebSearch(query: string): boolean {
+  const configured = process.env.OPENAI_WEB_SEARCH_ENABLED?.trim().toLowerCase();
+  if (configured === 'false' || configured === '0' || configured === 'off') {
+    return false;
+  }
+  if (configured === 'true' || configured === '1' || configured === 'on') {
+    return true;
+  }
+  return /\b(online|internet|web|latest|today|current|news|research|study|price|source|citation|according to)\b/i.test(query);
+}
+
 export type OrchestratedRun = {
   runId: string;
   domain: string;
@@ -185,6 +196,13 @@ export async function runChatOrchestrator(input: {
   const contextSourceText = retrieval.snapshots.length
     ? retrieval.snapshots.map((snapshot) => `${snapshot.label}: ${snapshot.detail}${snapshot.excerpt ? `\nFacts: ${snapshot.excerpt}` : ''}\nSource: ${snapshot.url}`).join('\n')
     : 'No canonical source snapshots available yet.';
+  const webSearch = shouldUseWebSearch(query);
+  const configuredWebTimeout = Number(process.env.OPENAI_WEB_SEARCH_TIMEOUT_MS);
+  const webSearchTimeoutMs = webSearch
+    ? Number.isFinite(configuredWebTimeout) && configuredWebTimeout > 0
+      ? configuredWebTimeout
+      : 60000
+    : undefined;
 
   const prompt = `You are Hearth, LifeOS Food planner.
 Rules:
@@ -196,22 +214,27 @@ Rules:
 - Keep the intro to one or two short paragraphs. Never duplicate a sentence or bullet list.
 - Only include citations for items drawn from concrete sources.
 - If no sources exist, state that explicitly and ask a clarifying follow-up.
+${webSearch ? '- This request asks for current or internet-backed information. Use the web_search tool before answering, and ground the answer in its returned sources; do not claim that no source exists when web results are available.' : ''}
 
 Domain: ${input.domain}
 Message: ${query}
-Context sources:
+  Context sources:
 ${contextSourceText}`;
   const ai = input.stream
     ? await callOpenAIStream({
       prompt,
       signal: input.signal,
       previousResponseId: input.previousResponseId,
+      timeoutMs: webSearchTimeoutMs,
+      webSearch,
       onToken: input.onModelToken,
     })
     : await callOpenAI({
       prompt,
       signal: input.signal,
       previousResponseId: input.previousResponseId,
+      timeoutMs: webSearchTimeoutMs,
+      webSearch,
     });
 
   const commandPlan = !policy.requiresClarification && hasMutatingIntent

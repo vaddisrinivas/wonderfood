@@ -5,10 +5,16 @@ export type OpenAIResponse = {
   text: string;
   model: string;
   source: string;
+  webCitations?: OpenAIWebCitation[];
   aborted?: boolean;
   responseId?: string;
   conversationId?: string;
   raw?: unknown;
+};
+
+export type OpenAIWebCitation = {
+  url: string;
+  title: string;
 };
 
 type OpenAIInput = {
@@ -17,6 +23,7 @@ type OpenAIInput = {
   timeoutMs?: number;
   signal?: AbortSignal;
   previousResponseId?: string;
+  webSearch?: boolean;
 };
 
 type OpenAIStreamInput = OpenAIInput & {
@@ -36,6 +43,63 @@ function configuredTimeout(inputTimeout: number | undefined, stream: boolean): n
   }
   const configured = Number(process.env.OPENAI_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : stream ? 8000 : 4500;
+}
+
+function webSearchTool() {
+  const searchContextSize = process.env.OPENAI_WEB_SEARCH_CONTEXT_SIZE?.trim();
+  return {
+    type: 'web_search',
+    ...(searchContextSize === 'low' || searchContextSize === 'medium' || searchContextSize === 'high'
+      ? { search_context_size: searchContextSize }
+      : {}),
+  };
+}
+
+function extractWebCitations(payload: unknown): OpenAIWebCitation[] {
+  const found: OpenAIWebCitation[] = [];
+  const add = (candidate: unknown) => {
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+    const value = candidate as Record<string, unknown>;
+    const nested = value.url_citation;
+    const citation = nested && typeof nested === 'object'
+      ? nested as Record<string, unknown>
+      : value;
+    const url = typeof citation.url === 'string' ? citation.url.trim() : '';
+    const title = typeof citation.title === 'string' ? citation.title.trim() : '';
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return;
+    }
+    if (!found.some((item) => item.url === url)) {
+      found.push({ url, title: title || url });
+    }
+  };
+
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    const object = value as Record<string, unknown>;
+    if (Array.isArray(object.annotations)) {
+      object.annotations.forEach(add);
+    }
+    if (Array.isArray(object.content)) {
+      object.content.forEach(visit);
+    }
+    if (Array.isArray(object.output)) {
+      object.output.forEach(visit);
+    }
+    if (object.item && typeof object.item === 'object') {
+      visit(object.item);
+    }
+  };
+  visit(payload);
+  return found;
 }
 
 export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
@@ -65,6 +129,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
       body: JSON.stringify({
         model,
         input: input.prompt,
+        ...(input.webSearch ? { tools: [webSearchTool()] } : {}),
         ...(input.previousResponseId
           ? { previous_response_id: input.previousResponseId }
           : {}),
@@ -114,6 +179,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
     const answer = typeof payload.output_text === 'string' && payload.output_text.length > 0
       ? payload.output_text
       : fallbackFromOutput;
+    const webCitations = extractWebCitations(payload);
     if (!answer) {
       return {
         status: 'error',
@@ -122,6 +188,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
         text: `OpenAI responses API returned no text for request.`,
         responseId: payload.id,
         conversationId: payload.conversation?.id ?? undefined,
+        webCitations,
         raw: payload,
       };
     }
@@ -132,6 +199,7 @@ export async function callOpenAI(input: OpenAIInput): Promise<OpenAIResponse> {
       responseId: payload.id,
       conversationId: payload.conversation?.id ?? undefined,
       text: answer,
+      webCitations,
       raw: payload,
     };
   } catch (error) {
@@ -170,6 +238,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
   const timeoutTimer = setTimeout(() => controller.abort(), configuredTimeout(input.timeoutMs, true));
   const signal = input.signal ? mergeAbortSignals(controller.signal, input.signal) : controller.signal;
   const chunks: string[] = [];
+  const webCitations: OpenAIWebCitation[] = [];
   let responseId: string | undefined;
   let conversationId: string | undefined;
 
@@ -184,6 +253,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
       body: JSON.stringify({
         model,
         input: input.prompt,
+        ...(input.webSearch ? { tools: [webSearchTool()] } : {}),
         ...(input.previousResponseId
           ? { previous_response_id: input.previousResponseId }
           : {}),
@@ -292,6 +362,11 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
               conversationId = maybe.conversation?.id;
             }
           }
+          for (const citation of extractWebCitations(payload)) {
+            if (!webCitations.some((item) => item.url === citation.url)) {
+              webCitations.push(citation);
+            }
+          }
           const text = extractText(payload);
           if (text) {
             chunks.push(text);
@@ -311,6 +386,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
         text: 'OpenAI stream returned no text.',
         responseId,
         conversationId,
+        webCitations,
       };
     }
 
@@ -321,6 +397,7 @@ export async function callOpenAIStream(input: OpenAIStreamInput): Promise<OpenAI
       text: answerText,
       responseId,
       conversationId,
+      webCitations,
       raw: { chunks },
     };
   } catch (error) {

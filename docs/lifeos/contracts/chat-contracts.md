@@ -29,6 +29,9 @@ Response:
   - `receipt` includes `source_ids`
   - `verification`
 - optional `action_hints`
+- optional `provenance.sources`: deduplicated clickable source cards from the
+  canonical graph (Notion/Sheets/app) and, when enabled or requested, OpenAI
+  Responses web-search `url_citation` annotations.
 - `action.receipt` is the MCP canonical `lifeos.action-event.v1` subset and must preserve exact source references (`source_ids` and source citations) from retrieval.
 
 ## Stream endpoint
@@ -50,6 +53,9 @@ Rules:
 - Input accepts `mode: stream` or `preview` and the same envelope fields as `/chat/send`.
 - `preview: true` disables mutating effects (executor may still validate and build policy responses without commits).
 - `/chat/send` never emits synthetic/fixture model answers; model output may be unavailable and is reported in `warnings`.
+- Web search is opt-in through `OPENAI_WEB_SEARCH_ENABLED=true`; when unset,
+  explicit `online`, `latest`, `current`, `source`, and similar queries enable
+  the tool. URL/title annotations are normalized into clickable source cards.
 
 ## Retry
 

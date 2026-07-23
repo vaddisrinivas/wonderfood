@@ -408,6 +408,13 @@ export async function handleServerChat(input: {
   const inputText = threadContext ? `${input.message}\n${threadContext}` : input.message;
   const sourceSnapshots = orchestrated.retrieval.snapshots;
   const sourceCitations = toCitationsFromSnapshots(sourceSnapshots);
+  const webCitations = (orchestrated.ai.webCitations ?? []).map((citation) => ({
+    label: citation.title,
+    detail: 'Internet source',
+    href: citation.url,
+    tone: 'blue' as const,
+  }));
+  const combinedSourceCitations = ensureCitations([...sourceCitations, ...webCitations]);
 
   const warnings: string[] = [];
   if (!orchestrated.policy.allowed) {
@@ -440,10 +447,10 @@ export async function handleServerChat(input: {
   const modelAnswer =
     orchestrated.policy.allowed && orchestrated.ai.status === 'ok'
       ? parseStructuredModel(inputText, orchestrated.ai.text)
-        ?? parseMarkdownModel(orchestrated.ai.text, ensureCitations(sourceCitations))
+        ?? parseMarkdownModel(orchestrated.ai.text, combinedSourceCitations)
       : undefined;
-  if (modelAnswer && sourceCitations.length > 0) {
-    modelAnswer.citations = ensureCitations(sourceCitations);
+  if (modelAnswer && combinedSourceCitations.length > 0) {
+    modelAnswer.citations = combinedSourceCitations;
   }
 
   // The mobile surface presents the full modelAnswer in its answer card. Keep
@@ -468,7 +475,7 @@ export async function handleServerChat(input: {
       undo_deadline_at: orchestrated.action.receipt.undo_deadline_at,
       conversation_id: orchestrated.action.receipt.conversation_id,
       source_ids: orchestrated.action.receipt.source_ids ?? [],
-      source_citations: sourceCitations,
+      source_citations: combinedSourceCitations,
     } as ChatActionReceipt)
     : undefined;
 
@@ -481,15 +488,15 @@ export async function handleServerChat(input: {
           title: 'Clarification required',
           intro: clarifyingText,
           rows: [],
-          citations: sourceCitations,
+          citations: combinedSourceCitations,
         }
       : modelAnswer,
     actionReceipt,
   };
 
   const actionHints =
-    sourceCitations.length > 0
-      ? sourceCitations.map((source) => source.label)
+    combinedSourceCitations.length > 0
+      ? combinedSourceCitations.map((source) => source.label)
       : ['no source citations'];
 
   return {
@@ -513,12 +520,12 @@ export async function handleServerChat(input: {
       ? {
         receipt: actionReceipt,
         verification: orchestrated.action?.verification ?? null,
-        source_citations: sourceCitations,
+        source_citations: combinedSourceCitations,
       }
       : undefined,
     action_hints: actionHints,
     provenance: {
-      sources: sourceCitations,
+      sources: combinedSourceCitations,
       generated_at: new Date().toISOString(),
     },
   };

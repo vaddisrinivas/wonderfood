@@ -86,6 +86,7 @@ This pass moves WonderFood from proof receipts to a visible product shell.
 - `[LifeOS Sheets]`: workbook mirror for schema rows, import/export checks, formulas, conflicts, and source handles.
 - `[MCP schema]`: `wonderfood://lifeos/domain-catalog-v1` for GPT/plugin parity.
 - `[Template health]`: `@now` duplication guard, sample/empty parity, relation/rollup checks, and source visibility.
+- `[Web source]`: OpenAI Responses web-search URL/title citations when the user asks for current or internet-backed facts.
 - Chat injects this source-pack context into provider prompts and local fallback answers, then renders compact source cards in the thread.
 
 ## Skill architecture
