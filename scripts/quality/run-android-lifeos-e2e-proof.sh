@@ -5,8 +5,13 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APK_PATH="$PROJECT_DIR/app/build/outputs/apk/play/debug/app-play-debug.apk"
 OUT_DIR="$PROJECT_DIR/app/build/evidence/android-lifeos-e2e/android-lifeos-e2e-$(date +%s)"
 DEVICE_SERIAL="${1:-}"
-NOTION_URL="${WONDERFOOD_PROOF_NOTION_URL:-https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1}"
-SHEETS_URL="${WONDERFOOD_PROOF_SHEETS_URL:-https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit}"
+NOTION_URL="${WONDERFOOD_PROOF_NOTION_URL:-}"
+SHEETS_URL="${WONDERFOOD_PROOF_SHEETS_URL:-}"
+
+if [[ -z "$NOTION_URL" || -z "$SHEETS_URL" ]]; then
+  echo "Set WONDERFOOD_PROOF_NOTION_URL and WONDERFOOD_PROOF_SHEETS_URL." >&2
+  exit 2
+fi
 
 mkdir -p "$OUT_DIR"
 

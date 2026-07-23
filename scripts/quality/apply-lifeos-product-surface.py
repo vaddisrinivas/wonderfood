@@ -20,8 +20,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "app/build/evidence/lifeos-product-surface"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-NOTION_PAGE_ID = os.getenv("LIFEOS_NOTION_PAGE_ID", "3a45dd535a93816fb7d3d4a0a2bc2bf1").replace("-", "")
-SPREADSHEET_ID = os.getenv("LIFEOS_SHEETS_ID", "1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU")
+NOTION_PAGE_ID = os.getenv("LIFEOS_NOTION_PAGE_ID", "").replace("-", "")
+SPREADSHEET_ID = os.getenv("LIFEOS_SHEETS_ID", "")
 TOKEN_FILE = pathlib.Path(os.getenv("GOOGLE_SHEETS_TOKEN_FILE", str(ROOT / "build/evidence/live-workspace/google-sheets-token.json")))
 MARKER = "LifeOS product surface installed by WonderFood Android"
 LIFERPG_MARKER = "LiFE RPG benchmark folded into WonderFood LifeOS"
@@ -30,6 +30,9 @@ SOURCE_PACK_MARKER = "LifeOS chat source pack installed by WonderFood"
 SKILL_ARCH_MARKER = "LifeOS skill architecture installed by WonderFood"
 NOTION_VERSION = "2026-03-11"
 OWNED_NOTION_MARKERS = [MARKER, LIFERPG_MARKER, SYNC_LOOP_MARKER, SOURCE_PACK_MARKER, SKILL_ARCH_MARKER]
+
+if not NOTION_PAGE_ID or not SPREADSHEET_ID:
+    raise RuntimeError("Set LIFEOS_NOTION_PAGE_ID and LIFEOS_SHEETS_ID explicitly.")
 
 
 def request_json(method: str, url: str, headers: dict[str, str], body: object | None = None) -> dict:

@@ -20,20 +20,20 @@ const sourceMeta: Record<string, { icon: string; tone: Tone; role: string; summa
   notion: {
     icon: 'N',
     tone: 'moss' as Tone,
-    role: 'Configured home',
-    summary: 'Human workspace for meals, kitchen, recipes and planning.',
-    scope: '42 records · 6 databases',
-    action: 'Open workspace',
-    href: 'https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1',
+    role: 'Optional authority',
+    summary: 'Connect your own Notion workspace for meals, kitchen, recipes and planning.',
+    scope: 'User configured',
+    action: 'Configure provider',
+    href: null,
   },
   'google_sheets': {
     icon: '▦',
     tone: 'blue' as Tone,
-    role: 'Configured surface',
-    summary: 'Auditable rows, formulas and shopping collaboration.',
-    scope: '31 rows · 7 tabs',
-    action: 'Open workbook',
-    href: 'https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit',
+    role: 'Optional surface',
+    summary: 'Connect your own workbook for auditable rows, formulas and collaboration.',
+    scope: 'User configured',
+    action: 'Configure provider',
+    href: null,
   },
   sqlite: {
     icon: '▣',
@@ -62,8 +62,8 @@ function normalizeSourceName(name: string): keyof typeof sourceMeta | 'other' {
 }
 
 const citationSources = [
-  ['[LifeOS Notion]', 'Pages, properties, relations and exact block quotes', 'Configured'],
-  ['[LifeOS Sheets]', 'Rows, cells, formulas and workbook timestamps', 'Configured'],
+  ['[LifeOS Notion]', 'Pages, properties, relations and exact block quotes', 'When connected'],
+  ['[LifeOS Sheets]', 'Rows, cells, formulas and workbook timestamps', 'When connected'],
   ['[App snapshot]', 'Local kitchen, plans, shopping and recent actions', 'Demo'],
   ['[MCP schema]', 'Domain catalog, skill rules and tool contracts', 'Versioned'],
 ] as const;
@@ -120,7 +120,7 @@ export default function SourcesScreen() {
           </View>
 
           <PageHeader
-            eyebrow="One graph · Four homes"
+            eyebrow="One graph · Your chosen homes"
             title="Your data stays legible."
             subtitle="LifeOS keeps one clear authority, an offline device replica and source versions that Chat can quote. Provider details never leak into daily work."
           />
@@ -128,19 +128,19 @@ export default function SourcesScreen() {
           <Card tone="blue" style={styles.loopCard}>
             <View style={styles.loopCopy}>
               <Pill tone="blue">SOURCE CONTRACT DESIGNED</Pill>
-              <Text style={styles.loopTitle}>Notion leads. SQLite will keep you fast.</Text>
+              <Text style={styles.loopTitle}>Choose your authority. SQLite keeps you fast.</Text>
               <Text style={styles.loopBody}>
-                Notion is the configured household home. Sheets is the configured workbook. SQLite and Postgres adapters are the next runtime phase.
+                Start locally, then connect your own Notion workspace, Sheets workbook or another supported authority when useful.
               </Text>
             </View>
             <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
-              <View style={styles.flowNode}><Text style={styles.flowNodeLabel}>Notion</Text><Text style={styles.flowNodeRole}>Authority</Text></View>
+              <View style={styles.flowNode}><Text style={styles.flowNodeLabel}>Your source</Text><Text style={styles.flowNodeRole}>Optional</Text></View>
               <Text style={styles.flowArrow}>→</Text>
               <View style={[styles.flowNode, styles.flowNodeCore]}><Text style={styles.flowNodeCoreLabel}>LifeOS</Text><Text style={styles.flowNodeCoreRole}>Graph</Text></View>
               <Text style={styles.flowArrow}>→</Text>
               <View style={styles.flowDestinations}>
-                <Text style={styles.flowDestination}>SQLite · adapter next</Text>
-                <Text style={styles.flowDestination}>Sheets · adapter next</Text>
+                <Text style={styles.flowDestination}>SQLite · local</Text>
+                <Text style={styles.flowDestination}>Providers · optional</Text>
               </View>
             </View>
           </Card>

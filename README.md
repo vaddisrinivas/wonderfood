@@ -17,11 +17,10 @@ Both native targets use the application identifier `com.wonderfood.app`.
 
 ## Current implementation
 
-Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn server chat with streaming, tables, source citations, action receipts and idempotent Undo; SQLite persistence; MCP Streamable HTTP; Notion data-source pull/push; Google Sheets adapter; Health Connect read bridge; and self-contained Android release packaging. Food is active; Health and Plants are real config packages available for later selection. Optional Notion push webhooks are disabled by default and are not required for release.
+Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, SQLite persistence, an optional connector runtime for streaming chat/MCP/provider adapters, a Health Connect read bridge, and self-contained Android release packaging. Food is active; Health and Plants are config packages available for later selection. The app remains local-first and does not require a public server or webhook.
 
-Provider secrets stay outside the repo. Local live Notion/OpenAI and Google Sheets pulls are available when the private environment is loaded; the approved workbook keeps a human-facing Runtime dashboard plus a machine-readable `LifeOS Canonical` tab for sync and source citations.
+Provider secrets stay outside the repo. The intended personal/FOSS setup stores user-entered provider credentials in app-private secure storage. The optional connector remains available for development, remote MCP, shared households, or managed deployments.
 
-- Personal Notion and Sheets workspaces are configured outside this repository through the private agent environment.
 - Domain runtime files: `packages/domain-config/`
 
 ## Local development
@@ -33,9 +32,7 @@ npm install
 npm run start
 ```
 
-Copy `.env.example` to `.env.local`, set the Mac LAN address, and start the server with the private environment loaded. Never commit tokens.
-
-For a personal install, configure any HTTPS server you control with `EXPO_PUBLIC_LIFEOS_SERVER_URL` and `EXPO_PUBLIC_LIFEOS_SERVER_TOKEN`. The repository does not depend on `thetechcruise.com`; that host is only the owner's private deployment.
+No server is required for the local SQLite experience. The optional connector can be started separately when testing remote MCP, shared sync, or server-managed model access. Never commit provider credentials.
 
 Launch a target:
 
