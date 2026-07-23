@@ -133,7 +133,29 @@ export async function openLifeOSHealthSettings(): Promise<boolean> {
 export async function readLifeOSHealthSnapshot(
   range: { startTime: string; endTime: string },
 ): Promise<HealthConnectSnapshot> {
-  const status = await getLifeOSHealthStatus();
+  const availability = await getLifeOSHealthStatus();
+  let status = availability;
+  if (status.availability === 'available') {
+    try {
+      const initialized = await initialize();
+      if (!initialized) {
+        status = {
+          ...status,
+          availability: 'error',
+          message: 'Health Connect could not be initialized for reading.',
+        };
+      } else {
+        status = await getLifeOSHealthStatus();
+      }
+    } catch (error) {
+      status = {
+        ...status,
+        availability: 'error',
+        message: error instanceof Error ? error.message : 'Health Connect read initialization failed.',
+      };
+    }
+  }
+
   const base = {
     ...status,
     observedAt: new Date().toISOString(),
