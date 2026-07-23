@@ -5,6 +5,7 @@ import { Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui'
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { searchDomainRecords } from '@/src/domain/queries';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 const commands = [
@@ -15,10 +16,14 @@ const commands = [
 
 export default function SearchScreen() {
   const theme = useLifeOSTheme();
+  const settings = useLifeOSSettingsSnapshot();
   const [query, setQuery] = useState('');
   const db = useLifeOSDatabase();
   const [results, setResults] = useState<DomainRecordViewModel[]>([]);
   const [loading, setLoading] = useState(false);
+  const searchConfig = settings.runtime.surfaceConfig.search;
+  const resultLimit = countSetting(searchConfig.resultLimit, 8);
+  const sections = orderedSections(searchConfig.sectionOrder);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,46 +49,93 @@ export default function SearchScreen() {
   }, [db, query]);
 
   const hasQuery = query.trim().length > 0;
+  const visibleResults = results.slice(0, resultLimit);
+
+  const renderSection = (section: SearchSection) => {
+    switch (section) {
+      case 'hero':
+        return searchConfig.showHero ? (
+          <View key={section}>
+            <View style={styles.contextBar}>
+              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / SEARCH</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Records, commands and source-backed answers</Text></View>
+              <Pill tone={hasQuery ? 'moss' : 'blue'}>{hasQuery ? 'Searching' : 'Ready'}</Pill>
+            </View>
+            <PageHeader eyebrow="Find or act" title="Search everything." subtitle="Find local records first. If nothing exact exists, jump into Chat with context instead of staring at a blank result page." />
+          </View>
+        ) : null;
+      case 'quickActions':
+        return !hasQuery && searchConfig.showQuickActions ? (
+          <View key={section}>
+            <Text style={[styles.label, { color: theme.colors.muted }]}>Quick actions</Text>
+            <Card style={styles.list}>
+              {commands.map((command) => (
+                <Link href={command.href} asChild key={command.id}>
+                  <Pressable style={styles.result}>
+                    <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>{command.icon}</Text></View>
+                    <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{command.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{command.detail}</Text></View>
+                    <Text style={[styles.chevron, { color: theme.colors.muted }]}>›</Text>
+                  </Pressable>
+                </Link>
+              ))}
+            </Card>
+          </View>
+        ) : null;
+      case 'results':
+        return hasQuery && searchConfig.showResults ? (
+          <View key={section}>
+            <Text style={[styles.label, { color: theme.colors.muted }]}>{`${visibleResults.length} MATCHES`}</Text>
+            <Card style={styles.list}>
+              {loading ? <View style={styles.loading}><Text style={styles.loadingText}>Searching records…</Text></View> : null}
+              {!loading && (
+                visibleResults.length ? (
+                  visibleResults.map((record) => {
+                    const tone = record.tone ?? 'neutral';
+                    const status = record.status ?? 'Active';
+                    return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
+                      <Pressable style={styles.result}>
+                        <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>◉</Text></View>
+                        <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{record.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{record.meta ?? ''}</Text></View>
+                        <Pill tone={tone}>{status}</Pill>
+                      </Pressable>
+                    </Link>;
+                  })
+                ) : (
+                  <View style={styles.empty}><Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing exact yet</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{searchConfig.emptyHint}</Text><Link href="/(tabs)/chat" style={[styles.ask, { color: theme.colors.moss }]}>Ask with AI →</Link></View>
+                )
+              )}
+            </Card>
+          </View>
+        ) : null;
+      default:
+        return null;
+    }
+  };
 
   return <Page><View style={sharedStyles.content}>
-    <View style={styles.contextBar}>
-      <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / SEARCH</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Records, commands and source-backed answers</Text></View>
-      <Pill tone={hasQuery ? 'moss' : 'blue'}>{hasQuery ? 'Searching' : 'Ready'}</Pill>
-    </View>
-    <PageHeader eyebrow="Find or act" title="Search everything." subtitle="Find local records first. If nothing exact exists, jump into Chat with context instead of staring at a blank result page." />
-    <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search food, sources, settings, commands…" placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
-    <ScrollView keyboardShouldPersistTaps="handled"><Text style={[styles.label, { color: theme.colors.muted }]}>{query ? `${results.length} MATCHES` : 'Quick actions'}</Text><Card style={styles.list}>
-      {loading ? <View style={styles.loading}><Text style={styles.loadingText}>Searching records…</Text></View> : null}
-      {!loading && hasQuery ? (
-        results.length ? (
-          results.map((record) => {
-            const tone = record.tone ?? 'neutral';
-            const status = record.status ?? 'Active';
-            return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
-              <Pressable style={styles.result}>
-                <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>◉</Text></View>
-                <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{record.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{record.meta ?? ''}</Text></View>
-                <Pill tone={tone}>{status}</Pill>
-              </Pressable>
-            </Link>;
-          })
-        ) : (
-          <View style={styles.empty}><Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing exact yet</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>Ask LifeOS to search connected sources or the web.</Text><Link href="/(tabs)/chat" style={[styles.ask, { color: theme.colors.moss }]}>Ask with AI →</Link></View>
-        )
-      ) : null}
-      {!hasQuery ? (
-        commands.map((command) => (
-          <Link href={command.href} asChild key={command.id}>
-            <Pressable style={styles.result}>
-              <View style={[styles.resultIcon, { backgroundColor: theme.colors.canvas }]}><Text>{command.icon}</Text></View>
-              <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{command.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{command.detail}</Text></View>
-              <Text style={[styles.chevron, { color: theme.colors.muted }]}>›</Text>
-            </Pressable>
-          </Link>
-        ))
-      ) : null}
-    </Card></ScrollView>
+    <ScrollView keyboardShouldPersistTaps="handled">
+      {sections.includes('hero') ? renderSection('hero') : null}
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>⌕</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search food, sources, settings, commands…" placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
+      {sections.filter((section) => section !== 'hero').map(renderSection)}
+    </ScrollView>
   </View></Page>;
+}
+
+function countSetting(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+const SEARCH_SECTIONS = ['hero', 'quickActions', 'results'] as const;
+type SearchSection = typeof SEARCH_SECTIONS[number];
+
+function orderedSections(value: string) {
+  const allowed = new Set<string>(SEARCH_SECTIONS);
+  const requested = value
+    .split(',')
+    .map((section) => section.trim())
+    .filter((section): section is SearchSection => allowed.has(section));
+  const missing = SEARCH_SECTIONS.filter((section) => !requested.includes(section));
+  return [...requested, ...missing];
 }
 
 const styles = StyleSheet.create({

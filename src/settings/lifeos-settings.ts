@@ -94,6 +94,24 @@ export type LifeOSSettings = {
         nutritionLimit: string;
         showProvenance: boolean;
       };
+      search: {
+        sectionOrder: string;
+        showHero: boolean;
+        showQuickActions: boolean;
+        showResults: boolean;
+        resultLimit: string;
+        emptyHint: string;
+      };
+      capture: {
+        sectionOrder: string;
+        showHero: boolean;
+        showTypePicker: boolean;
+        showEditor: boolean;
+        showAttachments: boolean;
+        showRouteCard: boolean;
+        defaultType: string;
+        destinationHint: string;
+      };
     };
   };
 };
@@ -222,6 +240,24 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showRelations: true,
         nutritionLimit: '6',
         showProvenance: true,
+      },
+      search: {
+        sectionOrder: 'hero,quickActions,results',
+        showHero: true,
+        showQuickActions: true,
+        showResults: true,
+        resultLimit: '8',
+        emptyHint: 'Ask LifeOS to search connected sources or the web.',
+      },
+      capture: {
+        sectionOrder: 'hero,typePicker,editor,routeCard',
+        showHero: true,
+        showTypePicker: true,
+        showEditor: true,
+        showAttachments: true,
+        showRouteCard: true,
+        defaultType: 'Note',
+        destinationHint: 'Writes to Food local graph with no network dependency.',
       },
     },
   },
@@ -365,6 +401,24 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showRelations: config.record?.showRelations !== false,
       nutritionLimit: normalizePositiveString(config.record?.nutritionLimit, defaults.record.nutritionLimit),
       showProvenance: config.record?.showProvenance !== false,
+    },
+    search: {
+      sectionOrder: normalizeOrderString(config.search?.sectionOrder, defaults.search.sectionOrder),
+      showHero: config.search?.showHero !== false,
+      showQuickActions: config.search?.showQuickActions !== false,
+      showResults: config.search?.showResults !== false,
+      resultLimit: normalizePositiveString(config.search?.resultLimit, defaults.search.resultLimit),
+      emptyHint: typeof config.search?.emptyHint === 'string' ? config.search.emptyHint : defaults.search.emptyHint,
+    },
+    capture: {
+      sectionOrder: normalizeOrderString(config.capture?.sectionOrder, defaults.capture.sectionOrder),
+      showHero: config.capture?.showHero !== false,
+      showTypePicker: config.capture?.showTypePicker !== false,
+      showEditor: config.capture?.showEditor !== false,
+      showAttachments: config.capture?.showAttachments !== false,
+      showRouteCard: config.capture?.showRouteCard !== false,
+      defaultType: typeof config.capture?.defaultType === 'string' ? config.capture.defaultType : defaults.capture.defaultType,
+      destinationHint: typeof config.capture?.destinationHint === 'string' ? config.capture.destinationHint : defaults.capture.destinationHint,
     },
   };
 }

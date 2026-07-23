@@ -249,6 +249,8 @@ export default function ConfigStudioScreen() {
             food: { ...current.runtime.surfaceConfig.food, ...runtime.surfaceConfig?.food },
             chat: { ...current.runtime.surfaceConfig.chat, ...runtime.surfaceConfig?.chat },
             record: { ...current.runtime.surfaceConfig.record, ...runtime.surfaceConfig?.record },
+            search: { ...current.runtime.surfaceConfig.search, ...runtime.surfaceConfig?.search },
+            capture: { ...current.runtime.surfaceConfig.capture, ...runtime.surfaceConfig?.capture },
           },
         },
       }));
@@ -531,6 +533,24 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Relations" detail="Show connected record cards." value={settings.runtime.surfaceConfig.record.showRelations} onValueChange={(showRelations) => updateSurfaceConfig('record', { showRelations })} />
                 <Field label="Nutrition cards" value={settings.runtime.surfaceConfig.record.nutritionLimit} onChangeText={(nutritionLimit) => updateSurfaceConfig('record', { nutritionLimit })} />
                 <ToggleRow title="Provenance" detail="Show source/schema trust panel." value={settings.runtime.surfaceConfig.record.showProvenance} onValueChange={(showProvenance) => updateSurfaceConfig('record', { showProvenance })} />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Search">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.search.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('search', { sectionOrder })} />
+                <ToggleRow title="Hero" detail="Show search positioning copy." value={settings.runtime.surfaceConfig.search.showHero} onValueChange={(showHero) => updateSurfaceConfig('search', { showHero })} />
+                <ToggleRow title="Quick actions" detail="Show Chat, Capture and Settings commands." value={settings.runtime.surfaceConfig.search.showQuickActions} onValueChange={(showQuickActions) => updateSurfaceConfig('search', { showQuickActions })} />
+                <ToggleRow title="Results" detail="Show local graph matches." value={settings.runtime.surfaceConfig.search.showResults} onValueChange={(showResults) => updateSurfaceConfig('search', { showResults })} />
+                <Field label="Result cards" value={settings.runtime.surfaceConfig.search.resultLimit} onChangeText={(resultLimit) => updateSurfaceConfig('search', { resultLimit })} />
+                <Field label="Empty hint" value={settings.runtime.surfaceConfig.search.emptyHint} onChangeText={(emptyHint) => updateSurfaceConfig('search', { emptyHint })} multiline />
+              </SurfaceConfigCard>
+              <SurfaceConfigCard title="Capture">
+                <Field label="Section order" value={settings.runtime.surfaceConfig.capture.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('capture', { sectionOrder })} />
+                <ToggleRow title="Hero" detail="Show capture positioning copy." value={settings.runtime.surfaceConfig.capture.showHero} onValueChange={(showHero) => updateSurfaceConfig('capture', { showHero })} />
+                <ToggleRow title="Type picker" detail="Show Note, Food, Receipt, Voice and Link chips." value={settings.runtime.surfaceConfig.capture.showTypePicker} onValueChange={(showTypePicker) => updateSurfaceConfig('capture', { showTypePicker })} />
+                <ToggleRow title="Editor" detail="Show capture input card." value={settings.runtime.surfaceConfig.capture.showEditor} onValueChange={(showEditor) => updateSurfaceConfig('capture', { showEditor })} />
+                <ToggleRow title="Attachments" detail="Show photo, link and record affordances." value={settings.runtime.surfaceConfig.capture.showAttachments} onValueChange={(showAttachments) => updateSurfaceConfig('capture', { showAttachments })} />
+                <ToggleRow title="Route card" detail="Show classify/source/relation path." value={settings.runtime.surfaceConfig.capture.showRouteCard} onValueChange={(showRouteCard) => updateSurfaceConfig('capture', { showRouteCard })} />
+                <Field label="Default type" value={settings.runtime.surfaceConfig.capture.defaultType} onChangeText={(defaultType) => updateSurfaceConfig('capture', { defaultType })} />
+                <Field label="Destination hint" value={settings.runtime.surfaceConfig.capture.destinationHint} onChangeText={(destinationHint) => updateSurfaceConfig('capture', { destinationHint })} multiline />
               </SurfaceConfigCard>
             </View>
           </Card>

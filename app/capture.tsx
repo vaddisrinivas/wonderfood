@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
@@ -6,10 +6,13 @@ import { colors, radius, useLifeOSTheme } from '@/src/theme';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { loadCatalog } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 const types = [['Note', '✎'], ['Food', '◉'], ['Receipt', '▤'], ['Voice', '◖'], ['Link', '⌁']] as const;
 
 type CaptureType = (typeof types)[number][0];
+const CAPTURE_SECTIONS = ['hero', 'typePicker', 'editor', 'routeCard'] as const;
+type CaptureSection = typeof CAPTURE_SECTIONS[number];
 
 function mapCaptureCollection(captureType: CaptureType): string {
   if (captureType === 'Food') return 'shopping_item';
@@ -17,19 +20,40 @@ function mapCaptureCollection(captureType: CaptureType): string {
   return 'source_record';
 }
 
+function orderedSections(value: string) {
+  const allowed = new Set<string>(CAPTURE_SECTIONS);
+  const requested = value
+    .split(',')
+    .map((section) => section.trim())
+    .filter((section): section is CaptureSection => allowed.has(section));
+  const missing = CAPTURE_SECTIONS.filter((section) => !requested.includes(section));
+  return [...requested, ...missing];
+}
+
 export default function CaptureScreen() {
   const router = useRouter();
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
   const theme = useLifeOSTheme();
+  const settings = useLifeOSSettingsSnapshot();
 
   const [type, setType] = useState<CaptureType>('Note');
   const [value, setValue] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const captureConfig = settings.runtime.surfaceConfig.capture;
+  const sections = orderedSections(captureConfig.sectionOrder);
 
   const title = value.trim().split('\n')[0]?.slice(0, 70) || `${catalog.activeManifest.label} note`;
   const hasLocalGraph = Boolean(db);
+  const destinationHint = captureConfig.destinationHint || (hasLocalGraph
+    ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
+    : 'No local graph yet. Capture is kept in-session for this phase.');
+
+  useEffect(() => {
+    const configured = types.find(([name]) => name.toLowerCase() === captureConfig.defaultType.toLowerCase())?.[0];
+    if (configured) setType(configured);
+  }, [captureConfig.defaultType]);
 
   const handleSave = async () => {
     if (!value.trim()) {
@@ -79,20 +103,25 @@ export default function CaptureScreen() {
     }
   };
 
-  return (
-    <Page>
-      <ScrollView keyboardShouldPersistTaps="handled">
-        <View style={sharedStyles.content}>
-          <View style={styles.contextBar}>
-            <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CAPTURE</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Fast inbox · source preserved</Text></View>
-            <Pill tone="moss">{catalog.activeManifest.label} graph</Pill>
+  const renderSection = (section: CaptureSection) => {
+    switch (section) {
+      case 'hero':
+        return captureConfig.showHero ? (
+          <View key={section}>
+            <View style={styles.contextBar}>
+              <View><Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CAPTURE</Text><Text style={[styles.context, { color: theme.colors.muted }]}>Fast inbox · source preserved</Text></View>
+              <Pill tone="moss">{catalog.activeManifest.label} graph</Pill>
+            </View>
+            <PageHeader
+              eyebrow="Inbox first"
+              title="Capture anything."
+              subtitle="Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to meals, pantry, shopping or any future domain."
+            />
           </View>
-          <PageHeader
-            eyebrow="Inbox first"
-            title="Capture anything."
-            subtitle="Save the raw thing now. LifeOS keeps the source, classifies later, and connects it to meals, pantry, shopping or any future domain."
-          />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.types}>
+        ) : null;
+      case 'typePicker':
+        return captureConfig.showTypePicker ? (
+          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.types}>
             {types.map(([name, icon]) => (
               <Pressable
                 key={name}
@@ -109,7 +138,10 @@ export default function CaptureScreen() {
               </Pressable>
             ))}
           </ScrollView>
-          <Card style={styles.editorCard}>
+        ) : null;
+      case 'editor':
+        return captureConfig.showEditor ? (
+          <Card key={section} style={styles.editorCard}>
             <View style={styles.editorTop}>
               <Pill tone="moss">{type.toUpperCase()}</Pill>
               <Text style={[styles.destination, { color: theme.colors.muted }]}>→ {hasLocalGraph ? `${catalog.activeManifest.label} graph` : 'Food inbox (preview)'}</Text>
@@ -127,20 +159,34 @@ export default function CaptureScreen() {
               style={[styles.input, { color: theme.colors.ink }]}
               textAlignVertical="top"
             />
-            <View style={[styles.attachments, { borderTopColor: theme.colors.line }]}>
-              <Text style={[styles.attachment, { color: theme.colors.muted }]}>▧ Photo</Text>
-              <Text style={[styles.attachment, { color: theme.colors.muted }]}>⌁ Link</Text>
-              <Text style={[styles.attachment, { color: theme.colors.muted }]}>◖ Record</Text>
-            </View>
+            {captureConfig.showAttachments ? (
+              <View style={[styles.attachments, { borderTopColor: theme.colors.line }]}>
+                <Text style={[styles.attachment, { color: theme.colors.muted }]}>▧ Photo</Text>
+                <Text style={[styles.attachment, { color: theme.colors.muted }]}>⌁ Link</Text>
+                <Text style={[styles.attachment, { color: theme.colors.muted }]}>◖ Record</Text>
+              </View>
+            ) : null}
           </Card>
-          <Card tone="blue" style={styles.routeCard}>
+        ) : null;
+      case 'routeCard':
+        return captureConfig.showRouteCard ? (
+          <Card key={section} tone="blue" style={styles.routeCard}>
             <Text style={[styles.routeTitle, { color: theme.colors.ink }]}>What happens next</Text>
             <Text style={[styles.routeBody, { color: theme.colors.muted }]}>Classify → preserve source → link relations → show in Chat citations.</Text>
           </Card>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Page>
+      <ScrollView keyboardShouldPersistTaps="handled">
+        <View style={sharedStyles.content}>
+          {sections.map(renderSection)}
           <Text style={[styles.hint, { color: theme.colors.muted }]}>
-            {hasLocalGraph
-              ? `Writes to ${catalog.activeManifest.label} local graph with no network dependency.`
-              : 'No local graph yet. Capture is kept in-session for this phase.'}
+            {destinationHint}
           </Text>
           {saved ? (
             <Card tone="moss" style={styles.success}>
