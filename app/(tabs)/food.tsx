@@ -155,6 +155,12 @@ export default function FoodScreen() {
                 <ActionButton label={todayMeal ? 'Open dinner' : 'Plan dinner'} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
                 <ActionButton label="Ask Food AI" quiet onPress={() => router.push('/chat')} />
               </View>
+              <View style={styles.commandLane}>
+                <CommandStep index="01" title="Dinner" detail={todayMeal?.title ?? 'Pick tonight'} tone="moss" href={todayMeal ? `/record/${todayMeal.id}` : '/chat'} />
+                <CommandStep index="02" title="Pantry risk" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
+                <CommandStep index="03" title="Shopping gap" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
+                <CommandStep index="04" title="Prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
+              </View>
             </Card>
 
             <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
@@ -357,6 +363,34 @@ function FeatureCard({ tone, label, item, fallbackTitle, fallbackBody }: {
   );
 }
 
+function CommandStep({ index, title, detail, tone, href }: {
+  index: string;
+  title: string;
+  detail: string;
+  tone: 'moss' | 'amber' | 'blue' | 'plum';
+  href: string;
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <Link href={href as never} asChild>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.commandStep, commandToneStyle(tone, theme.colors), pressed && styles.pressed]}>
+        <Text style={[styles.commandIndex, { color: theme.colors.muted }]}>{index}</Text>
+        <View style={styles.commandCopy}>
+          <Text style={[styles.commandTitle, { color: theme.colors.ink }]}>{title}</Text>
+          <Text style={[styles.commandDetail, { color: theme.colors.muted }]} numberOfLines={1}>{detail}</Text>
+        </View>
+      </Pressable>
+    </Link>
+  );
+}
+
+function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: typeof colors) {
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft, borderColor: themed.line };
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft, borderColor: themed.line };
+  if (tone === 'plum') return { backgroundColor: themed.plumSoft, borderColor: themed.line };
+  return { backgroundColor: themed.mossSoft, borderColor: themed.line };
+}
+
 const styles = StyleSheet.create({
   content: { alignSelf: 'center', maxWidth: 1480, paddingBottom: 140 },
   topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
@@ -376,6 +410,12 @@ const styles = StyleSheet.create({
   heroBody: { color: colors.ink, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 700 },
   heroBodyCompact: { maxWidth: 310 },
   heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 20 },
+  commandLane: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22 },
+  commandStep: { flexGrow: 1, flexBasis: 190, minHeight: 76, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  commandIndex: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  commandCopy: { flex: 1, minWidth: 0 },
+  commandTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
+  commandDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   todayRail: { width: 320, gap: 12 },
   todayRailCompact: { width: '100%' },
   segments: { backgroundColor: '#EAE9E0', padding: 4, borderRadius: radius.pill, marginTop: 18, marginBottom: 20 },
