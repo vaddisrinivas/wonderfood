@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import agentRegistry from '@/packages/domain-config/agents/registry.v1.json';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { setActiveDomainOverride } from '@/src/domain/catalog';
+import { DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
 import {
   LifeOSSettings,
   defaultLifeOSSettings,
@@ -39,6 +39,8 @@ const schemaFiles = [
   'undo.v1.schema.json',
 ] as const;
 
+const catalogDomains = catalog.domains as unknown as DomainCatalogEntry[];
+
 function toggle(values: string[], value: string, enabled: boolean) {
   return enabled ? Array.from(new Set([...values, value])) : values.filter((item) => item !== value);
 }
@@ -56,7 +58,11 @@ export default function ConfigStudioScreen() {
   }, []);
 
   const activeDomain = useMemo(
-    () => catalog.domains.find((domain) => domain.id === settings.runtime.activeDomain) ?? catalog.domains[0],
+    () => catalogDomains.find((domain) => domain.id === settings.runtime.activeDomain) ?? catalogDomains[0],
+    [settings.runtime.activeDomain],
+  );
+  const activeManifest = useMemo(
+    () => getDomainManifest(catalogDomains, settings.runtime.activeDomain),
     [settings.runtime.activeDomain],
   );
 
@@ -109,7 +115,7 @@ export default function ConfigStudioScreen() {
 
           <SectionTitle title="Domains" />
           <View style={[styles.grid, compact && styles.stack]}>
-            {catalog.domains.map((domain) => {
+            {catalogDomains.map((domain) => {
               const enabled = settings.runtime.enabledDomains.includes(domain.id);
               const active = settings.runtime.activeDomain === domain.id;
               return (
@@ -140,12 +146,55 @@ export default function ConfigStudioScreen() {
             })}
           </View>
 
+          {activeManifest ? (
+            <>
+              <SectionTitle title="Active package contract" />
+              <View style={[styles.contractGrid, compact && styles.stack]}>
+                <Card style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>Collections</Text>
+                  <Text style={styles.contractNumber}>{activeManifest.collections.length}</Text>
+                  <ChipList values={activeManifest.collections} tone="moss" limit={14} />
+                </Card>
+                <Card style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>Surfaces</Text>
+                  <Text style={styles.contractNumber}>{activeManifest.surfaces.length}</Text>
+                  <ChipList values={activeManifest.surfaces.map((surface) => `${surface.label}: ${surface.collections.join(', ')}`)} tone="blue" limit={6} />
+                </Card>
+                <Card style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>Relations</Text>
+                  <Text style={styles.contractNumber}>{activeManifest.relations.length}</Text>
+                  <ChipList values={activeManifest.relations.map((relation) => `${relation.from} → ${relation.to} · ${relation.name}`)} tone="plum" limit={10} />
+                </Card>
+              </View>
+              <View style={[styles.contractGrid, compact && styles.stack]}>
+                <Card tone="blue" style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>Data homes</Text>
+                  <ChipList values={activeManifest.data_homes} tone="blue" />
+                  <Text style={styles.help}>Same package can run as app, Notion, Sheets, SQLite/Postgres, or MCP.</Text>
+                </Card>
+                <Card style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>MCP contract</Text>
+                  <ChipList values={activeManifest.mcp.tools.map((tool) => `tool:${tool}`)} tone="moss" limit={8} />
+                  <ChipList values={activeManifest.mcp.resources.map((resource) => `resource:${resource}`)} tone="amber" limit={8} />
+                </Card>
+                <Card tone="plum" style={styles.contractCard}>
+                  <Text style={styles.contractLabel}>Provider fields</Text>
+                  <ChipList values={[
+                    ...(activeManifest.provider_template_fields?.required ?? []).map((field) => `required:${field}`),
+                    ...(activeManifest.provider_template_fields?.rich_detail_json ?? []).map((field) => `detail:${field}`),
+                    ...(activeManifest.provider_template_fields?.relations_json ?? []).map((field) => `relations:${field}`),
+                  ]} tone="plum" limit={12} />
+                </Card>
+              </View>
+            </>
+          ) : null}
+
           <SectionTitle title="Skill instructions" />
           <Card style={styles.sectionCard}>
             <Text style={styles.lead}>Add your judgment above the bundled domain skill.</Text>
             <Text style={styles.help}>Examples: dietary rules, medical caution, preferred tone, household conventions, or plant-care philosophy.</Text>
             <View style={styles.fields}>
-              {catalog.domains.filter((domain) => settings.runtime.enabledDomains.includes(domain.id)).map((domain) => (
+              {catalogDomains.filter((domain) => settings.runtime.enabledDomains.includes(domain.id)).map((domain) => (
                 <View key={domain.id} style={styles.field}>
                   <View style={styles.fieldHeading}>
                     <Text style={styles.fieldLabel}>{domain.label} skill</Text>
@@ -315,11 +364,27 @@ function ChoiceField(props: { label: string; value: string; choices: string[]; o
   );
 }
 
+function ChipList(props: { values: string[]; tone: 'moss' | 'blue' | 'amber' | 'plum'; limit?: number }) {
+  const visible = props.values.slice(0, props.limit ?? props.values.length);
+  const hidden = props.values.length - visible.length;
+  return (
+    <View style={styles.contractChips}>
+      {visible.map((value) => <Pill key={value} tone={props.tone}>{value}</Pill>)}
+      {hidden > 0 ? <Pill tone="neutral">+{hidden}</Pill> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.blue, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },
   grid: { flexDirection: 'row', gap: 12 },
+  contractGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  contractCard: { flex: 1, minWidth: 240, minHeight: 180 },
+  contractLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  contractNumber: { color: colors.ink, fontSize: 34, lineHeight: 40, fontWeight: '900', letterSpacing: -1, marginTop: 10, marginBottom: 12 },
+  contractChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   stack: { flexDirection: 'column' },
   column: { flex: 1, minWidth: 220 },
   domainCard: { minHeight: 255, padding: 20 },
