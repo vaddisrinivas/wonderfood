@@ -204,7 +204,7 @@ async function runNotionProof() {
   await notionRequest(token, 'PATCH', `/pages/${createdPageId}`, { in_trash: true });
   let cleanupDatabaseArchived = false;
   if (dataSource.databaseId) {
-    await notionRequest(token, 'PATCH', `/blocks/${encodeURIComponent(dataSource.databaseId)}`, { archived: true })
+    await notionRequest(token, 'PATCH', `/databases/${encodeURIComponent(dataSource.databaseId)}`, { archived: true })
       .then(() => {
         cleanupDatabaseArchived = true;
       })

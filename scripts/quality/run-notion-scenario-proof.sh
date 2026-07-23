@@ -515,6 +515,16 @@ required_checks = [
 missing = [key for key in required_checks if not payload.get(key)]
 payload["all_scenarios_passed"] = not missing
 payload["failed_scenarios"] = missing
+try:
+    request(
+        "PATCH",
+        "/pages/" + urllib.parse.quote(page_id, safe=""),
+        {"in_trash": True},
+        retry=False,
+    )
+    payload["cleanup_scenario_page_trashed"] = True
+except Exception:
+    payload["cleanup_scenario_page_trashed"] = False
 open(evidence_path, "w").write(json.dumps(payload, indent=2, sort_keys=True))
 print(evidence_path)
 if missing:
