@@ -10,6 +10,15 @@ export type ChatStructuredAnswer = {
   title: string;
   intro: string;
   rows: Array<{ meal: string; use: string; next: string }>;
+  sourceCards?: Array<{
+    id: string;
+    label: string;
+    detail: string;
+    quote: string;
+    href: string;
+    tone: ChatCitationTone;
+    fields?: string[];
+  }>;
   citations: Array<{ label: string; detail: string; href: string; tone: ChatCitationTone }>;
 };
 
@@ -313,6 +322,23 @@ function parseMarkdownModel(modelText: string, citations: ChatStructuredAnswer['
   return { title, intro, rows: dedupeRows(rows.slice(0, 12)), citations };
 }
 
+function sourceCardsFromSnapshots(snapshots: Array<{ id: string; label: string; detail: string; url: string; tone: 'moss' | 'blue' | 'amber'; excerpt?: string }>): NonNullable<ChatStructuredAnswer['sourceCards']> {
+  return snapshots
+    .filter((snapshot) => snapshot.label && snapshot.url)
+    .slice(0, 6)
+    .map((snapshot) => ({
+      id: snapshot.id,
+      label: snapshot.label,
+      detail: snapshot.detail,
+      quote: snapshot.excerpt || 'No excerpt was available from this source snapshot.',
+      href: snapshot.url,
+      tone: snapshot.tone,
+      fields: snapshot.excerpt
+        ? snapshot.excerpt.split(';').map((part) => part.split(':')[0]?.trim()).filter(Boolean).slice(0, 5)
+        : [],
+    }));
+}
+
 function cleanMarkdown(value: string): string {
   return value
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -424,6 +450,7 @@ export async function handleServerChat(input: {
   const inputText = threadContext ? `${input.message}\n${threadContext}` : input.message;
   const sourceSnapshots = orchestrated.retrieval.snapshots;
   const sourceCitations = toCitationsFromSnapshots(sourceSnapshots);
+  const sourceCards = sourceCardsFromSnapshots(sourceSnapshots);
   const webCitations = (orchestrated.ai.webCitations ?? []).map((citation) => ({
     label: citation.title,
     detail: 'Internet source',
@@ -468,6 +495,9 @@ export async function handleServerChat(input: {
   if (modelAnswer && combinedSourceCitations.length > 0) {
     modelAnswer.citations = combinedSourceCitations;
   }
+  if (modelAnswer && sourceCards.length > 0) {
+    modelAnswer.sourceCards = sourceCards;
+  }
 
   // The mobile surface presents the full modelAnswer in its answer card. Keep
   // the chat bubble as a short hand-off so the same prose is not printed twice.
@@ -504,6 +534,7 @@ export async function handleServerChat(input: {
           title: 'Clarification required',
           intro: clarifyingText,
           rows: [],
+          sourceCards,
           citations: combinedSourceCitations,
         }
       : modelAnswer,

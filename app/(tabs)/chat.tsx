@@ -28,6 +28,7 @@ import type { CanonicalRecord } from '@/src/domain/runtime';
 type MessageSourceMode = 'server' | 'direct' | 'offline';
 
 type MessageRow = ChatMessage;
+type SourceCardRow = NonNullable<NonNullable<MessageRow['answer']>['sourceCards']>[number];
 
 const seedThreads: ChatThread[] = [
   {
@@ -602,7 +603,41 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
           ))}
         </View>
       ) : null}
+      {answer.sourceCards?.length ? (
+        <View style={styles.sourceEvidence}>
+          <Text style={[styles.sourceEvidenceTitle, { color: theme.colors.ink }]}>Source evidence</Text>
+          {answer.sourceCards.map((source) => (
+            <CitationEvidenceCard key={`${source.id}-${source.href}`} source={source} />
+          ))}
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function CitationEvidenceCard({ source }: { source: SourceCardRow }) {
+  const router = useRouter();
+  const theme = useLifeOSTheme();
+  const open = () => {
+    const recordPath = source.href.startsWith('wonderfood://record/')
+      ? source.href.replace('wonderfood://record/', '')
+      : '';
+    const recordId = recordPath.split('/').filter(Boolean).at(-1) ?? '';
+    if (recordId) {
+      router.push(`/record/${decodeURIComponent(recordId)}`);
+      return;
+    }
+    void Linking.openURL(source.href);
+  };
+  return (
+    <Pressable accessibilityRole="link" onPress={open} style={({ pressed }) => [styles.sourceEvidenceCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }, pressed && styles.pressed]}>
+      <View style={styles.sourceEvidenceTop}>
+        <Text style={[styles.sourceEvidenceLabel, { color: theme.colors.ink }]} numberOfLines={1}>{source.label}</Text>
+        <Pill tone={source.tone}>{source.fields?.length ? `${source.fields.length} fields` : 'source'}</Pill>
+      </View>
+      <Text style={[styles.sourceEvidenceDetail, { color: theme.colors.muted }]} numberOfLines={1}>{source.detail}</Text>
+      <Text style={[styles.sourceEvidenceQuote, { color: theme.colors.ink }]} numberOfLines={4}>“{source.quote}”</Text>
+    </Pressable>
   );
 }
 
@@ -709,6 +744,13 @@ const styles = StyleSheet.create({
   answerRecordMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },
   answerRecordBullet: { color: colors.ink, fontSize: 12, lineHeight: 17, marginTop: 6 },
   answerRecordSource: { color: colors.moss, fontSize: 10, fontWeight: '800', marginTop: 8 },
+  sourceEvidence: { marginTop: 10, gap: 8 },
+  sourceEvidenceTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  sourceEvidenceCard: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, borderRadius: 12, padding: 10 },
+  sourceEvidenceTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  sourceEvidenceLabel: { color: colors.ink, fontSize: 13, fontWeight: '900', flex: 1 },
+  sourceEvidenceDetail: { color: colors.muted, fontSize: 10, marginTop: 4 },
+  sourceEvidenceQuote: { color: colors.ink, fontSize: 12, lineHeight: 17, marginTop: 7 },
   citationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   citation: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6, maxWidth: 166 },
   citationMoss: { backgroundColor: colors.mossSoft },

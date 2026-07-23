@@ -67,7 +67,7 @@ const routes = [
   {
     name: 'chat',
     path: '/chat',
-    must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Undo', 'Open source'],
+    must: ['Talk to your life', 'Chat cites sources', 'Sources', 'Source evidence', 'Undo', 'Open source'],
   },
   {
     name: 'sources',

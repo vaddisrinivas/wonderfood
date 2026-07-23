@@ -146,6 +146,7 @@ export function makeWelcomeAnswer(records: CanonicalRecord[], domainLabel = 'Foo
       : `Connect Notion, Sheets, SQLite or another source, then I will answer from exact ${domainLabel} records.`,
     columns: rows.length ? ['Record', 'Available', 'Needed / shopping'] : undefined,
     rows,
+    sourceCards: selectedRecords.map(recordToSourceCard),
     recordCards: selectedRecords.map(recordToAnswerCard),
     citations: selectedRecords.map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
@@ -581,6 +582,7 @@ function makeDirectAnswer(text: string, provider: string | undefined, records: C
     intro,
     columns: table.columns,
     rows: table.rows,
+    sourceCards: selectedRecords.map(recordToSourceCard),
     recordCards: selectedRecords.map(recordToAnswerCard),
     citations: selectedRecords.slice(0, 5).map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
@@ -926,6 +928,7 @@ function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): Chat
       : 'No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.',
     columns: rows.length ? ['Record', 'Available', 'Missing / shopping'] : undefined,
     rows,
+    sourceCards: selectedRecords.map(recordToSourceCard),
     recordCards: selectedRecords.map(recordToAnswerCard),
     citations: selectedRecords.slice(0, 5).map((record, index) => ({
       label: `${record.source.provider} · ${record.title}`,
@@ -1014,5 +1017,30 @@ function recordToAnswerCard(record: CanonicalRecord): NonNullable<ChatAnswer['re
     detail: String(record.properties.meta ?? record.properties.body ?? record.collection),
     source: `${record.source.provider} · ${record.source.external_id}`,
     bullets,
+  };
+}
+
+function recordToSourceCard(record: CanonicalRecord): NonNullable<ChatAnswer['sourceCards']>[number] {
+  const detail = readFoodDetail(record);
+  const fields = Object.entries(record.properties)
+    .filter(([key, value]) => typeof value === 'string' && value.trim().length > 0 && !['tone', 'food_detail'].includes(key))
+    .slice(0, 4)
+    .map(([key]) => key);
+  const quote = [
+    String(record.properties.body ?? '').trim(),
+    String(record.properties.meta ?? '').trim(),
+    detail.ingredients.length
+      ? `Ingredients: ${detail.ingredients.slice(0, 5).map((item) => `${item.name} (${item.state})`).join(', ')}`
+      : '',
+    detail.instructions[0] ? `Next step: ${detail.instructions[0]}` : '',
+  ].filter(Boolean).join('\n');
+  return {
+    id: record.id,
+    label: record.title,
+    detail: `${record.collection} · ${record.source.provider}${record.source.external_id ? ` · ${record.source.external_id}` : ''}`,
+    quote: quote || `Source row: ${record.title}`,
+    href: record.source.url || `wonderfood://record/${record.id}`,
+    tone: record.source.provider === 'notion' ? 'moss' : record.source.provider === 'google_sheets' ? 'blue' : 'amber',
+    fields,
   };
 }
