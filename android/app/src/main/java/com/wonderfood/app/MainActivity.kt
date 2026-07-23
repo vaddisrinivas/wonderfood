@@ -27,7 +27,7 @@ class MainActivity : ReactActivity() {
     openHealthConnectSettingsIfRequested(intent)
   }
 
-  override fun onNewIntent(intent: Intent?) {
+  override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
     openHealthConnectSettingsIfRequested(intent)
