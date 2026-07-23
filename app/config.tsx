@@ -45,16 +45,36 @@ function toggle(values: string[], value: string, enabled: boolean) {
   return enabled ? Array.from(new Set([...values, value])) : values.filter((item) => item !== value);
 }
 
+function buildProfile(settings: LifeOSSettings) {
+  return JSON.stringify({
+    lifeos: '2026.7',
+    profile: `${settings.runtime.activeDomain}-first`,
+    runtime: {
+      activeDomain: settings.runtime.activeDomain,
+      enabledDomains: settings.runtime.enabledDomains,
+      enabledWorkflows: settings.runtime.enabledWorkflows,
+      enabledAgents: settings.runtime.enabledAgents,
+      theme: settings.runtime.theme,
+      density: settings.runtime.density,
+      surfaceConfig: settings.runtime.surfaceConfig,
+    },
+  }, null, 2);
+}
+
 export default function ConfigStudioScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
+  const [profileDraft, setProfileDraft] = useState(buildProfile(defaultLifeOSSettings));
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    void loadLifeOSSettings().then(setSettings);
+    void loadLifeOSSettings().then((loaded) => {
+      setSettings(loaded);
+      setProfileDraft(buildProfile(loaded));
+    });
   }, []);
 
   const activeDomain = useMemo(
@@ -87,6 +107,44 @@ export default function ConfigStudioScreen() {
         },
       },
     }));
+  };
+
+  const loadCurrentProfile = () => {
+    setProfileDraft(buildProfile(settings));
+    setNotice('Current profile loaded into the editor.');
+  };
+
+  const applyProfileDraft = () => {
+    try {
+      const parsed = JSON.parse(profileDraft) as {
+        runtime?: Partial<LifeOSSettings['runtime']>;
+      };
+      if (!parsed.runtime?.surfaceConfig || typeof parsed.runtime.surfaceConfig !== 'object') {
+        throw new Error('Profile must include runtime.surfaceConfig.');
+      }
+      const runtime = parsed.runtime;
+      setSettings((current) => ({
+        ...current,
+        runtime: {
+          ...current.runtime,
+          activeDomain: typeof runtime.activeDomain === 'string' ? runtime.activeDomain : current.runtime.activeDomain,
+          enabledDomains: Array.isArray(runtime.enabledDomains) ? runtime.enabledDomains.filter((item): item is string => typeof item === 'string') : current.runtime.enabledDomains,
+          enabledWorkflows: Array.isArray(runtime.enabledWorkflows) ? runtime.enabledWorkflows.filter((item): item is string => typeof item === 'string') : current.runtime.enabledWorkflows,
+          enabledAgents: Array.isArray(runtime.enabledAgents) ? runtime.enabledAgents.filter((item): item is string => typeof item === 'string') : current.runtime.enabledAgents,
+          theme: runtime.theme === 'light' || runtime.theme === 'dark' || runtime.theme === 'system' ? runtime.theme : current.runtime.theme,
+          density: runtime.density === 'compact' || runtime.density === 'comfortable' ? runtime.density : current.runtime.density,
+          surfaceConfig: {
+            home: { ...current.runtime.surfaceConfig.home, ...runtime.surfaceConfig?.home },
+            food: { ...current.runtime.surfaceConfig.food, ...runtime.surfaceConfig?.food },
+            chat: { ...current.runtime.surfaceConfig.chat, ...runtime.surfaceConfig?.chat },
+            record: { ...current.runtime.surfaceConfig.record, ...runtime.surfaceConfig?.record },
+          },
+        },
+      }));
+      setNotice('Profile applied. Save & activate to persist it.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Profile JSON could not be applied.');
+    }
   };
 
   const save = async () => {
@@ -361,6 +419,30 @@ export default function ConfigStudioScreen() {
             </View>
           </Card>
 
+          <SectionTitle title="Portable profile" />
+          <Card tone="plum" style={styles.sectionCard}>
+            <Text style={styles.lead}>Copy, edit, paste, and move this LifeOS layout.</Text>
+            <Text style={styles.help}>
+              This is the app-editable profile layer behind the Notion/Glance idea: domains, enabled loops, theme, density, section order, visibility and counts.
+            </Text>
+            <TextInput
+              value={profileDraft}
+              onChangeText={setProfileDraft}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.input, styles.code, styles.profileEditor]}
+            />
+            <View style={styles.profileActions}>
+              <Pressable accessibilityRole="button" onPress={loadCurrentProfile} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
+                <Text style={styles.openText}>Load current profile</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={applyProfileDraft} style={({ pressed }) => [styles.save, pressed && styles.pressed]}>
+                <Text style={styles.saveText}>Apply profile</Text>
+              </Pressable>
+            </View>
+          </Card>
+
           <SectionTitle title="Schemas & advanced overrides" />
           <Card tone="blue" style={styles.sectionCard}>
             <View style={styles.schemaChips}>
@@ -448,7 +530,6 @@ function Field(props: { label: string; value: string; onChangeText: (value: stri
     <View style={styles.smallField}>
       <Text style={styles.fieldLabel}>{props.label}</Text>
       <TextInput
-        keyboardType="number-pad"
         value={props.value}
         onChangeText={props.onChangeText}
         style={styles.input}
@@ -522,6 +603,8 @@ const styles = StyleSheet.create({
   choiceTextActive: { color: '#FFF' },
   schemaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   code: { minHeight: 180, marginTop: 16, fontFamily: 'monospace', textAlignVertical: 'top' },
+  profileEditor: { minHeight: 220 },
+  profileActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
   notice: { color: colors.moss, fontSize: 13, fontWeight: '800', textAlign: 'center', marginTop: 16 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16, marginBottom: 28 },
   save: { flexGrow: 1, minHeight: 52, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
