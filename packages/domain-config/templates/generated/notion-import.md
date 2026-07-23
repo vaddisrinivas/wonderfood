@@ -129,6 +129,67 @@ Source snapshots, audit events, template health and citation registry.
 - Collections: source_record, audit_event
 - Views: Latest sources, Needs repair, Undo window, Template QA
 
+## Visual identity
+
+Use these same tokens for Notion page icons/covers, Sheets dashboard symbols, app cards and MCP/external AI clients. App settings may override these bundled defaults without rebuilding.
+
+- 🍲 **domain.food** · accent: moss
+- 🏡 **surfaces.food.overview** · accent: moss
+- 🍽️ **surfaces.food.meals** · accent: amber
+- 🥬 **surfaces.food.kitchen** · accent: moss
+- 🛒 **surfaces.food.shopping** · accent: blue
+- 🏠 **collections.household** · accent: moss
+- 🙂 **collections.member** · accent: plum
+- 🍎 **collections.food_item** · accent: moss
+- 🏷️ **collections.product** · accent: blue
+- 🧺 **collections.inventory** · accent: moss
+- 📦 **collections.inventory_lot** · accent: amber
+- ↻ **collections.inventory_movement** · accent: blue
+- 🧄 **collections.ingredient** · accent: moss
+- 📖 **collections.recipe** · accent: amber
+- ✍️ **collections.recipe_revision** · accent: plum
+- 🔥 **collections.recipe_step** · accent: amber
+- 🍳 **collections.recipe_tool** · accent: blue
+- 🧩 **collections.meal_template** · accent: plum
+- 📅 **collections.meal_plan** · accent: moss
+- ✅ **collections.meal_log** · accent: moss
+- 🥣 **collections.meal_consumption** · accent: amber
+- 📝 **collections.shopping_list** · accent: blue
+- 🛒 **collections.shopping_item** · accent: blue
+- ❗ **collections.shopping_demand** · accent: amber
+- 🧾 **collections.purchase** · accent: plum
+- 💳 **collections.purchase_line** · accent: plum
+- 🏪 **collections.store** · accent: blue
+- ♡ **collections.preference** · accent: plum
+- 🎯 **collections.nutrition_goal** · accent: moss
+- ⚖️ **collections.nutrition_profile** · accent: moss
+- 📈 **collections.nutrition_observation** · accent: blue
+- 📎 **collections.attachment** · accent: neutral
+- 🧭 **collections.audit_event** · accent: neutral
+- 🔗 **collections.source_record** · accent: neutral
+- 📅 **statuses.planned** · accent: plum
+- 🌙 **statuses.tonight** · accent: moss
+- 🛒 **statuses.to buy** · accent: blue
+- ⏳ **statuses.use soon** · accent: amber
+- ✅ **statuses.available** · accent: moss
+- 👀 **statuses.review** · accent: amber
+- ＋ **actions.add_record** · accent: moss
+- ✦ **actions.ask_with_collection** · accent: plum
+- ⌕ **actions.search** · accent: blue
+- 🔗 **actions.open_sources** · accent: neutral
+- ◨ **sources.notion** · accent: neutral
+- ▦ **sources.google_sheets** · accent: moss
+- ▣ **sources.sqlite** · accent: blue
+- ⬢ **sources.postgres** · accent: plum
+- 🌐 **sources.web** · accent: blue
+- 🙂 **sources.user** · accent: moss
+- 🍲 **skills.food** · accent: moss
+- ↻ **skills.weekly_food_reset** · accent: amber
+- 🔎 **skills.source_verifier** · accent: blue
+- ✦ **agents.food_brain** · accent: plum
+- 🔗 **agents.source_steward** · accent: blue
+- ↻ **agents.weekly_reset** · accent: amber
+
 ## Relation views
 
 - Recipe uses ingredient and food item

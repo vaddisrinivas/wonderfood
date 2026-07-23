@@ -81,7 +81,7 @@ Every domain gets the same structure:
 - Every token can carry `emoji`, `icon`, optional `image_url` and accent tone.
 - UI must read these tokens first and fall back only when config is missing.
 - App settings can override bundled tokens through `runtime.visualIdentityOverrides`, so personal icon/image choices do not require a rebuild.
-- Notion template icons/covers and Sheets dashboard symbols should use the same token map.
+- Generated Notion and Sheets artifacts use the same token map: Notion import includes a Visual identity section, and Sheets gets a `Visual Identity` tab for app/MCP/provider parity.
 
 ## Home page
 

@@ -25,6 +25,35 @@ function titleForCollection(collection) {
     .join(' ');
 }
 
+function visualRows() {
+  const rows = [];
+  const groups = food.visual_identity ?? {};
+  const pushToken = (scope, key, token = {}, notes = '') => {
+    const emoji = token.emoji ?? '';
+    const icon = token.icon ?? '';
+    rows.push([
+      scope,
+      key,
+      emoji,
+      icon,
+      token.image_url ?? '',
+      token.accent ?? 'neutral',
+      emoji || icon || key.slice(0, 1).toUpperCase(),
+      emoji || icon || key.slice(0, 1).toUpperCase(),
+      notes,
+    ]);
+  };
+  if (groups.domain) pushToken('domain', food.id, groups.domain, 'Domain home icon/cover fallback');
+  for (const [scope, tokens] of Object.entries(groups)) {
+    if (scope === 'domain' || !tokens || typeof tokens !== 'object') continue;
+    for (const [key, token] of Object.entries(tokens)) pushToken(scope, key, token, `Shared ${scope} visual token`);
+  }
+  for (const collection of food.collections) {
+    if (!groups.collections?.[collection]) pushToken('collections', collection, {}, 'Fallback generated because manifest has no token');
+  }
+  return rows;
+}
+
 function rowsForTab(tab) {
   const header = tab.columns ?? [];
   const rows = [header];
@@ -63,6 +92,10 @@ function rowsForTab(tab) {
         'Generated from Food manifest and LifeOS data-plane template'
       ]);
     }
+    return rows;
+  }
+  if (tab.name === 'Visual Identity') {
+    rows.push(...visualRows());
     return rows;
   }
   if (tab.name === 'Records') {
@@ -135,6 +168,14 @@ function notionMarkdown() {
     if (database.views) lines.push(`- Views: ${database.views.join(', ')}`);
     lines.push('');
   }
+  lines.push('## Visual identity');
+  lines.push('');
+  lines.push('Use these same tokens for Notion page icons/covers, Sheets dashboard symbols, app cards and MCP/external AI clients. App settings may override these bundled defaults without rebuilding.');
+  lines.push('');
+  for (const [scope, key, emoji, icon, imageUrl, accent] of visualRows()) {
+    lines.push(`- ${emoji || icon || '•'} **${scope}.${key}** · accent: ${accent}${imageUrl ? ` · image: ${imageUrl}` : ''}`);
+  }
+  lines.push('');
   lines.push('## Relation views');
   lines.push('');
   for (const relationView of template.notion.relation_views) lines.push(`- ${relationView}`);

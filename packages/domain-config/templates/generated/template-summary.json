@@ -3,7 +3,7 @@
   "template_id": "lifeos-2026-food-first",
   "food_collections": 29,
   "notion_databases": 8,
-  "sheets_tabs": 11,
+  "sheets_tabs": 12,
   "output_files": [
     "notion-import.md",
     "template-summary.json",
@@ -17,6 +17,7 @@
     "sheets/purchases.csv",
     "sheets/household.csv",
     "sheets/sources.csv",
+    "sheets/visual-identity.csv",
     "sheets/schema.csv"
   ]
 }

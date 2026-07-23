@@ -264,6 +264,12 @@
         "columns": ["id", "collection", "provider", "external_id", "url", "version", "content_hash", "observed_at", "event_type", "actor", "undo_until"]
       },
       {
+        "name": "Visual Identity",
+        "job": "Shared icon, emoji, image and accent tokens for Notion, Sheets, app UI and MCP clients.",
+        "collections": ["*"],
+        "columns": ["scope", "key", "emoji", "icon", "image_url", "accent", "notion_icon", "sheets_symbol", "notes"]
+      },
+      {
         "name": "Schema",
         "job": "Human-readable collection registry and validation notes.",
         "collections": ["*"],
