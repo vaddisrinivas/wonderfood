@@ -1,33 +1,45 @@
 # LifeOS implementation ledger
 
+## Corrected architecture checkpoint (2026-07-22)
+
+- The canonical core is portable. SQLite, Postgres, Notion, Sheets, app UI, AI, and MCP are optional surfaces with one shared semantic contract.
+- SQLite, Notion, Sheets, or Postgres may be the user-selected authority. Notion and Sheets must each remain independently usable.
+- AI is optional. Users configure direct model providers with an ordered primary/fallback policy; the UI discloses the provider used.
+- The app never requires `server/`, Tailscale, a WonderFood-owned host, tunnel, Mac, webhook, or subscription. `server/` remains a separate FOSS MCP/external-client package.
+- All runtime configuration is editable in app. Credentials use platform-secure storage and must never be compiled through `EXPO_PUBLIC_*`.
+- Export success, local contract checks, one screenshot, or one live scenario proves only that slice. It does not close a phase.
+- No phase is complete until its exact functional, portability, recovery, security, accessibility, and visual gates pass with durable evidence.
+
 ## Progress (2026-07-22)
 
 | Phase | Owner | Status | Evidence | Blocker | Next action |
 |---|---|---|---|---|---|
-| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | DONE (PASS) | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | None for the local-first architecture; a remote connector is optional | Keep provider credentials and optional connector URLs user-configured |
-| 1 — SQLite canonical runtime | Agent A | DONE (PASS) | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `server/package.json`, `scripts/quality/check-phase1-sqlite-runtime.sh`, `docs/lifeos/implementation-workstreams.md`, `bddbf0e`, `1f8c0d8`, `b098158`, `2026-07-22: npm run config:validate`, `2026-07-22: npm run typecheck`, `2026-07-22: npm run export:web`, `2026-07-22: npm run export:android`, `2026-07-22: web dev SQLite migration/seed smoke` | Runtime and web worker are live; fixed the records upsert placeholder mismatch exposed by web SQLite. Checked-in native folders are authoritative for Health Connect, so Expo's non-CNG sync check is explicitly disabled | Continue with phase-2 renderer hardening |
-| 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx`, `app/search.tsx`, `app/record/[id].tsx`, `app/sources.tsx` | Empty/permission states still need stronger domain-agnostic copy and actions in `search`, `record`, and `sources` when DB is null or empty | Finish domain-agnostic renderer integration for remaining phase-2 screens and empty/loading states |
-| 3 — Server and real chat | S2 | DONE (PASS) | `server/src/{chat.ts,chat-storage.ts,conversations.ts,index.ts,provenance.ts,agents/{orchestrator,verifier,retrieval}.ts}`, `src/chat/*.ts`, `scripts/quality/check-phase3-chat-send.ts`, `scripts/quality/check-phase3-chat-rollback-idempotency.ts`, `scripts/quality/check-phase3-chat-undo.ts`, `server/src/providers/openai.ts`, `server/src/chat.ts`, `src/chat/client.ts`, `docs/lifeos/contracts/chat-contracts.md`, `server/test/multiturn-conversation-contract.ts`; live two-turn OpenAI proof on 2026-07-22 | Canonical action payloads, model selection, stream/replay, and restart-safe multi-turn context are covered; Notion/Sheets runtime and UI polish remain | Continue phase 4/5/6 adapter parity |
-| 4 — MCP parity | DONE (PASS) | `server/src/mcp/{server.ts,tools.ts,resources.ts,auth.ts,policy.ts}`, `server/src/workflows/{checkpoint.ts,compensation.ts}`, `server/src/mcp/state.ts`, `packages/domain-config/workflows/phase4_replay_workflow.v1.json`, `packages/domain-config/workflows/phase4_compensation_probe.v1.json`, `scripts/quality/check-phase4-mcp-tool-contract.ts`, `scripts/quality/check-phase4-mcp-workflow-replay.ts`, `scripts/quality/check-phase4-mcp-workflow-replay-http.ts`, `server/test/mcp-resource-contract.ts`, `docs/lifeos/contracts/mcp-contracts.md` | Local Streamable HTTP replay/resource gates pass; no remote MCP deployment is required or active | Expose an optional user-configured MCP URL only for users who need remote clients |
-| 5 — Notion adapter | PASS (LIVE PULL + CHAT; PUSH OPTIONAL) | `server/src/providers/notion/*`, `server/src/providers/sync/notion.ts`, `server/src/providers/webhooks/notion.ts`, `server/src/index.ts`, `server/test/provider-webhook-ingress.ts`, `scripts/quality/check-phase5-notion-adapter.ts`; disposable live evidence at `app/build/evidence/live-workspace/notion_scenarios-1784760281.json` | Release does not depend on a Notion subscription; optional push sync remains disabled by default | Use a user-supplied token and authenticated pull/manual refresh; keep webhooks optional |
-| 6 — Google Sheets adapter | PASS (ADAPTER + LIVE WORKBOOK PROOF) | `server/src/providers/sheets/*`, `server/src/providers/sync/sheets.ts`, `server/src/providers/webhooks/sheets.ts`, `server/src/providers/sheets/workbook.ts`, `server/test/provider-sync-sheets.ts`, `server/test/provider-webhook-ingress.ts`, `scripts/quality/check-phase6-sheets-adapter.ts`; live workbook mirroring, pull, ingress, and Chat citation evidence captured | App-native account setup and the complete spreadsheet-primary UX remain open | Move Google account/workbook selection into user settings and verify the full local sync loop |
-| 7 — Commands, Undo, workflows | PASS (SERVER + CLIENT CONTRACT + WEB) | `packages/domain-config/schemas/{command.v1.schema.json,action-event.v1.schema.json,agent-handoff.v1.schema.json,undo.v1.schema.json}`, `src/actions/{policy.ts,engine.ts,undo.ts}`, `server/src/mcp/{tools.ts,state.ts}`, `server/src/workflows/{runner.ts,checkpoint.ts,compensation.ts}`, `scripts/quality/check-phase7-chat-client-cross-surface.ts`; evidence at `app/build/evidence/phase7-chat-client-cross-surface-proof.json`; web live chat verified at `http://127.0.0.1:8094` | Native UI action receipt rendering and Android device proof remain outside this server/runtime slice | Carry the same contract into Android/emulator QA |
-| 8 — Android completion | Agent G | IN PROGRESS | Expo native project generated under `android/`; release APK `android/app/build/outputs/apk/release/app-release.apk` launches on fresh API 34 emulatorx and renders the Today dashboard (`app/build/evidence/emulatorx-healthconnect-release-after-sqlite-fix.png`); migration WAL setup is now outside the SQLite transaction (`bd9ef6b`); `wonderfood://health-connect` now routes through `MainActivity` to the system Health Connect controller; API 34 emulatorx onboarding deep-link proof is captured at `app/build/evidence/emulatorx-health-settings-deeplink.png`; `src/health/connect.ts`; Health Connect read-only manifest permissions and permission delegate; authenticated snapshot sync, full export, and deletion routes in `server/src/health/snapshots.ts`; `scripts/quality/check-health-connect-android.sh` PASS | Emulatorx permission-denied and package-granted branches are verified; native UI wiring, background scheduling, and real Health Connect record proof remain open | Wire the existing bridge into a visible settings action and exercise real Health Connect reads |
-| 9 — Polish/perf/iOS | Agent G | BLOCKED | no production runtime yet | earlier phases incomplete | Hold |
+| 0 — Architecture and contracts | Agent A (Canonical schemas + domain runtime) | PARTIAL | `3db1f9b`, `f849188`, `docs/lifeos/expo-implementation-plan.md`, `docs/lifeos/product-pass.md`, `docs/lifeos/adr-0001-architecture.md`, `packages/domain-config/*` | Existing ADR and setup docs must be reconciled with portable authority, direct provider primary/fallback, secure credentials, and complete in-app configuration | Review and accept corrected ADR/contracts; no host selection |
+| 1 — SQLite canonical runtime | Agent A | PARTIAL — CORE SLICE PROVEN | `src/domain/{catalog,runtime,surface,queries,renderer}.ts`, `src/db/{migrations,provider,provider.native.tsx,provider.web.tsx,records,conversations,sources,outbox,actions,undo,seed}.ts`, `app/_layout.tsx`, `package.json`, `server/package.json`, `scripts/quality/check-phase1-sqlite-runtime.sh`, `docs/lifeos/implementation-workstreams.md`, `bddbf0e`, `1f8c0d8`, `b098158`, historical config/type/export and web SQLite smoke | Retained migration-fixture upgrades, app-level process-death/recovery, provider-field preservation, release seed policy, and full action/Undo coverage are not all proven | Add durable app-level migration/recovery fixtures and verify a clean SQLite-only Food loop |
+| 2 — Generic domain renderer | Agent G (Expo UX) | PARTIAL | `src/domain/{surface,queries,renderer}.tsx`, `app/(tabs)/food.tsx`, `app/search.tsx`, `app/record/[id].tsx`, `app/sources.tsx` | Hard-coded Food/Today/provider/demo copy remains; domain picker, invalid/stale/permission states, fixture-domain navigation proof, responsive matrix, and accessibility/visual acceptance are open | Remove runtime constants and complete manifest-driven UI plus the full visual-state matrix |
+| 3 — Direct AI chat | S2 | PARTIAL — DIRECT PROVIDER FOUNDATION | `src/settings/lifeos-settings.ts`, `src/chat/{client,direct-provider}.ts`, `app/settings.tsx`, `app/config.tsx`; historical server-side chat proofs remain scoped evidence | Direct provider UI/storage/routing exist; ten-turn correction, source-grounding, rich tables, second-device resume, and production visual proof remain open | Prove primary/fallback on emulator, then finish source-grounded rich chat |
+| 4 — Optional MCP parity | PARTIAL — LOCAL SLICE PROVEN | `server/src/mcp/{server.ts,tools.ts,resources.ts,auth.ts,policy.ts}`, workflow checkpoint/compensation files, phase-4 local HTTP evidence, `server/test/mcp-resource-contract.ts` | Independent external-client conformance, auth/rate/timeout/audit, removal of proposal semantics, and MCP-disabled operation remain open | Validate official protocol behavior and prove MCP can be enabled or removed without changing canonical semantics |
+| 5 — Optional Notion adapter | PARTIAL — ADAPTER/LIVE SLICE PROVEN | `server/src/providers/notion/*`, sync/webhook files, adapter tests; historical disposable scenario evidence at `app/build/evidence/live-workspace/notion_scenarios-1784760281.json` | Full template counts/relations/rollups, authority selection, provider Undo, permission-loss recovery, standalone Notion loop, disconnect, and durable visual proof remain open | Prove Notion-only authority and Notion-disabled modes with user-owned credentials; keep webhooks optional |
+| 6 — Optional Google Sheets adapter | PARTIAL — ADAPTER/LIVE SLICE PROVEN | `server/src/providers/sheets/*`, sync/webhook files, adapter tests; historical live workbook scenario evidence | User setup, authority selection, stable workbook contract, formula/user-column preservation, provider Undo, round trip, disconnect, and Sheets-only visual UX remain open | Prove Sheets-only authority and Sheets-disabled modes with user-owned OAuth/workbook |
+| 7 — Commands, Undo, workflows | PARTIAL — LOCAL/WEB SLICE PROVEN | shared schemas, `src/actions/*`, MCP state/tools, workflow checkpoint/compensation, phase-7 cross-surface evidence | All entry paths, provider/device Undo, conflict handling, cancellation/resume, receipt accounting, native rendering, and removal of legacy proposal/review semantics remain open | Close command parity and workflow gates across SQLite, optional adapters, direct AI, MCP, web, and Android |
+| 8 — Android completion | Agent G | IN PROGRESS | Expo native project generated under `android/`; release APK launch evidence on emulator and S23U; Health Connect read-only bridge, permission delegate, denied/granted emulator branches, and settings deep link | Secure direct-provider credentials, shared-token removal, visible Health UI, real Health records, native capture/share/barcode/voice, backup/restore, background sync, full device/visual matrix, AAB/Play, and upgrade proof remain open | Replace public bearer-token setup, wire user settings, then complete Android product and release gates |
+| 9 — Polish/perf/iOS | Agent G | NOT STARTED | Brand assets and isolated screenshots exist; no complete phase gate | Visual state matrix, responsive/accessibility evidence, performance budgets, dark theme decision, tablet/foldable UX, iOS native/signing/TestFlight remain open | Finish visual quality gates after functional phases; begin iOS only after Android gate |
 
 ## Active sub-agent roster
 
 Current explicit phase-slice agents are defined in `docs/lifeos/implementation-sub-agents.md` and are binding for new edits:
 
 - S1: Canonical schemas, SQLite, domain runtime (Phases 0–1)
-- S2: Chat + Responses + Conversations + citations + internal agents (Phase 3)
-- S3: Notion adapter + webhooks (Phase 5)
-- S4: Google Sheets adapter (Phase 6)
-- S5: MCP + action engine + Undo + workflows (Phases 4,7)
+- S2: Direct provider registry + Chat + conversations + citations + internal agents (Phase 3)
+- S3: Optional Notion adapter + optional webhooks (Phase 5)
+- S4: Optional Google Sheets adapter (Phase 6)
+- S5: Optional MCP + action engine + Undo + workflows (Phases 4,7)
 - S6: Expo UI + accessibility + responsive QA (Phases 2,9)
 - S7: Android + Health Connect + EAS (Phase 8)
 
-## Required evidence log
+## Historical evidence log
+
+Entries below preserve what was executed. A historical PASS applies only to the named script, route, device, or scenario; it is not phase completion.
 
 - `3db1f9b` checkpoint committed before and includes baseline SQLite/manifest scaffolds.
 - `docs/lifeos/expo-implementation-plan.md` read and mapped to file-level contracts.
@@ -115,9 +127,9 @@ Current explicit phase-slice agents are defined in `docs/lifeos/implementation-s
 - `2026-07-22`: removed obsolete Kotlin package `com.example.wonderfood` from the S23U; only the current Expo package `com.wonderfood.app` remains. The app process and LAN server are healthy, but visual proof is still pending because the device is secure-locked/dozing.
 - `2026-07-22`: temporary authenticated remote-connector proof validated external chat, Notion/Sheets citations, and MCP. It was proof infrastructure, not required product architecture.
 - `2026-07-22`: temporary user-level connector lifecycle proof passed (`a07c945`, `78f2279`).
-- `2026-07-22`: retired all personal hosted bridge infrastructure: removed the exact DNS record, Cloudflare tunnel, LaunchAgent, and Keychain bridge token. The root website, shared infrastructure, Tailscale, and local conversation data were untouched. LifeOS is local-first; remote MCP/server access is optional and user-configured.
+- `2026-07-22`: retired all personal hosted bridge infrastructure: removed the exact DNS record, Cloudflare tunnel, LaunchAgent, and Keychain bridge token. The root website, shared infrastructure, Tailscale, and local conversation data were untouched. The app has no server dependency.
 
-## Required gates executed
+## Historical slice gates executed
 
 - `npm run config:validate` ✅ (re-run 2026-07-22; no regressions)
 - `npm run typecheck` ✅ (re-run 2026-07-22; fixed chat/server type-contract blockers)
@@ -144,7 +156,7 @@ Current explicit phase-slice agents are defined in `docs/lifeos/implementation-s
 
 First run of `npm run doctor` failed due local `.npm` path mismatch (`ENOTDIR /Users/srinivasvaddi/.npm`); rerun succeeded with explicit cache override.
 
-Core runtime, config, typecheck, web export, chat, MCP, and hosted provider checks pass. Android/Health Connect native checks and emulatorx permission/deep-link proof pass. Notion push webhooks are intentionally not part of release; final product UI polish, real Health Connect record fixtures, and production hosting hardening remain open.
+These historical checks prove core/runtime slices only. Current phase status remains the table above. Direct-provider primary/fallback, independent authority modes, durable visual/accessibility evidence, provider/device Undo, Android release completion, and iOS remain open.
 
 ## Execution rules
 

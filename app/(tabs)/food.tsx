@@ -12,23 +12,15 @@ import { DomainRecordViewModel } from '@/src/domain/renderer';
 
 type FoodRecordView = DomainRecordViewModel;
 
-const { activeManifest } = loadCatalog();
-const surfaceCatalog = buildSurfaceCatalog(activeManifest);
-
-const defaultTab = surfaceCatalog.tabs[0] ?? 'Overview';
-const defaultViews = surfaceCatalog.tabs;
-
 function getTopSummary(records: FoodRecordView[]) {
-  const byCollection = (name: string) => records.find((record) => record.collection === name);
-
-  return [
-    byCollection('meal_plan') ?? records[0],
-    byCollection('inventory') ?? records[1],
-    byCollection('shopping_item') ?? records[2],
-  ];
+  return records.slice(0, 3);
 }
 
 export default function FoodScreen() {
+  const { activeManifest } = loadCatalog();
+  const surfaceCatalog = useMemo(() => buildSurfaceCatalog(activeManifest), [activeManifest]);
+  const defaultViews = surfaceCatalog.tabs;
+  const defaultTab = defaultViews[0] ?? 'Overview';
   const db = useLifeOSDatabase();
   const [active, setActive] = useState(defaultTab);
   const [records, setRecords] = useState<FoodRecordView[]>([]);
@@ -79,7 +71,7 @@ export default function FoodScreen() {
           <PageHeader
             eyebrow={`${activeManifest.label} domain · Active`}
             title={`${activeManifest.label} workspace`}
-            subtitle="Meals, pantry, shopping, and nutrition run from one canonical graph."
+            subtitle={`${activeManifest.collections.length} collections, ${activeManifest.relations.length} relations, and ${activeManifest.skills.length} skills run from one canonical graph.`}
           />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
@@ -100,7 +92,7 @@ export default function FoodScreen() {
             <View style={sharedStyles.grid}>
               {hasRecords ? (
                 topSummary.map((item, index) => {
-                  const labels = ['TONIGHT', 'USE SOON', 'SHOPPING'];
+                  const labels = defaultViews.slice(1, 4).map((label) => label.toUpperCase());
                   const tones: Array<'moss' | 'amber' | 'blue'> = ['moss', 'amber', 'blue'];
                   if (!item) {
                     return null;

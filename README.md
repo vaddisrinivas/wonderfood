@@ -17,9 +17,9 @@ Both native targets use the application identifier `com.wonderfood.app`.
 
 ## Current implementation
 
-Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, SQLite persistence, an optional connector runtime for streaming chat/MCP/provider adapters, a Health Connect read bridge, and self-contained Android release packaging. Food is active; Health and Plants are config packages available for later selection. The app remains local-first and does not require a public server or webhook.
+Implemented now: responsive Today/domain/Chat shell, record editor, global search, capture, SQLite persistence, direct AI primary/fallback routing, encrypted in-app configuration, Config Studio, a Health Connect read bridge, and self-contained Android release packaging. Food, Health, and Plants are selectable config packages. The app does not require a public server or webhook.
 
-Provider secrets stay outside the repo. The intended personal/FOSS setup stores user-entered provider credentials in app-private secure storage. The optional connector remains available for development, remote MCP, shared households, or managed deployments.
+Provider secrets stay outside the repo. AI, Notion, Sheets, Postgres, MCP, domains, skills, workflows, agents, schemas, sync, privacy, and appearance are configured inside the app. Android/iOS use platform-secure storage; web uses that browser's local storage and displays the limitation.
 
 - Domain runtime files: `packages/domain-config/`
 
@@ -32,7 +32,7 @@ npm install
 npm run start
 ```
 
-No server is required for the local SQLite experience. The optional connector can be started separately when testing remote MCP, shared sync, or server-managed model access. Never commit provider credentials.
+No server URL or token is compiled into the app. External GPT/MCP clients may run the separate FOSS MCP package, but the app does not depend on it. Never commit provider credentials.
 
 Launch a target:
 

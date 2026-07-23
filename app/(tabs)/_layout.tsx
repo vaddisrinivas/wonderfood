@@ -2,10 +2,12 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 
 import { colors } from '@/src/theme';
+import { loadCatalog } from '@/src/domain/catalog';
 
 const icons: Record<string, string> = { index: '⌂', food: '◉', chat: '✦' };
 
 export default function TabLayout() {
+  const domain = loadCatalog().activeManifest;
   return (
     <Tabs screenOptions={({ route }) => ({
       headerStyle: { backgroundColor: colors.canvas },
@@ -19,7 +21,7 @@ export default function TabLayout() {
       tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>{icons[route.name] ?? '•'}</Text>,
     })}>
       <Tabs.Screen name="index" options={{ title: 'Today', headerShown: false }} />
-      <Tabs.Screen name="food" options={{ title: 'Food', headerShown: false }} />
+      <Tabs.Screen name="food" options={{ title: domain.label, headerShown: false }} />
       <Tabs.Screen name="chat" options={{ title: 'Chat', headerShown: false }} />
     </Tabs>
   );

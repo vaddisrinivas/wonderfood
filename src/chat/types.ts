@@ -67,7 +67,7 @@ export type ChatSendInput = {
 export type ChatSendResult = {
   thread: ChatThread;
   conversationId: string;
-  mode: 'offline' | 'server';
+  mode: 'offline' | 'direct' | 'server';
   action?: {
     receipt?: ChatMessage['actionReceipt'];
   };

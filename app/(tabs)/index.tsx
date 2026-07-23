@@ -33,13 +33,14 @@ export default function TodayScreen() {
   }, [db]);
 
   const rhythmRows = records.slice(0, 3);
+  const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
 
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         <View style={sharedStyles.content}>
           <View style={styles.topbar}>
-            <View><Text style={styles.brand}>LIFEOS</Text><Text style={styles.date}>Wednesday · July 22</Text></View>
+            <View><Text style={styles.brand}>LIFEOS</Text><Text style={styles.date}>{todayLabel}</Text></View>
             <View style={styles.topActions}>
               <Link href="/search" asChild><Pressable><Text style={styles.topIcon}>⌕</Text></Pressable></Link>
               <Link href="/capture" asChild><Pressable><Text style={styles.topIcon}>＋</Text></Pressable></Link>
@@ -47,7 +48,7 @@ export default function TodayScreen() {
             </View>
           </View>
           <PageHeader
-            eyebrow="Good morning, Srinivas"
+            eyebrow={`Your ${catalog.activeManifest.label} LifeOS`}
             title="A calm day starts here."
             subtitle={`One view across ${catalog.activeManifest.label} and connected sources.`}
           />
@@ -67,8 +68,8 @@ export default function TodayScreen() {
 
           <View style={[sharedStyles.grid, styles.metrics]}>
             <Metric value={loading ? '…' : `${records.length}`} label={`${catalog.activeManifest.label} records`} footnote="Total across this domain" />
-            <Metric value={loading ? '…' : `${records.filter((row) => row.collection.includes('recipe')).length}`} label="Recipes" footnote="Quickly reusable" />
-            <Metric value={loading ? '…' : `${records.filter((row) => row.collection.includes('shopping')).length}`} label="Shopping items" footnote="Pending and tracked" />
+            <Metric value={`${catalog.activeManifest.collections.length}`} label="Collections" footnote="Defined by this package" />
+            <Metric value={`${catalog.activeManifest.surfaces.length}`} label="Surfaces" footnote="Rendered from config" />
           </View>
 
           <SectionTitle title="Today’s rhythm" action="Ask about today" href="/chat" />
@@ -87,22 +88,22 @@ export default function TodayScreen() {
           <SectionTitle title="Worth your attention" />
           <View style={sharedStyles.grid}>
             <Card tone="amber" style={styles.attentionCard}>
-              <Text style={styles.cardIcon}>◷</Text><Text style={styles.cardTitle}>Use the yogurt</Text>
-              <Text style={sharedStyles.muted}>{catalog.activeManifest.label} surfaces are set to highlight near-term actions.</Text>
+              <Text style={styles.cardIcon}>◷</Text><Text style={styles.cardTitle}>{rhythmRows[1]?.title ?? 'No urgent item'}</Text>
+              <Text style={sharedStyles.muted}>{rhythmRows[1]?.meta ?? `${catalog.activeManifest.label} will surface near-term actions here.`}</Text>
               <Link href="/sources" style={styles.cardLink}>Open sources →</Link>
             </Card>
             <Card tone="blue" style={styles.attentionCard}>
-              <Text style={styles.cardIcon}>✓</Text><Text style={styles.cardTitle}>Shopping is nearly ready</Text>
-              <Text style={sharedStyles.muted}>Review grouped shopping rows before your next run.</Text>
+              <Text style={styles.cardIcon}>✓</Text><Text style={styles.cardTitle}>Your package is configurable</Text>
+              <Text style={sharedStyles.muted}>Change domains, skills, agents, workflows, schemas and sync without rebuilding.</Text>
               <Link href="/(tabs)/food" style={styles.cardLink}>Open {catalog.activeManifest.label} workspace →</Link>
             </Card>
           </View>
 
           <SectionTitle title="Connected context" action="Manage sources" href="/sources" />
           <Card style={styles.listCard}>
-            <Row icon="N" title="LifeOS 2026" detail="Notion · configured source" />
-            <Row icon="▦" title="LifeOS Master" detail="Google Sheets · configured source" />
-            <Row icon="▣" title="Local graph" detail="SQLite · adapter implementation next" />
+            <Row icon="▣" title="Local graph" detail="SQLite · available offline" />
+            <Row icon="N" title="Notion" detail="Optional · configure in Connections" href="/settings" />
+            <Row icon="▦" title="Google Sheets" detail="Optional · configure in Connections" href="/settings" />
           </Card>
         </View>
       </ScrollView>

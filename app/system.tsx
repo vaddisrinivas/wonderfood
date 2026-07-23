@@ -253,12 +253,12 @@ export default function SystemScreen() {
             ))}
           </Card>
 
-          <Link href="/sources" asChild>
+          <Link href="/settings" asChild>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.sourceAction, pressed ? styles.pressed : null]}>
               <View>
-                <Text style={styles.sourceActionEyebrow}>DATA PLANE</Text>
-                <Text style={styles.sourceActionTitle}>Inspect sources & sync</Text>
-                <Text style={styles.sourceActionBody}>See authority, freshness, citation coverage and provider readiness.</Text>
+                <Text style={styles.sourceActionEyebrow}>SETTINGS</Text>
+                <Text style={styles.sourceActionTitle}>Configure the whole LifeOS</Text>
+                <Text style={styles.sourceActionBody}>AI, Notion, Sheets, Postgres, MCP, domains, skills, agents, schemas and sync—all editable here.</Text>
               </View>
               <Text style={styles.sourceActionArrow}>→</Text>
             </Pressable>

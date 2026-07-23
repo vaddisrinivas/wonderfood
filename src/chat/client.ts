@@ -2,12 +2,9 @@ import { loadCatalog } from '@/src/domain/catalog';
 import { listConversations, getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
-// keep citations user-controlled to avoid fabricated defaults when model fallback is in effect
-
-export const chatServerConfig = {
-  url: process.env.EXPO_PUBLIC_LIFEOS_SERVER_URL?.trim() ?? '',
-  token: process.env.EXPO_PUBLIC_LIFEOS_SERVER_TOKEN?.trim() ?? '',
-};
+import { sendDirectModelMessage } from '@/src/chat/direct-provider';
+import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
+// Keep citations user-controlled to avoid fabricated defaults when model fallback is in effect.
 
 export type ServerResponseMessage = {
   id: string;
@@ -129,9 +126,37 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
 
   const offlineAnswer = makeOfflineAnswer(text);
   const offlineWarnings: string[] = [];
+  const settings = await loadLifeOSSettings();
+  const configuredServerUrl = input.serverUrl?.trim() ?? '';
+  const configuredServerToken = input.serverToken?.trim() ?? '';
+  const directProfiles = usableAiProfiles(settings);
 
   if (!db) {
-    if (!chatServerConfig.url) {
+    if (!configuredServerUrl && directProfiles.length) {
+      const direct = await tryDirectProviders({
+        profiles: directProfiles,
+        domainId,
+        messages: [{ role: 'user', content: text }],
+      });
+      if (direct.text) {
+        return {
+          mode: 'direct',
+          conversationId,
+          warnings: direct.warnings,
+          thread: {
+            id: conversationId,
+            title: text.slice(0, 36) || 'Conversation',
+            detail: direct.provider || 'Direct provider',
+            messages: [
+              { id: userId, role: 'user', text },
+              { id: nowId('asst'), role: 'assistant', text: direct.text },
+            ],
+          },
+        };
+      }
+    }
+
+    if (!configuredServerUrl) {
       return {
         mode: 'offline',
         conversationId,
@@ -153,14 +178,14 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       };
     }
 
-    const serverEndpoint = chatServerConfig.url;
+    const serverEndpoint = configuredServerUrl;
     const serverResult = input.onModelToken
       ? await sendToServerStream({
           conversationId,
           text,
           domainId,
           userId,
-          token: chatServerConfig.token,
+          token: configuredServerToken,
           baseUrl: serverEndpoint,
           retryOf,
           onToken: input.onModelToken,
@@ -171,7 +196,7 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
           domainId,
           userId,
           limit: 4,
-          token: chatServerConfig.token,
+          token: configuredServerToken,
           baseUrl: serverEndpoint,
           retryOf,
         });
@@ -268,7 +293,44 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
   const threadAfterUser = await getConversation(db, conversationId);
   const messagesSoFar = threadAfterUser?.messages ?? [];
 
-  if (!input.serverUrl) {
+  if (!configuredServerUrl && directProfiles.length) {
+    const direct = await tryDirectProviders({
+      profiles: directProfiles,
+      domainId,
+      messages: messagesSoFar.slice(-20).map((message) => ({
+        role: message.role,
+        content: message.body,
+      })),
+    });
+    if (direct.text) {
+      const answerId = nowId('asst');
+      await appendMessage(db, {
+        id: answerId,
+        conversation_id: conversationId,
+        role: 'assistant',
+        sort_index: nextSortIndex + 1,
+        body: direct.text,
+      });
+      const updated = await getConversation(db, conversationId);
+      return {
+        mode: 'direct',
+        conversationId,
+        warnings: direct.warnings,
+        thread: {
+          id: conversationId,
+          title: updated?.title || 'Conversation',
+          detail: direct.provider || 'Direct provider',
+          messages: updated?.messages.map(dbMessageToChat) ?? [
+            ...messagesSoFar.map(dbMessageToChat),
+            { id: answerId, role: 'assistant', text: direct.text },
+          ],
+        },
+      };
+    }
+    offlineWarnings.push(...direct.warnings);
+  }
+
+  if (!configuredServerUrl) {
     const answer = makeOfflineAnswer(text);
     const answerId = nowId('asst');
     await appendMessage(db, {
@@ -307,8 +369,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       text,
       domainId,
       userId,
-      token: input.serverToken ?? chatServerConfig.token,
-      baseUrl: input.serverUrl ?? chatServerConfig.url,
+      token: configuredServerToken,
+      baseUrl: configuredServerUrl,
       retryOf,
       onToken: input.onModelToken,
     })
@@ -318,8 +380,8 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       domainId,
       userId,
       limit: 1,
-      token: input.serverToken ?? chatServerConfig.token,
-      baseUrl: input.serverUrl ?? chatServerConfig.url,
+      token: configuredServerToken,
+      baseUrl: configuredServerUrl,
       retryOf,
     });
 
@@ -411,6 +473,40 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       messages: messagesForThread,
     },
   };
+}
+
+async function tryDirectProviders(input: {
+  profiles: AiProviderProfile[];
+  domainId: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+}): Promise<{ text: string; provider?: string; warnings: string[] }> {
+  const warnings: string[] = [];
+  const system = {
+    role: 'system' as const,
+    content:
+      `You are Hearth, the LifeOS assistant for the ${input.domainId} domain. ` +
+      'Use the conversation context, state uncertainty plainly, never invent source claims, and keep answers useful and concise. ' +
+      'When records or source excerpts are absent, say what information is missing.',
+  };
+
+  for (const profile of input.profiles) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    try {
+      const result = await sendDirectModelMessage({
+        profile,
+        signal: controller.signal,
+        messages: [system, ...input.messages],
+      });
+      return { text: result.text, provider: result.provider, warnings };
+    } catch (error) {
+      warnings.push(error instanceof Error ? error.message : `${profile.id} provider failed.`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return { text: '', warnings };
 }
 
 async function sendToServer(payload: {

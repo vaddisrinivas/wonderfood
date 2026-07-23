@@ -7,7 +7,9 @@ Permanent shell: Today, Food, Chat
 
 ## 1. Outcome
 
-Build one LifeOS product for app-primary, Notion-primary, Sheets-primary, mixed-client, SQLite/Postgres, and GPT/MCP users. Every client uses the same domain packages, record semantics, source citations, workflows, action policy, agents, and audit trail.
+Build one portable LifeOS canonical core. App, Notion, Google Sheets, SQLite, Postgres, AI providers, and MCP clients are optional surfaces around that core. A user may use any one surface independently or combine several without changing record meaning.
+
+Every enabled surface uses the same domain packages, record semantics, source citations, workflows, action policy, agents, and audit trail. No vendor, hosted service, account, or model provider is mandatory.
 
 The daily product feels like GPT plus Notion:
 
@@ -21,30 +23,32 @@ No proposal inbox, AI-response editing, agent-branch UI, or approval screen. Exa
 
 ## 2. Current baseline
 
-Implemented in the Expo replacement:
+Evidence-backed implementation slices:
 
 - Expo SDK 57, React Native 0.86, Expo Router.
 - Static web and Android bundle exports.
 - Today, Food, Chat, Search, Capture, Record, Sources, and System screens.
-- Server-backed multi-turn chat with streaming, durable turns, retrieval, tables, source citations, action receipts, idempotency and Undo.
-- SQLite canonical runtime plus Notion data-source and Google Sheets adapters, optional webhook replay, authority-gated sync and MCP Streamable HTTP.
+- SQLite canonical runtime code, migrations, repositories, recovery helpers, and local smoke evidence.
+- Historical server-backed chat slices with streaming, durable turns, retrieval, tables, source citations, action receipts, idempotency, and Undo.
+- Notion data-source, Google Sheets, and MCP Streamable HTTP adapter slices with local contract tests and limited live proof.
 - Food, Health and Plants manifests/skills; declarative seven-role agent registry; canonical schemas and five Food workflows.
-- Android release APK with bundled JavaScript, Health Connect read-only bridge, permission delegate and phone-safe LAN server configuration.
-- Config validator, TypeScript, Expo Doctor, web export, and Android export gates.
+- Android release APK with bundled JavaScript, Health Connect read-only bridge, and permission delegate.
+- Historical passes for config validation, TypeScript, Expo Doctor, web export, and Android export.
 - Native identifiers remain com.wonderfood.app.
-- Web runtime and emulatorx release smoke verified; physical-device testing is out of scope for this pass.
+- Web runtime and emulator release smoke evidence exists.
 
-Open release work:
+Not yet proven complete:
 
-- Personal hosted deployment is optional; FOSS/release uses a user-configured server URL and authenticated pull/manual refresh.
-- Unlocked-device Health Connect grant/read/export/delete verification and background sync.
-- Remaining phase-2 UI empty/loading polish and the final iOS build/release pass.
+- Full phase gates below, including ten-turn chat, provider-independent setup, provider Undo, responsive/accessibility coverage, AAB/Play, physical Health Connect, backup/restore, performance, and iOS.
+- Direct user-configured model providers with primary/fallback behavior.
+- Complete in-app editing for providers, domains, skills, workflows, agents, schemas, sync, privacy, and appearance.
+- Replacement of demo/static copy with live state and completion of visual acceptance.
 
 ## 3. Non-negotiable product contracts
 
 ### 3.1 Client parity
 
-App Chat, external GPT, MCP clients, Notion automations, and Sheets workflows use:
+When enabled, App Chat, direct model providers, external GPT, MCP clients, Notion automations, and Sheets workflows use:
 
 - the same active domain catalog;
 - the same canonical record schema;
@@ -55,20 +59,31 @@ App Chat, external GPT, MCP clients, Notion automations, and Sheets workflows us
 - the same action-risk policy;
 - the same action receipts and Undo semantics.
 
-Different clients may render differently. They cannot interpret the domain differently.
+Different clients may render differently. They cannot interpret the domain differently. Disabling one surface cannot corrupt or disable another.
 
 ### 3.2 Authority and data homes
 
 - One authoritative data home per household.
-- Notion is the first configured human authority.
-- SQLite is the instant offline working replica.
-- Sheets is a first-class human projection and input surface.
-- Postgres is a later authority option.
+- The user chooses SQLite, Notion, Sheets, or Postgres as authority during setup; none is globally mandatory.
+- SQLite can operate as the standalone local authority or as an instant offline replica.
+- Notion and Sheets can each operate as the sole human-facing authority, or as an explicit projection/input surface.
+- Postgres is an optional self-hosted or managed authority.
 - Never uncontrolled multi-master Notion plus Sheets plus Postgres writes.
 - Every provider record maps to a stable canonical LifeOS ID.
 - Unsupported provider fields remain preserved in source snapshots.
 
-### 3.3 Chat
+### 3.3 Portability and optional connectivity
+
+- The canonical schemas, domain packages, action policy, source format, and migration rules run inside each enabled surface.
+- AI is optional. Local records, capture, search, editing, workflows, and Undo remain useful without a model.
+- Users configure model providers directly. They choose an ordered primary and fallback list with explicit capability and privacy labels.
+- A provider failure may fall back only to a configured provider. The UI names the provider used; it never silently changes data policy.
+- User model credentials stay in platform-secure storage and never in `EXPO_PUBLIC_*`, static web output, logs, screenshots, or committed files.
+- The app has no required server URL, shared bearer token, tunnel, Mac, webhook, or subscription.
+- External GPT/MCP clients use the separate FOSS MCP package; that package is not an app dependency.
+- Every adapter has standalone health, import/export, disconnect, and recovery behavior.
+
+### 3.4 Chat
 
 - Linear append-only turns.
 - Corrections are new turns.
@@ -79,7 +94,7 @@ Different clients may render differently. They cannot interpret the domain diffe
 - Web search is used only when current external information is relevant.
 - Model summaries are context aids, never evidence.
 
-### 3.4 Actions
+### 3.5 Actions
 
 - Reads execute immediately.
 - Exact reversible creates, updates, and archives execute atomically.
@@ -89,7 +104,7 @@ Different clients may render differently. They cannot interpret the domain diffe
 - Sensitive record edits open the normal editor.
 - Idempotency prevents retries from duplicating work.
 
-### 3.5 Packages
+### 3.6 Packages
 
 - One domain skill per domain.
 - Schemas are contracts and MCP resources, not skills.
@@ -186,7 +201,8 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 - Expo Router SDK 57 navigation imports only.
 - Expo SQLite: SQLiteProvider, useSQLiteContext, async prepared reads and writes, transactions.
-- OpenAI: Responses plus Conversations; web_search with rendered URL citations.
+- Model providers: direct user-configured adapters with declared capabilities, ordered primary/fallback selection, and provider-specific conversation state.
+- OpenAI adapter: Responses plus Conversations; web_search with rendered URL citations.
 - OpenAI Agents SDK may orchestrate server-side workers. It must not create a second conversation-history system.
 - MCP: Streamable HTTP. Existing stdio bridge is development-only.
 - Notion: API version 2026-03-11, data-source IDs, data-source query, page markdown or blocks, verified webhooks.
@@ -211,18 +227,24 @@ The registry belongs beside domain config. Domain packages may request a role bu
 ### Locked decisions
 
 1. Keep Expo web output static.
-2. Create a separate server package for secrets, model calls, agents, OAuth, webhooks, provider adapters, MCP, and action policy.
-3. Use Responses Conversations for durable chat history. Do not combine an Agents Session with conversation ID or previous response ID for the same history.
-4. Use SQLite locally. Web persistence receives a separate validation gate because Expo SQLite web is alpha.
-5. Notion webhooks are change signals. Deduplicate, order when needed, and refetch canonical content.
-6. Sheets append is undoable only when the returned updated range is stored.
+2. Keep the canonical core portable and independent of Notion, Sheets, Postgres, AI, or MCP.
+3. Support direct user-configured model providers. Store ordered primary/fallback selection and show which provider answered.
+4. Keep `server/` as a separate FOSS MCP/external-client package. Never make it an app runtime requirement.
+5. Use Responses Conversations for durable OpenAI chat history. Do not combine an Agents Session with conversation ID or previous response ID for the same history.
+6. Use SQLite locally. Web persistence receives a separate validation gate because Expo SQLite web is alpha.
+7. Let the user select one authority. Notion, Sheets, SQLite, and Postgres remain optional and independently usable.
+8. Notion webhooks are optional change signals. Deduplicate, order when needed, and refetch canonical content.
+9. Sheets append is undoable only when the returned updated range is stored.
+10. Never place a shared bearer token or provider credential in an Expo public environment variable or static bundle.
 
 ### Gate
 
 - Architecture decision record accepted.
-- Server host selected.
-- OAuth model selected.
-- Notion authority versus Sheets projection documented.
+- Standalone, direct-provider, Notion-only, Sheets-only, database-only, and MCP-client modes documented.
+- Every runtime option is editable and inspectable inside the app.
+- Credential storage and OAuth model selected for each platform.
+- Authority selection and projection rules documented for SQLite, Notion, Sheets, and Postgres.
+- Primary/fallback model-provider policy reviewed.
 - Package, command, source, citation, agent-handoff, action-event, and Undo schemas reviewed.
 
 ## 6. Phase 1: local canonical runtime
@@ -298,8 +320,10 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Invalid manifest fails closed.
 - 320, 390, 768, and 1280 widths have no horizontal overflow.
 - Keyboard, screen reader, dynamic type, and 44dp targets pass.
+- Today, Food, Chat, Search, Capture, Record, Sources, and System pass the visual quality gate in every supported state.
+- Dates, identity, source status, record counts, adapter state, and capability labels come from runtime state rather than demo constants.
 
-## 8. Phase 3: server and real chat
+## 8. Phase 3: direct AI chat
 
 ### Files
 
@@ -323,16 +347,20 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 ### Tasks
 
-1. Create authenticated mobile and web chat endpoints.
-2. Create or resume one Responses Conversation per LifeOS thread.
-3. Stream content blocks, tool progress, citations, and action receipts.
-4. Implement bounded agent registry and typed handoffs.
-5. Retrieve fresh sources every turn.
-6. Persist immutable source snapshots and citation spans.
-7. Add current web search when required.
-8. Replace synthetic chat answers with the typed client.
-9. Keep an offline local-data answer mode with explicit limitations.
-10. Add stop, retry failed response, thread rename, pin, archive, search, and resume.
+1. Add a provider registry with user-selected primary and ordered fallback providers.
+2. Support direct provider calls from the app with encrypted credentials and ordered primary/fallback routing.
+3. Keep external GPT/MCP transport in the separate FOSS package, outside the app runtime.
+4. Create or resume provider-native conversation state per LifeOS thread.
+5. Stream content blocks, tool progress, citations, provider identity, fallback events, and action receipts.
+6. Implement bounded agent registry and typed handoffs.
+7. Retrieve fresh enabled sources every turn; absence of Notion, Sheets, MCP, or web search is valid.
+8. Persist immutable source snapshots and citation spans.
+9. Add current web search only when required and supported by the selected provider.
+10. Replace synthetic chat answers with the typed client.
+11. Keep an offline local-data answer mode with explicit limitations.
+12. Add stop, retry failed response, thread rename, pin, archive, search, and resume.
+13. Store direct-provider credentials in platform-secure storage; never compile them into static web or native bundles.
+14. Document provider disconnect, credential replacement, export, reset, and recovery entirely in app.
 
 ### Verification
 
@@ -342,23 +370,27 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Changed source displays Updated since this answer.
 - Model failure does not duplicate user turns or writes.
 - Worker timeout and cancellation work.
+- Primary failure invokes only the configured fallback, preserves the user turn once, and displays the provider used.
+- Local-only and direct-provider modes work with no server.
+- Connector loss degrades to local capability without data loss.
 - No hidden reasoning is stored or shown.
 - No edit-response or branch UI exists.
 
 ### Anti-pattern guards
 
-- No model or provider key in the Expo bundle.
+- No model, provider, or shared bearer credential in an Expo public/static bundle.
 - No summary used as citation evidence.
 - No unsupported source fabricated by the model.
 - No uncontrolled recursive agents.
 - No second chat history owned by Agents Session.
 
-#### Phase 3 completion note (2026-07-22)
+#### Phase 3 historical slice note (2026-07-22)
 
 - `/chat/send` and `/chat/send/stream` now use the shared `chat-send-request.v1` envelope.
 - Streaming always emits `run.start`, optional `token` frames, and terminal `run.end`.
 - `/chat/send` and `/chat/undo` expose canonical action receipts and source references (`source_ids`) from MCP/agent execution.
 - Idempotency replay and deterministic error/cancel handling are in place with evidence scripts in `app/build/evidence/phase3-chat-*`.
+- These checks prove a historical server-backed slice only. They do not close direct-provider, fallback, ten-turn, second-device, or credential-storage gates.
 
 ## 9. Phase 4: MCP and external-client parity
 
@@ -374,12 +406,14 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 ### Tasks
 
-1. Expose Streamable HTTP MCP.
+1. Expose Streamable HTTP MCP as an optional adapter.
 2. Expose catalog, manifests, schemas, records, source snapshots, and conversations as resources.
 3. Expose search, read, create, update, archive, run workflow, and Undo as typed tools.
 4. Generate schemas from the same domain package as the app.
 5. Apply identical policy and receipt formats to app Chat and external clients.
 6. Rewrite or retire the stdio Python bridge and deleted Kotlin asset paths.
+7. Keep local App/Notion/Sheets use fully functional when MCP is disabled.
+8. Let users configure MCP clients/servers in app without a product-owned host.
 
 ### Verification
 
@@ -388,6 +422,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Idempotency blocks duplicates.
 - Sensitive and irreversible operations are absent.
 - MCP conformance, auth, rate, timeout, and audit tests pass.
+- Disabling MCP leaves canonical records, direct AI, and enabled provider surfaces intact.
 
 ## 10. Phase 5: Notion 2026 adapter
 
@@ -403,7 +438,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 ### Tasks
 
-1. Implement protected OAuth or internal-integration connection.
+1. Implement optional protected OAuth or internal-integration connection.
 2. Use Notion version 2026-03-11.
 3. Discover databases and data sources; query by data-source ID.
 4. Map canonical IDs to Notion pages.
@@ -412,6 +447,8 @@ The registry belongs beside domain config. Domain packages may request a role bu
 7. Dedupe webhook event IDs, handle out-of-order delivery, and refetch current content.
 8. Preserve unsupported Notion blocks as provider-owned read-only content.
 9. Create exact page or block citations.
+10. Support Notion as standalone authority, explicit projection, or disabled adapter.
+11. Disconnect without deleting canonical or unsupported provider data.
 
 ### Verification
 
@@ -421,6 +458,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Permission loss becomes stale, not data loss.
 - Notion-only user can run the core Food loop.
 - Existing visual dashboard remains useful without the app.
+- App/SQLite, Sheets-only, direct AI, and MCP modes remain usable without Notion.
 
 ### Anti-pattern guards
 
@@ -442,7 +480,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 
 ### Tasks
 
-1. Add OAuth with least-privilege scope.
+1. Add optional OAuth with least-privilege scope.
 2. Add stable LifeOS ID, version, updated-at, source, and archive columns.
 3. Define one tab per canonical collection plus schema, relations, sync, and health tabs.
 4. Batch reads and writes.
@@ -450,6 +488,8 @@ The registry belongs beside domain config. Domain packages may request a role bu
 6. Store append updated range for Undo.
 7. Preserve formulas and user-owned columns.
 8. Validate required tabs, columns, IDs, types, formulas, duplicates, and relation targets.
+9. Support Sheets as standalone authority, explicit projection, or disabled adapter.
+10. Disconnect without deleting canonical or user-owned workbook data.
 
 ### Verification
 
@@ -459,6 +499,7 @@ The registry belongs beside domain config. Domain packages may request a role bu
 - Repeated sync is idempotent.
 - Formula and user-column preservation passes.
 - Undo restores cells and canonical records.
+- App/SQLite, Notion-only, direct AI, and MCP modes remain usable without Sheets.
 
 ### Anti-pattern guards
 
@@ -625,6 +666,19 @@ Use one orchestrator task and parallel, isolated workstreams. Every worker must 
 
 ## 16. Final verification gate
 
+### Visual quality acceptance
+
+- Capture comparable screenshots at 320, 390, 768, and 1280 widths plus small phone, medium phone, S23U-size phone, tablet, and foldable breakpoints.
+- Review Today, Food, Chat, Search, Capture, Record, Sources, and System in populated, empty, loading, offline, stale, invalid-package, permission-denied, migration, recovery, and error states.
+- No clipped text, unintended horizontal scrolling, overlapping controls, unsafe-area collisions, keyboard obstruction, or layout jump.
+- Typography hierarchy, spacing rhythm, color, elevation, icons, dividers, and component states are consistent across screens.
+- Text passes contrast; controls expose accessible names, focus order, selected/disabled state, dynamic type, keyboard operation, and at least 44dp targets.
+- Product copy describes current capability. No stale dates, personal names, demo counts, fake live badges, provider IDs, “adapter next,” or configured-source claims in release UI.
+- Long records and chats remain readable and performant; tables and citations wrap or scroll intentionally.
+- Light theme is complete. Dark theme is required only when declared supported and must pass the same matrix.
+- Store approved reference screenshots and machine-readable test metadata as durable release evidence, not only ignored local build output.
+- A phase cannot be marked complete from export success or one screenshot alone.
+
 Repository gates:
 
 - npm ci
@@ -636,6 +690,7 @@ Repository gates:
 - secret scan
 - dependency and license scan
 - stale Kotlin-path and proposal-semantics scan
+- static-bundle credential scan, including `EXPO_PUBLIC_*`
 
 Product gates:
 
@@ -647,8 +702,11 @@ Product gates:
 - App and MCP parity tests.
 - Notion disposable import and round trip.
 - Sheets disposable workbook and round trip.
+- SQLite-only, Notion-only, Sheets-only, Postgres, direct-AI, no-AI, and MCP-disabled mode checks.
+- Primary/fallback model-provider failure and disclosure checks.
+- In-app configuration export/import, validation, reset, and upgrade-migration checks.
 - Workflow checkpoint and compensation tests.
-- Responsive screenshots and accessibility.
+- Visual quality matrix and accessibility.
 - Android emulator matrix.
 - EAS APK and AAB install and upgrade.
 - Physical S23U Health Connect.
@@ -661,11 +719,13 @@ Release only when product copy matches live capability. Demo labels disappear on
 LifeOS is done for Food when:
 
 - A new user can run Food offline without an account.
-- A Notion-only user and a Sheets-only user have coherent primary surfaces.
-- App, Notion, Sheets, SQLite, Postgres option, GPT, and MCP share the same semantic contract.
+- SQLite-only, Notion-only, Sheets-only, Postgres-backed, direct-AI, no-AI, MCP-enabled, and MCP-disabled users have coherent supported modes.
+- App, Notion, Sheets, SQLite, Postgres, configured AI providers, and MCP share the same semantic contract when enabled.
+- No single provider, account, hostname, tunnel, or subscription is mandatory.
+- Users can configure a primary and fallback model provider directly; fallback is explicit, observable, and safe.
 - Chat is genuinely multi-turn, resumes, streams, cites exact sources, renders structured answers, and acts through typed tools.
 - Reversible actions return working Undo.
 - Internal multi-agent work is bounded, observable, cancellable, and invisible as branch clutter.
 - New domains install by package.
-- Web and Android are production-grade.
+- Web and Android are production-grade and pass the full visual quality matrix.
 - iOS is the last platform pass, not a different architecture.

@@ -71,6 +71,12 @@ export interface ParsedCatalog {
 }
 
 let parsedCatalogCache: ParsedCatalog | null = null;
+let activeDomainOverride: string | null = null;
+
+export function setActiveDomainOverride(domainId: string | null): void {
+  activeDomainOverride = domainId?.trim() || null;
+  parsedCatalogCache = null;
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -246,10 +252,13 @@ export function loadCatalog(): ParsedCatalog {
 
   const catalog = parseCatalog(catalogJson);
   const domainsById = Object.fromEntries(catalog.domains.map((domain) => [domain.id, domain])) as Record<string, DomainCatalogEntry>;
-  const activeDomain = domainsById[catalog.active_domain_id];
+  const activeDomainId = activeDomainOverride && domainsById[activeDomainOverride]
+    ? activeDomainOverride
+    : catalog.active_domain_id;
+  const activeDomain = domainsById[activeDomainId];
 
   if (!activeDomain) {
-    throw new Error(`[domain-catalog] Active domain does not exist: ${catalog.active_domain_id}`);
+    throw new Error(`[domain-catalog] Active domain does not exist: ${activeDomainId}`);
   }
 
   const activeManifest = parseDomainManifest(
@@ -261,6 +270,6 @@ export function loadCatalog(): ParsedCatalog {
     throw new Error(`[domain-catalog] Manifest id mismatch: ${activeManifest.id}`);
   }
 
-  parsedCatalogCache = { catalog, activeDomainId: catalog.active_domain_id, activeDomain, activeManifest, domainsById };
+  parsedCatalogCache = { catalog, activeDomainId, activeDomain, activeManifest, domainsById };
   return parsedCatalogCache;
 }

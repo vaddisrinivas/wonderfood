@@ -15,14 +15,15 @@ import { useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
-import { chatServerConfig, listChatThreads, sendChatMessage, stopServerRun, undoServerAction } from '@/src/chat/client';
+import { listChatThreads, sendChatMessage } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { colors, radius } from '@/src/theme';
 import { loadCatalog } from '@/src/domain/catalog';
+import { loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
 
-type MessageSourceMode = 'server' | 'offline';
+type MessageSourceMode = 'server' | 'direct' | 'offline';
 
 type MessageRow = ChatMessage;
 
@@ -63,20 +64,24 @@ export default function ChatScreen() {
       const dbThreads = await listChatThreads(db);
       if (cancelled) return;
 
+      const settings = await loadLifeOSSettings();
+      const directReady = usableAiProfiles(settings).length > 0;
+      const nextMode: MessageSourceMode = directReady ? 'direct' : 'offline';
+
       if (dbThreads.length) {
         setThreads(dbThreads);
         setActiveThreadId(dbThreads[0].id);
-        setMode('offline');
+        setMode(nextMode);
       } else {
         const baseThread: ChatThread = {
           id: 'thread-empty',
           title: 'Food context',
-          detail: chatServerConfig.url ? 'Live runtime available' : seedModeNotice.detail,
+          detail: nextMode === 'direct' ? 'Direct model ready' : seedModeNotice.detail,
           messages: seedThreads[0].messages,
         };
         setThreads([baseThread]);
         setActiveThreadId(baseThread.id);
-        setMode(chatServerConfig.url ? 'server' : 'offline');
+        setMode(nextMode);
       }
     };
 
@@ -98,7 +103,7 @@ export default function ChatScreen() {
     const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: `${seedModeNotice.title.toLowerCase()} · ${chatServerConfig.url ? 'live runtime' : 'local-only'}`,
+      detail: mode === 'direct' ? 'Direct model' : 'Local only',
       messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'Food context is on. I can help with meals, recipes, shopping, and source-backed actions.' }],
     };
 
@@ -192,8 +197,6 @@ export default function ChatScreen() {
       text,
       conversationId: activeThread.id,
       domainId: activeDomainId,
-      serverUrl: chatServerConfig.url,
-      serverToken: chatServerConfig.token,
       onModelToken: (token) => {
         appendStreamingToken(activeThread.id, streamMessageId, token);
       },
@@ -214,22 +217,6 @@ export default function ChatScreen() {
     setSending(false);
   };
 
-  const stopRun = async () => {
-    if (!activeRunId || sending === false) {
-      return;
-    }
-    const response = await stopServerRun({
-      runId: activeRunId,
-      baseUrl: chatServerConfig.url,
-      token: chatServerConfig.token,
-    });
-    setSending(false);
-    setActiveRunId(null);
-    if (response?.status) {
-      setWarnings([`Run ${response.run_id || activeRunId} ${response.status}`]);
-    }
-  };
-
   const retryLatest = async () => {
     if (sending) {
       return;
@@ -245,8 +232,6 @@ export default function ChatScreen() {
       text: lastUser.text,
       conversationId: activeThread.id,
       domainId: activeDomainId,
-      serverUrl: chatServerConfig.url,
-      serverToken: chatServerConfig.token,
       retryOfMessageId: lastUser.id,
     });
     appendOrReplaceThread(result.thread);
@@ -275,36 +260,9 @@ export default function ChatScreen() {
   };
 
   const undoMessageAction = async (threadId: string, message: MessageRow) => {
-    if (!chatServerConfig.url) {
-      setWarnings(['Undo is unavailable until live runtime is configured.']);
-      return;
-    }
-    if (message.role !== 'assistant' || message.actionReceipt?.status !== 'completed' || !message.actionReceipt.record_ids?.length) {
-      setWarnings(['No reversible action for this message.']);
-      return;
-    }
-
-    const response = await undoServerAction({
-      actionId: message.actionReceipt.id,
-      baseUrl: chatServerConfig.url,
-      token: chatServerConfig.token,
-      actor: message.actionReceipt.actor,
-      idempotencyKey: message.actionReceipt.idempotency_key,
-    });
-    if (!response?.undo_result) {
-      setWarnings(['Undo request failed.']);
-      return;
-    }
-
-    if (response.undo_result.success) {
-      setMessageReceipt(threadId, message.id, (existing) => ({
-        ...existing,
-        actionReceipt: existing.actionReceipt ? { ...existing.actionReceipt, status: 'cancelled' } : undefined,
-      }));
-      setWarnings([response.undo_result.message]);
-    } else {
-      setWarnings([response.undo_result.message || 'Undo request returned failed status.']);
-    }
+    void threadId;
+    void message;
+    setWarnings(['This direct-provider answer has no reversible action.']);
   };
 
   return (
@@ -315,7 +273,7 @@ export default function ChatScreen() {
             <View style={styles.topbar}>
               <View>
                 <Text style={styles.brand}>LIFEOS / CHAT</Text>
-                <Text style={styles.date}>Food context · {mode === 'server' ? 'live runtime' : 'offline runtime'}</Text>
+                <Text style={styles.date}>Food context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, pressed && styles.pressed]}>
                 <Text style={styles.newThreadText}>＋ New thread</Text>
@@ -344,7 +302,11 @@ export default function ChatScreen() {
                 <View style={styles.chatHeader}>
                   <View style={styles.assistantMark}><Text style={styles.assistantMarkText}>✦</Text></View>
                   <View style={styles.chatHeaderCopy}><Text style={styles.chatTitle}>{activeThread.title}</Text><Text style={styles.chatDetail}>Hearth · Food workspace available</Text></View>
-                  <Pill tone={mode === 'server' ? 'moss' : 'blue'}>{mode === 'server' ? 'Live' : 'Offline'}</Pill>
+                  <Pressable accessibilityRole="button" onPress={() => router.push('/settings')}>
+                    <Pill tone={mode === 'direct' ? 'plum' : 'blue'}>
+                      {mode === 'direct' ? 'Direct' : 'Set up AI'}
+                    </Pill>
+                  </Pressable>
                 </View>
 
                 <View style={styles.divider} />
@@ -370,7 +332,6 @@ export default function ChatScreen() {
                     <Pressable accessibilityRole="button" disabled={!draft.trim() || sending} onPress={sendMessage} style={({ pressed }) => [styles.send, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
                       <Text style={styles.sendText}>{sending ? 'Working…' : 'Send ↑'}</Text>
                     </Pressable>
-                    {sending && activeRunId ? <Pressable accessibilityRole="button" onPress={stopRun} style={({ pressed }) => [styles.send, styles.sendDisabled, pressed && styles.pressed]}><Text style={styles.sendText}>Stop</Text></Pressable> : null}
                     {!sending ? <Pressable accessibilityRole="button" onPress={retryLatest} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><Text style={styles.sendText}>Retry</Text></Pressable> : null}
                   </View>
                   <View style={styles.composerFoot}><Text style={styles.composerHint}>Uses Kitchen, Meals, Recipes, Shopping, and their sources.</Text><Text style={styles.shortcut}>⌘ ↵</Text></View>
