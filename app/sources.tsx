@@ -5,6 +5,9 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimens
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
 import { listSourceRows } from '@/src/domain/queries';
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { loadCatalog } from '@/src/domain/catalog';
+import { DirectSyncReceipt, syncConfiguredSources, syncNotionDirect, syncSheetsDirect } from '@/src/providers/direct-source-sync';
+import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings } from '@/src/settings/lifeos-settings';
 import { colors, radius } from '@/src/theme';
 
 type SourceRow = {
@@ -69,9 +72,9 @@ const citationSources = [
 ] as const;
 
 const recentSync = [
-  ['01', 'Notion adapter', 'Map pages, properties, relations and exact source blocks'],
-  ['02', 'Sheets adapter', 'Map tabs, typed rows, formulas and stable record ids'],
-  ['03', 'SQLite replica', 'Persist offline records, outbox actions and source versions'],
+  ['01', 'Notion direct pull', 'Reads user data sources into canonical records from in-app credentials'],
+  ['02', 'Sheets direct pull', 'Reads workbook rows into the same canonical graph from in-app credentials'],
+  ['03', 'SQLite replica', 'Persists records, source snapshots and chat citations on device'],
 ] as const;
 
 function toneColor(tone: Tone) {
@@ -87,16 +90,29 @@ export default function SourcesScreen() {
   const { width } = useWindowDimensions();
   const compact = width < 720;
   const db = useLifeOSDatabase();
+  const { activeManifest } = loadCatalog();
   const [sourceRows, setSourceRows] = useState<SourceRow[]>([]);
+  const [settings, setSettings] = useState<LifeOSSettings>(defaultLifeOSSettings);
+  const [receipts, setReceipts] = useState<DirectSyncReceipt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<DirectSyncReceipt['provider'] | 'all' | null>(null);
   const hasDb = Boolean(db);
+
+  const refreshRows = async () => {
+    setLoading(true);
+    const [rows, loadedSettings] = await Promise.all([listSourceRows(db), loadLifeOSSettings()]);
+    setSettings(loadedSettings);
+    setSourceRows(mergeConfiguredRows(rows, loadedSettings));
+    setLoading(false);
+  };
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const rows = await listSourceRows(db);
+      const [rows, loadedSettings] = await Promise.all([listSourceRows(db), loadLifeOSSettings()]);
       if (!cancelled) {
-        setSourceRows(rows);
+        setSettings(loadedSettings);
+        setSourceRows(mergeConfiguredRows(rows, loadedSettings));
         setLoading(false);
       }
     };
@@ -107,6 +123,23 @@ export default function SourcesScreen() {
     };
   }, [db]);
 
+  const runSync = async (target: DirectSyncReceipt['provider'] | 'all') => {
+    setSyncing(target);
+    const loadedSettings = await loadLifeOSSettings();
+    setSettings(loadedSettings);
+    const result = target === 'all'
+      ? await syncConfiguredSources({ db, manifest: activeManifest, settings: loadedSettings })
+      : target === 'notion'
+        ? [await syncNotionDirect({ db, manifest: activeManifest, settings: loadedSettings })]
+        : [await syncSheetsDirect({ db, manifest: activeManifest, settings: loadedSettings })];
+    setReceipts(result);
+    await refreshRows();
+    setSyncing(null);
+  };
+
+  const configuredCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
+  const latestReceipt = receipts[0];
+
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -116,7 +149,7 @@ export default function SourcesScreen() {
               <Text style={styles.brand}>LIFEOS / SOURCES</Text>
               <Text style={styles.context}>Authority, sync and citation health</Text>
             </View>
-            <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>Demo snapshot</Text></View>
+            <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>{latestReceipt ? latestReceipt.status : 'Local ready'}</Text></View>
           </View>
 
           <PageHeader
@@ -127,11 +160,21 @@ export default function SourcesScreen() {
 
           <Card tone="blue" style={styles.loopCard}>
             <View style={styles.loopCopy}>
-              <Pill tone="blue">SOURCE CONTRACT DESIGNED</Pill>
-              <Text style={styles.loopTitle}>Choose your authority. SQLite keeps you fast.</Text>
+              <Pill tone="blue">DIRECT SYNC READY</Pill>
+              <Text style={styles.loopTitle}>Pull your sources into one local graph.</Text>
               <Text style={styles.loopBody}>
-                Start locally, then connect your own Notion workspace, Sheets workbook or another supported authority when useful.
+                Start locally, then pull your own Notion data sources or Sheets workbook without webhooks or a mandatory LifeOS server.
               </Text>
+              <View style={styles.syncActions}>
+                <Pressable accessibilityRole="button" disabled={Boolean(syncing)} onPress={() => void runSync('all')} style={({ pressed }) => [styles.primarySync, syncing && styles.disabled, pressed && styles.pressed]}>
+                  <Text style={styles.primarySyncText}>{syncing === 'all' ? 'Syncing...' : 'Sync enabled sources'}</Text>
+                </Pressable>
+                <Link href="/settings" asChild>
+                  <Pressable accessibilityRole="button" style={({ pressed }) => [styles.secondarySync, pressed && styles.pressed]}>
+                    <Text style={styles.secondarySyncText}>Connections</Text>
+                  </Pressable>
+                </Link>
+              </View>
             </View>
             <View style={[styles.loopFlow, compact ? styles.loopFlowCompact : null]} accessibilityLabel="Notion syncs through the LifeOS graph to SQLite and Google Sheets">
               <View style={styles.flowNode}><Text style={styles.flowNodeLabel}>Your source</Text><Text style={styles.flowNodeRole}>Optional</Text></View>
@@ -146,10 +189,28 @@ export default function SourcesScreen() {
           </Card>
 
           <View style={styles.metrics}>
-            <Card style={styles.metric}><Text style={styles.metricValue}>{loading ? '…' : `${sourceRows.length}`}</Text><Text style={styles.metricLabel}>sources known</Text><Text style={styles.metricFoot}>Configured homes · adapters</Text></Card>
-            <Card style={styles.metric}><Text style={styles.metricValue}>4</Text><Text style={styles.metricLabel}>adapter contracts</Text><Text style={styles.metricFoot}>Runtime wiring follows</Text></Card>
-            <Card style={styles.metric}><Text style={styles.metricValue}>Demo</Text><Text style={styles.metricLabel}>current data</Text><Text style={styles.metricFoot}>No false live-sync claim</Text></Card>
+            <Card style={styles.metric}><Text style={styles.metricValue}>{loading ? '...' : `${sourceRows.length}`}</Text><Text style={styles.metricLabel}>sources known</Text><Text style={styles.metricFoot}>Configured homes and links</Text></Card>
+            <Card style={styles.metric}><Text style={styles.metricValue}>{configuredCount}</Text><Text style={styles.metricLabel}>enabled settings</Text><Text style={styles.metricFoot}>Editable in app</Text></Card>
+            <Card style={styles.metric}><Text style={styles.metricValue}>{latestReceipt ? `${latestReceipt.records}` : '0'}</Text><Text style={styles.metricLabel}>last pull rows</Text><Text style={styles.metricFoot}>{latestReceipt?.message ?? 'No sync run this session'}</Text></Card>
           </View>
+
+          {receipts.length ? (
+            <Card style={styles.receiptCard}>
+              <Text style={styles.sectionLead}>Latest sync receipts</Text>
+              <View style={styles.receiptList}>
+                {receipts.map((receipt) => (
+                  <View key={`${receipt.provider}-${receipt.observedAt}`} style={styles.receiptRow}>
+                    <Pill tone={receipt.status === 'synced' ? 'moss' : receipt.status === 'blocked' ? 'blue' : 'amber'}>{receipt.status.toUpperCase()}</Pill>
+                    <View style={styles.receiptCopy}>
+                      <Text style={styles.receiptTitle}>{receipt.provider.replace('_', ' ')}</Text>
+                      <Text style={styles.receiptMessage}>{receipt.message}</Text>
+                    </View>
+                    <Text style={styles.receiptCount}>{receipt.records} rows</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          ) : null}
 
           <SectionTitle title="Data homes & surfaces" />
           {!sourceRows.length ? (
@@ -190,9 +251,18 @@ export default function SourcesScreen() {
                       <View><Text style={styles.factLabel}>FRESHNESS</Text><Text style={styles.factValue}>{sourceRow.freshness}</Text></View>
                       <View><Text style={styles.factLabel}>SCOPE</Text><Text style={styles.factValue}>{meta.scope}</Text></View>
                     </View>
-                    <Pressable accessibilityRole={meta.href ? 'link' : 'button'} onPress={() => { if (meta.href) void Linking.openURL(meta.href); }} style={styles.sourceActionRow}>
-                      <Text style={styles.sourceAction}>{meta.action}</Text>
-                      <Text style={styles.sourceActionArrow}>{meta.href ? '↗' : '→'}</Text>
+                    <Pressable
+                      accessibilityRole={meta.href ? 'link' : 'button'}
+                      disabled={Boolean(syncing)}
+                      onPress={() => {
+                        if (normalized === 'notion') void runSync('notion');
+                        else if (normalized === 'google_sheets') void runSync('google_sheets');
+                        else if (meta.href) void Linking.openURL(meta.href);
+                      }}
+                      style={styles.sourceActionRow}
+                    >
+                      <Text style={styles.sourceAction}>{normalized === 'notion' || normalized === 'google_sheets' ? 'Pull now' : meta.action}</Text>
+                      <Text style={styles.sourceActionArrow}>{syncing === normalized ? '...' : meta.href ? '↗' : '→'}</Text>
                     </Pressable>
                   </Card>
                 </View>
@@ -273,6 +343,31 @@ export default function SourcesScreen() {
   );
 }
 
+function mergeConfiguredRows(rows: SourceRow[], settings: LifeOSSettings): SourceRow[] {
+  const byName = new Map(rows.map((row) => [row.name.toLowerCase(), row]));
+  const next = [...rows];
+  if (settings.notion.enabled && !byName.has('notion')) {
+    next.push({
+      name: 'notion',
+      status: settings.notion.token && settings.notion.dataSourceIds ? 'Configured' : 'Needs setup',
+      freshness: 'Not pulled yet',
+      workspace: settings.notion.pageId || settings.notion.dataSourceIds || 'Notion',
+    });
+  }
+  if (settings.sheets.enabled && !byName.has('google_sheets')) {
+    next.push({
+      name: 'google_sheets',
+      status: settings.sheets.token && settings.sheets.workbookId ? 'Configured' : 'Needs setup',
+      freshness: 'Not pulled yet',
+      workspace: settings.sheets.sheetName || 'LifeOS Canonical',
+    });
+  }
+  if (settings.postgres.enabled && !byName.has('postgres')) {
+    next.push({ name: 'postgres', status: 'Configured', freshness: 'Not pulled yet', workspace: 'Postgres' });
+  }
+  return next;
+}
+
 const styles = StyleSheet.create({
   contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   brand: { color: colors.blue, fontSize: 12, fontWeight: '900', letterSpacing: 1.6 },
@@ -284,6 +379,11 @@ const styles = StyleSheet.create({
   loopCopy: { flexGrow: 1, flexBasis: 360, minWidth: 240 },
   loopTitle: { color: colors.ink, fontSize: 25, lineHeight: 30, fontWeight: '800', letterSpacing: -0.7, marginTop: 18 },
   loopBody: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8, maxWidth: 560 },
+  syncActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20 },
+  primarySync: { minHeight: 48, borderRadius: radius.pill, backgroundColor: colors.ink, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  primarySyncText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+  secondarySync: { minHeight: 48, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  secondarySyncText: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   loopFlow: { flexGrow: 1, flexBasis: 380, minWidth: 320, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   loopFlowCompact: { minWidth: 0, flexBasis: '100%', justifyContent: 'flex-start', flexWrap: 'wrap' },
   flowNode: { minWidth: 82, minHeight: 60, borderRadius: radius.md, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', padding: 10 },
@@ -300,6 +400,13 @@ const styles = StyleSheet.create({
   metricValue: { color: colors.ink, fontSize: 25, fontWeight: '800', letterSpacing: -0.7 },
   metricLabel: { color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 4 },
   metricFoot: { color: colors.muted, fontSize: 11, marginTop: 4 },
+  receiptCard: { marginTop: 12, padding: 18 },
+  receiptList: { marginTop: 12 },
+  receiptRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  receiptCopy: { flex: 1, minWidth: 0 },
+  receiptTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', textTransform: 'capitalize' },
+  receiptMessage: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  receiptCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   sourceCell: { minWidth: 280, flexGrow: 1, flexBasis: '47%' },
   sourceCellCompact: { flexBasis: '100%', minWidth: 0 },
@@ -360,5 +467,6 @@ const styles = StyleSheet.create({
   systemActionTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', marginTop: 5 },
   systemActionBody: { color: '#C8CCC3', fontSize: 12, lineHeight: 17, marginTop: 4, maxWidth: 620 },
   systemActionArrow: { color: '#FFF', fontSize: 28, fontWeight: '400' },
+  disabled: { opacity: 0.45 },
   pressed: { opacity: 0.72 },
 });
