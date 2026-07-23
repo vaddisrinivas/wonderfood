@@ -42,6 +42,11 @@ type SqlRelationRow = {
 
 type CanonicalRelationInput = Pick<SqlRelationRow, 'name' | 'target_id'>;
 
+function operationId(parts: string[]) {
+  const safe = parts.map((part) => part.replace(/[^A-Za-z0-9_-]/g, '-')).join('-');
+  return `op-${safe}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export async function getRecord(db: SQLiteDatabase, id: string): Promise<CanonicalRecord | null> {
   const row = await db.getFirstAsync<SqlRecordRow>(`SELECT * FROM records WHERE id = ?`, [id]);
   if (!row) return null;
@@ -132,7 +137,7 @@ export async function upsertRecord(
 
   const current = await getRecord(db, validated.id);
   const result = await applyOperation(db, manifest, {
-    op_id: `op-${validated.id}-${Date.now().toString(36)}`,
+    op_id: operationId([validated.id]),
     kind: current ? 'update' : 'create',
     domain: manifest.id,
     collection: validated.collection,
@@ -162,7 +167,7 @@ export async function archiveRecord(db: SQLiteDatabase, id: string): Promise<voi
     ? catalog.activeManifest
     : getDomainManifest(catalog.catalog.domains, current.domain) ?? catalog.activeManifest;
   const result = await applyOperation(db, manifest, {
-    op_id: `op-${id}-archive-${Date.now().toString(36)}`,
+    op_id: operationId([id, 'archive']),
     kind: 'archive',
     domain: manifest.id,
     collection: current.collection,

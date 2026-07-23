@@ -45,11 +45,33 @@ if (!activeManifest) throw new Error(`Active domain manifest missing: ${active.i
 
 const registry = read(join(root, 'agents/registry.v1.json'));
 const agentIds = new Set();
+const operationKinds = new Set(['create', 'update', 'archive', 'restore', 'relate', 'unrelate', 'delete']);
 for (const agent of registry.agents) {
   if (agentIds.has(agent.id)) throw new Error(`Duplicate agent id: ${agent.id}`);
   agentIds.add(agent.id);
   for (const schemaRef of [agent.input_schema, agent.output_schema]) {
     if (!existsSync(resolve(root, 'agents', schemaRef))) throw new Error(`Missing agent schema: ${agent.id} -> ${schemaRef}`);
+  }
+  if (!Array.isArray(agent.capabilities) || agent.capabilities.length === 0) {
+    throw new Error(`Agent ${agent.id} must declare capabilities.`);
+  }
+  for (const capability of agent.capabilities) {
+    if (capability.domain !== '*' && !manifests.has(capability.domain)) {
+      throw new Error(`Agent ${agent.id} capability references unknown domain: ${capability.domain}`);
+    }
+    const domainIds = capability.domain === '*' ? Array.from(manifests.keys()) : [capability.domain];
+    for (const domainId of domainIds) {
+      const manifest = manifests.get(domainId);
+      if (!manifest) continue;
+      for (const collection of capability.collections ?? []) {
+        if (collection !== '*' && !manifest.collections.includes(collection)) {
+          throw new Error(`Agent ${agent.id} capability references unknown collection: ${domainId}.${collection}`);
+        }
+      }
+    }
+    for (const op of capability.ops ?? []) {
+      if (!operationKinds.has(op)) throw new Error(`Agent ${agent.id} capability references unknown operation: ${op}`);
+    }
   }
 }
 

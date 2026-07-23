@@ -24,9 +24,20 @@ export interface Operation {
 }
 
 export interface OperationResult {
-  status: 'applied' | 'rejected' | 'duplicate';
+  status: 'applied' | 'rejected' | 'duplicate' | 'dry_run';
   op_id: string;
   record?: CanonicalRecord;
   inverse?: Operation;
+  diff?: OperationDiff;
   reject_reason?: string;
 }
+
+export type OperationDiff = {
+  before: CanonicalRecord | null;
+  after: CanonicalRecord;
+  changed_fields: string[];
+};
+
+export type ApplyOperationOptions = {
+  dryRun?: boolean;
+};

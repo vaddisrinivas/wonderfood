@@ -4,7 +4,7 @@ import type { DomainManifest } from '@/src/domain/catalog';
 import type { CanonicalProvenance, CanonicalRecord, CanonicalRelation, RecordProvider } from '@/src/domain/runtime';
 import { validateCanonicalRecord } from '@/src/domain/runtime';
 import { computeInverse } from '@/src/ops/inverse';
-import type { Operation, OperationResult } from '@/src/ops/operation';
+import type { ApplyOperationOptions, Operation, OperationDiff, OperationResult } from '@/src/ops/operation';
 
 type SqlRecordRow = {
   id: string;
@@ -43,6 +43,10 @@ function nowIso() {
 }
 
 function safeJson(value: unknown) {
+  return JSON.stringify(value ?? null);
+}
+
+function stable(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
@@ -209,8 +213,40 @@ async function insertOperation(db: SQLiteDatabase, op: Operation, before: Canoni
   );
 }
 
-export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifest, op: Operation): Promise<OperationResult> {
-  if (op.idempotency_key) {
+function diffRecords(before: CanonicalRecord | null, after: CanonicalRecord): OperationDiff {
+  const changed = new Set<string>();
+  if (!before) {
+    changed.add('record');
+  } else {
+    if (before.title !== after.title) changed.add('title');
+    if (before.archived_at !== after.archived_at) changed.add('archived_at');
+    if (before.deleted !== after.deleted) changed.add('deleted');
+    if (before.privacy !== after.privacy) changed.add('privacy');
+    if (stable(before.relations) !== stable(after.relations)) changed.add('relations');
+    const propertyKeys = new Set([...Object.keys(before.properties), ...Object.keys(after.properties)]);
+    for (const key of propertyKeys) {
+      if (stable(before.properties[key]) !== stable(after.properties[key])) changed.add(`properties.${key}`);
+    }
+  }
+  return { before, after, changed_fields: Array.from(changed).sort() };
+}
+
+async function rejectOperation(
+  db: SQLiteDatabase,
+  op: Operation,
+  before: CanonicalRecord | null,
+  rejectReason: string,
+  dryRun: boolean,
+): Promise<OperationResult> {
+  if (!dryRun) {
+    await insertOperation(db, op, before, null, 'rejected', rejectReason);
+  }
+  return { status: 'rejected', op_id: op.op_id, reject_reason: rejectReason };
+}
+
+export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifest, op: Operation, options: ApplyOperationOptions = {}): Promise<OperationResult> {
+  const dryRun = options.dryRun === true;
+  if (!dryRun && op.idempotency_key) {
     const duplicate = await db.getFirstAsync<OperationRow>('SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?', [op.idempotency_key]);
     if (duplicate?.status === 'applied' || duplicate?.status === 'undone') {
       return {
@@ -223,14 +259,10 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
 
   const current = await readRecord(db, op.record_id);
   if (current && op.kind !== 'create' && op.expected_revision == null) {
-    const rejectReason = 'expected_revision_required';
-    await insertOperation(db, op, current, null, 'rejected', rejectReason);
-    return { status: 'rejected', op_id: op.op_id, reject_reason: rejectReason };
+    return rejectOperation(db, op, current, 'expected_revision_required', dryRun);
   }
   if (current && op.expected_revision != null && op.expected_revision !== current.revision) {
-    const rejectReason = 'revision_conflict';
-    await insertOperation(db, op, current, null, 'rejected', rejectReason);
-    return { status: 'rejected', op_id: op.op_id, reject_reason: rejectReason };
+    return rejectOperation(db, op, current, 'revision_conflict', dryRun);
   }
 
   let next: CanonicalRecord;
@@ -238,10 +270,14 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
     next = buildNextRecord(manifest, op, current);
   } catch (error) {
     const rejectReason = error instanceof Error ? error.message : 'validation_failed';
-    await insertOperation(db, op, current, null, 'rejected', rejectReason);
-    return { status: 'rejected', op_id: op.op_id, reject_reason: rejectReason };
+    return rejectOperation(db, op, current, rejectReason, dryRun);
   }
   const inverse = computeInverse(current, op, next);
+  const diff = diffRecords(current, next);
+
+  if (dryRun) {
+    return { status: 'dry_run', op_id: op.op_id, record: next, inverse, diff };
+  }
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -309,5 +345,5 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
     await insertOperation(db, op, current, next, 'applied');
   });
 
-  return { status: 'applied', op_id: op.op_id, record: next, inverse };
+  return { status: 'applied', op_id: op.op_id, record: next, inverse, diff };
 }
