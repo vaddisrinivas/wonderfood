@@ -67,6 +67,7 @@
           "subtitle": { "type": "string" },
           "kind": { "enum": ["spotlight", "metric", "list", "action"] },
           "tone": { "enum": ["neutral", "moss", "amber", "plum", "blue"] },
+          "size": { "enum": ["compact", "standard", "wide", "feature"] },
           "query": {
             "type": "object",
             "properties": {

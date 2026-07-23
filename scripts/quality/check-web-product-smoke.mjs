@@ -62,6 +62,10 @@ const routes = [
       },
     },
     must: ['Chef board', 'Custom app-edited feature block.'],
+    inspect: async (page) => {
+      const cardBox = await page.locator('text=Chef board').locator('xpath=ancestor::*[@role="button"][1]').boundingBox();
+      if (!cardBox || cardBox.width < 520) throw new Error(`Configured feature card should be full-width-ish, got ${cardBox?.width ?? 0}`);
+    },
   },
   {
     name: 'search-configured-visuals',

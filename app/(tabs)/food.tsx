@@ -537,6 +537,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   const theme = useLifeOSTheme();
   const primary = records[0];
   const href = primary ? { pathname: '/record/[id]', params: { id: primary.id } } : block.href;
+  const size = block.size ?? 'standard';
   const metricValue = block.kind === 'metric'
     ? records.length
       ? records.map((record) => record.title).slice(0, 2).join(' + ')
@@ -544,19 +545,25 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
     : primary?.title ?? (block.kind === 'action' ? 'Open workspace' : 'Awaiting data');
   return (
     <Link href={href as never} asChild>
-      <Pressable accessibilityRole="button" style={({ pressed }) => [styles.manifestBlockPress, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" style={({ pressed }) => [
+        styles.manifestBlockPress,
+        size === 'compact' && styles.manifestBlockPressCompact,
+        size === 'wide' && styles.manifestBlockPressWide,
+        size === 'feature' && styles.manifestBlockPressFeature,
+        pressed && styles.pressed,
+      ]}>
         <Card tone={block.tone === 'neutral' ? undefined : block.tone} style={[
           styles.manifestBlock,
-          block.size === 'compact' && styles.manifestBlockCompact,
-          block.size === 'wide' && styles.manifestBlockWide,
-          block.size === 'feature' && styles.manifestBlockFeature,
+          size === 'compact' && styles.manifestBlockCompact,
+          size === 'wide' && styles.manifestBlockWide,
+          size === 'feature' && styles.manifestBlockFeature,
         ]}>
           <View style={styles.manifestBlockTop}>
             <Text style={[styles.manifestBlockKind, { color: theme.colors.muted }]}>{block.kind.toUpperCase()}</Text>
             <Pill tone={block.tone}>{records.length ? `${records.length} hit${records.length === 1 ? '' : 's'}` : 'config'}</Pill>
           </View>
-          <Text style={[styles.manifestBlockTitle, { color: theme.colors.ink }]}>{block.title}</Text>
-          <Text style={[styles.manifestBlockSubtitle, { color: theme.colors.muted }]}>{block.subtitle}</Text>
+          <Text style={[styles.manifestBlockTitle, { color: theme.colors.ink }]} numberOfLines={size === 'compact' ? 1 : 2}>{block.title}</Text>
+          <Text style={[styles.manifestBlockSubtitle, { color: theme.colors.muted }]} numberOfLines={size === 'compact' ? 2 : 3}>{block.subtitle}</Text>
           <Text style={[styles.manifestBlockValue, { color: theme.colors.ink }]} numberOfLines={block.kind === 'list' ? 1 : 2}>{metricValue}</Text>
           {block.kind === 'list' ? (
             <View style={styles.manifestBlockList}>
@@ -975,11 +982,14 @@ const styles = StyleSheet.create({
   collectionChipName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   collectionChipCount: { color: colors.moss, fontSize: 11, fontWeight: '900' },
   manifestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  manifestBlockPress: { flexGrow: 1, flexBasis: 300 },
-  manifestBlock: { minHeight: 220, padding: 20, borderRadius: radius.lg },
-  manifestBlockCompact: { minHeight: 164 },
-  manifestBlockWide: { minHeight: 220, minWidth: 420 },
-  manifestBlockFeature: { minHeight: 280, minWidth: 560 },
+  manifestBlockPress: { flexGrow: 1, flexBasis: 300, minWidth: 240 },
+  manifestBlockPressCompact: { flexBasis: 230, flexGrow: 0.8 },
+  manifestBlockPressWide: { flexBasis: 460, flexGrow: 1.35 },
+  manifestBlockPressFeature: { flexBasis: '100%', flexGrow: 1 },
+  manifestBlock: { minHeight: 220, height: '100%', padding: 20, borderRadius: radius.lg },
+  manifestBlockCompact: { minHeight: 172 },
+  manifestBlockWide: { minHeight: 220 },
+  manifestBlockFeature: { minHeight: 280 },
   manifestBlockTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   manifestBlockKind: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
   manifestBlockTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', marginTop: 18 },
