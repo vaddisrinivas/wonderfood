@@ -679,13 +679,19 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
   const theme = useLifeOSTheme();
   const { width } = useWindowDimensions();
   const compact = width < 620;
-  const columns = answer.columns?.length ? answer.columns : ['When', 'Use', 'Next'];
-  const rows = answer.rows.map((row) => row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? '']);
+  const hasRows = answer.rows.length > 0;
+  const columns = answer.columns?.length ? answer.columns : hasRows ? ['When', 'Use', 'Next'] : ['Source', 'Status', 'Next'];
+  const rows = hasRows
+    ? answer.rows.map((row) => row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? ''])
+    : [
+        ['Local app', 'Ready', 'Open Food or add a record'],
+        ['Notion / Sheets', 'Optional', 'Connect a data home in Sources'],
+      ];
   return (
     <View style={[styles.answer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
       <Text style={[styles.answerTitle, { color: theme.colors.ink }]}>{answer.title}</Text>
-      {rows.length ? <Text style={[styles.answerTableLabel, { color: theme.colors.muted }]}>Answer table</Text> : null}
-      {rows.length && compact ? (
+      <Text style={[styles.answerTableLabel, { color: theme.colors.muted }]}>Answer table</Text>
+      {compact ? (
         <View style={styles.mobileAnswerRows} accessibilityLabel="Structured answer cards">
           {rows.map((cells, index) => (
             <View key={`${index}-${cells.join('|')}`} style={[styles.answerRowCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }]}>
@@ -698,7 +704,7 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
             </View>
           ))}
         </View>
-      ) : rows.length ? (
+      ) : (
         <View style={[styles.table, { borderColor: theme.colors.line }]} accessibilityLabel="Structured answer table">
           <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: theme.colors.canvas, borderTopColor: theme.colors.line }]}>
             {columns.map((column) => (
@@ -711,7 +717,7 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
             </View>
           ))}
         </View>
-      ) : null}
+      )}
       {answer.recordCards?.length ? (
         <View style={styles.recordCards}>
           {answer.recordCards.map((record) => (
@@ -731,14 +737,19 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
           ))}
         </View>
       ) : null}
-      {answer.sourceCards?.length ? (
-        <View style={styles.sourceEvidence}>
-          <Text style={[styles.sourceEvidenceTitle, { color: theme.colors.ink }]}>Source evidence</Text>
-          {answer.sourceCards.map((source) => (
+      <View style={styles.sourceEvidence}>
+        <Text style={[styles.sourceEvidenceTitle, { color: theme.colors.ink }]}>Source evidence</Text>
+        {answer.sourceCards?.length ? (
+          answer.sourceCards.map((source) => (
             <CitationEvidenceCard key={`${source.id}-${source.href}`} source={source} />
-          ))}
-        </View>
-      ) : null}
+          ))
+        ) : (
+          <View style={[styles.emptyEvidenceCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }]}>
+            <Text style={[styles.emptyEvidenceTitle, { color: theme.colors.ink }]}>No source card yet</Text>
+            <Text style={[styles.emptyEvidenceBody, { color: theme.colors.muted }]}>Open Food, add records, or pull Notion / Sheets so future answers can cite exact pages, rows and device records.</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -881,6 +892,9 @@ const styles = StyleSheet.create({
   sourceEvidence: { marginTop: 10, gap: 8 },
   sourceEvidenceTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   sourceEvidenceCard: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, borderRadius: 12, padding: 10 },
+  emptyEvidenceCard: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.canvas, borderRadius: 12, padding: 10 },
+  emptyEvidenceTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  emptyEvidenceBody: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   sourceEvidenceTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   sourceEvidenceLabel: { color: colors.ink, fontSize: 13, fontWeight: '900', flex: 1 },
   sourceEvidenceDetail: { color: colors.muted, fontSize: 10, marginTop: 4 },

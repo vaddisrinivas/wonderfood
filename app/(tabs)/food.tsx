@@ -312,14 +312,14 @@ export default function FoodScreen() {
         ) : null;
       case 'tabs':
         return foodConfig.showViewTabs ? (
-          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.segments, { backgroundColor: theme.colors.canvas }]}>
+          <ScrollView key={section} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.segments, compact && styles.segmentsCompact, { backgroundColor: theme.colors.canvas }]}>
             {views.map((view) => (
               <Pressable
                 key={view}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active === view }}
                 onPress={() => setActive(view)}
-                style={[styles.segment, active === view && styles.segmentActive, active === view && { backgroundColor: theme.colors.paper }]}
+                style={[styles.segment, compact && styles.segmentCompact, active === view && styles.segmentActive, active === view && { backgroundColor: theme.colors.paper }]}
               >
                 <Text style={[styles.segmentText, { color: active === view ? theme.colors.ink : theme.colors.muted }]}>{view}</Text>
               </Pressable>
@@ -805,8 +805,10 @@ const styles = StyleSheet.create({
   commandDetail: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   todayRail: { width: 340, gap: 12 },
   todayRailCompact: { width: '100%' },
-  segments: { backgroundColor: '#EAE9E0', padding: 4, borderRadius: radius.pill, marginTop: 18, marginBottom: 20 },
-  segment: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill },
+  segments: { backgroundColor: '#EAE9E0', padding: 4, paddingRight: 10, borderRadius: radius.pill, marginTop: 8, marginBottom: 16 },
+  segmentsCompact: { maxWidth: '100%' },
+  segment: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, minWidth: 86, alignItems: 'center' },
+  segmentCompact: { minWidth: 76, paddingHorizontal: 10 },
   segmentActive: { backgroundColor: colors.paper },
   segmentText: { color: colors.muted, fontSize: 13, fontWeight: '800' },
   segmentTextActive: { color: colors.ink },

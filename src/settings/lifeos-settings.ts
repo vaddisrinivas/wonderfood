@@ -238,7 +238,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showControlCard: false,
       },
       food: {
-        sectionOrder: 'hero,tabs,manifest,workspace,attention,widgets,view,package',
+        sectionOrder: 'tabs,hero,manifest,workspace,attention,widgets,view,package',
         showHero: true,
         showViewTabs: true,
         showManifestBlocks: true,
