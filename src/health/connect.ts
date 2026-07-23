@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import {
   SdkAvailabilityStatus,
   getGrantedPermissions,
@@ -112,6 +112,21 @@ export async function requestLifeOSHealthPermissions(): Promise<HealthConnectSta
       granted: [],
       message: error instanceof Error ? error.message : 'Health Connect permission request failed.',
     };
+  }
+}
+
+/**
+ * Opens the system-managed Health Connect permission surface through the app's
+ * stable deep link. The Android activity owns the intent extras so callers do
+ * not need to know platform-specific package names.
+ */
+export async function openLifeOSHealthSettings(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  try {
+    await Linking.openURL('wonderfood://health-connect');
+    return true;
+  } catch {
+    return false;
   }
 }
 

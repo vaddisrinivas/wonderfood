@@ -1,6 +1,7 @@
 package com.wonderfood.app
 import expo.modules.splashscreen.SplashScreenManager
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 
@@ -23,6 +24,22 @@ class MainActivity : ReactActivity() {
     // @generated end expo-splashscreen
     super.onCreate(null)
     HealthConnectPermissionDelegate.setPermissionDelegate(this)
+    openHealthConnectSettingsIfRequested(intent)
+  }
+
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    openHealthConnectSettingsIfRequested(intent)
+  }
+
+  private fun openHealthConnectSettingsIfRequested(intent: Intent?) {
+    val data = intent?.data ?: return
+    if (data.scheme != "wonderfood" || data.host != "health-connect") return
+
+    val settingsIntent = Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
+      .putExtra(Intent.EXTRA_PACKAGE_NAME, packageName)
+    runCatching { startActivity(settingsIntent) }
   }
 
   /**
