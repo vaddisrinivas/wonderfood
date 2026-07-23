@@ -887,3 +887,11 @@
 - Still open:
   - Android/iOS release is blocked by debug-signed APK, unsigned AAB, missing Android signing env, and missing Apple release env.
   - Final visual/accessibility polish is partial: web/accessibility smokes pass, but full visual state matrix, native visual proof, responsive screenshots, and product-grade UI review remain open.
+
+## 2026-07-23 web visual state matrix proof
+
+- Added `scripts/quality/check-visual-state-matrix.mjs` and `npm run phase9:check:visual-state-matrix`.
+- The verifier checks durable desktop/mobile screenshots for Home, Food, record detail, collection, Chat, Sources, Settings, Config, Capture, Search and Health diagnostics, plus the existing web smoke and accessibility smoke results.
+- Fresh result: `npm run phase9:check:visual-state-matrix` ✅ with `22/22` screenshots; evidence `app/build/evidence/visual-state-matrix/visual-state-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit` after adding visual-matrix evidence. New rollup: `complete=false`, `5 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining completion blockers are now sharper: Android/iOS release signing/App Store env is blocked; final visual polish remains partial because native full-state matrix, tablet/foldable review and manual product-grade UI review are not complete.

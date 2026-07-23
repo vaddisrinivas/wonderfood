@@ -60,6 +60,7 @@ const workflow = readJson('app/build/evidence/workflow/workflow-resume-cancel-pr
 const release = readJson('app/build/evidence/release-readiness.json');
 const accessibility = readJson('app/build/evidence/accessibility/accessibility-smoke.json');
 const webProduct = readJson('app/build/evidence/web-product-smoke/web-product-smoke.json');
+const visualMatrix = readJson('app/build/evidence/visual-state-matrix/visual-state-matrix.json');
 const androidArtifacts = readJson('app/build/evidence/android-release-artifacts.json');
 const iosExport = readJson('app/build/evidence/ios-export.json');
 
@@ -67,6 +68,7 @@ const authorityPassed = providerAuthority?.receipt?.all_authority_checks_passed 
 const workflowPassed = workflow?.all_passed === true;
 const releaseReady = release?.release_ready === true;
 const visualSmokePassed = accessibility?.pass === true && webProduct?.pass === true;
+const visualMatrixPassed = visualMatrix?.status === 'passed';
 const androidArtifactsCurrent = androidArtifacts?.git_head === head;
 
 const items = [
@@ -92,12 +94,20 @@ const items = [
     releaseReady ? [] : (release?.blockers ?? ['release_readiness_evidence_missing']),
   ),
   item(
+    'web_visual_state_matrix',
+    'Web visual state matrix',
+    visualMatrixPassed ? 'passed' : 'missing',
+    'app/build/evidence/visual-state-matrix/visual-state-matrix.json',
+    visualMatrixPassed ? [] : ['Run phase9:check:visual-state-matrix after check:web-product and check:accessibility-smoke.'],
+  ),
+  item(
     'final_visual_accessibility_polish',
     'Final visual/accessibility polish',
-    visualSmokePassed ? 'partial' : 'missing',
+    visualSmokePassed && visualMatrixPassed ? 'partial' : 'missing',
     {
       web_product: 'app/build/evidence/web-product-smoke/web-product-smoke.json',
       accessibility: 'app/build/evidence/accessibility/accessibility-smoke.json',
+      visual_matrix: 'app/build/evidence/visual-state-matrix/visual-state-matrix.json',
     },
     visualSmokePassed
       ? [
