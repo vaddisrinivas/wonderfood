@@ -17,12 +17,11 @@ Both native targets use the application identifier `com.wonderfood.app`.
 
 ## Current implementation
 
-Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn server chat with streaming, tables, source citations, action receipts and idempotent Undo; SQLite persistence; MCP Streamable HTTP; Notion data-source pull/push/webhooks; Google Sheets adapter; Health Connect read bridge; and self-contained Android release packaging. Food is active; Health and Plants are real config packages available for later selection.
+Implemented now: responsive Today/Food/Chat shell, record editor, global search, capture, multi-turn server chat with streaming, tables, source citations, action receipts and idempotent Undo; SQLite persistence; MCP Streamable HTTP; Notion data-source pull/push; Google Sheets adapter; Health Connect read bridge; and self-contained Android release packaging. Food is active; Health and Plants are real config packages available for later selection. Optional Notion push webhooks are disabled by default and are not required for release.
 
 Provider secrets stay outside the repo. Local live Notion/OpenAI and Google Sheets pulls are available when the private environment is loaded; the approved workbook keeps a human-facing Runtime dashboard plus a machine-readable `LifeOS Canonical` tab for sync and source citations.
 
-- [LifeOS 2026 Notion](https://app.notion.com/p/manasa-srinivas/LifeOS-2026-3a45dd535a93816fb7d3d4a0a2bc2bf1)
-- [LifeOS Google Sheets](https://docs.google.com/spreadsheets/d/1WpEwm07ApcnuiLDVhzl8vy4D5kU8KjmtbAVC4qLphcU/edit)
+- Personal Notion and Sheets workspaces are configured outside this repository through the private agent environment.
 - Domain runtime files: `packages/domain-config/`
 
 ## Local development
@@ -36,7 +35,7 @@ npm run start
 
 Copy `.env.example` to `.env.local`, set the Mac LAN address, and start the server with the private environment loaded. Never commit tokens.
 
-The current personal hosted runtime uses `https://lifeos-api.thetechcruise.com` through a named Cloudflare Tunnel. It is backed by the Mac server process, requires `LIFEOS_SERVER_TOKEN` for chat/write/MCP calls, and is not a replacement for a managed always-on host. Build the phone with the matching `EXPO_PUBLIC_LIFEOS_SERVER_URL` and `EXPO_PUBLIC_LIFEOS_SERVER_TOKEN` values.
+For a personal install, configure any HTTPS server you control with `EXPO_PUBLIC_LIFEOS_SERVER_URL` and `EXPO_PUBLIC_LIFEOS_SERVER_TOKEN`. The repository does not depend on `thetechcruise.com`; that host is only the owner's private deployment.
 
 Launch a target:
 

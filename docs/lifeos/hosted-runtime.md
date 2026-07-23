@@ -1,4 +1,7 @@
-# Hosted LifeOS runtime
+# Hosted LifeOS runtime (personal deployment only)
+
+This describes the owner's private Mac-backed deployment. It is not part of
+the open-source release setup and is not required to run the app.
 
 The personal runtime is exposed at `https://lifeos-api.thetechcruise.com` through the named Cloudflare Tunnel `wonderfood-lifeos`.
 
@@ -27,6 +30,6 @@ launchctl print gui/$(id -u)/com.wonderfood.lifeos-hosted
 curl https://lifeos-api.thetechcruise.com/health
 ```
 
-Chat, Health Connect, provider sync, write actions, MCP calls, and Google Sheets webhook ingress use the matching `Authorization: Bearer ...` token. Notion webhooks additionally verify their provider signature. The phone release build was produced with the hosted URL and token; tokens are intentionally absent from source and documentation.
+Chat, Health Connect, provider sync, write actions, MCP calls, and Google Sheets webhook ingress use the matching `Authorization: Bearer ...` token. Notion push webhooks are optional and disabled by default; the release path uses authenticated pulls/manual refresh. Tokens are intentionally absent from source and documentation.
 
 Cloudflare's current API flow requires a named tunnel, ingress configuration, a DNS CNAME to `<tunnel-id>.cfargotunnel.com`, and a running connector. See the [Cloudflare remote tunnel API guide](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/).

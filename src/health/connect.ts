@@ -41,6 +41,23 @@ export type HealthConnectSnapshot = HealthConnectStatus & {
   };
 };
 
+export type HealthConnectSnapshotSummary = {
+  id: string;
+  provider: 'health_connect';
+  availability: string;
+  granted: string[];
+  observed_at: string;
+  range: { start_time: string; end_time: string };
+  record_counts: {
+    nutrition: number;
+    hydration: number;
+    steps: number;
+    activeCalories: number;
+    weight: number;
+  };
+  content_hash: string;
+};
+
 function unsupportedStatus(): HealthConnectStatus {
   return {
     availability: 'unsupported',
@@ -222,4 +239,52 @@ export async function syncLifeOSHealthSnapshot(input: {
   } catch (error) {
     return { status: 'error', message: error instanceof Error ? error.message : 'Health snapshot sync failed.' };
   }
+}
+
+export async function listLifeOSHealthSnapshots(input: {
+  baseUrl: string;
+  token?: string;
+  signal?: AbortSignal;
+}): Promise<HealthConnectSnapshotSummary[]> {
+  const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
+  if (!baseUrl) return [];
+  try {
+    const response = await fetch(`${baseUrl}/health/connect/snapshots`, {
+      headers: { ...(input.token?.trim() ? { authorization: `Bearer ${input.token.trim()}` } : {}) },
+      signal: input.signal,
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json().catch(() => null)) as { snapshots?: HealthConnectSnapshotSummary[] } | null;
+    return Array.isArray(payload?.snapshots) ? payload.snapshots : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteLifeOSHealthSnapshot(input: {
+  baseUrl: string;
+  token?: string;
+  id: string;
+  signal?: AbortSignal;
+}): Promise<{ status: 'deleted' | 'not_found' | 'error'; message: string }> {
+  const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
+  if (!baseUrl || !input.id.trim()) return { status: 'error', message: 'Health snapshot id is required.' };
+  try {
+    const response = await fetch(`${baseUrl}/health/connect/snapshot/${encodeURIComponent(input.id.trim())}`, {
+      method: 'DELETE',
+      headers: { ...(input.token?.trim() ? { authorization: `Bearer ${input.token.trim()}` } : {}) },
+      signal: input.signal,
+    });
+    const payload = (await response.json().catch(() => null)) as { status?: 'deleted' | 'error'; message?: string } | null;
+    if (response.status === 404) return { status: 'not_found', message: payload?.message || 'Health snapshot not found.' };
+    if (!response.ok) return { status: 'error', message: payload?.message || 'Health snapshot delete failed.' };
+    return { status: 'deleted', message: payload?.message || 'Health snapshot deleted.' };
+  } catch (error) {
+    return { status: 'error', message: error instanceof Error ? error.message : 'Health snapshot delete failed.' };
+  }
+}
+
+export function healthConnectExportUrl(baseUrl: string) {
+  const normalized = baseUrl.trim().replace(/\/$/, '');
+  return normalized ? `${normalized}/health/connect/export` : '';
 }

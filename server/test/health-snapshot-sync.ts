@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { listHealthSnapshots, saveHealthSnapshot } from '../src/health/snapshots';
+import { deleteHealthSnapshot, exportHealthSnapshots, listHealthSnapshots, saveHealthSnapshot } from '../src/health/snapshots';
 
 const dir = mkdtempSync(join(tmpdir(), 'lifeos-health-snapshot-'));
 const path = join(dir, 'snapshots.json');
@@ -22,6 +22,14 @@ try {
   if (!second.ok || second.status !== 'duplicate') throw new Error('same health snapshot should dedupe');
   const rows = listHealthSnapshots();
   if (rows.length !== 1 || rows[0]?.record_counts.steps !== 1) throw new Error('health snapshot summary mismatch');
+  const exported = exportHealthSnapshots();
+  if (exported.length !== 1 || exported[0]?.records.steps.length !== 1) throw new Error('health snapshot export mismatch');
+  const invalid = saveHealthSnapshot({ ...input, range: { startTime: input.range.endTime, endTime: input.range.startTime } });
+  if (invalid.ok || invalid.status !== 'invalid') throw new Error('reversed health range should be rejected');
+  const deleted = deleteHealthSnapshot(rows[0]!.id);
+  if (!deleted.ok || deleted.status !== 'deleted' || listHealthSnapshots().length !== 0) {
+    throw new Error('health snapshot delete mismatch');
+  }
   console.log('PASS server/test/health-snapshot-sync.ts');
 } finally {
   if (previous === undefined) delete process.env.LIFEOS_HEALTH_SNAPSHOTS_PATH;

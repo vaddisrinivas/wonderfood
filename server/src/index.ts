@@ -33,7 +33,12 @@ import {
 } from './chat-storage';
 import { ChatStreamEvent } from './responses';
 import { getActionEvent, runUndo } from './mcp/state';
-import { listHealthSnapshots, saveHealthSnapshot } from './health/snapshots';
+import {
+  deleteHealthSnapshot,
+  exportHealthSnapshots,
+  listHealthSnapshots,
+  saveHealthSnapshot,
+} from './health/snapshots';
 
 const port = Number(process.env.PORT ?? '8787');
 const host = process.env.LIFEOS_SERVER_HOST?.trim() || '127.0.0.1';
@@ -57,7 +62,7 @@ function applyCors(req: any, res: any) {
     res.setHeader('vary', 'origin');
   }
   res.setHeader('access-control-allow-headers', 'content-type, authorization');
-  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  res.setHeader('access-control-allow-methods', 'DELETE, GET, POST, OPTIONS');
 }
 
 function json(value: unknown) {
@@ -76,6 +81,10 @@ function unauthorized(res: any, message: string) {
 
 function badRequest(res: any, message: string) {
   setJson(res, 400, { status: 'error', message });
+}
+
+function notFound(res: any, message: string) {
+  setJson(res, 404, { status: 'error', message });
 }
 
 function ok(res: any, body: unknown) {
@@ -107,6 +116,10 @@ function assertAuth(req: any, res: any) {
   }
   unauthorized(res, 'Invalid server token');
   return false;
+}
+
+function notionWebhooksEnabled() {
+  return process.env.LIFEOS_NOTION_WEBHOOKS_ENABLED?.trim().toLowerCase() === 'true';
 }
 
 function parseNumber(raw: unknown, fallback: number) {
@@ -376,6 +389,16 @@ const server = createServer(async (req: any, res: any) => {
       ok(res, { status: 'ok', provider: 'health_connect', snapshots: listHealthSnapshots() });
       return;
     }
+    if (req.method === 'GET' && path === '/health/connect/export') {
+      res.setHeader('content-disposition', 'attachment; filename="lifeos-health-connect-export.json"');
+      ok(res, {
+        status: 'ok',
+        provider: 'health_connect',
+        exported_at: new Date().toISOString(),
+        snapshots: exportHealthSnapshots(),
+      });
+      return;
+    }
     if (req.method === 'POST' && path === '/health/connect/snapshot') {
       let payload: Record<string, unknown>;
       try {
@@ -392,12 +415,30 @@ const server = createServer(async (req: any, res: any) => {
       ok(res, result);
       return;
     }
+    const snapshotMatch = path.match(/^\/health\/connect\/snapshot\/([^/]+)$/);
+    if (req.method === 'DELETE' && snapshotMatch) {
+      const result = deleteHealthSnapshot(decodeURIComponent(snapshotMatch[1]));
+      if (!result.ok && result.status === 'not_found') {
+        notFound(res, result.message);
+        return;
+      }
+      if (!result.ok) {
+        badRequest(res, result.message);
+        return;
+      }
+      ok(res, result);
+      return;
+    }
     badRequest(res, 'Route not found');
     return;
   }
 
   if (path.startsWith('/providers/notion')) {
     if (path === '/providers/notion/webhook') {
+      if (!notionWebhooksEnabled()) {
+        notFound(res, 'Notion webhooks are disabled; use authenticated pull sync.');
+        return;
+      }
       if (req.method !== 'POST') {
         badRequest(res, 'Unsupported method');
         return;

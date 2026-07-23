@@ -16,7 +16,10 @@ grep -q 'android.health.connect.action.MANAGE_HEALTH_PERMISSIONS' "$root_dir/and
 grep -q 'openLifeOSHealthSettings' "$root_dir/src/health/connect.ts"
 test -f "$root_dir/src/health/connect.ts"
 grep -q "health/connect/snapshot" "$root_dir/server/src/index.ts"
+grep -q "health/connect/export" "$root_dir/server/src/index.ts"
+grep -q "deleteHealthSnapshot" "$root_dir/server/src/health/snapshots.ts"
 grep -q "saveHealthSnapshot" "$root_dir/server/src/health/snapshots.ts"
+test -x "$root_dir/scripts/quality/run-emulatorx-health-connect.sh"
 
 if [[ ! -f "$apk" ]]; then
   echo "Health Connect APK check: FAIL (release APK missing; run npm run android:release)" >&2

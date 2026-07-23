@@ -27,16 +27,16 @@ Implemented in the Expo replacement:
 - Static web and Android bundle exports.
 - Today, Food, Chat, Search, Capture, Record, Sources, and System screens.
 - Server-backed multi-turn chat with streaming, durable turns, retrieval, tables, source citations, action receipts, idempotency and Undo.
-- SQLite canonical runtime plus Notion data-source and Google Sheets adapters, webhook replay, authority-gated sync and MCP Streamable HTTP.
+- SQLite canonical runtime plus Notion data-source and Google Sheets adapters, optional webhook replay, authority-gated sync and MCP Streamable HTTP.
 - Food, Health and Plants manifests/skills; declarative seven-role agent registry; canonical schemas and five Food workflows.
 - Android release APK with bundled JavaScript, Health Connect read-only bridge, permission delegate and phone-safe LAN server configuration.
 - Config validator, TypeScript, Expo Doctor, web export, and Android export gates.
 - Native identifiers remain com.wonderfood.app.
-- Web runtime and wireless S23U release install verified; S23U permission/read walkthrough remains pending until the secure device is unlocked.
+- Web runtime and emulatorx release smoke verified; physical-device testing is out of scope for this pass.
 
 Open release work:
 
-- Hosted deployment for the server/webhooks and a real Google Sheets OAuth workbook configuration.
+- Personal hosted deployment is optional; FOSS/release uses a user-configured server URL and authenticated pull/manual refresh.
 - Unlocked-device Health Connect grant/read/export/delete verification and background sync.
 - Remaining phase-2 UI empty/loading polish and the final iOS build/release pass.
 

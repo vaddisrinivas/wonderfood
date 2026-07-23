@@ -11,7 +11,7 @@
 ## Inputs
 - Typed MCP command + resolved `data_home`.
 - Notion payload with `page_id` or `external_id` identity.
-- Env-driven credentials only (`NOTION_TOKEN`, `NOTION_DATA_SOURCE_ID`, optional `NOTION_WEBHOOK_SIGNING_SECRET`).
+- Env-driven credentials only (`NOTION_TOKEN`, `NOTION_DATA_SOURCE_ID`). Webhooks are optional and disabled by default; enable them explicitly with `LIFEOS_NOTION_WEBHOOKS_ENABLED=true` plus `NOTION_WEBHOOK_SIGNING_SECRET`.
 
 ## Outputs/contracts
 - Adapter write result includes:
@@ -30,12 +30,13 @@
 
 ## Webhook verification handshake
 
-`POST /providers/notion/webhook` acknowledges Notion's unsigned one-time
-`verification_token` payload with `verification_required` and a boolean
-presence flag. It never echoes or persists the token. After the operator copies
-the token into `NOTION_WEBHOOK_SIGNING_SECRET` and verifies the subscription in
-Notion connection settings, signed event delivery uses the existing
-refetch-before-canonical-apply path.
+`POST /providers/notion/webhook` is an optional push-sync path. It is disabled
+by default so release does not depend on a Notion subscription, verification
+token, or signing secret. When explicitly enabled, it acknowledges Notion's
+unsigned one-time `verification_token` payload with `verification_required` and
+a boolean presence flag, never echoes or persists the token, and uses the
+existing refetch-before-canonical-apply path for signed events. Release uses
+authenticated pull/manual refresh and can add scheduled polling later.
 
 ## Evidence
 - `app/build/evidence/phase5-notion-adapter/phase5-notion-adapter-proof.json`

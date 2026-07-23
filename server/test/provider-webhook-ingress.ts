@@ -10,6 +10,7 @@ process.env.PORT = String(port);
 process.env.LIFEOS_SERVER_TOKEN = 'webhook-ingress-test-token';
 process.env.NOTION_TOKEN = 'webhook-ingress-notion-token';
 process.env.NOTION_WEBHOOK_SIGNING_SECRET = 'webhook-ingress-secret';
+process.env.LIFEOS_NOTION_WEBHOOKS_ENABLED = 'true';
 delete process.env.NOTION_DATA_SOURCE_ID;
 delete process.env.GOOGLE_SHEETS_ACCESS_TOKEN;
 delete process.env.GOOGLE_SHEETS_TOKEN;
@@ -31,6 +32,15 @@ async function readJson(response: Response) {
 }
 
 try {
+  process.env.LIFEOS_NOTION_WEBHOOKS_ENABLED = 'false';
+  const disabledResponse = await fetch(`http://127.0.0.1:${port}/providers/notion/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ verification_token: 'disabled_probe' }),
+  });
+  ensure(disabledResponse.status === 404, 'Notion webhooks must be disabled unless explicitly enabled');
+  process.env.LIFEOS_NOTION_WEBHOOKS_ENABLED = 'true';
+
   const verificationResponse = await fetch(`http://127.0.0.1:${port}/providers/notion/webhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
