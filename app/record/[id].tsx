@@ -9,6 +9,7 @@ import { getDomainRecord, getDomainRecordCanonical } from '@/src/domain/queries'
 import { loadCatalog } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';
 import { getRecordsByIds, upsertRecord } from '@/src/db/records';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 type FoodDetail = {
   kind: 'meal' | 'recipe' | 'inventory' | 'shopping' | 'generic';
@@ -20,6 +21,11 @@ type FoodDetail = {
 };
 
 const ingredientStates = new Set(['available', 'needed', 'shopping', 'previous']);
+
+function countSetting(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
 
 function fallbackCanonicalFromView(
   view: NonNullable<Awaited<ReturnType<typeof getDomainRecord>>>,
@@ -280,6 +286,7 @@ export default function RecordScreen() {
   const compact = width < 860;
   const db = useLifeOSDatabase();
   const catalog = loadCatalog();
+  const settings = useLifeOSSettingsSnapshot();
 
   const [record, setRecord] = useState<CanonicalRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -355,7 +362,8 @@ export default function RecordScreen() {
         previous: foodDetail.ingredients.filter((ingredient) => ingredient.state === 'previous'),
       }
     : { available: [], needed: [], shopping: [], previous: [] };
-  const primaryNutrition = foodDetail?.nutrition.slice(0, 4) ?? [];
+  const nutritionLimit = countSetting(settings.runtime.surfaceConfig.record.nutritionLimit, 6);
+  const primaryNutrition = foodDetail?.nutrition.slice(0, Math.min(4, nutritionLimit)) ?? [];
 
   const handleSave = async () => {
     if (!record || !db) {
@@ -499,7 +507,7 @@ export default function RecordScreen() {
 
               <SectionTitle title="Nutrition profile" />
               <View style={styles.nutritionGrid}>
-                {foodDetail.nutrition.map(([label, value]) => (
+                {foodDetail.nutrition.slice(0, nutritionLimit).map(([label, value]) => (
                   <Card key={label} style={styles.nutritionCard}>
                     <Text style={styles.nutritionValue}>{value}</Text>
                     <Text style={styles.nutritionLabel}>{label}</Text>
@@ -615,11 +623,15 @@ export default function RecordScreen() {
                 )}
               </View>
 
-              <SectionTitle title="Provenance" />
-              <Card>
-                <Row icon="S" title={sourceLabel} detail="Canonical source" />
-                <Row icon="⌁" title="LifeOS Food schema v1" detail="Record shape and relations" />
-              </Card>
+              {settings.runtime.surfaceConfig.record.showProvenance ? (
+                <>
+                  <SectionTitle title="Provenance" />
+                  <Card>
+                    <Row icon="S" title={sourceLabel} detail="Canonical source" />
+                    <Row icon="⌁" title="LifeOS Food schema v1" detail="Record shape and relations" />
+                  </Card>
+                </>
+              ) : null}
             </View>
           </View>
           <Pressable onPress={() => router.back()} style={styles.close}>

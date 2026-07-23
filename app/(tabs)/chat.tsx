@@ -50,6 +50,11 @@ const promptBank = [
   'Summarize nutrition and previous cooking notes.',
 ];
 
+function countSetting(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 export default function ChatScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
@@ -108,6 +113,7 @@ export default function ChatScreen() {
   }, [activeDomainId, db, domainLabel]);
 
   const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0], [activeThreadId, threads]);
+  const sourceLimit = countSetting(settings.runtime.surfaceConfig.chat.sourceLimit, 8);
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -340,7 +346,7 @@ export default function ChatScreen() {
                 <View style={styles.sourceStrip}>
                   <Text style={styles.sourceStripTitle}>{sourceRecords.length} source records loaded</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
-                    {sourceRecords.slice(0, 8).map((record) => (
+                    {sourceRecords.slice(0, sourceLimit).map((record) => (
                       <Pressable key={record.id} accessibilityRole="link" onPress={() => router.push(`/record/${record.id}`)} style={({ pressed }) => [styles.sourcePill, pressed && styles.pressed]}>
                         <Text style={styles.sourcePillTitle} numberOfLines={1}>{record.title}</Text>
                         <Text style={styles.sourcePillMeta} numberOfLines={1}>{record.collection} · {record.source.provider}</Text>
@@ -357,13 +363,15 @@ export default function ChatScreen() {
                 </View>
 
                 <View style={styles.composerWrap}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
-                    {promptBank.map((prompt) => (
-                      <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
-                        <Text style={styles.promptText}>{prompt}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                  {settings.runtime.surfaceConfig.chat.promptRail ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptRail}>
+                      {promptBank.map((prompt) => (
+                        <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, pressed && styles.pressed]}>
+                          <Text style={styles.promptText}>{prompt}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  ) : null}
                   <View style={styles.composer}>
                     <TextInput
                       accessibilityLabel="Chat message"

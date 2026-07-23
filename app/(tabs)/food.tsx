@@ -8,6 +8,7 @@ import { getSurfaceCollectionsForLabel, queryDomainCollections } from '@/src/dom
 import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius } from '@/src/theme';
 
 type FoodRecordView = DomainRecordViewModel;
@@ -39,12 +40,18 @@ function pickByNeed(records: FoodRecordView[], needle: string, fallbackIndex: nu
   return records.find((item) => `${item.collection} ${item.meta} ${item.title}`.toLowerCase().includes(needle)) ?? records[fallbackIndex];
 }
 
+function countSetting(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 export default function FoodScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 760;
   const contentWidth = compact ? Math.max(width - 32, 280) : Math.max(width - 128, 900);
   const { activeManifest } = loadCatalog();
+  const settings = useLifeOSSettingsSnapshot();
   const surfaceCatalog = useMemo(() => buildSurfaceCatalog(activeManifest), [activeManifest]);
   const views = surfaceCatalog.tabs;
   const defaultTab = views[0] ?? 'Overview';
@@ -83,10 +90,12 @@ export default function FoodScreen() {
   const kitchenItem = pickByNeed(records, 'pantry', 1);
   const shoppingItem = pickByNeed(records, 'shopping', 2);
   const activeCopy = viewCopy[active] ?? viewCopy.Overview;
-  const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, 4);
-  const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, 4);
-  const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, 4);
-  const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, 3);
+  const columnLimit = countSetting(settings.runtime.surfaceConfig.food.columnLimit, 4);
+  const attentionLimit = countSetting(settings.runtime.surfaceConfig.food.attentionLimit, 3);
+  const mealRecords = records.filter((item) => ['meal_plan', 'meal_log', 'recipe'].includes(item.collection)).slice(0, columnLimit);
+  const kitchenRecords = records.filter((item) => ['inventory', 'ingredient', 'purchase_line'].includes(item.collection)).slice(0, columnLimit);
+  const shoppingRecords = records.filter((item) => ['shopping_item', 'purchase'].includes(item.collection)).slice(0, columnLimit);
+  const reviewRows = records.filter((item) => /use|planned|buy|tonight/i.test(`${item.status} ${item.meta}`)).slice(0, attentionLimit);
 
   return (
     <Page>
