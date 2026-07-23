@@ -13,7 +13,7 @@ async function main() {
   });
 
   const text = JSON.stringify(result);
-  const forbidden = ['local demo', 'Offline fallback', 'Server fallback', 'capped offline fallback'];
+  const forbidden = ['local demo', 'Offline fallback', 'Server fallback', 'capped offline fallback', 'Offline recipe answer', 'Offline food answer', 'Offline shopping answer'];
   for (const phrase of forbidden) {
     assert(!text.includes(phrase), `Chat product language leaked: ${phrase}`);
   }

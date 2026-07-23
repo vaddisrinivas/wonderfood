@@ -156,7 +156,7 @@ export default function ChatScreen() {
     const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: mode === 'direct' ? 'Direct model' : 'Local only',
+      detail: mode === 'direct' ? 'Direct model' : 'Local source mode',
       messages: [{ id: `${id}-welcome`, role: 'assistant', text: `${domainLabel} context is on. I can help with records, sources, and next actions.` }],
     };
 
@@ -435,7 +435,7 @@ export default function ChatScreen() {
             <View style={styles.topbar}>
               <View>
                 <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CHAT</Text>
-                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'offline'}</Text>
+                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'direct model' : 'local source mode'}</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
                 <Text style={[styles.newThreadText, { color: theme.colors.paper }]}>＋ New thread</Text>

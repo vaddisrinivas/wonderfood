@@ -922,7 +922,7 @@ function makeOfflineAnswer(input: string, records: CanonicalRecord[] = []): Chat
   });
 
   return {
-    title: selectedRecords.length ? `Local ${isShopping ? 'shopping' : isRecipe ? 'food planning' : 'Food'} answer` : `Offline ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
+    title: selectedRecords.length ? `Local ${isShopping ? 'shopping' : isRecipe ? 'food planning' : 'Food'} answer` : `Local ${isShopping ? 'shopping' : isRecipe ? 'recipe' : 'food'} answer`,
     intro: selectedRecords.length
       ? buildOfflineIntro({ isShopping, isRecipe, count: selectedRecords.length })
       : 'No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.',
