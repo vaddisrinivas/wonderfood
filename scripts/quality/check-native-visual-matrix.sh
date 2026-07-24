@@ -40,8 +40,12 @@ fi
 if [[ -z "$serial" && -z "$requested_serial" ]]; then
   echo "Native visual matrix: starting emulator $avd_name"
   log_file="$(mktemp -t lifeos-native-visual.XXXXXX)"
-  "$emulator_bin" -avd "$avd_name" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
-  for _ in $(seq 1 120); do
+  wipe_arg=()
+  if [[ "${LIFEOS_EMULATOR_WIPE_DATA:-0}" == "1" ]]; then
+    wipe_arg=(-wipe-data)
+  fi
+  "$emulator_bin" -avd "$avd_name" "${wipe_arg[@]}" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
+  for _ in $(seq 1 240); do
     serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
     [[ -n "$serial" ]] && break
     sleep 1
@@ -51,7 +55,7 @@ fi
 echo "Native visual matrix: using device $serial"
 
 boot=""
-for _ in $(seq 1 120); do
+for _ in $(seq 1 300); do
   boot="$("$adb_bin" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
   [[ "$boot" == "1" ]] && break
   sleep 1
@@ -64,7 +68,7 @@ if [[ "$serial" == emulator-* ]]; then
 fi
 echo "Native visual matrix: installing $(basename "$apk")"
 install_log="$(mktemp -t lifeos-native-install.XXXXXX)"
-if ! timeout 180 "$adb_bin" -s "$serial" install --no-incremental -r "$apk" >"$install_log" 2>&1; then
+if ! timeout 420 "$adb_bin" -s "$serial" install --no-incremental -r "$apk" >"$install_log" 2>&1; then
   fail "APK install timed out or failed on $serial: $(tail -n 8 "$install_log" | tr '\n' ' ')"
 fi
 echo "Native visual matrix: install complete"
