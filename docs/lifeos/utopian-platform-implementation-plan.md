@@ -4,7 +4,7 @@
 **Baseline branch:** `codex/lifeos-e2e-implementation`  
 **Baseline commit:** `a3fc52e`  
 **Scope:** Web and Android debug application  
-**Execution strategy:** Replacement first, parity second, deletion third  
+**Execution strategy:** Inventory contracts, delete custom infrastructure in an isolated ORCH worktree, adopt the official library, verify, then merge  
 **Maximum parallel implementation lanes:** Four  
 **Only execution control plane:** ORCH  
 **Only worker adapter:** `codex`  
@@ -46,6 +46,28 @@ Hard rules:
   deletion unlocked.
 - Queue reset, policy enforcement, monitoring, approval/rejection, and retry
   are control-plane maintenance and may be performed directly with `orch`.
+
+Delete-first applies to replaceable infrastructure, not product semantics:
+
+| Delete custom implementation | Adopt |
+|---|---|
+| MCP JSON-RPC, protocol negotiation, SSE, transport validation | Official [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) v1.29 |
+| Fake agent roles, static planner, regex executor | Official [Vercel AI SDK](https://github.com/vercel/ai) `ToolLoopAgent` |
+| Manual chat stream parser and tool continuation plumbing | AI SDK `useChat` and `DefaultChatTransport` |
+| Handwritten workflow lifecycle and duplicate server runner | Official [XState](https://github.com/statelyai/xstate) |
+| Handwritten JSON-Schema validation | Ajv |
+| Ad-hoc record/package diff implementation | `fast-json-patch` |
+| Ad-hoc rule predicate evaluator | `json-logic-js` |
+
+Deletion happens first inside the task worktree. The same task immediately
+adopts the library and restores required behavior before it can merge. No
+compatibility shim, dual runtime, or old/new production switch survives the
+task.
+
+The following are product contracts, not replaceable infrastructure, and must
+not be deleted: `Operation`, `planOperation`, `applyOperation`, QuerySpec,
+approval receipts, provenance, Undo, provider authority/readback rules,
+AppPackage activation/rollback, capability policy, and canonical SQLite data.
 
 The 15-minute monitor runs:
 
@@ -395,22 +417,24 @@ Do not use unless proven by the pinned versions:
 
 # 6. Execution policy
 
-## 6.1 Replacement sequence
+## 6.1 Delete-and-adopt sequence
 
-Every replacement follows this order:
+Every library-backed replacement follows this order:
 
 1. Define target ownership.
-2. Capture current behavior and tests.
-3. Build compatibility adapter.
-4. Prove parity.
-5. Redirect production call sites.
-6. Run full relevant checks.
-7. Quarantine old path.
-8. Confirm no production imports.
-9. Delete old path.
-10. Remove obsolete tests and storage only after migration review.
+2. Inventory only the Wonder-owned contracts and observable behavior that must
+   survive.
+3. In the isolated ORCH worktree, delete the custom infrastructure.
+4. Copy the documented official-library pattern.
+5. Reconnect the preserved Wonder contracts directly to that library.
+6. Add or update contract and integration tests.
+7. Confirm no production import or compatibility shim reaches the deleted path.
+8. Run the full relevant checks.
+9. Merge only when replacement behavior passes.
+10. Remove obsolete storage only after migration and recovery review.
 
-No agent may delete first and promise parity later.
+The main branch must never receive a deletion-only broken commit. The task
+worktree may be temporarily broken while deleting and adopting.
 
 ## 6.2 PR requirements
 

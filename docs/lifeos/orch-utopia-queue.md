@@ -13,6 +13,8 @@ Model policy:
 Reuse policy:
 
 - Do not handwrite infrastructure when a good standard library fits.
+- For library-backed infrastructure, delete the custom implementation first in the isolated ORCH worktree, adopt the official library in the same task, verify, then merge.
+- Do not retain compatibility shims or parallel old/new runtimes.
 - Keep Wonder's product kernel: `applyOperation`, receipts, provenance, undo, provider authority, package activation, and policy gates.
 - Durable/public contracts use JSON Schema + Ajv + generated TypeScript.
 - Zod is for transient API/UI/env parsing only.
