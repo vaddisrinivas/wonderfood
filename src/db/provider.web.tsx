@@ -2,6 +2,7 @@ import { ReactNode, createContext, useContext, useEffect, useState } from 'react
 import { SQLiteDatabase, openDatabaseAsync } from 'expo-sqlite';
 
 import { DATABASE_NAME, runMigrations } from '@/src/db/migrations';
+import { bootstrapAppPackageRegistry } from '@/src/db/app-package-registry';
 import { seedDatabase } from '@/src/db/seed';
 
 export type LifeOSDatabase = SQLiteDatabase | null;
@@ -23,6 +24,7 @@ export function LifeOSDatabaseProvider({ children, seedInDev = false }: { childr
       try {
         opened = await openDatabaseAsync(DATABASE_NAME);
         await runMigrations(opened);
+        await bootstrapAppPackageRegistry(opened);
         await seedDatabase(opened, { seedInDev });
         if (!cancelled) setDb(opened);
       } catch {

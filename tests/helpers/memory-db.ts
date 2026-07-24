@@ -10,6 +10,9 @@ export class MemoryDb {
   sourceSnapshotRelations: Row[] = [];
   outbox = new Map<string, Row>();
   workflowRuns = new Map<string, Row>();
+  appPackages = new Map<string, Row>();
+  appPackageState: Row | null = null;
+  appPackageReceipts: Row[] = [];
 
   async execAsync(_sql: string) {}
 
@@ -114,6 +117,39 @@ export class MemoryDb {
       this.workflowRuns.set(id, { id, domain, workflow_id, inputs_json, status, payload_json, created_at, updated_at });
       return;
     }
+    if (compact.startsWith('INSERT OR REPLACE INTO app_packages')) {
+      const row = normalizeParams(params);
+      this.appPackages.set(row.$package_key, {
+        package_key: row.$package_key,
+        package_id: row.$package_id,
+        version: row.$version,
+        payload_json: row.$payload_json,
+        created_at: row.$created_at,
+        updated_at: row.$updated_at,
+      });
+      return;
+    }
+    if (compact.startsWith('INSERT OR REPLACE INTO app_package_state')) {
+      const row = normalizeParams(params);
+      this.appPackageState = {
+        id: 'default',
+        active_package_key: row.$active_package_key,
+        previous_package_key: row.$previous_package_key,
+        updated_at: row.$updated_at,
+      };
+      return;
+    }
+    if (compact.startsWith('INSERT INTO app_package_receipts')) {
+      const row = normalizeParams(params);
+      this.appPackageReceipts.push({
+        id: row.$id,
+        action: row.$action,
+        package_key: row.$package_key,
+        previous_package_key: row.$previous_package_key,
+        created_at: row.$created_at,
+      });
+      return;
+    }
     if (compact.startsWith('UPDATE workflow_runs SET')) {
       const id = params[params.length - 1];
       const row = this.workflowRuns.get(id);
@@ -161,6 +197,19 @@ export class MemoryDb {
     if (compact === 'SELECT * FROM workflow_runs WHERE id = ?') {
       return (this.workflowRuns.get(params[0]) ?? null) as T | null;
     }
+    if (compact === "SELECT active_package_key, previous_package_key FROM app_package_state WHERE id = 'default'") {
+      return (this.appPackageState ? {
+        active_package_key: this.appPackageState.active_package_key,
+        previous_package_key: this.appPackageState.previous_package_key,
+      } : null) as T | null;
+    }
+    if (compact === 'SELECT package_key, payload_json FROM app_packages WHERE package_key = $package_key') {
+      const row = this.appPackages.get(normalizeParams(params).$package_key);
+      return (row ? { package_key: row.package_key, payload_json: row.payload_json } : null) as T | null;
+    }
+    if (compact === 'SELECT COUNT(*) as count FROM app_packages') {
+      return { count: this.appPackages.size } as T;
+    }
     throw new Error(`Unsupported getFirstAsync SQL: ${compact}`);
   }
 
@@ -193,6 +242,9 @@ export class MemoryDb {
       sourceSnapshotRelations: this.sourceSnapshotRelations.map((row) => ({ ...row })),
       outbox: new Map(this.outbox),
       workflowRuns: new Map(this.workflowRuns),
+      appPackages: new Map(this.appPackages),
+      appPackageState: this.appPackageState ? { ...this.appPackageState } : null,
+      appPackageReceipts: this.appPackageReceipts.map((row) => ({ ...row })),
     };
   }
 
@@ -206,5 +258,12 @@ export class MemoryDb {
     this.sourceSnapshotRelations = snapshot.sourceSnapshotRelations.map((row) => ({ ...row }));
     this.outbox = new Map(snapshot.outbox);
     this.workflowRuns = new Map(snapshot.workflowRuns);
+    this.appPackages = new Map(snapshot.appPackages);
+    this.appPackageState = snapshot.appPackageState ? { ...snapshot.appPackageState } : null;
+    this.appPackageReceipts = snapshot.appPackageReceipts.map((row) => ({ ...row }));
   }
+}
+
+function normalizeParams(params: unknown): Record<string, any> {
+  return params && typeof params === 'object' && !Array.isArray(params) ? params as Record<string, any> : {};
 }

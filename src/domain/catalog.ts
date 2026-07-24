@@ -2,6 +2,7 @@ import catalogJson from '@/packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '@/packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '@/packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '@/packages/domain-config/domains/plants.v1.json';
+import type { AppPackageV2 } from '@/server/src/kernel/package';
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
 export type DomainSchemaVersion = 'lifeos.domain.v1';
@@ -143,6 +144,7 @@ export interface ParsedCatalog {
 
 let parsedCatalogCache: ParsedCatalog | null = null;
 let activeDomainOverride: string | null = null;
+let activePackageOverride: AppPackageV2 | null = null;
 
 export function setActiveDomainOverride(domainId: string | null): void {
   const next = domainId?.trim() || null;
@@ -150,6 +152,11 @@ export function setActiveDomainOverride(domainId: string | null): void {
     return;
   }
   activeDomainOverride = next;
+  parsedCatalogCache = null;
+}
+
+export function setActivePackageOverride(pkg: AppPackageV2 | null): void {
+  activePackageOverride = pkg;
   parsedCatalogCache = null;
 }
 
@@ -453,6 +460,29 @@ export function loadCatalog(): ParsedCatalog {
 
   const catalog = parseCatalog(catalogJson);
   const domainsById = Object.fromEntries(catalog.domains.map((domain) => [domain.id, domain])) as Record<string, DomainCatalogEntry>;
+
+  if (activePackageOverride) {
+    const activeManifest = domainManifestFromPackage(activePackageOverride);
+    const activeDomain: DomainCatalogEntry = domainsById[activeManifest.id] ?? {
+      id: activeManifest.id,
+      label: activeManifest.label,
+      icon: activeManifest.visual_identity?.domain?.icon ?? activeManifest.visual_identity?.domain?.emoji ?? 'box',
+      status: 'active',
+      manifest: `app-package:${activePackageOverride.id}@${activePackageOverride.version}`,
+      skill: `package:${activePackageOverride.id}`,
+      summary: `${activeManifest.label} package`,
+    };
+    const nextDomainsById = { ...domainsById, [activeManifest.id]: activeDomain };
+    parsedCatalogCache = {
+      catalog: { ...catalog, active_domain_id: activeManifest.id, domains: Object.values(nextDomainsById) },
+      activeDomainId: activeManifest.id,
+      activeDomain,
+      activeManifest,
+      domainsById: nextDomainsById,
+    };
+    return parsedCatalogCache;
+  }
+
   const activeDomainId = activeDomainOverride && domainsById[activeDomainOverride]
     ? activeDomainOverride
     : catalog.active_domain_id;
@@ -473,4 +503,46 @@ export function loadCatalog(): ParsedCatalog {
 
   parsedCatalogCache = { catalog, activeDomainId, activeDomain, activeManifest, domainsById };
   return parsedCatalogCache;
+}
+
+function domainManifestFromPackage(pkg: AppPackageV2): DomainManifest {
+  const presentation = pkg.presentation;
+  const collections = Object.keys(pkg.collections);
+  const surfaces = presentation?.surfaces?.length
+    ? presentation.surfaces.map((surface) => ({
+      id: surface.id,
+      label: surface.label,
+      icon: surface.icon,
+      image_url: surface.imageUrl,
+      views: surface.views,
+      collections: surface.collections,
+    }))
+    : Object.values(pkg.views).map((view) => ({
+      id: view.id,
+      label: view.id,
+      views: [view.id],
+      collections,
+    }));
+
+  return {
+    schema_version: 'lifeos.domain.v1',
+    id: pkg.id,
+    label: presentation?.label ?? pkg.id,
+    home_surface: presentation?.homeSurface,
+    surfaces,
+    collections,
+    visual_identity: presentation?.visualIdentity as DomainVisualIdentity | undefined,
+    relations: [],
+    skills: [],
+    workflows: [],
+    data_homes: pkg.capabilities.filter((capability) => capability.startsWith('data-home:')).map((capability) => capability.slice('data-home:'.length)),
+    dashboard_blocks: presentation?.dashboardBlocks as DashboardBlock[] | undefined,
+    render: presentation?.render as DomainRenderContract | undefined,
+    rich_detail_schema: presentation?.richDetailSchema,
+    provider_template_fields: presentation?.providerTemplateFields as DomainManifest['provider_template_fields'],
+    mcp: {
+      resources: pkg.capabilities.filter((capability) => capability.startsWith('mcp-resource:')).map((capability) => capability.slice('mcp-resource:'.length)),
+      tools: pkg.capabilities.filter((capability) => capability.startsWith('mcp-tool:')).map((capability) => capability.slice('mcp-tool:'.length)),
+    },
+  };
 }

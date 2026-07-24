@@ -109,7 +109,7 @@ class MigrationMemoryDb {
 }
 
 describe('database migrations', () => {
-  it('fresh install reaches current schema with operation, sync, and control-plane tables', async () => {
+  it('fresh install reaches current schema with operation, sync, package, and control-plane tables', async () => {
     const db = new MigrationMemoryDb();
     await runMigrations(db as any);
 
@@ -119,6 +119,9 @@ describe('database migrations', () => {
     expect(db.tables.has('config_sources')).toBe(true);
     expect(db.tables.has('config_snapshots')).toBe(true);
     expect(db.tables.has('config_conflicts')).toBe(true);
+    expect(db.tables.has('app_packages')).toBe(true);
+    expect(db.tables.has('app_package_state')).toBe(true);
+    expect(db.tables.has('app_package_receipts')).toBe(true);
     const recordColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(records)');
     expect(recordColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
       'revision',
@@ -190,6 +193,9 @@ describe('database migrations', () => {
       'config_sources',
       'config_snapshots',
       'config_conflicts',
+      'app_packages',
+      'app_package_state',
+      'app_package_receipts',
     ]));
   });
 });

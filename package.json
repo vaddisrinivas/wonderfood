@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "ajv": "^8.20.0",
     "expo": "~57.0.8",
     "expo-constants": "~57.0.7",
     "expo-font": "~57.0.1",
@@ -15,6 +16,8 @@
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.1",
     "expo-web-browser": "~57.0.2",
+    "fast-json-patch": "^3.1.1",
+    "json-logic-js": "^2.0.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
@@ -23,7 +26,9 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.0"
+    "react-native-worklets": "0.10.0",
+    "xstate": "^5.32.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -56,11 +61,12 @@
     "check:provider-clear-restore": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-provider-clear-restore.ts",
     "check:operation-boundary": "./scripts/quality/check-operation-boundary-grep.sh && npm run check:provider-clear-restore",
     "check:roundtrip": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-roundtrip.ts",
+    "check:food-golden-path": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-food-golden-path.ts",
     "check:sync-merge": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-sync-merge.ts",
     "check:direct-source-merge": "vitest run tests/providers/direct-source-sync.test.ts",
     "check:reactive-provider-writeback": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-reactive-provider-writeback.ts",
     "check:provider-writeback": "vitest run tests/providers/writeback.test.ts && npm run check:reactive-provider-writeback",
-    "check:utopia-debug": "npm run typecheck && npm run config:validate && npm run test && npm run test:server:direct && npm run check:provider-writeback && npm run check:ai-runtime && npm run check:workflow-runtime && npm run phase7:check:workflow-resume-cancel && npm run check:writer-boundary && npm run check:migrations && npm run check:roundtrip && npm run check:sync-merge && npm run export:web && npm run export:android",
+    "check:utopia-debug": "npm run typecheck && npm run config:validate && npm run test && npm run test:server:direct && npm run check:provider-writeback && npm run check:ai-runtime && npm run check:workflow-runtime && npm run phase7:check:workflow-resume-cancel && npm run check:writer-boundary && npm run check:migrations && npm run check:roundtrip && npm run check:food-golden-path && npm run check:sync-merge && npm run export:web && npm run export:android",
     "check:ai-runtime": "vitest run tests/ai/runtime.test.ts",
     "check:workflow-runtime": "vitest run tests/workflows/runtime.test.ts",
     "phase7:check:workflow-resume-cancel": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-workflow-resume-cancel.ts",

@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 5;
+export const DATABASE_VERSION = 6;
 
 const TABLES = {
   meta: 'meta',
@@ -19,6 +19,9 @@ const TABLES = {
   config_sources: 'config_sources',
   config_snapshots: 'config_snapshots',
   config_conflicts: 'config_conflicts',
+  app_packages: 'app_packages',
+  app_package_state: 'app_package_state',
+  app_package_receipts: 'app_package_receipts',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
   agent_runs: 'agent_runs',
@@ -397,6 +400,45 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.config_snapshots}`);
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.config_sources}`);
       await db.execAsync(`PRAGMA user_version = 3`);
+    },
+  },
+  {
+    version: 6,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.app_packages} (
+          package_key TEXT PRIMARY KEY,
+          package_id TEXT NOT NULL,
+          version TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.app_package_state} (
+          id TEXT PRIMARY KEY CHECK(id = 'default'),
+          active_package_key TEXT,
+          previous_package_key TEXT,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.app_package_receipts} (
+          id TEXT PRIMARY KEY,
+          action TEXT NOT NULL CHECK(action IN ('bootstrap','activate','rollback')),
+          package_key TEXT,
+          previous_package_key TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`PRAGMA user_version = 6`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_package_receipts}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_package_state}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_packages}`);
+      await db.execAsync(`PRAGMA user_version = 5`);
     },
   },
 ];
