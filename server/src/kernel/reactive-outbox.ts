@@ -1,5 +1,6 @@
 import type { OperationCommitEvent } from './operation-observer';
 import type { ReactiveCycleProposal, ReactiveCycleResult } from './reactive-cycle';
+import { parseOperationProposalEnvelope, parseOperationTemplate, parseProposalEvent } from './reactive-proposal-schema';
 import { createOperationProposalIdempotencyKey } from './rules';
 
 export const REACTIVE_OUTBOX_SCHEMA_VERSION = 'wonder.reactive-outbox.v1' as const;
@@ -207,33 +208,29 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
     if (!isObject(item.proposal) || item.proposal.id !== proposalId) {
       throw new Error(`Reactive outbox item ${proposalId} is missing its proposal.`);
     }
-    const envelope = item.proposal.envelope;
-    if (!isObject(envelope) || envelope.schemaVersion !== 'wonder.operation-proposal.v1' || envelope.proposalId !== proposalId) {
+    let proposalEvent: ReactiveCycleProposal['event'];
+    let proposalTemplate: ReactiveCycleProposal['operationTemplate'];
+    let envelope: ReactiveCycleProposal['envelope'];
+    try {
+      proposalEvent = parseProposalEvent(item.proposal.event);
+      proposalTemplate = parseOperationTemplate(item.proposal.operationTemplate);
+      envelope = parseOperationProposalEnvelope(item.proposal.envelope);
+    } catch {
       throw new Error(`Reactive outbox item ${proposalId} is missing its proposal envelope.`);
     }
-    if (!isProposalEvent(item.proposal.event) || !isProposalEvent(envelope.event)) {
-      throw new Error(`Reactive outbox item ${proposalId} has an invalid proposal event.`);
-    }
-    if (!isOperationTemplate(item.proposal.operationTemplate) || !isOperationTemplate(envelope.operationTemplate)) {
-      throw new Error(`Reactive outbox item ${proposalId} has an invalid operation template.`);
-    }
     if (
-      envelope.operation !== item.proposal.operation
-      || stableJson(envelope.operationTemplate) !== stableJson(item.proposal.operationTemplate)
+      envelope.proposalId !== proposalId
+      || envelope.operation !== item.proposal.operation
+      || stableJson(envelope.operationTemplate) !== stableJson(proposalTemplate)
       || envelope.ruleId !== item.proposal.ruleId
       || envelope.eventId !== item.proposal.eventId
       || envelope.eventId !== item.eventId
-      || stableJson(envelope.event) !== stableJson(item.proposal.event)
+      || stableJson(envelope.event) !== stableJson(proposalEvent)
       || envelope.causeId !== item.proposal.causeId
       || envelope.causeId !== item.causeId
       || envelope.packageVersion !== item.proposal.packageVersion
-      || typeof envelope.packageId !== 'string'
-      || !envelope.packageId.trim()
       || envelope.mode !== item.proposal.mode
       || envelope.depth !== item.proposal.depth
-      || !isReview(envelope.review)
-      || !isAuthorization(envelope.authorization)
-      || !isDryRun(envelope.dryRun)
     ) {
       throw new Error(`Reactive outbox item ${proposalId} has an inconsistent proposal envelope.`);
     }
@@ -301,71 +298,6 @@ function isStatus(value: unknown): value is ReactiveOutboxStatus {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isProposalEvent(value: unknown): value is ReactiveCycleProposal['event'] {
-  if (!isObject(value) || typeof value.id !== 'string' || !value.id.trim()) return false;
-  if (value.kind !== 'operation' && value.kind !== 'schedule' && value.kind !== 'query_transition') return false;
-  if (value.queryId !== undefined && (typeof value.queryId !== 'string' || !value.queryId.trim())) return false;
-  if (value.transition !== undefined && value.transition !== 'enter' && value.transition !== 'leave' && value.transition !== 'change') return false;
-  if (value.kind === 'query_transition' && (!value.queryId || !value.transition)) return false;
-  if (value.kind !== 'query_transition' && (value.queryId !== undefined || value.transition !== undefined)) return false;
-  return true;
-}
-
-function isOperationTemplate(value: unknown): value is ReactiveCycleProposal['operationTemplate'] {
-  if (!isObject(value) || typeof value.kind !== 'string') return false;
-  if (value.kind === 'custom') return typeof value.tool === 'string' && Boolean(value.tool.trim());
-  if (value.kind === 'create_record') {
-    return typeof value.collection === 'string' && Boolean(value.collection.trim())
-      && (value.recordId === undefined || (typeof value.recordId === 'string' && Boolean(value.recordId.trim())))
-      && (value.properties === undefined || isObject(value.properties));
-  }
-  if (value.kind === 'update_record') {
-    return typeof value.recordId === 'string' && Boolean(value.recordId.trim())
-      && isObject(value.changes)
-      && (value.collection === undefined || (typeof value.collection === 'string' && Boolean(value.collection.trim())))
-      && (value.expectedRevision === undefined || (typeof value.expectedRevision === 'number' && Number.isInteger(value.expectedRevision) && value.expectedRevision >= 0));
-  }
-  if (value.kind === 'archive_record' || value.kind === 'restore_record') {
-    return typeof value.recordId === 'string' && Boolean(value.recordId.trim())
-      && (value.collection === undefined || (typeof value.collection === 'string' && Boolean(value.collection.trim())))
-      && (value.expectedRevision === undefined || (typeof value.expectedRevision === 'number' && Number.isInteger(value.expectedRevision) && value.expectedRevision >= 0));
-  }
-  return false;
-}
-
-function isReview(value: unknown): value is ReactiveCycleProposal['envelope']['review'] {
-  return isObject(value)
-    && typeof value.required === 'boolean'
-    && (value.reason === 'suggest_mode' || value.reason === 'policy_required' || value.reason === 'policy_authorized')
-    && typeof value.policyId === 'string'
-    && Boolean(value.policyId.trim())
-    && typeof value.policyVersion === 'string'
-    && Boolean(value.policyVersion.trim());
-}
-
-function isAuthorization(value: unknown): value is ReactiveCycleProposal['envelope']['authorization'] {
-  return isObject(value)
-    && value.policyId === 'wonder.reactive-proposal-policy'
-    && value.policyVersion === 'v1'
-    && typeof value.allowed === 'boolean'
-    && (value.risk === 'low' || value.risk === 'standard' || value.risk === 'sensitive' || value.risk === 'restricted')
-    && typeof value.reviewRequired === 'boolean'
-    && typeof value.requiredCapability === 'string'
-    && Boolean(value.requiredCapability.trim())
-    && typeof value.capabilityPresent === 'boolean'
-    && typeof value.reason === 'string'
-    && Boolean(value.reason.trim());
-}
-
-function isDryRun(value: unknown): value is ReactiveCycleProposal['envelope']['dryRun'] {
-  return isObject(value)
-    && typeof value.ok === 'boolean'
-    && value.effect === 'queue_review_action'
-    && typeof value.executable === 'boolean'
-    && typeof value.reason === 'string'
-    && Boolean(value.reason.trim());
 }
 
 function validateEnvelopeEvidence(proposalId: string, envelope: ReactiveCycleProposal['envelope']): void {

@@ -146,9 +146,23 @@ assert.throws(
 assert.throws(
   () => parseReactiveOutboxStore(JSON.stringify({
     ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, unexpected: 'field' } } } },
+  })),
+  /missing its proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, operationTemplate: { kind: 'update_record', recordId: 'r1' }, envelope: { ...failed.items['proposal-a'].proposal.envelope, operationTemplate: { kind: 'update_record', recordId: 'r1' } } } } },
+  })),
+  /missing its proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
     items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, packageId: '' } } } },
   })),
-  /inconsistent proposal envelope/,
+  /missing its proposal envelope/,
 );
 assert.throws(
   () => parseReactiveOutboxStore(JSON.stringify({
@@ -162,7 +176,7 @@ assert.throws(
     ...failed,
     items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, review: { required: false, reason: 'policy_required' } } } } },
   })),
-  /inconsistent proposal envelope/,
+  /missing its proposal envelope/,
 );
 assert.throws(
   () => parseReactiveOutboxStore(JSON.stringify({
