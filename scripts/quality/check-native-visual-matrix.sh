@@ -63,7 +63,7 @@ fi
 
 routes=(
   "home|wonderfood:///|LIFEOS / HOME|Green dal + rice"
-  "food|wonderfood:///food|LIFEOS / FOOD|Green dal + rice"
+  "food|wonderfood:///food|Meal timeline|Review queue"
   "record-green-dal|wonderfood:///record/meal-green-dal|Record|Green dal + rice"
   "chat|wonderfood:///chat|Chat|Settings"
   "sources|wonderfood:///sources|LIFEOS / SOURCES|Food authority"

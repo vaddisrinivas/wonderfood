@@ -30,6 +30,7 @@ export default function TabLayout() {
         styles.tabBar,
         theme.density === 'compact' && styles.tabBarCompact,
         { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line },
+        route.name === 'food' && { display: 'none' },
       ],
       tabBarItemStyle: [styles.tabItem, theme.density === 'compact' && styles.tabItemCompact],
       tabBarActiveTintColor: theme.colors.moss,

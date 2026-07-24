@@ -16,6 +16,7 @@ import {
   type ReactiveOutboxItem,
   type ReactiveOutboxStore,
 } from './reactive-outbox';
+import { executeReactiveProposalLive } from './reactive-proposal-executor';
 
 const REACTIVE_RUNTIME_SCHEMA_VERSION = 'wonder.reactive-runtime.v1' as const;
 
@@ -113,7 +114,7 @@ export function installReactiveRuntime(path = defaultRuntimePath): void {
 
 export async function drainReactiveRuntimeOutbox(input: {
   path?: string;
-  executeProposal: (item: ReactiveOutboxItem) => Promise<ReactiveOutboxExecutionResult> | ReactiveOutboxExecutionResult;
+  executeProposal?: (item: ReactiveOutboxItem) => Promise<ReactiveOutboxExecutionResult> | ReactiveOutboxExecutionResult;
   now?: string;
   maxItems?: number;
   retryDelayMs?: number;
@@ -122,7 +123,7 @@ export async function drainReactiveRuntimeOutbox(input: {
   let runtime = loadRuntimeStore(path);
   const result = await drainReactiveOutbox({
     store: runtime.outbox,
-    executeProposal: input.executeProposal,
+    executeProposal: input.executeProposal ?? executeReactiveProposalLive,
     now: input.now,
     maxItems: input.maxItems,
     retryDelayMs: input.retryDelayMs,

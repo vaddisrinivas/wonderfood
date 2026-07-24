@@ -12,6 +12,19 @@ export type ReactiveProposalVerificationReceipt = Readonly<{
   expected: Record<string, unknown>;
   observed: Record<string, unknown> | null;
   resultingRevision: number | null;
+  providerWriteback?: ReactiveProviderWritebackReceipt;
+  reason: string;
+}>;
+
+export type ReactiveProviderWritebackReceipt = Readonly<{
+  ok: boolean;
+  provider: 'notion' | 'google_sheets';
+  operation: 'create_record' | 'update_record' | 'archive_record';
+  providerRecordId: string | null;
+  sourceSnapshotHash: string;
+  sourceSnapshot: Record<string, unknown>;
+  readbackSnapshotHash: string;
+  readbackSnapshot: Record<string, unknown>;
   reason: string;
 }>;
 
@@ -23,6 +36,7 @@ export function verifyReactiveProposalPostcondition(input: {
   operationId: string;
   proposalId: string;
   operationTemplateHash: string;
+  providerWriteback?: ReactiveProviderWritebackReceipt;
 }): ReactiveProposalVerificationReceipt {
   const template = input.operationTemplate;
   const identity = {
@@ -32,10 +46,10 @@ export function verifyReactiveProposalPostcondition(input: {
     operationTemplateHash: input.operationTemplateHash,
   };
   if (template.kind === 'custom') {
-    return receipt(identity, false, null, {}, null, 'custom_operation_has_no_canonical_postcondition');
+    return receipt(identity, false, null, {}, null, 'custom_operation_has_no_canonical_postcondition', input.providerWriteback);
   }
   if (template.kind === 'restore_record') {
-    return receipt(identity, false, template.recordId, {}, observedRecord(input.record), 'restore_postcondition_requires_undo_context');
+    return receipt(identity, false, template.recordId, {}, observedRecord(input.record), 'restore_postcondition_requires_undo_context', input.providerWriteback);
   }
   if (template.kind === 'create_record') {
     const recordId = template.recordId ?? input.record?.id ?? null;
@@ -48,7 +62,7 @@ export function verifyReactiveProposalPostcondition(input: {
     const ok = Boolean(input.record)
       && input.record?.collection === template.collection
       && hasProperties(input.record.properties, template.properties ?? {});
-    return receipt(identity, ok, recordId, expected, observed, ok ? 'canonical_create_verified' : 'canonical_create_mismatch');
+    return receipt(identity, ok && providerOk(input.providerWriteback), recordId, expected, observed, ok ? providerReason(input.providerWriteback, 'canonical_create_verified') : 'canonical_create_mismatch', input.providerWriteback);
   }
   if (template.kind === 'update_record') {
     const observed = observedRecord(input.record);
@@ -60,7 +74,7 @@ export function verifyReactiveProposalPostcondition(input: {
     const ok = Boolean(input.record)
       && hasProperties(input.record?.properties ?? {}, template.changes)
       && (input.beforeRevision === undefined || input.record?.revision === input.beforeRevision + 1);
-    return receipt(identity, ok, template.recordId, expected, observed, ok ? 'canonical_update_verified' : 'canonical_update_mismatch');
+    return receipt(identity, ok && providerOk(input.providerWriteback), template.recordId, expected, observed, ok ? providerReason(input.providerWriteback, 'canonical_update_verified') : 'canonical_update_mismatch', input.providerWriteback);
   }
   const observed = observedRecord(input.record);
   const expected = {
@@ -69,7 +83,16 @@ export function verifyReactiveProposalPostcondition(input: {
   };
   const ok = Boolean(input.record?.archived_at)
     && (input.beforeRevision === undefined || input.record?.revision === input.beforeRevision + 1);
-  return receipt(identity, ok, template.recordId, expected, observed, ok ? 'canonical_archive_verified' : 'canonical_archive_mismatch');
+  return receipt(identity, ok && providerOk(input.providerWriteback), template.recordId, expected, observed, ok ? providerReason(input.providerWriteback, 'canonical_archive_verified') : 'canonical_archive_mismatch', input.providerWriteback);
+}
+
+function providerOk(receipt: ReactiveProviderWritebackReceipt | undefined): boolean {
+  return receipt === undefined || receipt.ok;
+}
+
+function providerReason(receipt: ReactiveProviderWritebackReceipt | undefined, localReason: string): string {
+  if (!receipt) return localReason;
+  return receipt.ok ? `${localReason}+provider_writeback_verified` : receipt.reason;
 }
 
 function hasProperties(observed: Record<string, unknown>, expected: Record<string, unknown>): boolean {
@@ -118,6 +141,7 @@ function receipt(
   expected: Record<string, unknown>,
   observed: Record<string, unknown> | null,
   reason: string,
+  providerWriteback?: ReactiveProviderWritebackReceipt,
 ): ReactiveProposalVerificationReceipt {
   return {
     ok,
@@ -127,6 +151,7 @@ function receipt(
     expected,
     observed,
     resultingRevision: typeof observed?.revision === 'number' ? observed.revision : null,
+    ...(providerWriteback ? { providerWriteback } : {}),
     reason,
   };
 }

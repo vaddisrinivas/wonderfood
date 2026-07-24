@@ -37,7 +37,7 @@ function chromeExecutable() {
 
 const routes = [
   { name: 'home', path: '/', labels: ['LIFEOS / HOME', 'Green dal + rice'] },
-  { name: 'food', path: '/food', labels: ['LIFEOS / FOOD', 'Green dal + rice'] },
+  { name: 'food', path: '/food', labels: ['Meal timeline', 'Review queue'] },
   { name: 'record-green-dal', path: '/record/meal-green-dal', labels: ['Meal plan · Meal plan · Thursday dinner', 'Nutrition profile'] },
   { name: 'chat', path: '/chat', labels: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.'] },
   { name: 'sources', path: '/sources', labels: ['LIFEOS / SOURCES', 'Your food data homes.'] },

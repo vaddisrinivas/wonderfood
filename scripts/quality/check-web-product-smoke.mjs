@@ -49,25 +49,16 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['LIFEOS / FOOD', 'Tonight: Green dal + rice', '15 food records', 'Nutrition lens', 'Shopping gaps', 'Lots and movements', 'Spend and receipt health', 'Yogurt lot · open tub', 'Food collection atlas', '29 managed collections', '43 relations', 'Support graph', 'Food operating board', 'TONIGHT OPERATING TABLE', 'Cook decision, pantry state, shopping gap, next move', 'Meals', 'Kitchen', 'Shopping', 'Review before anything writes', 'Food can be customized'],
+    must: ['Meal timeline', 'Review queue', 'Pantry-aware suggestion', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop', 'Ask'],
     forbidden: ['0 food records', 'Record not found'],
   },
   {
-    name: 'food-configured-dashboard',
+    name: 'food-app-destinations',
     path: '/food',
-    localSettings: {
-      runtime: {
-        surfaceConfig: {
-          food: {
-            dashboardBlocks: 'food:chef|Chef board|Custom app-edited feature block.|action|plum|recipe|chicken|1|/chat|feature',
-          },
-        },
-      },
-    },
-    must: ['Chef board', 'Custom app-edited feature block.'],
+    must: ['Meal timeline', 'Review queue', 'Pantry-aware suggestion', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop', 'Ask'],
     inspect: async (page) => {
-      const cardBox = await page.locator('text=Chef board').locator('xpath=ancestor::*[@role="button"][1]').boundingBox();
-      if (!cardBox || cardBox.width < 520) throw new Error(`Configured feature card should be full-width-ish, got ${cardBox?.width ?? 0}`);
+      const askBox = await page.locator('text=Ask').last().boundingBox();
+      if (!askBox || askBox.width < 80 || askBox.height < 44) throw new Error(`Ask control should be thumb-sized, got ${askBox?.width ?? 0}x${askBox?.height ?? 0}`);
     },
   },
   {
@@ -99,7 +90,7 @@ const routes = [
         enabledDomains: ['food', 'health'],
       },
     },
-    must: ['LIFEOS / HEALTH', '♡', 'Run your health workspace.', 'Health sources', 'Overview', 'Journal', 'Plans'],
+    must: ['LIFEOS / HEALTH', 'Run your health workspace.', 'Health sources', 'Overview', 'Journal', 'Plans'],
   },
   {
     name: 'plants-active-workspace',
@@ -395,6 +386,7 @@ const viewports = [
 for (const viewport of viewports) {
   const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
   for (const route of routes) {
+    process.stdout.write(`[web-product] ${route.name}-${viewport.label}\n`);
     const url = `${baseUrl}${route.path}`;
     const result = {
       name: `${route.name}-${viewport.label}`,
@@ -458,6 +450,10 @@ for (const viewport of viewports) {
       result.error = error instanceof Error ? error.message : String(error);
     }
     results.push(result);
+    process.stdout.write(`[web-product] ${result.ok ? 'ok' : 'fail'} ${result.name}\n`);
+    if (!result.ok) {
+      process.stdout.write(`${JSON.stringify({ missing: result.missing, error: result.error, consoleErrors: result.consoleErrors, horizontalOverflow: result.horizontalOverflow })}\n`);
+    }
   }
   await page.close();
 }

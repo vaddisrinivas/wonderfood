@@ -12,7 +12,7 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-proposal-'));
 process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
-const { executeReactiveProposal } = await import('../src/kernel/reactive-proposal-executor');
+const { executeReactiveProposal, executeReactiveProposalLive } = await import('../src/kernel/reactive-proposal-executor');
 const { attachActionVerification, createRecord, findActionByIdempotencyKey, findRecord, getActionEvent, updateRecord } = await import('../src/mcp/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
@@ -357,6 +357,307 @@ const providerWriteback = executeReactiveProposal(providerUpdateItem, { actor: '
 assert.equal(providerWriteback.ok, false);
 assert.equal(providerWriteback.error, 'provider_writeback_verification_missing');
 assert.equal(findRecord('auto-update-record')?.revision, updateRevision);
+
+const providerSeed = createRecord({
+  id: 'auto-provider-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Provider seed',
+  properties: { status: 'open' },
+  relations: [],
+  source: { provider: 'notion', external_id: 'notion-page-provider', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const providerLiveTemplate = { kind: 'update_record' as const, collection: 'recipe', recordId: providerSeed.id, expectedRevision: providerSeed.revision, changes: { status: 'done' } };
+const providerLiveKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-provider-live-rule',
+  event: updateEvent,
+  causeId: 'provider-live-cause',
+  operationTemplate: providerLiveTemplate,
+});
+const providerLiveItem = {
+  ...providerUpdateItem,
+  proposalId: 'auto-provider-live-proposal',
+  causeId: 'provider-live-cause',
+  proposal: {
+    ...providerUpdateItem.proposal,
+    id: 'auto-provider-live-proposal',
+    ruleId: 'auto-provider-live-rule',
+    operationTemplate: providerLiveTemplate,
+    causeId: 'provider-live-cause',
+    envelope: {
+      ...providerUpdateItem.proposal.envelope,
+      proposalId: 'auto-provider-live-proposal',
+      ruleId: 'auto-provider-live-rule',
+      operationTemplate: providerLiveTemplate,
+      causeId: 'provider-live-cause',
+      idempotencyKey: providerLiveKey,
+    },
+  },
+};
+const originalFetch = globalThis.fetch;
+process.env.NOTION_TOKEN = 'test-notion-token';
+process.env.NOTION_DATA_SOURCE_ID = 'test-notion-data-source';
+const notionCalls: Array<{ method: string; url: string; body: string }> = [];
+globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+  const url = typeof input === 'string' ? input : input.toString();
+  const method = (init.method || 'GET').toUpperCase();
+  const body = typeof init.body === 'string' ? init.body : '';
+  notionCalls.push({ method, url, body });
+  if (method === 'PATCH' && url.includes('/pages/notion-page-provider')) {
+    return new Response(JSON.stringify({
+      id: 'notion-page-provider',
+      url: 'https://notion.test/notion-page-provider',
+      archived: false,
+      parent: { database_id: 'db-test' },
+      created_time: '2026-07-23T00:00:00.000Z',
+      last_edited_time: '2026-07-23T00:00:01.000Z',
+    }), { status: 200 });
+  }
+  if (method === 'POST' && url.includes('/data_sources/test-notion-data-source/query')) {
+    return new Response(JSON.stringify({
+      results: [{
+        id: 'notion-page-provider',
+        archived: false,
+        in_trash: false,
+        parent: { database_id: 'db-test' },
+        properties: {
+          Name: { title: [{ plain_text: 'Provider seed' }] },
+          'LifeOS Domain': { rich_text: [{ plain_text: 'food' }] },
+          'LifeOS Collection': { rich_text: [{ plain_text: 'recipe' }] },
+          status: { rich_text: [{ plain_text: 'done' }] },
+        },
+      }],
+    }), { status: 200 });
+  }
+  return new Response(JSON.stringify({ message: `unexpected ${method} ${url}` }), { status: 500 });
+}) as typeof globalThis.fetch;
+const providerLive = await executeReactiveProposalLive(providerLiveItem, { actor: 'approver', approval: approvalFor(providerLiveItem) });
+globalThis.fetch = originalFetch;
+assert.equal(providerLive.ok, true);
+assert.equal(providerLive.receipt?.verification?.providerWriteback?.provider, 'notion');
+assert.equal(providerLive.receipt?.verification?.providerWriteback?.providerRecordId, 'notion-page-provider');
+assert.equal(providerLive.receipt?.verification?.providerWriteback?.reason, 'provider_writeback_verified');
+assert.equal(findRecord(providerSeed.id)?.source.provider, 'notion');
+assert.equal(findRecord(providerSeed.id)?.properties.status, 'done');
+assert.equal(notionCalls.some((call) => call.method === 'PATCH'), true);
+assert.equal(notionCalls.some((call) => call.method === 'POST' && call.url.includes('/data_sources/test-notion-data-source/query')), true);
+
+const mismatchSeed = createRecord({
+  id: 'auto-provider-mismatch-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Provider mismatch seed',
+  properties: { status: 'open' },
+  relations: [],
+  source: { provider: 'notion', external_id: 'notion-page-missing', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const mismatchTemplate = { kind: 'update_record' as const, collection: 'recipe', recordId: mismatchSeed.id, expectedRevision: mismatchSeed.revision, changes: { status: 'done' } };
+const mismatchKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-provider-mismatch-rule',
+  event: updateEvent,
+  causeId: 'provider-mismatch-cause',
+  operationTemplate: mismatchTemplate,
+});
+const mismatchItem = {
+  ...providerLiveItem,
+  proposalId: 'auto-provider-mismatch-proposal',
+  causeId: 'provider-mismatch-cause',
+  proposal: {
+    ...providerLiveItem.proposal,
+    id: 'auto-provider-mismatch-proposal',
+    ruleId: 'auto-provider-mismatch-rule',
+    operationTemplate: mismatchTemplate,
+    causeId: 'provider-mismatch-cause',
+    envelope: {
+      ...providerLiveItem.proposal.envelope,
+      proposalId: 'auto-provider-mismatch-proposal',
+      ruleId: 'auto-provider-mismatch-rule',
+      operationTemplate: mismatchTemplate,
+      causeId: 'provider-mismatch-cause',
+      idempotencyKey: mismatchKey,
+    },
+  },
+};
+globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+  const url = typeof input === 'string' ? input : input.toString();
+  const method = (init.method || 'GET').toUpperCase();
+  if (method === 'PATCH' && url.includes('/pages/notion-page-missing')) {
+    return new Response(JSON.stringify({ id: 'notion-page-missing', url: 'https://notion.test/notion-page-missing', archived: false }), { status: 200 });
+  }
+  if (method === 'POST' && url.includes('/data_sources/test-notion-data-source/query')) {
+    return new Response(JSON.stringify({ results: [] }), { status: 200 });
+  }
+  return new Response(JSON.stringify({ message: `unexpected ${method} ${url}` }), { status: 500 });
+}) as typeof globalThis.fetch;
+const mismatchLive = await executeReactiveProposalLive(mismatchItem, { actor: 'approver', approval: approvalFor(mismatchItem) });
+globalThis.fetch = originalFetch;
+assert.equal(mismatchLive.ok, false);
+assert.equal(mismatchLive.error, 'provider_writeback_readback_missing');
+assert.equal(findRecord(mismatchSeed.id)?.properties.status, 'open');
+
+const staleReadbackSeed = createRecord({
+  id: 'auto-provider-stale-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Provider stale seed',
+  properties: { status: 'open' },
+  relations: [],
+  source: { provider: 'notion', external_id: 'notion-page-stale', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const staleReadbackTemplate = { kind: 'update_record' as const, collection: 'recipe', recordId: staleReadbackSeed.id, expectedRevision: staleReadbackSeed.revision, changes: { status: 'done' } };
+const staleReadbackKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-provider-stale-rule',
+  event: updateEvent,
+  causeId: 'provider-stale-cause',
+  operationTemplate: staleReadbackTemplate,
+});
+const staleReadbackItem = {
+  ...providerLiveItem,
+  proposalId: 'auto-provider-stale-proposal',
+  causeId: 'provider-stale-cause',
+  proposal: {
+    ...providerLiveItem.proposal,
+    id: 'auto-provider-stale-proposal',
+    ruleId: 'auto-provider-stale-rule',
+    operationTemplate: staleReadbackTemplate,
+    causeId: 'provider-stale-cause',
+    envelope: {
+      ...providerLiveItem.proposal.envelope,
+      proposalId: 'auto-provider-stale-proposal',
+      ruleId: 'auto-provider-stale-rule',
+      operationTemplate: staleReadbackTemplate,
+      causeId: 'provider-stale-cause',
+      idempotencyKey: staleReadbackKey,
+    },
+  },
+};
+globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+  const url = typeof input === 'string' ? input : input.toString();
+  const method = (init.method || 'GET').toUpperCase();
+  if (method === 'PATCH' && url.includes('/pages/notion-page-stale')) {
+    return new Response(JSON.stringify({ id: 'notion-page-stale', url: 'https://notion.test/notion-page-stale', archived: false }), { status: 200 });
+  }
+  if (method === 'POST' && url.includes('/data_sources/test-notion-data-source/query')) {
+    return new Response(JSON.stringify({
+      results: [{
+        id: 'notion-page-stale',
+        archived: false,
+        in_trash: false,
+        parent: { database_id: 'db-test' },
+        properties: {
+          Name: { title: [{ plain_text: 'Provider stale seed' }] },
+          'LifeOS Domain': { rich_text: [{ plain_text: 'food' }] },
+          'LifeOS Collection': { rich_text: [{ plain_text: 'recipe' }] },
+          status: { rich_text: [{ plain_text: 'open' }] },
+        },
+      }],
+    }), { status: 200 });
+  }
+  return new Response(JSON.stringify({ message: `unexpected ${method} ${url}` }), { status: 500 });
+}) as typeof globalThis.fetch;
+const staleReadbackLive = await executeReactiveProposalLive(staleReadbackItem, { actor: 'approver', approval: approvalFor(staleReadbackItem) });
+globalThis.fetch = originalFetch;
+assert.equal(staleReadbackLive.ok, false);
+assert.equal(staleReadbackLive.error, 'provider_writeback_readback_mismatch');
+assert.equal(findRecord(staleReadbackSeed.id)?.properties.status, 'open');
+
+const sheetsSeed = createRecord({
+  id: 'auto-sheets-provider-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Sheets seed',
+  properties: { status: 'open' },
+  relations: [],
+  source: { provider: 'google_sheets', external_id: 'auto-sheets-provider-record', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const sheetsTemplate = { kind: 'update_record' as const, collection: 'recipe', recordId: sheetsSeed.id, expectedRevision: sheetsSeed.revision, changes: { status: 'done' } };
+const sheetsKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-sheets-provider-rule',
+  event: updateEvent,
+  causeId: 'sheets-provider-cause',
+  operationTemplate: sheetsTemplate,
+});
+const sheetsItem = {
+  ...providerLiveItem,
+  proposalId: 'auto-sheets-provider-proposal',
+  causeId: 'sheets-provider-cause',
+  proposal: {
+    ...providerLiveItem.proposal,
+    id: 'auto-sheets-provider-proposal',
+    ruleId: 'auto-sheets-provider-rule',
+    operationTemplate: sheetsTemplate,
+    causeId: 'sheets-provider-cause',
+    envelope: {
+      ...providerLiveItem.proposal.envelope,
+      proposalId: 'auto-sheets-provider-proposal',
+      ruleId: 'auto-sheets-provider-rule',
+      operationTemplate: sheetsTemplate,
+      causeId: 'sheets-provider-cause',
+      idempotencyKey: sheetsKey,
+      authorization: {
+        ...providerLiveItem.proposal.envelope.authorization,
+        providerAuthority: {
+          targetProvider: 'google_sheets',
+          authorityProvider: 'google_sheets',
+          allowed: true,
+          requiredCapability: 'reactive:provider:google_sheets:update_record',
+          capabilityPresent: true,
+          reason: 'provider_authority_ok',
+        },
+      },
+    },
+  },
+};
+process.env.GOOGLE_SHEETS_ACCESS_TOKEN = 'test-sheets-token';
+process.env.GOOGLE_SHEETS_SPREADSHEET_ID = 'test-sheets-id';
+process.env.GOOGLE_SHEETS_DATA_SOURCE_ID = 'test-sheets-data-source';
+const sheetRows = [
+  ['id', 'title', 'domain', 'collection', 'properties', 'archived', 'version', 'updated_at', 'source', 'external_id'],
+  ['auto-sheets-provider-record', 'Sheets seed', 'food', 'recipe', '{"status":"open"}', 'false', '1', '2026-07-23T00:00:00.000Z', '', 'auto-sheets-provider-record'],
+];
+globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+  const url = typeof input === 'string' ? input : input.toString();
+  const method = (init.method || 'GET').toUpperCase();
+  const body = typeof init.body === 'string' ? init.body : '';
+  if (method === 'GET' && /\/spreadsheets\/[^/]+\/?$/.test(url)) {
+    return new Response(JSON.stringify({
+      spreadsheetId: 'test-sheets-id',
+      sheets: [{ properties: { title: 'LifeOS Runtime', gridProperties: { columnCount: 26, rowCount: 100 } } }],
+    }), { status: 200 });
+  }
+  if (method === 'GET' && url.includes('/values:batchGet')) {
+    return new Response(JSON.stringify({ valueRanges: [{ range: 'LifeOS Runtime!A:Z', values: sheetRows }] }), { status: 200 });
+  }
+  if (method === 'POST' && url.includes('/values:batchUpdate')) {
+    const payload = JSON.parse(body) as { data?: Array<{ range?: string; values?: string[][] }> };
+    const update = payload.data?.[0];
+    const row = Number.parseInt(/!A([0-9]+)/.exec(String(update?.range ?? ''))?.[1] ?? '', 10);
+    assert.equal(row, 2);
+    sheetRows[row - 1] = update?.values?.[0] ?? [];
+    return new Response(JSON.stringify({ responses: [{ updatedRange: 'LifeOS Runtime!A2:J2' }] }), { status: 200 });
+  }
+  return new Response(JSON.stringify({ error: `unexpected ${method} ${url}` }), { status: 500 });
+}) as typeof globalThis.fetch;
+const sheetsLive = await executeReactiveProposalLive(sheetsItem, { actor: 'approver', approval: approvalFor(sheetsItem) });
+globalThis.fetch = originalFetch;
+assert.equal(sheetsLive.ok, true);
+assert.equal(sheetsLive.receipt?.verification?.providerWriteback?.provider, 'google_sheets');
+assert.equal(sheetsLive.receipt?.verification?.providerWriteback?.providerRecordId, 'auto-sheets-provider-record');
+assert.equal(sheetsLive.receipt?.verification?.providerWriteback?.reason, 'provider_writeback_verified');
+assert.equal(findRecord(sheetsSeed.id)?.source.provider, 'google_sheets');
+assert.equal(findRecord(sheetsSeed.id)?.properties.status, 'done');
 
 const archiveSeed = createRecord({
   id: 'auto-archive-record',

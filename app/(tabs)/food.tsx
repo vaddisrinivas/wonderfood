@@ -14,6 +14,36 @@ import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
 type FoodRecordView = DomainRecordViewModel;
+type FoodMode = 'Today' | 'Kitchen' | 'Plan' | 'Recipes' | 'Shop';
+type FoodTone = 'moss' | 'amber' | 'blue' | 'plum' | 'red';
+
+const FOOD_MODES: Array<{ id: FoodMode; label: string; glyph: string }> = [
+  { id: 'Today', label: 'Today', glyph: '🍽️' },
+  { id: 'Kitchen', label: 'Kitchen', glyph: '🥬' },
+  { id: 'Plan', label: 'Plan', glyph: '🗓️' },
+  { id: 'Recipes', label: 'Recipes', glyph: '🍳' },
+  { id: 'Shop', label: 'Shop', glyph: '🧺' },
+];
+
+const fallbackMeals = [
+  { title: 'Breakfast: Greek yogurt bowl', detail: 'Blueberries, walnuts, honey. Protein estimate pending review.', badge: '+22g protein', tone: 'moss' as const },
+  { title: 'Lunch: Chickpea spinach wraps', detail: 'Use spinach before Sunday; add tomatoes from shopping list.', badge: 'use first', tone: 'amber' as const },
+  { title: 'Dinner: Salmon rice bowls', detail: 'Receipt draft matched salmon, cucumber, rice vinegar.', badge: 'draft', tone: 'red' as const },
+];
+
+const fallbackKitchen = [
+  { title: 'Baby spinach', detail: 'Fridge lot A3. Expires Sun. Great for wraps or eggs.', badge: '2 days', tone: 'amber' as const },
+  { title: 'Salmon fillets', detail: 'Freezer. Receipt confidence 92%. 1.4 lb estimated.', badge: 'new', tone: 'moss' as const },
+  { title: 'Greek yogurt', detail: 'Opened yesterday. Protein value reviewed by user.', badge: 'reviewed', tone: 'moss' as const },
+  { title: 'Chickpeas', detail: 'Pantry. 3 cans. Recipe match: spinach wraps.', badge: '3 cans', tone: 'blue' as const },
+  { title: 'Blueberries', detail: 'Fridge. Price captured from receipt draft.', badge: '$3.99', tone: 'red' as const },
+];
+
+const fallbackShop = [
+  { title: 'Add to inventory', detail: 'Salmon fillets, baby spinach, blueberries', badge: '3 items', tone: 'moss' as const },
+  { title: 'Keep on shopping list', detail: 'Rice vinegar, tortillas, lemons, oats', badge: '4 left', tone: 'amber' as const },
+  { title: 'Ignore household line', detail: 'Dish soap stays out of food inventory.', badge: 'ignored', tone: 'blue' as const },
+];
 
 const viewCopy: Record<string, { title: string; subtitle: string; empty: string }> = {
   Overview: {
@@ -221,6 +251,7 @@ export default function FoodScreen() {
   const defaultTab = views[0] ?? 'Overview';
   const db = useLifeOSDatabase();
   const [active, setActive] = useState(defaultTab);
+  const [foodMode, setFoodMode] = useState<FoodMode>('Today');
   const [records, setRecords] = useState<FoodRecordView[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -510,6 +541,25 @@ export default function FoodScreen() {
     }
   };
 
+  if (isFoodDomain) {
+    return (
+      <FoodDemoSurface
+        mode={foodMode}
+        onModeChange={setFoodMode}
+        records={rankedRecords}
+        meals={mealRecords}
+        kitchen={kitchenRecords}
+        shopping={shoppingRecords}
+        reviewRows={reviewRows}
+        loading={loading}
+        compact={compact}
+        contentWidth={Math.min(contentWidth, 760)}
+        onToggleShopping={toggleShoppingRecord}
+        onAsk={() => router.push('/chat')}
+      />
+    );
+  }
+
   return (
     <Page>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -581,6 +631,390 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
       </Pressable>
     </Link>
   );
+}
+
+function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onAsk }: {
+  mode: FoodMode;
+  onModeChange: (mode: FoodMode) => void;
+  records: FoodRecordView[];
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  reviewRows: FoodRecordView[];
+  loading: boolean;
+  compact: boolean;
+  contentWidth: number;
+  onToggleShopping: (record: FoodRecordView) => void;
+  onAsk: () => void;
+}) {
+  const theme = useLifeOSTheme();
+  const today = new Date();
+  const title = mode === 'Today'
+    ? today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : mode;
+  const subtitle = {
+    Today: 'Meals, reviews, use first',
+    Kitchen: 'What you have',
+    Plan: 'This week from your kitchen',
+    Recipes: 'Make now, almost, all',
+    Shop: 'To buy, receipts, put away',
+  }[mode];
+  return (
+    <Page>
+      <View style={styles.foodDemoRoot}>
+        <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
+          <View style={[styles.foodDemoContent, !compact && { width: contentWidth }, compact && styles.foodDemoContentCompact]}>
+            <View style={styles.foodDemoTopbar}>
+              <View style={styles.foodDemoHeadline}>
+                <Text style={[styles.foodDemoTitle, { color: theme.colors.ink }]}>{title}</Text>
+                <Text style={[styles.foodDemoSubtitle, { color: theme.colors.muted }]}>{loading ? 'Loading your kitchen…' : subtitle}</Text>
+              </View>
+              <View style={styles.foodDemoTopActions}>
+                <Link href="/search" style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>⌕</Link>
+                <Link href="/capture" style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>＋</Link>
+                <Pressable accessibilityRole="button" onPress={onAsk} style={({ pressed }) => [styles.foodAskPill, compact && styles.foodAskPillCompact, { backgroundColor: theme.dark ? theme.colors.plumSoft : '#FFD5C8' }, pressed && styles.pressed]}>
+                  <Text style={[styles.foodAskText, { color: theme.dark ? theme.colors.ink : '#4B241D' }]}>Ask</Text>
+                </Pressable>
+              </View>
+            </View>
+            <FoodDemoBody
+              mode={mode}
+              records={records}
+              meals={meals}
+              kitchen={kitchen}
+              shopping={shopping}
+              reviewRows={reviewRows}
+              onToggleShopping={onToggleShopping}
+            />
+          </View>
+        </ScrollView>
+        <FoodDemoNav active={mode} onChange={onModeChange} />
+      </View>
+    </Page>
+  );
+}
+
+function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping }: {
+  mode: FoodMode;
+  records: FoodRecordView[];
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  reviewRows: FoodRecordView[];
+  onToggleShopping: (record: FoodRecordView) => void;
+}) {
+  if (mode === 'Kitchen') return <KitchenDemo records={kitchen.length ? kitchen : records} />;
+  if (mode === 'Plan') return <PlanDemo meals={meals} kitchen={kitchen} />;
+  if (mode === 'Recipes') return <RecipesDemo meals={meals} kitchen={kitchen} />;
+  if (mode === 'Shop') return <ShopDemo shopping={shopping} onToggleShopping={onToggleShopping} />;
+  return <TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} />;
+}
+
+function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  reviewRows: FoodRecordView[];
+}) {
+  const liveMeals = meals.slice(0, 3).map((record, index) => ({
+    title: `${['Breakfast', 'Lunch', 'Dinner'][index] ?? 'Meal'}: ${record.title}`,
+    detail: record.body || record.meta,
+    badge: record.status || (index === 0 ? '+22g protein' : index === 1 ? 'use first' : 'draft'),
+    tone: index === 0 ? 'moss' as const : index === 1 ? 'amber' as const : 'red' as const,
+    href: `/record/${record.id}`,
+  }));
+  const rows = liveMeals.length >= 3 ? liveMeals : fallbackMeals;
+  const review = reviewRows[0];
+  const useSoon = kitchen[0];
+  const shop = shopping[0];
+  return (
+    <View style={styles.foodDemoStack}>
+      <FoodSummaryCard
+        tone="neutral"
+        glyphTone="moss"
+        glyph="🍽"
+        title="Meal timeline"
+        detail={`${rows.length + 1} meals planned from pantry ingredients`}
+        badge={`${Math.max(reviewRows.length, 3)} drafts to review`}
+      />
+      {rows.map((row) => (
+        <FoodDemoRow key={row.title} {...row} />
+      ))}
+      <FoodActionCard
+        tone="moss"
+        title="Review queue"
+        detail={review?.meta || 'Receipt proposal from Market Basket'}
+        strong={review ? `Review: ${review.title}` : 'Add: salmon fillets, blueberries, spinach'}
+        note="You can edit quantities before saving."
+        cta="Review changes"
+        href={review ? `/record/${review.id}` : '/chat'}
+      />
+      <FoodActionCard
+        tone="neutral"
+        title="Pantry-aware suggestion"
+        detail={useSoon ? `Cook around ${useSoon.title}.` : 'Cook lentil soup tomorrow: uses carrots, celery, and stock expiring soon.'}
+        strong={shop ? `Missing: ${shop.title}` : undefined}
+      />
+    </View>
+  );
+}
+
+function KitchenDemo({ records }: { records: FoodRecordView[] }) {
+  const rows = records.slice(0, 5).map((record, index) => ({
+    title: record.title,
+    detail: record.body || record.meta,
+    badge: record.status || fallbackKitchen[index]?.badge || 'ready',
+    tone: fallbackKitchen[index]?.tone ?? ('moss' as const),
+    href: `/record/${record.id}`,
+  }));
+  const resolvedRows = rows.length ? rows : fallbackKitchen;
+  return (
+    <View style={styles.foodDemoStack}>
+      <View style={styles.foodChipRow}>
+        <FoodFilterChip label={`Use first ${Math.max(5, resolvedRows.filter((item) => item.tone === 'amber').length)}`} tone="amber" selected />
+        <FoodFilterChip label={`Pantry ${Math.max(18, resolvedRows.length)}`} tone="moss" />
+        <FoodFilterChip label="Freezer 6" tone="blue" />
+      </View>
+      {resolvedRows.map((row) => <FoodDemoRow key={row.title} {...row} />)}
+      <FoodActionCard
+        tone="amber"
+        title="Inventory context"
+        detail="Lots, expiry, prices, notes, and nutrition confidence stay local until you export or back up."
+        cta="CSV export ready"
+        href="/sources"
+      />
+    </View>
+  );
+}
+
+function PlanDemo({ meals, kitchen }: { meals: FoodRecordView[]; kitchen: FoodRecordView[] }) {
+  const days = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
+  return (
+    <View style={styles.foodDemoStack}>
+      <View style={styles.foodWeekStrip}>
+        {days.map((day, index) => (
+          <View key={day} style={[styles.foodDay, index === 0 && styles.foodDayActive]}>
+            <Text style={styles.foodDayName}>{day}</Text>
+            <Text style={styles.foodDayDot}>{index < 4 ? '•' : '○'}</Text>
+          </View>
+        ))}
+      </View>
+      {(meals.length ? meals : []).slice(0, 4).map((record, index) => (
+        <FoodDemoRow
+          key={record.id}
+          title={`${days[index] ?? 'Plan'}: ${record.title}`}
+          detail={record.body || record.meta}
+          badge={index === 0 ? 'tonight' : index === 1 ? 'planned' : 'draft'}
+          tone={index === 0 ? 'moss' : index === 1 ? 'blue' : 'amber'}
+          href={`/record/${record.id}`}
+        />
+      ))}
+      {!meals.length ? fallbackMeals.map((row, index) => <FoodDemoRow key={row.title} title={`${days[index]}: ${row.title.replace(/^.*?: /, '')}`} detail={row.detail} badge={row.badge} tone={row.tone} />) : null}
+      <FoodActionCard
+        tone="blue"
+        title="Plan with my Kitchen"
+        detail={kitchen[0] ? `Start from ${kitchen[0].title}, then draft editable meals and shopping gaps.` : 'Draft meals from pantry and preferences before anything writes.'}
+        cta="Draft week"
+        href="/chat"
+      />
+    </View>
+  );
+}
+
+function RecipesDemo({ meals, kitchen }: { meals: FoodRecordView[]; kitchen: FoodRecordView[] }) {
+  const recipes = (meals.length ? meals : []).slice(0, 4);
+  return (
+    <View style={styles.foodDemoStack}>
+      <View style={styles.foodChipRow}>
+        <FoodFilterChip label="Make now" tone="moss" selected />
+        <FoodFilterChip label="Almost" tone="amber" />
+        <FoodFilterChip label="All recipes" tone="blue" />
+      </View>
+      {recipes.map((record, index) => (
+        <FoodDemoRow
+          key={record.id}
+          title={record.title}
+          detail={record.body || record.meta || `Matches ${kitchen[index % Math.max(kitchen.length, 1)]?.title ?? 'pantry'} items.`}
+          badge={index === 0 ? 'have all' : index === 1 ? 'need 1' : 'scale'}
+          tone={index === 0 ? 'moss' : index === 1 ? 'amber' : 'blue'}
+          href={`/record/${record.id}`}
+        />
+      ))}
+      {!recipes.length ? fallbackMeals.map((row, index) => (
+        <FoodDemoRow key={row.title} title={row.title.replace(/^.*?: /, '')} detail={row.detail} badge={index === 0 ? 'have all' : index === 1 ? 'need 1' : 'draft'} tone={row.tone} />
+      )) : null}
+      <FoodActionCard
+        tone="moss"
+        title="Recipe matching"
+        detail="Have/need matching appears before opening details, so dinner decisions are visible at a glance."
+        cta="Ask for ideas"
+        href="/chat"
+      />
+    </View>
+  );
+}
+
+function ShopDemo({ shopping, onToggleShopping }: { shopping: FoodRecordView[]; onToggleShopping: (record: FoodRecordView) => void }) {
+  const rows = shopping.slice(0, 3);
+  return (
+    <View style={styles.foodDemoStack}>
+      <View style={styles.foodChipRow}>
+        <FoodFilterChip label={`To buy ${Math.max(7, rows.length + 4)}`} tone="amber" selected />
+        <FoodFilterChip label="Receipts 2" tone="neutral" />
+        <FoodFilterChip label={`Put away ${Math.max(4, rows.length)}`} tone="moss" />
+      </View>
+      <FoodActionCard
+        tone="neutral"
+        title="Receipt review"
+        detail="Market Basket, synthetic demo receipt"
+        strong="Salmon, spinach, blueberries"
+        cta="Edit before save"
+        href="/chat"
+        ctaTone="red"
+      />
+      {rows.length ? rows.map((record, index) => (
+        <FoodDemoRow
+          key={record.id}
+          title={record.title}
+          detail={record.body || record.meta}
+          badge={record.status}
+          tone={index === 0 ? 'moss' : index === 1 ? 'amber' : 'blue'}
+          href={`/record/${record.id}`}
+          onPress={() => onToggleShopping(record)}
+        />
+      )) : fallbackShop.map((row) => <FoodDemoRow key={row.title} {...row} />)}
+      <FoodActionCard
+        tone="blue"
+        title="Reviewable AI command"
+        detail="AI parsed the receipt into a typed draft. WonderFood validates fields and waits for approval."
+        actions={['Accept', 'Edit', 'Reject']}
+      />
+    </View>
+  );
+}
+
+function FoodSummaryCard({ glyphTone, glyph, title, detail, badge }: { tone: 'neutral'; glyphTone: FoodTone; glyph: string; title: string; detail: string; badge: string }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodSummaryCard, { backgroundColor: theme.dark ? theme.colors.paper : '#EDE8DD' }]}>
+      <View style={[styles.foodGlyph, foodToneStyle(glyphTone, theme.colors)]}>
+        <Text style={styles.foodGlyphText}>{glyph}</Text>
+      </View>
+      <View style={styles.foodRowCopy}>
+        <Text style={[styles.foodRowTitle, { color: theme.colors.ink }]}>{title}</Text>
+        <Text style={[styles.foodRowDetail, { color: theme.colors.muted }]}>{detail}</Text>
+      </View>
+      <View style={[styles.foodBadge, foodToneStyle('amber', theme.colors)]}>
+        <Text style={[styles.foodBadgeText, { color: theme.colors.ink }]}>{badge}</Text>
+      </View>
+    </View>
+  );
+}
+
+function FoodDemoRow({ title, detail, badge, tone, href, onPress }: {
+  title: string;
+  detail: string;
+  badge: string;
+  tone: FoodTone;
+  href?: string;
+  onPress?: () => void;
+}) {
+  const theme = useLifeOSTheme();
+  const content = (
+    <View style={[styles.foodDemoRow, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+      <View style={[styles.foodGlyph, foodToneStyle(tone, theme.colors)]}>
+        <Text style={styles.foodGlyphText}>{tone === 'amber' ? '!' : tone === 'red' ? '•' : tone === 'blue' ? '↗' : '✓'}</Text>
+      </View>
+      <View style={styles.foodRowCopy}>
+        <Text style={[styles.foodRowTitle, { color: theme.colors.ink }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.foodRowDetail, { color: theme.colors.muted }]} numberOfLines={2}>{detail}</Text>
+      </View>
+      <View style={[styles.foodBadge, foodToneStyle(tone, theme.colors)]}>
+        <Text style={[styles.foodBadgeText, { color: tone === 'red' ? theme.colors.red : theme.colors.moss }]} numberOfLines={1}>{badge}</Text>
+      </View>
+    </View>
+  );
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>{content}</Pressable>;
+}
+
+function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone = 'moss', actions }: {
+  title: string;
+  detail: string;
+  strong?: string;
+  note?: string;
+  cta?: string;
+  href?: string;
+  tone: 'neutral' | 'moss' | 'amber' | 'blue';
+  ctaTone?: FoodTone;
+  actions?: string[];
+}) {
+  const theme = useLifeOSTheme();
+  const card = (
+    <View style={[styles.foodActionCard, foodPanelStyle(tone, theme.colors)]}>
+      <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>{title}</Text>
+      <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{detail}</Text>
+      {strong ? <Text style={[styles.foodActionStrong, { color: theme.colors.ink }]}>{strong}</Text> : null}
+      {note ? <Text style={[styles.foodActionNote, { color: theme.colors.muted }]}>{note}</Text> : null}
+      {actions ? (
+        <View style={styles.foodActionButtons}>
+          {actions.map((action, index) => (
+            <View key={action} style={[styles.foodActionButton, index === 0 ? { backgroundColor: theme.colors.moss } : foodToneStyle(index === 1 ? 'neutral' : 'red', theme.colors)]}>
+              <Text style={[styles.foodActionButtonText, { color: index === 0 ? theme.colors.paper : index === 2 ? theme.colors.red : theme.colors.ink }]}>{action}</Text>
+            </View>
+          ))}
+        </View>
+      ) : cta ? (
+        <View style={[styles.foodInlineCta, foodToneStyle(ctaTone, theme.colors)]}>
+          <Text style={[styles.foodInlineCtaText, { color: ctaTone === 'red' ? theme.colors.red : theme.colors.moss }]}>{cta}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+  return href ? <Link href={href as never} asChild><Pressable accessibilityRole="button" style={({ pressed }) => [pressed && styles.pressed]}>{card}</Pressable></Link> : card;
+}
+
+function FoodFilterChip({ label, tone, selected }: { label: string; tone: FoodTone | 'neutral'; selected?: boolean }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodFilterChip, foodToneStyle(tone, theme.colors), selected && styles.foodFilterChipSelected]}>
+      <Text style={[styles.foodFilterText, { color: tone === 'blue' ? theme.colors.blue : tone === 'amber' ? '#775E00' : theme.colors.moss }]}>{label}</Text>
+    </View>
+  );
+}
+
+function FoodDemoNav({ active, onChange }: { active: FoodMode; onChange: (mode: FoodMode) => void }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodDemoNav, { backgroundColor: theme.dark ? '#171B14' : '#F1F6EE' }]}>
+      {FOOD_MODES.map((mode) => {
+        const selected = active === mode.id;
+        return (
+          <Pressable key={mode.id} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onChange(mode.id)} style={styles.foodNavItem}>
+            <View style={[styles.foodNavGlyph, selected && { backgroundColor: theme.colors.amberSoft }]}>
+              <Text style={[styles.foodNavGlyphText, { color: selected ? theme.colors.moss : theme.colors.muted }]}>{mode.glyph}</Text>
+            </View>
+            <Text style={[styles.foodNavLabel, { color: selected ? theme.colors.moss : theme.colors.ink }]}>{mode.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function foodToneStyle(tone: FoodTone | 'neutral', themed: typeof colors) {
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft, borderColor: '#EAD58C' };
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft, borderColor: '#C8E2EF' };
+  if (tone === 'plum') return { backgroundColor: themed.plumSoft, borderColor: themed.line };
+  if (tone === 'red') return { backgroundColor: '#FFD8CD', borderColor: '#F5C5B7' };
+  if (tone === 'neutral') return { backgroundColor: themed.canvas, borderColor: themed.line };
+  return { backgroundColor: themed.mossSoft, borderColor: '#CBEACD' };
+}
+
+function foodPanelStyle(tone: 'neutral' | 'moss' | 'amber' | 'blue', themed: typeof colors) {
+  if (tone === 'moss') return { backgroundColor: '#EDF8EF', borderColor: '#CBEACD' };
+  if (tone === 'amber') return { backgroundColor: themed.amberSoft, borderColor: '#EAD58C' };
+  if (tone === 'blue') return { backgroundColor: themed.blueSoft, borderColor: '#C8E2EF' };
+  return { backgroundColor: themed.paper, borderColor: themed.line };
 }
 
 function RecordColumn({ title, subtitle, records, visuals, empty }: {
@@ -917,6 +1351,53 @@ function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: type
 }
 
 const styles = StyleSheet.create({
+  foodDemoRoot: { flex: 1 },
+  foodDemoContent: { alignSelf: 'center', maxWidth: 760, paddingHorizontal: 24, paddingTop: 42, paddingBottom: 158 },
+  foodDemoContentCompact: { alignSelf: 'stretch', paddingHorizontal: 16, paddingTop: 34 },
+  foodDemoTopbar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 22 },
+  foodDemoHeadline: { flex: 1, minWidth: 0 },
+  foodDemoTitle: { color: colors.ink, fontSize: 32, lineHeight: 36, fontWeight: '900', letterSpacing: -1.4 },
+  foodDemoSubtitle: { color: colors.muted, fontSize: 16, lineHeight: 22, marginTop: 5, fontWeight: '600' },
+  foodDemoTopActions: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 1, flexShrink: 0 },
+  foodDemoIcon: { minWidth: 40, minHeight: 40, color: colors.ink, fontSize: 24, lineHeight: 40, textAlign: 'center', fontWeight: '900', borderRadius: 20 },
+  foodAskPill: { minWidth: 84, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  foodAskPillCompact: { minWidth: 58, paddingHorizontal: 10 },
+  foodDemoStack: { gap: 14 },
+  foodRowPress: { alignSelf: 'stretch' },
+  foodSummaryCard: { minHeight: 96, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  foodDemoRow: { width: '100%', minHeight: 98, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden' },
+  foodGlyph: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  foodGlyphText: { color: colors.moss, fontSize: 18, lineHeight: 22, fontWeight: '900' },
+  foodRowCopy: { flex: 1, minWidth: 0, flexShrink: 1 },
+  foodRowTitle: { color: colors.ink, fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.45 },
+  foodRowDetail: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  foodBadge: { minWidth: 70, maxWidth: 104, minHeight: 34, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
+  foodBadgeText: { color: colors.moss, fontSize: 12, lineHeight: 14, fontWeight: '900', textAlign: 'center' },
+  foodActionCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 20, minHeight: 132 },
+  foodActionTitle: { color: colors.ink, fontSize: 25, lineHeight: 30, fontWeight: '900', letterSpacing: -0.7 },
+  foodActionDetail: { color: colors.muted, fontSize: 17, lineHeight: 24, marginTop: 8 },
+  foodActionStrong: { color: colors.ink, fontSize: 18, lineHeight: 25, fontWeight: '900', marginTop: 10 },
+  foodActionNote: { color: colors.muted, fontSize: 15, lineHeight: 21, marginTop: 8 },
+  foodInlineCta: { alignSelf: 'flex-end', marginTop: 8, minHeight: 38, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, justifyContent: 'center' },
+  foodInlineCtaText: { color: colors.moss, fontSize: 14, fontWeight: '900' },
+  foodActionButtons: { flexDirection: 'row', gap: 18, marginTop: 28 },
+  foodActionButton: { flex: 1, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  foodActionButtonText: { color: colors.ink, fontSize: 17, fontWeight: '900' },
+  foodChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 14 },
+  foodFilterChip: { minHeight: 52, borderRadius: radius.pill, paddingHorizontal: 18, paddingVertical: 12, borderWidth: 1, justifyContent: 'center' },
+  foodFilterChipSelected: { transform: [{ scale: 1.01 }] },
+  foodFilterText: { color: colors.moss, fontSize: 18, fontWeight: '900' },
+  foodWeekStrip: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  foodDay: { flex: 1, minHeight: 76, borderRadius: 22, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  foodDayActive: { backgroundColor: colors.amberSoft, borderColor: '#EAD58C' },
+  foodDayName: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  foodDayDot: { color: colors.moss, fontSize: 19, fontWeight: '900', marginTop: 2 },
+  foodAskText: { color: '#4B241D', fontSize: 16, lineHeight: 19, fontWeight: '900' },
+  foodDemoNav: { position: 'absolute', left: 0, right: 0, bottom: 0, minHeight: 96, paddingTop: 10, paddingHorizontal: 8, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#DFE7DA' },
+  foodNavItem: { flex: 1, alignItems: 'center', minHeight: 70, justifyContent: 'center' },
+  foodNavGlyph: { minWidth: 44, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  foodNavGlyphText: { color: colors.muted, fontSize: 18, fontWeight: '900' },
+  foodNavLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   content: { alignSelf: 'center', maxWidth: 1280, paddingHorizontal: 18, paddingBottom: 140 },
   topbar: { paddingTop: 16, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
