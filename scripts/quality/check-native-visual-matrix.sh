@@ -56,6 +56,9 @@ for _ in $(seq 1 120); do
 done
 [[ "$boot" == "1" ]] || fail "emulator boot did not complete"
 
+if [[ "$serial" == emulator-* ]]; then
+  "$adb_bin" -s "$serial" uninstall "$package_name" >/dev/null 2>&1 || true
+fi
 "$adb_bin" -s "$serial" install -r "$apk" >/dev/null
 
 routes=(
