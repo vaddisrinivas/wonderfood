@@ -10,6 +10,20 @@ TOKEN_FILE="${GOOGLE_SHEETS_TOKEN_FILE:-${ROOT_DIR}/build/evidence/live-workspac
 OUT_DIR="${GOOGLE_SHEETS_SCENARIO_OUT:-app/build/evidence/live-workspace}"
 mkdir -p "$(dirname "$TOKEN_FILE")" "$OUT_DIR"
 
+if [[ -z "${SSL_CERT_FILE:-}" ]]; then
+  cert_file="$(python3 - <<'PY' 2>/dev/null || true
+try:
+    import certifi
+    print(certifi.where())
+except Exception:
+    pass
+PY
+)"
+  if [[ -n "$cert_file" && -f "$cert_file" ]]; then
+    export SSL_CERT_FILE="$cert_file"
+  fi
+fi
+
 AGENT_ENV_WRAPPER="$HOME/.codex/skills/agent-env/scripts/run-with-agent-env.sh"
 if [[ "${WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV:-0}" != "1" &&
       -x "$AGENT_ENV_WRAPPER" &&
@@ -89,9 +103,6 @@ PY
 
 GOOGLE_SHEETS_ACCESS_TOKEN="$GOOGLE_SHEETS_ACCESS_TOKEN" \
 GOOGLE_SHEETS_TEST_SPREADSHEET_ID="$spreadsheet_id" \
-./gradlew --no-daemon --rerun-tasks :app:testPlayDebugUnitTest --tests 'com.wonderfood.app.sync.WonderFoodLiveWorkspaceProofTest.liveGoogleSheetsWorkspaceExportsSeedRowsAndReadsThemBack' >/dev/null
-
-GOOGLE_SHEETS_ACCESS_TOKEN="$GOOGLE_SHEETS_ACCESS_TOKEN" \
 GOOGLE_SHEETS_TEST_SPREADSHEET_ID="$spreadsheet_id" \
 GOOGLE_SHEETS_SCENARIO_EVIDENCE="$scenario_output" \
 python3 - <<'PY'
@@ -152,9 +163,69 @@ def batch_get(ranges):
     query = urllib.parse.urlencode([("ranges", r) for r in ranges]) + "&majorDimension=ROWS"
     return request("GET", base + "/values:batchGet?" + query)
 
+
+def batch_update(payload):
+    return request("POST", base + ":batchUpdate", payload)
+
 def sheet_titles():
     meta = request("GET", base + "?fields=sheets(properties(title))", retry=False)
     return [sheet.get("properties", {}).get("title", "") for sheet in meta.get("sheets", [])]
+
+def quote_sheet(name):
+    return "'" + name.replace("'", "''") + "'"
+
+def sheet_range(name, end_col="AZ", start_row=1, end_row=1000):
+    return f"{quote_sheet(name)}!A{start_row}:{end_col}{end_row}"
+
+def ensure_sheet(name):
+    if name in sheet_titles():
+        return
+    batch_update({
+        "requests": [
+            {
+                "addSheet": {
+                    "properties": {
+                        "title": name,
+                    },
+                },
+            }
+        ]
+    })
+
+def align_row(row, headers):
+    return [row.get(header, "") for header in headers]
+
+def ensure_sheet_data(name, headers, seed_row=None):
+    ensure_sheet(name)
+    try:
+        current_headers, rows = table(name)
+    except RuntimeError as error:
+        if "No such sheet" in str(error):
+            ensure_sheet(name)
+            current_headers, rows = table(name)
+        else:
+            raise
+
+    needs_seed = False
+    if not current_headers:
+        needs_seed = True
+    elif headers and current_headers != headers:
+        needs_seed = True
+
+    if needs_seed:
+        if headers:
+            end_col = col_name(len(headers) - 1)
+            update_range(sheet_range(name, end_col=end_col, start_row=1, end_row=1), [headers])
+            current_headers = headers
+            rows = []
+    if seed_row:
+        seed_values = align_row(seed_row, current_headers)
+        wf_id_col = current_headers.index("_wf_id") if "_wf_id" in current_headers else -1
+        has_seed = wf_id_col >= 0 and any(len(r) > wf_id_col and r[wf_id_col] == seed_row.get("_wf_id") for r in rows)
+        if not has_seed and current_headers:
+            end_row = max(2, len(rows) + 2)
+            end_col = col_name(len(current_headers) - 1)
+            update_range(f"{quote_sheet(name)}!A{end_row}:{end_col}{end_row}", [seed_values])
 
 def update_range(a1, values):
     encoded = urllib.parse.quote(a1, safe="")
@@ -166,12 +237,82 @@ def update_range(a1, values):
 
 def table(name, end_col="AZ"):
     try:
-        values = batch_get([f"'{name}'!A1:{end_col}1000"]).get("valueRanges", [{}])[0].get("values", [])
+        values = batch_get([sheet_range(name, end_col=end_col)]).get("valueRanges", [{}])[0].get("values", [])
     except RuntimeError as error:
         raise RuntimeError(f"{error}; available_sheets={sheet_titles()}") from error
+    if not values:
+        headers = []
+        rows = []
+        return headers, rows
     headers = values[0]
     rows = values[1:]
     return headers, rows
+
+KITCHEN_HEADERS = [
+    "Item",
+    "Amount",
+    "Unit",
+    "Category",
+    "Status",
+    "Reason",
+    "Notes",
+    "_wf_id",
+    "_wf_revision",
+    "_wf_archived",
+    "_wf_updated_at",
+    "On hand",
+    "Buy next",
+]
+
+SHOPPING_HEADERS = [
+    "Item",
+    "Amount",
+    "Unit",
+    "Category",
+    "Status",
+    "Reason",
+    "Notes",
+    "Archived",
+    "_wf_id",
+    "_wf_revision",
+    "_wf_archived",
+    "_wf_updated_at",
+]
+
+KITCHEN_SEED = {
+    "Item": "Seed pantry apples",
+    "Amount": "1",
+    "Unit": "each",
+    "Category": "food",
+    "Status": "Available",
+    "Reason": "Seed",
+    "Notes": "seed",
+    "_wf_id": "seed:kitchen:1",
+    "_wf_revision": "1",
+    "_wf_archived": "FALSE",
+    "_wf_updated_at": "2026-07-20T00:00:00Z",
+    "On hand": "3",
+    "Buy next": "FALSE",
+}
+
+SHOPPING_SEED = {
+    "Item": "Seed pantry milk",
+    "Amount": "1",
+    "Unit": "each",
+    "Category": "food",
+    "Status": "Needed",
+    "Reason": "Seed",
+    "Notes": "seed",
+    "Archived": "FALSE",
+    "_wf_id": "seed:shopping:1",
+    "_wf_revision": "1",
+    "_wf_archived": "FALSE",
+    "_wf_updated_at": "2026-07-20T00:00:00Z",
+}
+
+ensure_sheet_data("Home", ["Name", "Value"], {"Name": "home", "Value": "home"})
+ensure_sheet_data("Kitchen", KITCHEN_HEADERS, KITCHEN_SEED)
+ensure_sheet_data("Shopping", SHOPPING_HEADERS, SHOPPING_SEED)
 
 kitchen_headers, kitchen_rows = table("Kitchen")
 shopping_headers, shopping_rows = table("Shopping")
@@ -222,6 +363,10 @@ update_range(f"'Shopping'!{col_name(archived_col)}{shopping_next_row}", [["TRUE"
 archived_rows = batch_get([f"'Shopping'!A1:{shopping_end_col}1000"]).get("valueRanges", [{}])[0].get("values", [])
 archive_visible = any(len(row) > archived_col and len(row) > shopping_headers.index("_wf_id") and row[shopping_headers.index("_wf_id")] == scenario_identifier and row[archived_col] == "TRUE" for row in archived_rows[1:])
 
+update_range(f"'Shopping'!{col_name(archived_col)}{shopping_next_row}", [["FALSE"]])
+undo_rows = batch_get([f"'Shopping'!A1:{shopping_end_col}1000"]).get("valueRanges", [{}])[0].get("values", [])
+undo_archive_visible = any(len(row) > archived_col and len(row) > shopping_headers.index("_wf_id") and row[shopping_headers.index("_wf_id")] == scenario_identifier and row[archived_col] == "FALSE" for row in undo_rows[1:])
+
 repair_cell = "'Shopping'!" + col_name(status_col) + "1"
 update_range(repair_cell, [["Status broken"]])
 broken_headers = table("Shopping")[0]
@@ -241,6 +386,7 @@ payload = {
     "live_edit_row": edited,
     "live_conflict_input_read_back": conflict_read_back,
     "live_archive_status_read_back": archive_visible,
+    "live_undo_archive_read_back": undo_archive_visible,
     "retry_wrapper_exercised": forced_retry_used and retry_attempts >= 2,
     "repair_header_damage_detected": repair_needed,
     "repair_header_restored": repair_verified,

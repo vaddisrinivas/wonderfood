@@ -2,7 +2,7 @@
 
 The `Android Release` workflow publishes a signed APK and SHA-256 checksum when a
 semantic-version tag such as `v1.0.0` is pushed. The tag must exactly match the
-`versionName` in `app/build.gradle.kts`.
+`versionName` in `android/app/build.gradle`.
 
 ### Trust and reproducibility expectations
 
@@ -40,7 +40,7 @@ reject future APKs.
 
 ## Release checklist
 
-1. Increment `versionCode` and `versionName` in `app/build.gradle.kts`.
+1. Increment `versionCode` and `versionName` in `android/app/build.gradle`.
 2. Move user-visible entries from `Unreleased` into a dated changelog section.
 3. Run `./scripts/quality/android-harness.sh local`.
 4. Capture release evidence (commands run, checksums, signing fingerprints, app and
@@ -53,11 +53,15 @@ export ANDROID_KEY_ALIAS=...
 export ANDROID_KEY_PASSWORD=...
 
 ./scripts/quality/collect-release-evidence.sh
+npm run phase8:check:android-release-signed
 ```
 
 The collector writes a timestamped directory under `build/evidence/` with release
-APK verification output, SHA-256 sums, signing fingerprints, OAuth placeholder
-status, assetlinks status, and connected-device evidence when ADB sees a device.
+APK verification output, SHA-256 sums, signing fingerprints, Google auth status
+for the current direct-settings app, assetlinks status, and connected-device
+evidence when ADB sees a device.
+The signed-release npm gate is stricter than the normal local artifact proof: it
+fails if the APK is debug-signed or the AAB is unsigned.
 5. Validate release signing fingerprint and App Links manifest:
 
 ```bash

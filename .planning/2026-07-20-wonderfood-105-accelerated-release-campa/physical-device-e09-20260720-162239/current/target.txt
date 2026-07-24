@@ -1,0 +1,2 @@
+package=com.wonderfood.app.foss
+database=wonderfood-v105-household.db

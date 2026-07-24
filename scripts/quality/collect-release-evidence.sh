@@ -17,12 +17,16 @@ record() {
   printf '%s\n' "$*" | tee -a "$OUT_DIR/release-evidence.txt" >/dev/null
 }
 
-version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
-version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' app/build.gradle.kts | head -n 1)"
+gradle_file="android/app/build.gradle"
+if [[ ! -f "$gradle_file" && -f "app/build.gradle.kts" ]]; then
+  gradle_file="app/build.gradle.kts"
+fi
+version_name="$(sed -n 's/^[[:space:]]*versionName[[:space:]=]*(\{0,1\}"\([^"]*\)".*/\1/p' "$gradle_file" | head -n 1)"
+version_code="$(sed -n 's/^[[:space:]]*versionCode[[:space:]=]*(\{0,1\}\([0-9][0-9]*\).*/\1/p' "$gradle_file" | head -n 1)"
 package_name="com.wonderfood.app"
 
-test -n "$version_name" || fail "Could not read versionName from app/build.gradle.kts"
-test -n "$version_code" || fail "Could not read versionCode from app/build.gradle.kts"
+test -n "$version_name" || fail "Could not read versionName from $gradle_file"
+test -n "$version_code" || fail "Could not read versionCode from $gradle_file"
 
 record "WonderFood release evidence"
 record "timestamp=$STAMP"
@@ -51,38 +55,73 @@ if [[ "$missing_signing" -eq 0 ]]; then
     > "$OUT_DIR/signing-key.txt"
   awk '/SHA1:|SHA256:|SHA512:/{print}' "$OUT_DIR/signing-key.txt" | tee "$OUT_DIR/signing-fingerprints.txt" >/dev/null
   record "signing_fingerprints=$OUT_DIR/signing-fingerprints.txt"
-  ./gradlew --no-daemon :app:assembleFossRelease :app:assemblePlayRelease | tee "$OUT_DIR/gradle-release-build.log"
+  (cd android && ./gradlew --no-daemon :app:assembleRelease) | tee "$OUT_DIR/gradle-release-build.log"
 else
   record "signing_env=missing"
   record "release_build=skipped_missing_signing_env"
 fi
 
 release_apks=()
+apk_roots=()
+for dir in android/app/build/outputs/apk app/build/outputs/apk; do
+  [[ -d "$dir" ]] && apk_roots+=("$dir")
+done
 while IFS= read -r apk; do
   release_apks+=("$apk")
-done < <(find app/build/outputs/apk -path '*/release/*.apk' ! -name '*unsigned*' -type f 2>/dev/null | sort)
+done < <(
+  if [[ "${#apk_roots[@]}" -gt 0 ]]; then
+    find "${apk_roots[@]}" -path '*/release/*.apk' ! -name '*unsigned*' -type f 2>/dev/null | sort
+  fi
+)
 
 if [[ "${#release_apks[@]}" -gt 0 ]]; then
   apksigner="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
   [[ -x "$apksigner" ]] || fail "Could not find apksigner under ANDROID_HOME/build-tools"
   : > "$OUT_DIR/SHA256SUMS.txt"
-  for apk in "${release_apks[@]}"; do
-    base="$(basename "$apk")"
-    cp "$apk" "$OUT_DIR/$base"
-    shasum -a 256 "$OUT_DIR/$base" >> "$OUT_DIR/SHA256SUMS.txt"
-    "$apksigner" verify --verbose --print-certs "$apk" > "$OUT_DIR/$base.apksigner.txt"
-    record "verified_apk=$OUT_DIR/$base"
-  done
+  if [[ "$missing_signing" -eq 0 ]]; then
+    for apk in "${release_apks[@]}"; do
+      base="$(basename "$apk")"
+      cp "$apk" "$OUT_DIR/$base"
+      shasum -a 256 "$OUT_DIR/$base" >> "$OUT_DIR/SHA256SUMS.txt"
+      "$apksigner" verify --verbose --print-certs "$apk" > "$OUT_DIR/$base.apksigner.txt"
+      record "verified_apk=$OUT_DIR/$base"
+    done
+  else
+    for apk in "${release_apks[@]}"; do
+      record "release_apk_candidate_ignored_missing_signing_env=$apk"
+    done
+    record "verified_apk=none_missing_signing_env"
+  fi
 else
   record "verified_apk=none"
 fi
 
-client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' app/src/main/res/values/google_auth.xml | head -n 1)"
-if [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
-  record "google_web_client_id=placeholder"
-else
-  record "google_web_client_id=configured_public_value"
+google_auth_file=""
+for file in android/app/src/main/res/values/google_auth.xml app/src/main/res/values/google_auth.xml; do
+  if [[ -f "$file" ]]; then
+    google_auth_file="$file"
+    break
+  fi
+done
+client_id=""
+if [[ -n "$google_auth_file" ]]; then
+  client_id="$(sed -n 's/.*<string name="google_web_client_id">\(.*\)<\/string>.*/\1/p' "$google_auth_file" | head -n 1)"
 fi
+google_auth_required=0
+if rg -q 'google_web_client_id|GoogleSignIn|R\.string\.google' android/app/src app src 2>/dev/null; then
+  google_auth_required=1
+fi
+google_auth_status=""
+if [[ -z "$google_auth_file" && "$google_auth_required" -eq 0 ]]; then
+  google_auth_status="not_required_direct_settings"
+elif [[ -z "$google_auth_file" ]]; then
+  google_auth_status="missing_file"
+elif [[ -z "$client_id" || "$client_id" == "TODO_ADD_GOOGLE_WEB_CLIENT_ID" ]]; then
+  google_auth_status="placeholder"
+else
+  google_auth_status="configured_public_value"
+fi
+record "google_web_client_id=$google_auth_status"
 
 if [[ -f .well-known/assetlinks.json ]]; then
   if grep -q 'REPLACE_WITH_RELEASE_SHA256_CERT_FINGERPRINT' .well-known/assetlinks.json; then
@@ -114,8 +153,8 @@ version_name=$version_name
 version_code=$version_code
 package=$package_name
 signing_env=$([[ "$missing_signing" -eq 0 ]] && echo present || echo missing)
-google_web_client_id=${client_id:-missing}
-release_apk_count=${#release_apks[@]}
+google_web_client_id=$google_auth_status
+release_apk_count=$([[ "$missing_signing" -eq 0 ]] && echo "${#release_apks[@]}" || echo 0)
 MANIFEST
 
 record "manifest=$OUT_DIR/manifest.txt"

@@ -1,0 +1,71 @@
+# LifeOS chat contracts
+
+## Send endpoint
+
+### `POST /chat/send`
+
+Request envelope (`Content-Type: application/json`):
+
+- `thread_id` (string, required): canonical thread id.
+- `conversation_id` (string, legacy alias): accepted for backward compatibility.
+- `message` (string or object)
+  - string: plain message text.
+  - object: `{ id?: string, text: string }`.
+- `plan_hint` (string, optional): explicit intent text to route to planner/executor.
+- `domain_id` (string, optional): defaults to `food`.
+- `idempotency_key` (string, optional): stable key to replay idempotent results.
+- `previous_response_id` (string, optional): optional OpenAI previous response context.
+- `retry_of` (string, optional): retry a prior user message.
+- `mode` (enum `send|stream|preview`, optional): request mode hint.
+- `preview` (boolean, optional): preview mode disables commit side effects in action execution.
+
+Response:
+
+- `conversation_id`
+- `messages[]` (includes appended user + assistant message)
+- `thread`
+- `run` object
+- optional `action`
+  - `receipt` includes `source_ids`
+  - `verification`
+- optional `action_hints`
+- optional `provenance.sources`: deduplicated clickable source cards from the
+  canonical graph (Notion/Sheets/app) and, when enabled or requested, OpenAI
+  Responses web-search `url_citation` annotations.
+- `action.receipt` is the MCP canonical `lifeos.action-event.v1` subset and must preserve exact source references (`source_ids` and source citations) from retrieval.
+
+## Stream endpoint
+
+### `POST /chat/send/stream`
+
+Same request envelope as `/chat/send`.
+
+Server emits SSE frames (`data:` JSON) of type:
+
+- `run.start` (`run_id`, `conversation_id`, optional `thread_id`)
+- `token` (`run_id`, `conversation_id`, `delta`)
+- `run.end` (`run_id`, `conversation_id`, `response`)
+- `cache` (`conversation_id`, `response`) when idempotent replay is returned
+- `error` (`error`)
+
+Rules:
+
+- Input accepts `mode: stream` or `preview` and the same envelope fields as `/chat/send`.
+- `preview: true` disables mutating effects (executor may still validate and build policy responses without commits).
+- `/chat/send` never emits synthetic/fixture model answers; model output may be unavailable and is reported in `warnings`.
+- Conversation persistence stores the latest OpenAI `previous_response_id`; after a server restart, `/chat/send` resumes that chain when the client does not provide one.
+- The server also sends a bounded, structured summary of the last eight turns (including answer rows and source labels) as explicit model context, so multi-turn behavior remains recoverable even when provider response chaining is unavailable.
+- Web search is opt-in through `OPENAI_WEB_SEARCH_ENABLED=true`; when unset,
+  explicit `online`, `latest`, `current`, `source`, and similar queries enable
+  the tool. URL/title annotations are normalized into clickable source cards.
+
+## Retry
+
+### `POST /chat/undo`
+
+Input: `{ action_id, actor?, idempotency_key? }`
+
+Output includes `undo_result` and idempotent replay semantics:
+
+- successful first rollback executes action rollback
+- repeated rollback with same `idempotency_key` returns replayed confirmation

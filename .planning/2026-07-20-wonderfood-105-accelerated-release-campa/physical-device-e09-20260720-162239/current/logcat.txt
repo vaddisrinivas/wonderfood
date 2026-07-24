@@ -1,0 +1,1033 @@
+--------- beginning of system
+07-20 16:27:03.517  4800  4800 D PowerUI.Notification: showChargingNotice - Battery Level : 35 -> 35, Charging Type : 11 -> 11, Charging Time : 3935 -> 3924, Maximum protection : false -> false, Maximum threshold : 80 -> 80
+07-20 16:27:03.522  4800  4800 I NotificationManager: com.android.systemui: notify(2114586824, charging_state, Notification(channel=CHR shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONGOING_EVENT|ONLY_ALERT_ONCE color=0x00000000 category=sys groupKey=CHARGING vis=PUBLIC semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)) as user
+07-20 16:27:03.529  3221  5961 W PermissionService: getPermissionFlags: Unknown user -1
+07-20 16:27:03.529  3221  5961 W PermissionService: getPermissionFlags: Unknown user -1
+--------- beginning of main
+07-20 16:27:03.529  3221  5961 D NotificationHighlightCore: isNonImportantNotification Importance low
+07-20 16:27:03.530  3221  5961 W NotificationService: notificationHightlight enqu getNonImportantNotification, r= StatusBarNotification(pkg=com.android.systemui user=UserHandle{-1} id=2114586824 tag=charging_state key=-1|com.android.systemui|2114586824|charging_state|10041: Notification(channel=CHR shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONGOING_EVENT|ONLY_ALERT_ONCE color=0x00000000 category=sys groupKey=CHARGING vis=PUBLIC semFlags=0x200000 semPriority=0 semMissedCount=0 semScenarioType=0)), flags= SEM_FLAG_INSIGNIFICANT_MINIMIZED 
+07-20 16:27:03.530  4800  4800 I ChargingInfoView: handleMessage: MSG_SHOW_CHARGING_INFO
+07-20 16:27:03.530  4800  4800 I BottomChargingInfoView: updateContents: BATTERY_AND_REMAIN_TIME
+07-20 16:27:03.531  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - charging_info, timeout - 1000, reason - Charging Info is updating, delay by 500, wakeLock = WakeLock{86f18a4 held=false, refCount=0}
+07-20 16:27:03.532  3221  5961 D PowerManagerService: [api] acquire WakeLock DRAW_WAKE_LOCK                    'charging_info' (uid=10041 isFrozen=false pid=4800 displayId=0 lock=f8b28cf)
+07-20 16:27:03.532  3221  5961 D PowerManagerService: displayReady: false groupId=0
+07-20 16:27:03.532  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:03.533  3221  3404 I DisplayPowerController[0]: BrightnessEvent: brt=0.04705883(38.0%), nits=10.387, lux=-1.0, reason=doze, strat=DozeBrightnessStrategy, state=DOZE, stateReason=DRAW_WAKE_LOCK, policy=DOZE, flags=low_power_mode , initBrt=0.04705883, rcmdBrt=NaN, preBrt=NaN, preLux=0.0, wasShortTermModelActive=false, autoBrightness=true (default), unclampedBrt=0.04705883, hbmMax=1.0, hbmMode=off, thrmMax=1.0, rbcStrength=-1, powerFactor=0.9, physDisp=Built-in Screen(local:4630947093241269891), logicalId=0, slowChange=false, rampSpeed=0.0
+07-20 16:27:03.534  3221  3404 D PowerManagerService: [PWL] sb acquire: PowerManagerService.Display
+07-20 16:27:03.537  3221  4094 D DisplayManagerService: !@display_state requestDisplayStateInternal: DOZE_SUSPEND -> DOZE displayId=0
+07-20 16:27:03.537  4800  4800 I ChargingInfoManager: getDeviceRemainingTime: 1 h 5 m until full
+07-20 16:27:03.537  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] EARLY: DOZE_SUSPEND(4) -> DOZE(3)
+07-20 16:27:03.537  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - charging_info, timeout - 5500, reason - Charging Info is updating, delay by 5000, wakeLock = WakeLock{86f18a4 held=true, refCount=1}
+07-20 16:27:03.537  4800  4800 I AbsChargingInfoComponent: setVisibilityWithAnim: skipped true
+07-20 16:27:03.537  3221  3319 I DisplayDeviceRepository: Display device changed state: "Built-in Screen", DOZE
+07-20 16:27:03.538  3221  3816 D SemInputDevice:TSP: ActivateTask: 3,0 [07-20 16:27:03.537]
+07-20 16:27:03.538  3221  3404 D BrightnessThermalClamper: Thermal status observer already started
+07-20 16:27:03.539  1857  1857 I sysinput:Touch: activate:96, 3,0 OK
+07-20 16:27:03.539  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),3,true ret=0
+07-20 16:27:03.539  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 1 ms
+07-20 16:27:03.540  3221  3317 D WindowManager: DeferredDisplayUpdater: partially applying DisplayInfo(1440 x 3088) immediately
+07-20 16:27:03.540  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onStart : DOZE, DOZE, DEFAULT_DISPLAY
+07-20 16:27:03.540  1909  6385 D AudioFlinger: setParameters: filtered dev setParameters keyvalue screen_state=off
+07-20 16:27:03.540  1783  1808 D AHAL: AudioDevice: SetParameters: 1799: enter
+07-20 16:27:03.540  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 171: Enter
+07-20 16:27:03.540  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 416: Exit ret: 0
+07-20 16:27:03.540  1783  1808 D AHAL: hfp: hfp_set_parameters: 447: enter
+07-20 16:27:03.541  1783  1808 D AHAL: AudioDevice: SetParameters: 1882:  - screen = off
+07-20 16:27:03.541  1783  1808 I PAL: ResourceManager: setParameter: 9250: Screen State:0
+07-20 16:27:03.541  1783  1808 D AHAL: AudioDevice: SetParameters: 2617: exit: screen_state=off
+07-20 16:27:03.541  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 2 ms
+07-20 16:27:03.541  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:03.541  3221  4094 W LocalDisplayAdapter: !@display_state - 153 : DOZE_SUSPEND -> DOZE (MAIN)
+07-20 16:27:03.542  1783  1808 I Audio_a2dpsink_hw: adev_set_parameters: kevpairs=[screen_state=off]
+07-20 16:27:03.542  1926  1926 D SurfaceFlinger: Setting power mode 1 on physical display 4630947093241269891
+07-20 16:27:03.542  1926  1926 D SurfaceFlinger: setPhysicalDisplayPowerMode: Optimizing thread scheduling: optimizeForPerformance
+07-20 16:27:03.542  1926  1926 D SurfaceFlinger: Disabling synthetic vsync
+07-20 16:27:03.542  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 0
+07-20 16:27:03.542  1846  2164 I SDM     : HWCDisplay::SetPowerMode: display = 0, mode = Doze
+07-20 16:27:03.542  1846  2164 I SDM     : DisplayBase::SetDisplayState: Set state = 2, display 66-0, teardown = 0
+07-20 16:27:03.543  1846  2164 I SDM     : DisplayBase::SetDisplayState: active 1-0 state 2-3 pending_power_state_ 3
+07-20 16:27:03.543  1926  1926 I SurfaceFlinger: Force repainting for DOZE_SUSPEND -> DOZE or ON.
+07-20 16:27:03.543  3221  3976 D AS.DesktopUtils: isDesktopWindowing( false )
+07-20 16:27:03.543  1926  1926 D SurfaceFlinger: Finished setting power mode 1 on physical display 4630947093241269891
+07-20 16:27:03.543  3221  3976 D AS.DesktopModeHelper: setDesktopModePath caller = onDisplayChanged #Id=0, isInDesktopWindowing=false, isAudioOutputToDisplay : true
+07-20 16:27:03.545  1926  1926 I SurfaceFlinger: SFWD update time=10056791118662
+07-20 16:27:03.546  1846  2164 I SDM     : ToneMappingCore::set_default_vals():851 Initial enablement signals - bypass adaptive TM: 0, actual panel luma usage: 1, temporal filtering of dynamic meta data: 1, histTM enable: 1, static meta data usage: 1
+07-20 16:27:03.546  1846  2164 I SDM     : HdrAlgorithm::SetXMLParameters():278 Override enablement signals - bypass adaptive TM: 0, bypass sdr dimming: 1
+07-20 16:27:03.546  3221  4094 I LocalDisplayAdapter: SF.setDisplayPowerMode took 4ms
+07-20 16:27:03.546  3221  4094 W LocalDisplayAdapter: !@display_state - 153 : DOZE (MAIN) took 5 ms
+07-20 16:27:03.546  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2 - display changed
+07-20 16:27:03.546  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2
+07-20 16:27:03.546  8023  8023 I CAMERA_CONTROLLER: [2]ProviderServiceImpl.checkDisplayModePortrait():39 - presentationDisplaynull
+07-20 16:27:03.546  1846  2028 I SDM     : DisplayBase::WaitForCompletion: Wait for cached retire fence to be in steady state
+07-20 16:27:03.547  8023  8023 W CAMERA_CONTROLLER: [2]a.A():2 - presentationDisplay is null, return
+07-20 16:27:03.547  8023  8023 W CAMERA_CONTROLLER: [2]ProviderServiceImpl$registerDisplayListener$displayListener$1.onDisplayChanged():17 - display is not portrait mode 
+07-20 16:27:03.547  5145 25033 I HoneySpace.Memory-Monitor: current state = 3, didTrim = true
+07-20 16:27:03.547  5145  5145 I VRI[RecentsTransitionOverlay]@9ba9ba1: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.548  5145  5145 I VRI[CocktailBarService]@400297: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.548  5145  5145 I VRI[LauncherActivity]@4464a22: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.548  7646  7646 I VRI[FP Iconview]@6a76b96: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.548  5145  5145 I VRI[RecentsActivity]@30ab7a: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.548  6885  6885 I VRI[InputMethod]@df8c22f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.549  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] LATE: DOZE(3) -> DOZE(3)
+07-20 16:27:03.550  3221  3816 D SemInputDevice:TSP: ActivateTask: 3,1 [07-20 16:27:03.549]
+07-20 16:27:03.550  1857  1857 I sysinput:Touch: activate:96, 3,1 OK
+07-20 16:27:03.550  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),3,false ret=0
+07-20 16:27:03.550  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 1 ms
+07-20 16:27:03.551  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 1 ms
+07-20 16:27:03.551  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:03.551  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onFinish : DOZE, DOZE, DEFAULT_DISPLAY
+07-20 16:27:03.551  3221  3404 D DisplayPowerController[0]: setActualDisplayState: DOZE_SUSPEND -> DOZE
+07-20 16:27:03.551  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:03.552  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:03.552  7646  7646 I BSS_DisplayStateManager: handleDisplayStateChanged: DOZE_SUSPEND -> DOZE
+07-20 16:27:03.552  3221  3404 D PowerManagerService: displayReady: true groupId=0
+07-20 16:27:03.552  9907  9907 I VRI[PlayProtectDialogsActivity]@5131a1f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.552  9907  9907 I VRI[PlayProtectDialogsActivity]@ea52556: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.553  4800  4831 I VRI[ShellDropTarget]@fda9a37: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.553  3221  3404 D PowerManagerService: [PWL] sb release: PowerManagerService.Display
+07-20 16:27:03.553  3221  3956 D WifiDisplayAdapter: isFitToActiveDisplayLocked : false
+07-20 16:27:03.553  4800  4878 D StackScroller: onDisplayChanged for predraw skip to 3
+07-20 16:27:03.554  4800  4800 I AODUiController: onUIEvent : unknown component : 1202/0/0
+07-20 16:27:03.555  4800  4800 I AOD_BRIGHTNESS@BrightnessManager: mCurrentBrightness : HighNit[true], NitMode[10NIT], isForceState[0, ForceStateReason[[], ], mAppliedBrightness[1], LockStarLevel[100]
+07-20 16:27:03.555  4800  4800 I AOD_BRIGHTNESS@AlwaysOnDisplayEx: updateDozeBrightness: doze [65538] last [10NIT] change to [10NIT]
+07-20 16:27:03.555  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - AOD_DRAW, timeout - 100, reason - set Doze Brightness updateDozeBrightness, wakeLock = WakeLock{a359609 held=false, refCount=0}
+07-20 16:27:03.556 11143 11143 I VRI[HintService]@e83b0: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.557  3221  3240 D PowerManagerService: [api] acquire WakeLock DRAW_WAKE_LOCK                    'AOD_DRAW' (uid=10041 isFrozen=false pid=4800 displayId=0 lock=14700d7)
+07-20 16:27:03.557  4552  4552 I NearbyDiscovery: (REDACTED) FastPairDisplayObserver: %s -> %s
+07-20 16:27:03.557  4800  4800 D AODScreenBrightness: updateBrightness: brightness=0.04705883
+07-20 16:27:03.557  4800  4800 I DreamService[DozeService]: semSetDozeScreenBrightness dozeMode=65538 float brightness=0.04705883
+07-20 16:27:03.558  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:03.559  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:03.559  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:03.559  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:03.560  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:03.560  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:03.560  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:03.561  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:03.561  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:03.561  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:03.562  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:03.562  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:03.562  4800  4800 D DisplayLifecycle: updateDisplay id = 0
+07-20 16:27:03.562  4800  4800 I Keyguard.AODTouchModeManager: onDisplayChanged newDisplayState=3, currentDisplayState=4, displayId=0
+07-20 16:27:03.563  4800  4800 I AODTriggers: onAODEventDispatched = 4 / eventData = aod.q0@e5705aa
+07-20 16:27:03.563  4800  4800 I AOD_LIVE_CLOCK@LiveClockController: updateDisplayState: DISPLAY_STATE_DOZE
+07-20 16:27:03.563  4800  4800 I VRI[LockscreenShortcutBlur]@6491b12: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.564  4800  4800 I VRI[NavigationBar0]@35810b9: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.564  4800  4800 I VRI[DisplayBackGestureHandler 0]@2f2fb4f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.564  4800  4800 I VRI[NotificationShade]@c2a085d: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.564  4800  4800 I VRI[StatusBar]@1d0ce91: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.564  4800  4800 I VRI[Bouncer]@b0f9642: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.565  4800  4800 I VRI[SecondaryHomeHandle0]@a5b5f00: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:03.565  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:03.578  1846  2028 I SDM     : DisplayBase::WaitForCompletion: Cached retire fence is in ready state
+07-20 16:27:03.578  1846  2028 I SDM     : DisplayBase::GetPendingDisplayState: pending_power_state 3 for display 66-0
+07-20 16:27:03.659  3221  5961 D PowerManagerService: [api] release WakeLock DRAW_WAKE_LOCK                    'AOD_DRAW' ACQ=-101ms (uid=10041 isFrozen=false pid=4800 displayId=0 lock=14700d7)
+07-20 16:27:03.744  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:03.744  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:03.744  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:03.745  3221  3221 I Telecom : SamsungTelecomServiceImpl : isInManagedCall - callingPackage : android / callingUser : UserHandle{0} / hasCrossUserAccess : true
+07-20 16:27:03.773  7195  7195 I NotificationListener: [Service]v6.1.9-eap02 Received new notification
+07-20 16:27:03.773  7195  7829 I NotificationPipeline: Processing new notification: -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:03.775  7195  7829 I Notification4Watch7_NB: NotificationChecker.checkIgnoreCase - onGoing
+07-20 16:27:03.775  7195  7829 W Notification4Watch7_NB: NotificationBridgeCallback.onNotificationPosted-Ignored package : [-1] com.android.systemui
+07-20 16:27:03.776  7195  7829 I NotificationPipeline: Discarding notification: -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:03.779  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:03.780  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:03.780  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:03.780  5145  5308 I HoneySpace.NotificationListener: onNotificationPosted com.android.systemui: -1|com.android.systemui|2114586824|charging_state|10041: 0
+07-20 16:27:03.780  5145  5308 I HoneySpace.NotificationListener: invalid notification: com.android.systemui UserHandle{-1}: canShowBadge is false
+07-20 16:27:03.782  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:03.784  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:03.784  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:03.785  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:03.785  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:03.785  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:03.785  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:03.785  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:03.785  9120  9120 I Routine@Core[5.0.03.22]: PreloadNotificationListenerService: onNotificationPosted: - begin  - ($)
+07-20 16:27:03.789  9120  9120 I Routine@Core[5.0.03.22]: PreloadNotificationListenerService: isScreenedOut: package on denyList  - ($)
+07-20 16:27:03.798  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:03.799  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:03.800  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:03.800  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:03.801  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:03.801  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:03.801  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:03.801  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:03.802  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:03.802  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:03.802  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:03.803  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:03.803  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:03.967  4800  4800 D Bubbles : onEntryUpdated : shouldBubbleUp=true ,key=-1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:03.968  4800  4800 D InterruptionStateProvider:  no Heads up : edgelighting enabled app. -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:03.968  4800  4800 D InsignificantSummaryManager: onNotificationUpdated :-1|com.android.systemui|2114586824|charging_state|10041 flags: 200000 updateSummary entrySize:1
+07-20 16:27:03.968  4800  4800 I {OngoingActivityController}: onEntryUpdated and OA data is empty. So update latest task info
+07-20 16:27:03.970  4800  4800 D PluginAODManager: onEntryUpdated: 
+07-20 16:27:03.979  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:03.980  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:03.980  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:03.982  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:03.984  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:03.984  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:03.984  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:03.984  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:03.984  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:03.984  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:03.984  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:03.998  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:03.998  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:03.999  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:03.999  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:04.000  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:04.000  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:04.000  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:04.001  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:04.001  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:04.001  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:04.002  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:04.002  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:04.002  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:04.006  4800  5157 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:04.009  4800  5157 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:04.012  4800  4800 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:04.030  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:04.030  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:04.030  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:04.030  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:04.034  4800  4800 D S.S.N.  : entryViewBound parent :-1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:04.036  4800  4800 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:04.046  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:04.046  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:04.047  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:04.048  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:04.050  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:04.050  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:04.050  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:04.051  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:04.051  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:04.051  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:04.051  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:04.064  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:04.065  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:04.065  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:04.065  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:04.066  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:04.066  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:04.066  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:04.067  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:04.067  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:04.067  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:04.067  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:04.068  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:04.068  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:04.169  4800  4800 D InsignificantSummaryManager: Insignificant summary filtered out by other condition 1
+07-20 16:27:04.199  8499 11070 I gle.android.gms: Explicit concurrent mark compact GC freed 548KB AllocSpace bytes, 2(40KB) LOS objects, 44% free, 10222KB/17MB, paused 718us,13.766ms total 336.923ms
+07-20 16:27:04.267  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:ec53:40ff:feaa:ce6e/64 on ifindex 45 flags 0x00000100 scope 0
+07-20 16:27:04.267  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:df32:ddbe:60f6:f63b/64 on ifindex 45 flags 0x00000001 scope 0
+07-20 16:27:04.267  4268  5130 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@74d426c
+07-20 16:27:04.269  4268  5130 D ApfFilter: (wlan0): Ignoring RA RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0  which matches RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0 
+07-20 16:27:04.357  1221  1221 D io_stats: !@   8,0 r 6058853 104701297 w 732407 13223408 d 52361 9072664 f 19852 72690 iot 1322540 0 th 0 0 0 pt 0 inp 0 0 10057.603
+07-20 16:27:04.388  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:04.388  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:04.388  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:04.389  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:04.399  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.013, current:2.850781, soc:0.35, temperature:36.6, status:2, timestamp:1784579224399, voltage_chg:null}
+07-20 16:27:04.399  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:04.451  4268  5130 D IpClient/wlan0: interfaceLinkStateChanged: ifindex 45 up
+07-20 16:27:04.479  3221  7163 E BatteryStatsService: Invalid uid for waking network packet: -1
+07-20 16:27:04.543  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 1
+07-20 16:27:04.745  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:04.745  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:04.745  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:05.388  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:05.388  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:05.389  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:05.389  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:05.403  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.019, current:2.930468, soc:0.35, temperature:36.6, status:2, timestamp:1784579225403, voltage_chg:null}
+07-20 16:27:05.403  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:05.746  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:05.746  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:05.746  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:06.221  4226  4226 I wpa_supplicant: Heartbeat 1194
+07-20 16:27:06.358  1221  1221 D io_stats: !@   8,0 r 6058861 104701525 w 732415 13223432 d 52361 9072664 f 19852 72692 iot 1322560 0 th 0 0 0 pt 0 inp 0 0 10059.604
+07-20 16:27:06.359  1221  1221 D io_stats: !@ Read_top(KB): gle.android.gms(8499) 552 kworker/u16:4(26226) 176 kworker/u16:2(25080) 56
+07-20 16:27:06.359  1221  1221 D io_stats: !@ Write_top(KB): kworker/u16:2(25080) 1684 soft.appmanager(9526) 16 ugin:persistent(7195) 8
+07-20 16:27:06.379  3221  3392 D MARsPolicyManager: triggerAction called!
+07-20 16:27:06.379  3221  3392 I NSLocationMonitor: getGPSUsingApps() called
+07-20 16:27:06.380  5492  5532 I NSLocationManager_FLP: getGPSUsingApps, No change
+07-20 16:27:06.390  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:06.390  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:06.390  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:06.390  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:06.399  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.004, current:2.682031, soc:0.35, temperature:36.6, status:2, timestamp:1784579226399, voltage_chg:null}
+07-20 16:27:06.399  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:06.747  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:06.748  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:06.748  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:06.862  1850 29608 I QC2Comp : [av1D_57] Stats: Pending(11) i/p-done(7) Works: Q: 183/Done 173|Work-Rate: Q(0.0/s Avg=0.1/s) Done(0.000/s Avg=0.127/s)| Stream: 24.00fps 1.0Mbps
+07-20 16:27:06.862  1850 29608 I QC2Comp : [av1D_57] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-49: 19 bufs 0.297 MB] [2D-50: 23 bufs 56.602 MB] | Total: 96.898 MB
+07-20 16:27:07.342  1802  6822 I sensors-hal: handle_sns_std_sensor_event:137, [SSC_LIGHT] A: 17(17),m:11,c:0,b:0,c0:7522,l:17,r:100,bl:100,j:-1
+07-20 16:27:07.391  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:07.391  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:07.391  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:07.391  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:07.403  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.015, current:2.885156, soc:0.35, temperature:36.6, status:2, timestamp:1784579227403, voltage_chg:null}
+07-20 16:27:07.404  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:07.749  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:07.749  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:07.749  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:08.360  1221  1221 D io_stats: !@   8,0 r 6058864 104701537 w 732428 13227032 d 52361 9072664 f 19852 72692 iot 1322596 0 th 0 0 0 pt 0 inp 0 0 10061.605
+07-20 16:27:08.391  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:08.391  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:08.391  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:08.392  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:08.404  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.018, current:2.963281, soc:0.35, temperature:36.6, status:2, timestamp:1784579228403, voltage_chg:null}
+07-20 16:27:08.404  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:08.418  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:342 pause_registered_clients: pause_registered_clients
+07-20 16:27:08.418  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1672 OnPause: le_impl :: Pass AckPause
+07-20 16:27:08.419  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1408 disarm_connectability: disarm_connectability
+07-20 16:27:08.419  4828  5143 I bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1412 disarm_connectability: Disarming LE connection state machine with create connection cancel
+07-20 16:27:08.419  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:514 set_connectability_state: ConnectabilityState::ARMED --> ConnectabilityState::DISARMING
+07-20 16:27:08.427  1784  1784 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+07-20 16:27:08.429  1784  1784 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
+07-20 16:27:08.429  1784  1784 I vendor.qti.bluetooth@1.1-ibs_handler: DeviceWakeUp: Writing IBS_WAKE_IND
+07-20 16:27:08.434  1784  5346 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_ACK: 0xFC
+07-20 16:27:08.434  1784  5346 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Signal wack_cond_
+07-20 16:27:08.434  1784  1784 D vendor.qti.bluetooth@1.1-ibs_handler: DeviceWakeUp: Unblocked from waiting for FC, pthread_cond_timedwait ret = 0
+07-20 16:27:08.435  1784  5346 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+07-20 16:27:08.435  1784  5346 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+07-20 16:27:08.436  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:375 ack_pause: Wait all clients paused, return
+07-20 16:27:08.436  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:375 ack_pause: Wait all clients paused, return
+07-20 16:27:08.445  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1696 on_create_connection_cancel_complete: on_create_connection_cancel_complete
+07-20 16:27:08.446  4828  5143 W bluetooth: system/gd/hci/acl_manager/le_impl.h:552 on_le_connection_complete: on_le_connection_complete()
+07-20 16:27:08.446  4828  5143 W BluetoothMetrics: system/metrics/src/android/metrics.cc:96 LogBluetoothEvent: Failed BluetoothEvent Upload - Address is Empty
+07-20 16:27:08.446  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:514 set_connectability_state: ConnectabilityState::DISARMING --> ConnectabilityState::DISARMED
+07-20 16:27:08.446  4828  5143 W bluetooth: system/gd/hci/acl_manager/le_impl.h:526 on_le_connection_canceled_on_pause: Set connectability to DISARMED
+07-20 16:27:08.446  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:514 set_connectability_state: ConnectabilityState::DISARMED --> ConnectabilityState::DISARMED
+07-20 16:27:08.446  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 I bluetooth: system/gd/hci/le_address_manager.cc:589 GetNextPrivateAddressIntervalRange: client=LeAddressManager, nonwake=7m50s, wake=13m45s
+07-20 16:27:08.447  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:371 ack_pause: Client already in paused state
+07-20 16:27:08.447  4828  5143 I bluetooth: system/gd/hci/le_address_manager.cc:398 resume_registered_clients: Resuming registered clients
+07-20 16:27:08.447  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1137 arm_connectability: arm_connectability
+07-20 16:27:08.447  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:514 set_connectability_state: ConnectabilityState::DISARMED --> ConnectabilityState::ARMING
+07-20 16:27:08.448  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1225 arm_connectability: ACL connection count: Classic=0, LE=1
+07-20 16:27:08.448  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1231 arm_connectability: conn_interval_min=24, conn_interval_max=40
+07-20 16:27:08.448  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1688 OnResume: le_impl :: AckResume
+07-20 16:27:08.448  4828  5143 I bluetooth: system/gd/hci/le_scanning_manager_impl.cc:630 stop_scan: Scanning already stopped, return!
+07-20 16:27:08.461  4828  5143 I bluetooth: system/gd/hci/le_address_manager.cc:836 OnCommandComplete: Received command complete with op_code LE_SET_RANDOM_ADDRESS(0x2005)
+07-20 16:27:08.462  4828  5143 I bluetooth: system/gd/hci/le_address_manager.cc:856 OnCommandComplete: update random address : xx:xx:xx:xx:95:c3
+07-20 16:27:08.462  4828  5143 I bluetooth: system/gd/hci/le_address_manager.cc:398 resume_registered_clients: Resuming registered clients
+07-20 16:27:08.462  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:401 resume_registered_clients: client is not paused ClientState::RESUMED(0x3)
+07-20 16:27:08.462  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1688 OnResume: le_impl :: AckResume
+07-20 16:27:08.462  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:401 resume_registered_clients: client is not paused ClientState::RESUMED(0x3)
+07-20 16:27:08.462  4828  5143 W bluetooth: system/gd/hci/le_address_manager.cc:401 resume_registered_clients: client is not paused ClientState::RESUMED(0x3)
+07-20 16:27:08.469  4828  5143 W bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:514 set_connectability_state: ConnectabilityState::ARMING --> ConnectabilityState::ARMED
+07-20 16:27:08.469  4828  5143 I bt_gd_shim: system/gd/hci/acl_manager/le_impl.h:1111 update_connectability_state_after_armed: Le connection state machine armed state:ConnectabilityState::ARMED status:SUCCESS(0x00)
+07-20 16:27:08.514  7111  8092 I SDHMS:x : SIOP:: AP:408 BAT:366 USB:379 CHG:463 PA:413 CP:410 WIFI:388 CF:372 BLK:0 SUBBAT:0 SKIN:378 SKINF:378 SKINB:367 LRP:378 LRP2:378 LRF2:378 LRB2:367 AP2:378 CHG2:376 WIFI2:374 UANT2:374 RCV2:367 SPK2:373 FCAM:379 UPSPK:372 DNSPK:377 VAP02:414 VWIFI:387 AMB:369 AMB2:323 AVGCUR:2894 AVGSYS:33 POWER:11622
+07-20 16:27:08.518  1784  5346 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+07-20 16:27:08.576  3221  3790 D ActivityManager: freezing 12368 com.google.android.apps.turbo
+07-20 16:27:08.590  3221  3938 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+07-20 16:27:08.592  3221  3938 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+07-20 16:27:08.593  3221  3938 D InetDiagMessage: Destroyed live tcp sockets for uids={10236} in 9ms
+07-20 16:27:08.750  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:08.750  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:08.750  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:09.040  3221  7163 D PowerManagerService: [api] release WakeLock DRAW_WAKE_LOCK                    'charging_info' ACQ=-5s504ms (uid=10041 isFrozen=false pid=4800 displayId=0 lock=f8b28cf)
+07-20 16:27:09.042  3221  7163 D PowerManagerService: displayReady: false groupId=0
+07-20 16:27:09.042  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:09.046  3221  3404 I DisplayPowerController[0]: BrightnessEvent: brt=0.04705883(38.0%), nits=10.387, lux=-1.0, reason=doze, strat=DozeBrightnessStrategy, state=DOZE_SUSPEND, stateReason=UNKNOWN, policy=DOZE, flags=low_power_mode , initBrt=0.04705883, rcmdBrt=NaN, preBrt=NaN, preLux=0.0, wasShortTermModelActive=false, autoBrightness=true (default), unclampedBrt=0.04705883, hbmMax=1.0, hbmMode=off, thrmMax=1.0, rbcStrength=-1, powerFactor=0.9, physDisp=Built-in Screen(local:4630947093241269891), logicalId=0, slowChange=false, rampSpeed=0.0
+07-20 16:27:09.047  3221  3404 D PowerManagerService: [PWL] sb acquire: PowerManagerService.Display
+07-20 16:27:09.051  3221  4094 D DisplayManagerService: !@display_state requestDisplayStateInternal: DOZE -> DOZE_SUSPEND displayId=0
+07-20 16:27:09.052  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] EARLY: DOZE(3) -> DOZE_SUSPEND(4)
+07-20 16:27:09.052  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 0 ms
+07-20 16:27:09.052  3221  3816 D SemInputDevice:TSP: ActivateTask: 4,0 [07-20 16:27:09.052]
+07-20 16:27:09.053  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 1 ms
+07-20 16:27:09.053  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:09.053  3221  4094 W LocalDisplayAdapter: !@display_state - 154 : DOZE -> DOZE_SUSPEND (MAIN)
+07-20 16:27:09.053  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onStart : DOZE_SUSPEND, DOZE_SUSPEND, DEFAULT_DISPLAY
+07-20 16:27:09.053  3221  3319 I DisplayDeviceRepository: Display device changed state: "Built-in Screen", DOZE_SUSPEND
+07-20 16:27:09.054  1857  1857 I sysinput:Touch: activate:96, 4,0 OK
+07-20 16:27:09.054  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),4,true ret=0
+07-20 16:27:09.055  3221  3404 D BrightnessThermalClamper: Thermal status observer already started
+07-20 16:27:09.056  1926  1926 D SurfaceFlinger: Setting power mode 3 on physical display 4630947093241269891
+07-20 16:27:09.056  1926  1926 D SurfaceFlinger: setPhysicalDisplayPowerMode: Optimizing thread scheduling: optimizeForPerformance
+07-20 16:27:09.056  1926  1926 D SurfaceFlinger: Enabling synthetic vsync
+07-20 16:27:09.056  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 0
+07-20 16:27:09.056  3221  3317 D WindowManager: DeferredDisplayUpdater: partially applying DisplayInfo(1440 x 3088) immediately
+07-20 16:27:09.057  1909  6385 D AudioFlinger: setParameters: filtered dev setParameters keyvalue screen_state=off
+07-20 16:27:09.057  1846  2164 I SDM     : HWCDisplay::SetPowerMode: display = 0, mode = DozeSuspend
+07-20 16:27:09.057  1846  2164 I SDM     : DisplayBase::SetDisplayState: Set state = 3, display 66-0, teardown = 0
+07-20 16:27:09.057  1783  1808 D AHAL: AudioDevice: SetParameters: 1799: enter
+07-20 16:27:09.057  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 171: Enter
+07-20 16:27:09.057  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 416: Exit ret: 0
+07-20 16:27:09.057  1783  1808 D AHAL: hfp: hfp_set_parameters: 447: enter
+07-20 16:27:09.057  1783  1808 D AHAL: AudioDevice: SetParameters: 1882:  - screen = off
+07-20 16:27:09.057  1783  1808 I PAL: ResourceManager: setParameter: 9250: Screen State:0
+07-20 16:27:09.057  1783  1808 D AHAL: AudioDevice: SetParameters: 2617: exit: screen_state=off
+07-20 16:27:09.058  1846  2164 I SDM     : HWDeviceDRM::NullCommit: Null commit succeeded crtc=174
+07-20 16:27:09.058  1846  2164 I SDM     : DisplayBase::WaitForCompletion: Wait for cached retire fence to be in steady state
+07-20 16:27:09.058  1783  1808 I Audio_a2dpsink_hw: adev_set_parameters: kevpairs=[screen_state=off]
+07-20 16:27:09.065  3221  3976 D AS.DesktopUtils: isDesktopWindowing( false )
+07-20 16:27:09.065  3221  3976 D AS.DesktopModeHelper: setDesktopModePath caller = onDisplayChanged #Id=0, isInDesktopWindowing=false, isAudioOutputToDisplay : true
+07-20 16:27:09.066  6885  6885 I VRI[InputMethod]@df8c22f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.069  4800  4831 I VRI[ShellDropTarget]@fda9a37: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.069  4800  4800 D DisplayLifecycle: updateDisplay id = 0
+07-20 16:27:09.069  4800  4800 I Keyguard.AODTouchModeManager: onDisplayChanged newDisplayState=4, currentDisplayState=3, displayId=0
+07-20 16:27:09.070  9907  9907 I VRI[PlayProtectDialogsActivity]@5131a1f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.070  9907  9907 I VRI[PlayProtectDialogsActivity]@ea52556: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.071 11143 11143 I VRI[HintService]@e83b0: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.071  4800  4878 D StackScroller: onDisplayChanged for predraw skip to 4
+07-20 16:27:09.072  4800  4800 I AODTriggers: onAODEventDispatched = 4 / eventData = aod.q0@722df0d
+07-20 16:27:09.072  4800  4800 I AOD_LIVE_CLOCK@LiveClockController: updateDisplayState: DISPLAY_STATE_DOZE_SUSPEND
+07-20 16:27:09.072  4800  4800 I VRI[LockscreenShortcutBlur]@6491b12: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.072  4800  4800 I VRI[NavigationBar0]@35810b9: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  4800  4800 I VRI[DisplayBackGestureHandler 0]@2f2fb4f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  4800  4800 I VRI[NotificationShade]@c2a085d: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  7646  7646 I VRI[FP Iconview]@6a76b96: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  4800  4800 I VRI[StatusBar]@1d0ce91: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  4800  4800 I VRI[Bouncer]@b0f9642: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.073  4800  4800 I VRI[SecondaryHomeHandle0]@a5b5f00: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.075  5145  5145 I VRI[RecentsTransitionOverlay]@9ba9ba1: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.075  5145  5145 I VRI[CocktailBarService]@400297: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.075  5145 31569 I HoneySpace.Memory-Monitor: current state = 4, didTrim = true
+07-20 16:27:09.075  5145  5145 I VRI[LauncherActivity]@4464a22: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.075  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2 - display changed
+07-20 16:27:09.075  5145  5145 I VRI[RecentsActivity]@30ab7a: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:09.075  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2
+07-20 16:27:09.075  8023  8023 I CAMERA_CONTROLLER: [2]ProviderServiceImpl.checkDisplayModePortrait():39 - presentationDisplaynull
+07-20 16:27:09.076  8023  8023 W CAMERA_CONTROLLER: [2]a.A():2 - presentationDisplay is null, return
+07-20 16:27:09.076  8023  8023 W CAMERA_CONTROLLER: [2]ProviderServiceImpl$registerDisplayListener$displayListener$1.onDisplayChanged():17 - display is not portrait mode 
+07-20 16:27:09.077  3221  7311 D WifiDisplayAdapter: isFitToActiveDisplayLocked : false
+07-20 16:27:09.077  4552  4552 I NearbyDiscovery: (REDACTED) FastPairDisplayObserver: %s -> %s
+07-20 16:27:09.077  1846  2164 I SDM     : DisplayBase::WaitForCompletion: Cached retire fence is in ready state
+07-20 16:27:09.077  1846  2164 I SDM     : DisplayBase::SetDisplayState: active 0-0 state 3-3 pending_power_state_ 0
+07-20 16:27:09.078  1926  1926 D SurfaceFlinger: Finished setting power mode 3 on physical display 4630947093241269891
+07-20 16:27:09.078  3221  4094 I LocalDisplayAdapter: SF.setDisplayPowerMode took 23ms
+07-20 16:27:09.078  3221  4094 W LocalDisplayAdapter: !@display_state - 154 : DOZE_SUSPEND (MAIN) took 25 ms
+07-20 16:27:09.078  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] LATE: DOZE_SUSPEND(4) -> DOZE_SUSPEND(4)
+07-20 16:27:09.079  3221  3816 D SemInputDevice:TSP: ActivateTask: 4,1 [07-20 16:27:09.079]
+07-20 16:27:09.080  1857  1857 I sysinput:Touch: activate:96, 4,1 OK
+07-20 16:27:09.080  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 2 ms
+07-20 16:27:09.080  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),4,false ret=0
+07-20 16:27:09.080  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 0 ms
+07-20 16:27:09.080  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:09.080  3221  3404 D DisplayPowerController[0]: setActualDisplayState: DOZE -> DOZE_SUSPEND
+07-20 16:27:09.080  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onFinish : DOZE_SUSPEND, DOZE_SUSPEND, DEFAULT_DISPLAY
+07-20 16:27:09.080  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:09.081  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:09.081  7646  7646 I BSS_DisplayStateManager: handleDisplayStateChanged: DOZE -> DOZE_SUSPEND
+07-20 16:27:09.081  3221  3404 D PowerManagerService: displayReady: true groupId=0
+07-20 16:27:09.081  3221  3404 D PowerManagerService: [PWL] sb release: PowerManagerService.Display
+07-20 16:27:09.393  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:09.393  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:09.393  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:09.394  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:09.405  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.016, current:2.883593, soc:0.35, temperature:36.6, status:2, timestamp:1784579229405, voltage_chg:null}
+07-20 16:27:09.405  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:09.477  1784  5363 I vendor.qti.bluetooth@1.1-ibs_handler: DeviceSleep: TX Awake, Sending SLEEP_IND
+07-20 16:27:09.477  1784  5363 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+07-20 16:27:09.628  1784  5160 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
+07-20 16:27:09.751  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:09.751  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:09.751  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:10.056  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 1
+07-20 16:27:10.322  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:ec53:40ff:feaa:ce6e/64 on ifindex 45 flags 0x00000100 scope 0
+07-20 16:27:10.323  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:df32:ddbe:60f6:f63b/64 on ifindex 45 flags 0x00000001 scope 0
+07-20 16:27:10.323  4268  5130 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@74d426c
+07-20 16:27:10.325  4268  5130 D ApfFilter: (wlan0): Ignoring RA RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0  which matches RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0 
+07-20 16:27:10.361  1221  1221 D io_stats: !@   8,0 r 6058876 104701977 w 732517 13227384 d 52377 9072980 f 19855 72701 iot 1322656 0 th 0 0 0 pt 0 inp 0 0 10063.607
+07-20 16:27:10.361  1221  1221 D io_stats: !@ Read_top(KB): kworker/u16:2(25080) 192 kworker/u16:11(26230) 140 kworker/u16:4(26226) 84
+07-20 16:27:10.362  1221  1221 D io_stats: !@ Write_top(KB): kworker/u16:11(26230) 3600 f2fs_ckpt-254:6(1423) 76 init(1) 32
+07-20 16:27:10.395  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:10.396  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:10.396  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:10.396  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:10.407  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.019, current:2.925781, soc:0.35, temperature:36.6, status:2, timestamp:1784579230407, voltage_chg:null}
+07-20 16:27:10.407  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:10.752  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:10.752  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:10.752  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:11.397  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:11.397  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:11.397  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:11.398  3221  3392 D MARsPolicyManager: triggerAction called!
+07-20 16:27:11.398  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:11.398  3221  3392 I NSLocationMonitor: getGPSUsingApps() called
+07-20 16:27:11.399  5492  5532 I NSLocationManager_FLP: getGPSUsingApps, No change
+07-20 16:27:11.409  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.019, current:2.964062, soc:0.35, temperature:36.6, status:2, timestamp:1784579231409, voltage_chg:null}
+07-20 16:27:11.409  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:11.753  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:11.754  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:11.754  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:11.863  1850 29608 I QC2Comp : [av1D_57] Stats: Pending(11) i/p-done(7) Works: Q: 183/Done 173|Work-Rate: Q(0.0/s Avg=0.1/s) Done(0.000/s Avg=0.126/s)| Stream: 24.00fps 1.0Mbps
+07-20 16:27:11.863  1850 29608 I QC2Comp : [av1D_57] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-49: 19 bufs 0.297 MB] [2D-50: 23 bufs 56.602 MB] | Total: 96.898 MB
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): Output of /proc/2254/stat/ : 2254 (shsusrd0) S 1 2254 0 0 -1 1077936384 3430 0 1335 0 61 349 0 0 20 0 11 0 791 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 0 0 0 17 4 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.980  2254  2282 I shsusrd : 
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): utime 61 stime 349 cpu_time_last 410
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): user time = 61 | system time = 349 | total = 410 | cpu_time_delta = 0, clk_tck 100
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): time_cur 1784579231 time_last 1784579221
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): shsusrd is using 0 pct of CPU - time_delta 10
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage(): shsusrd usage 0
+07-20 16:27:11.980  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): time_delta for combined : 10 time_cur 1784579231 time_last_combined 1784579221
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2254/stat: 2254 (shsusrd0) S 1 2254 0 0 -1 1077936384 1194 0 10 0 1 1 0 0 20 0 11 0 791 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 17 4 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.981  2254  2282 I shsusrd : 
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2254 utime 1 stime 1 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2277/stat: 2277 (shsusrd12) S 1 2254 0 0 -1 4194368 1666 0 465 0 1 32 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.981  2254  2282 I shsusrd : 
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2277 utime 1 stime 32 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2280/stat: 2280 (shsusrd2) S 1 2254 0 0 -1 4194368 164 0 0 0 0 14 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.981  2254  2282 I shsusrd : 
+07-20 16:27:11.981  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2280 utime 0 stime 14 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2281/stat: 2281 (shsusrd13) S 1 2254 0 0 -1 1077936192 9 0 40 0 0 0 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.982  2254  2282 I shsusrd : 
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2281 utime 0 stime 0 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2282/stat: 2282 (shsusrd42) R 1 2254 0 0 -1 4194368 219 0 654 0 55 234 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 0 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.982  2254  2282 I shsusrd : 
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2282 utime 55 stime 234 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2283/stat: 2283 (shsusrd4) S 1 2254 0 0 -1 4194368 0 0 0 0 0 12 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.982  2254  2282 I shsusrd : 
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2283 utime 0 stime 12 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.982  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2284/stat: 2284 (shsusrd14) S 1 2254 0 0 -1 4194368 33 0 24 0 0 15 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.982  2254  2282 I shsusrd : 
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2284 utime 0 stime 15 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5367/stat: 5367 (shsusrd14) S 1 2254 0 0 -1 4194368 0 0 7 0 0 13 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.983  2254  2282 I shsusrd : 
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5367 utime 0 stime 13 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5369/stat: 5369 (shsusrd7) S 1 2254 0 0 -1 4194368 5 0 7 0 0 13 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.983  2254  2282 I shsusrd : 
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5369 utime 0 stime 13 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5372/stat: 5372 (shsusrd5) S 1 2254 0 0 -1 4194368 2 0 7 0 0 12 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.983  2254  2282 I shsusrd : 
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5372 utime 0 stime 12 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5645/stat: 5645 (HwBinder:2254_1) S 1 2254 0 0 -1 1077936192 4 0 0 0 0 0 0 0 20 0 11 0 2337 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 5 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:11.983  2254  2282 I shsusrd : 
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5645 utime 0 stime 0 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined CPU usage: total_utime 57 total_stime 346 total_cpu_time_seconds 0.00, clk_tck 100
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage 0
+07-20 16:27:11.983  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage FINAL 0
+07-20 16:27:12.399  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:12.399  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:12.399  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:12.399  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:12.410  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.017, current:2.902343, soc:0.35, temperature:36.6, status:2, timestamp:1784579232410, voltage_chg:null}
+07-20 16:27:12.410  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:12.755  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:12.755  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:12.755  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:13.400  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:13.400  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:13.400  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:13.400  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:13.411  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.013, current:2.759375, soc:0.35, temperature:36.6, status:2, timestamp:1784579233411, voltage_chg:null}
+07-20 16:27:13.411  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:13.670  1914  1948 D HeatmapThread: Updated plugType via uevent: 2
+07-20 16:27:13.673  1854  1949 E BatteryDump: !@new_battery_dump : 4020,2928,2900,3150,35,366,380,463,366,0,378,464,0,Charging,NO_CHARGING,Normal,Good,PDIC,0,Normal,0,0,9095,0x8000,0x20000,0x0,0,0,0000,0000,ffff0700,0,0,0,0,1125,3782,3538,990,0,
+07-20 16:27:13.678  1854  1854 I sehhealth-service: updateLrpSysfs: write: 378
+07-20 16:27:13.678  3221 13864 V [SS]SleepChargingTimeController: [isActivated]mSleepChargingStatus null => false
+07-20 16:27:13.679  3221  3956 D [SS]BattFunctions: [sendRemainingChargingTimeChangedIntent]remainingChargingTime:3914 ,mLastRemainingChargingTime:3924
+07-20 16:27:13.682  4800  4800 I AODBatteryManager: updateBatteryData: ACTION_BATTERY_CHANGED: false, isSleepModeChanged:false ,isRemainingTimeChanged: true, isUSBRestriction: false
+07-20 16:27:13.682  4800  4800 I ChargingInfoManager: updateChargingInfo: newState = AOD ChargingInfo [mState=BATTERY_AND_REMAIN_TIME, mIsCharging=true, mIsPlugged=true, mIsFullyCharged=false, mIsBatteryProtectMode=false, mBetteryLevel=35, mBetteryProtectModeType4, mIsSlowChargingfalse], oldState = AOD ChargingInfo [mState=BATTERY_AND_REMAIN_TIME, mIsCharging=true, mIsPlugged=true, mIsFullyCharged=false, mIsBatteryProtectMode=false, mBetteryLevel=35, mBetteryProtectModeType4, mIsSlowChargingfalse]
+07-20 16:27:13.683  4800  4800 D PowerUI : Remaining charging time : 3914
+07-20 16:27:13.683  4800  4800 D PowerUI : Charging time is changed, check charging notification
+07-20 16:27:13.685  4800  4800 D PowerUI.Notification: showChargingNotice - Battery Level : 35 -> 35, Charging Type : 11 -> 11, Charging Time : 3924 -> 3914, Maximum protection : false -> false, Maximum threshold : 80 -> 80
+07-20 16:27:13.689  4800  4800 I NotificationManager: com.android.systemui: notify(2114586824, charging_state, Notification(channel=CHR shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONGOING_EVENT|ONLY_ALERT_ONCE color=0x00000000 category=sys groupKey=CHARGING vis=PUBLIC semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)) as user
+07-20 16:27:13.695  3221  3956 W PermissionService: getPermissionFlags: Unknown user -1
+07-20 16:27:13.695  3221  3956 W PermissionService: getPermissionFlags: Unknown user -1
+07-20 16:27:13.695  3221  3956 D NotificationHighlightCore: isNonImportantNotification Importance low
+07-20 16:27:13.696  3221  3956 W NotificationService: notificationHightlight enqu getNonImportantNotification, r= StatusBarNotification(pkg=com.android.systemui user=UserHandle{-1} id=2114586824 tag=charging_state key=-1|com.android.systemui|2114586824|charging_state|10041: Notification(channel=CHR shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONGOING_EVENT|ONLY_ALERT_ONCE color=0x00000000 category=sys groupKey=CHARGING vis=PUBLIC semFlags=0x200000 semPriority=0 semMissedCount=0 semScenarioType=0)), flags= SEM_FLAG_INSIGNIFICANT_MINIMIZED 
+07-20 16:27:13.696  4800  4800 I ChargingInfoView: handleMessage: MSG_SHOW_CHARGING_INFO
+07-20 16:27:13.696  4800  4800 I BottomChargingInfoView: updateContents: BATTERY_AND_REMAIN_TIME
+07-20 16:27:13.696  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - charging_info, timeout - 1000, reason - Charging Info is updating, delay by 500, wakeLock = WakeLock{86f18a4 held=false, refCount=0}
+07-20 16:27:13.697  3221  3956 D PowerManagerService: [api] acquire WakeLock DRAW_WAKE_LOCK                    'charging_info' (uid=10041 isFrozen=false pid=4800 displayId=0 lock=f8b28cf)
+07-20 16:27:13.697  3221  3956 D PowerManagerService: displayReady: false groupId=0
+07-20 16:27:13.697  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:13.699  3221  3956 D PowerManagerService: [PWL] sb acquire: PowerManagerService.Display
+07-20 16:27:13.700  3221  3404 I DisplayPowerController[0]: BrightnessEvent: brt=0.04705883(38.0%), nits=10.387, lux=-1.0, reason=doze, strat=DozeBrightnessStrategy, state=DOZE, stateReason=DRAW_WAKE_LOCK, policy=DOZE, flags=low_power_mode , initBrt=0.04705883, rcmdBrt=NaN, preBrt=NaN, preLux=0.0, wasShortTermModelActive=false, autoBrightness=true (default), unclampedBrt=0.04705883, hbmMax=1.0, hbmMode=off, thrmMax=1.0, rbcStrength=-1, powerFactor=0.9, physDisp=Built-in Screen(local:4630947093241269891), logicalId=0, slowChange=false, rampSpeed=0.0
+07-20 16:27:13.700  3221  4094 D DisplayManagerService: !@display_state requestDisplayStateInternal: DOZE_SUSPEND -> DOZE displayId=0
+07-20 16:27:13.700  4800  4800 I ChargingInfoManager: getDeviceRemainingTime: 1 h 5 m until full
+07-20 16:27:13.700  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - charging_info, timeout - 5500, reason - Charging Info is updating, delay by 5000, wakeLock = WakeLock{86f18a4 held=true, refCount=1}
+07-20 16:27:13.701  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] EARLY: DOZE_SUSPEND(4) -> DOZE(3)
+07-20 16:27:13.701  4800  4800 I AbsChargingInfoComponent: setVisibilityWithAnim: skipped true
+07-20 16:27:13.701  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 1 ms
+07-20 16:27:13.701  3221  3816 D SemInputDevice:TSP: ActivateTask: 3,0 [07-20 16:27:13.701]
+07-20 16:27:13.701  3221  3319 I DisplayDeviceRepository: Display device changed state: "Built-in Screen", DOZE
+07-20 16:27:13.701  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 0 ms
+07-20 16:27:13.701  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:13.701  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onStart : DOZE, DOZE, DEFAULT_DISPLAY
+07-20 16:27:13.701  3221  4094 W LocalDisplayAdapter: !@display_state - 155 : DOZE_SUSPEND -> DOZE (MAIN)
+07-20 16:27:13.702  1857  1857 I sysinput:Touch: activate:96, 3,0 OK
+07-20 16:27:13.702  3221  3404 D BrightnessThermalClamper: Thermal status observer already started
+07-20 16:27:13.702  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),3,true ret=0
+07-20 16:27:13.703  3221  3317 D WindowManager: DeferredDisplayUpdater: partially applying DisplayInfo(1440 x 3088) immediately
+07-20 16:27:13.703  1909  6385 D AudioFlinger: setParameters: filtered dev setParameters keyvalue screen_state=off
+07-20 16:27:13.704  1926  1926 D SurfaceFlinger: Setting power mode 1 on physical display 4630947093241269891
+07-20 16:27:13.704  1926  1926 D SurfaceFlinger: setPhysicalDisplayPowerMode: Optimizing thread scheduling: optimizeForPerformance
+07-20 16:27:13.704  1926  1926 D SurfaceFlinger: Disabling synthetic vsync
+07-20 16:27:13.704  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 0
+07-20 16:27:13.704  1846  2164 I SDM     : HWCDisplay::SetPowerMode: display = 0, mode = Doze
+07-20 16:27:13.704  1846  2164 I SDM     : DisplayBase::SetDisplayState: Set state = 2, display 66-0, teardown = 0
+07-20 16:27:13.704  1846  2164 I SDM     : DisplayBase::SetDisplayState: active 1-0 state 2-3 pending_power_state_ 3
+07-20 16:27:13.704  1926  1926 I SurfaceFlinger: Force repainting for DOZE_SUSPEND -> DOZE or ON.
+07-20 16:27:13.705  1926  1926 D SurfaceFlinger: Finished setting power mode 1 on physical display 4630947093241269891
+07-20 16:27:13.705  1783  1808 D AHAL: AudioDevice: SetParameters: 1799: enter
+07-20 16:27:13.705  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 171: Enter
+07-20 16:27:13.705  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 416: Exit ret: 0
+07-20 16:27:13.705  1783  1808 D AHAL: hfp: hfp_set_parameters: 447: enter
+07-20 16:27:13.705  1783  1808 D AHAL: AudioDevice: SetParameters: 1882:  - screen = off
+07-20 16:27:13.705  1783  1808 I PAL: ResourceManager: setParameter: 9250: Screen State:0
+07-20 16:27:13.705  1783  1808 D AHAL: AudioDevice: SetParameters: 2617: exit: screen_state=off
+07-20 16:27:13.707  3221  4094 I LocalDisplayAdapter: SF.setDisplayPowerMode took 4ms
+07-20 16:27:13.707  3221  4094 W LocalDisplayAdapter: !@display_state - 155 : DOZE (MAIN) took 6 ms
+07-20 16:27:13.707  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] LATE: DOZE(3) -> DOZE(3)
+07-20 16:27:13.707  3221  3816 D SemInputDevice:TSP: ActivateTask: 3,1 [07-20 16:27:13.707]
+07-20 16:27:13.707  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 0 ms
+07-20 16:27:13.708  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 1 ms
+07-20 16:27:13.708  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:13.708  1857  1857 I sysinput:Touch: activate:96, 3,1 OK
+07-20 16:27:13.709  6885  6885 I VRI[InputMethod]@df8c22f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.709  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),3,false ret=0
+07-20 16:27:13.709  3221  3404 D DisplayPowerController[0]: setActualDisplayState: DOZE_SUSPEND -> DOZE
+07-20 16:27:13.709  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:13.709  1783  1808 I Audio_a2dpsink_hw: adev_set_parameters: kevpairs=[screen_state=off]
+07-20 16:27:13.709  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE, mIsEnabled=true
+07-20 16:27:13.711  4800  4800 I AODUiController: onUIEvent : unknown component : 1202/0/0
+07-20 16:27:13.711  3221  3404 D PowerManagerService: displayReady: true groupId=0
+07-20 16:27:13.711  4800  4800 I AOD_BRIGHTNESS@BrightnessManager: mCurrentBrightness : HighNit[true], NitMode[10NIT], isForceState[0, ForceStateReason[[], ], mAppliedBrightness[1], LockStarLevel[100]
+07-20 16:27:13.711  4800  4800 I AOD_BRIGHTNESS@AlwaysOnDisplayEx: updateDozeBrightness: doze [65538] last [10NIT] change to [10NIT]
+07-20 16:27:13.711  4800  4800 I AOD_WAKELOCK@WakeLockManager: acquireIfExists: tag - AOD_DRAW, timeout - 100, reason - set Doze Brightness updateDozeBrightness, wakeLock = WakeLock{a359609 held=false, refCount=0}
+07-20 16:27:13.712  3221  3404 D PowerManagerService: [PWL] sb release: PowerManagerService.Display
+07-20 16:27:13.714  1846  2164 I SDM     : ToneMappingCore::set_default_vals():851 Initial enablement signals - bypass adaptive TM: 0, actual panel luma usage: 1, temporal filtering of dynamic meta data: 1, histTM enable: 1, static meta data usage: 1
+07-20 16:27:13.714  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onFinish : DOZE, DOZE, DEFAULT_DISPLAY
+07-20 16:27:13.714  1846  2164 I SDM     : HdrAlgorithm::SetXMLParameters():278 Override enablement signals - bypass adaptive TM: 0, bypass sdr dimming: 1
+07-20 16:27:13.714  3221  3976 D AS.DesktopUtils: isDesktopWindowing( false )
+07-20 16:27:13.714  3221  3976 D AS.DesktopModeHelper: setDesktopModePath caller = onDisplayChanged #Id=0, isInDesktopWindowing=false, isAudioOutputToDisplay : true
+07-20 16:27:13.717  1846  2028 I SDM     : DisplayBase::WaitForCompletion: Wait for cached retire fence to be in steady state
+07-20 16:27:13.720  5145  5145 I VRI[RecentsTransitionOverlay]@9ba9ba1: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.720  3221  4993 D PowerManagerService: [api] acquire WakeLock DRAW_WAKE_LOCK                    'AOD_DRAW' (uid=10041 isFrozen=false pid=4800 displayId=0 lock=14700d7)
+07-20 16:27:13.720  5145  5145 I VRI[CocktailBarService]@400297: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.720  5145  5145 I VRI[LauncherActivity]@4464a22: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.720  5145 31569 I HoneySpace.Memory-Monitor: current state = 3, didTrim = true
+07-20 16:27:13.720  5145  5145 I VRI[RecentsActivity]@30ab7a: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.721  7646  7646 I VRI[FP Iconview]@6a76b96: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.721  7646  7646 I BSS_DisplayStateManager: handleDisplayStateChanged: DOZE_SUSPEND -> DOZE
+07-20 16:27:13.722  4800  4831 I VRI[ShellDropTarget]@fda9a37: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.722  4800  4878 D StackScroller: onDisplayChanged for predraw skip to 3
+07-20 16:27:13.723  9907  9907 I VRI[PlayProtectDialogsActivity]@5131a1f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.723  9907  9907 I VRI[PlayProtectDialogsActivity]@ea52556: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.723  4800  4800 D AODScreenBrightness: updateBrightness: brightness=0.04705883
+07-20 16:27:13.723  4800  4800 I DreamService[DozeService]: semSetDozeScreenBrightness dozeMode=65538 float brightness=0.04705883
+07-20 16:27:13.723  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:13.723  3221  7176 D WifiDisplayAdapter: isFitToActiveDisplayLocked : false
+07-20 16:27:13.724  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:13.725  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:13.725  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:13.725  4552  4552 I NearbyDiscovery: (REDACTED) FastPairDisplayObserver: %s -> %s
+07-20 16:27:13.725  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:13.725  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:13.725  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:13.726  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:13.726 11143 11143 I VRI[HintService]@e83b0: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.727  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:13.727  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:13.727  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:13.727  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:13.727  4800  4800 D DisplayLifecycle: updateDisplay id = 0
+07-20 16:27:13.727  4800  4800 I Keyguard.AODTouchModeManager: onDisplayChanged newDisplayState=3, currentDisplayState=4, displayId=0
+07-20 16:27:13.728  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2 - display changed
+07-20 16:27:13.728  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2
+07-20 16:27:13.728  4800  4800 I AODTriggers: onAODEventDispatched = 4 / eventData = aod.q0@7d26810
+07-20 16:27:13.728  4800  4800 I AOD_LIVE_CLOCK@LiveClockController: updateDisplayState: DISPLAY_STATE_DOZE
+07-20 16:27:13.728  8023  8023 I CAMERA_CONTROLLER: [2]ProviderServiceImpl.checkDisplayModePortrait():39 - presentationDisplaynull
+07-20 16:27:13.728  4800  4800 I VRI[LockscreenShortcutBlur]@6491b12: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.728  8023  8023 W CAMERA_CONTROLLER: [2]a.A():2 - presentationDisplay is null, return
+07-20 16:27:13.728  8023  8023 W CAMERA_CONTROLLER: [2]ProviderServiceImpl$registerDisplayListener$displayListener$1.onDisplayChanged():17 - display is not portrait mode 
+07-20 16:27:13.728  4800  4800 I VRI[NavigationBar0]@35810b9: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.729  4800  4800 I VRI[DisplayBackGestureHandler 0]@2f2fb4f: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.729  4800  4800 I VRI[NotificationShade]@c2a085d: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.729  4800  4800 I VRI[StatusBar]@1d0ce91: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.729  4800  4800 I VRI[Bouncer]@b0f9642: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.729  4800  4800 I VRI[SecondaryHomeHandle0]@a5b5f00: onDisplayChanged oldDisplayState=4 newDisplayState=3
+07-20 16:27:13.730  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:13.744  1846  2028 I SDM     : DisplayBase::WaitForCompletion: Cached retire fence is in ready state
+07-20 16:27:13.744  1846  2028 I SDM     : DisplayBase::GetPendingDisplayState: pending_power_state 3 for display 66-0
+07-20 16:27:13.756  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:13.756  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:13.756  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:13.825  3221  4993 D PowerManagerService: [api] release WakeLock DRAW_WAKE_LOCK                    'AOD_DRAW' ACQ=-104ms (uid=10041 isFrozen=false pid=4800 displayId=0 lock=14700d7)
+07-20 16:27:13.898  3221  3221 I Telecom : SamsungTelecomServiceImpl : isInManagedCall - callingPackage : android / callingUser : UserHandle{0} / hasCrossUserAccess : true
+07-20 16:27:13.925  7195  7195 I NotificationListener: [Service]v6.1.9-eap02 Received new notification
+07-20 16:27:13.928  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:13.928  7195  7829 I NotificationPipeline: Processing new notification: -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:13.929  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:13.929  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:13.930  7195  7829 I Notification4Watch7_NB: NotificationChecker.checkIgnoreCase - onGoing
+07-20 16:27:13.931  7195  7829 W Notification4Watch7_NB: NotificationBridgeCallback.onNotificationPosted-Ignored package : [-1] com.android.systemui
+07-20 16:27:13.931  7195  7829 I NotificationPipeline: Discarding notification: -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:13.932  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:13.934  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:13.935  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:13.935  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:13.936  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:13.936  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:13.936  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:13.936  5145  5308 I HoneySpace.NotificationListener: onNotificationPosted com.android.systemui: -1|com.android.systemui|2114586824|charging_state|10041: 0
+07-20 16:27:13.937  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:13.937  5145  5308 I HoneySpace.NotificationListener: invalid notification: com.android.systemui UserHandle{-1}: canShowBadge is false
+07-20 16:27:13.941  9120  9120 I Routine@Core[5.0.03.22]: PreloadNotificationListenerService: onNotificationPosted: - begin  - ($)
+07-20 16:27:13.942  9120  9120 I Routine@Core[5.0.03.22]: PreloadNotificationListenerService: isScreenedOut: package on denyList  - ($)
+07-20 16:27:13.947  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:13.948  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:13.948  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:13.948  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:13.949  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:13.949  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:13.949  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:13.950  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:13.950  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:13.951  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:13.951  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:13.951  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:13.952  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:13.955  3221  3339 E Watchdog: !@Sync: 336 heap(MB): 176 / 191 FD: 1417 Threads: 565 [2026-07-20 16:27:13.954]
+07-20 16:27:14.121  4800  4800 D Bubbles : onEntryUpdated : shouldBubbleUp=true ,key=-1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.123  4800  4800 D InterruptionStateProvider:  no Heads up : edgelighting enabled app. -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.123  4800  4800 D InsignificantSummaryManager: onNotificationUpdated :-1|com.android.systemui|2114586824|charging_state|10041 flags: 200000 updateSummary entrySize:1
+07-20 16:27:14.123  4800  4800 I {OngoingActivityController}: onEntryUpdated and OA data is empty. So update latest task info
+07-20 16:27:14.126  4800  4800 D PluginAODManager: onEntryUpdated: 
+07-20 16:27:14.147  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:14.149  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:14.150  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:14.152  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:14.155  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:14.155  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:14.156  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:14.156  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:14.156  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:14.156  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:14.156  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:14.164  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:14.165  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:14.166  4800  5157 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:14.166  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:14.167  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:14.167  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:14.168  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:14.168  4800  5157 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:14.168  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:14.169  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:14.169  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:14.170  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:14.170  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:14.170  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:14.176  4800  4800 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:14.198  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.198  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.199  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.199  4800  4800 D ExpandableNotifRow: mMaxSmallHeight different before reInflateViews mMaxSmallHeight: 239 mTempSmallHeight:0 -1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.203  4800  4800 D S.S.N.  : entryViewBound parent :-1|com.android.systemui|2114586824|charging_state|10041
+07-20 16:27:14.205  4800  4800 D LocalImageResolver: Couldn't use ImageDecoder for drawable, falling back to non-resized load.
+07-20 16:27:14.209  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:14.211  4800  4800 W PreparationCoordinator: Group inflation took too long for INSIGNIFICANT, releasing children early
+07-20 16:27:14.212  4800  4800 D SubscreenNotificationListCoordinator: onAfterRenderList() isSubScreen = false, pluginLockMode = 0, doNotShowOnCover = false
+07-20 16:27:14.213  4800  4800 I LockscreenNotificationIconsOnlyController: onNotificationInfoUpdated 3
+07-20 16:27:14.215  4800  4800 I AODNotificationManager: updateNotification() 
+07-20 16:27:14.217  4800  4800 E AbsSettings: refreshInner: refreshedSettingsDBItem key aod_content_type val = 0
+07-20 16:27:14.217  4800  4800 I AODThemeSettingsHelper: getSingleThemeContentType = 0
+07-20 16:27:14.218  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 3
+07-20 16:27:14.218  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|62|null|1000
+07-20 16:27:14.219  4800  4800 D PluginAODManager: onNotificationInfoUpdated() -1|android|27|null|1000
+07-20 16:27:14.219  4800  4800 D PluginAODManager: onNotificationInfoUpdated() 0|com.samsung.wearable.watch7plugin|721|null|10406
+07-20 16:27:14.219  4800  4800 I AODNotificationManager: updateVisibleNotifications: 3
+07-20 16:27:14.230  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:14.231  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:14.232  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:14.232  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:14.232  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:14.232  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:14.232  4800  4800 D SecKeyguardClockRepositoryImpl: setClockSize SMALL
+07-20 16:27:14.233  4800  4800 I SecKeyguardClockPositionAlgorithm: prepareClockContainerHeightChanging:
+07-20 16:27:14.233  4800  4800 I FaceWidget_updatePosition: updatePosition: faceWidgetPosition = Point(0, 325)
+07-20 16:27:14.234  4800  4800 D FaceWidgetPagesController: refreshViews() reason = CLOCK_POSITION_CHANGED, force = false
+07-20 16:27:14.234  4800  4800 I PluginFaceWidgetManager: isEditMode = false
+07-20 16:27:14.234  4800  4800 I NowBarItemManager: getVisibleList isScreenTurnedOn = false / aodShowState false shouldControlScreenOff false isLockTypeNone false visibleList size = 0 / expandedItem null
+07-20 16:27:14.234  4800  4800 I FaceWidgetClockPage: updateClockRect: skip in screen off state
+07-20 16:27:14.324  4800  4800 D InsignificantSummaryManager: Insignificant summary filtered out by other condition 1
+07-20 16:27:14.364  1221  1221 D io_stats: !@   8,0 r 6058899 104702105 w 732528 13228464 d 52378 9072984 f 19855 72702 iot 1322720 0 th 0 0 0 pt 0 inp 0 0 10067.609
+07-20 16:27:14.364  1221  1221 D io_stats: !@ Read_top(KB): system_server(3221) 88 kworker/u16:2(25080) 32 kworker/u16:7(7843) 4
+07-20 16:27:14.364  1221  1221 D io_stats: !@ Write_top(KB): kworker/u16:11(26230) 1036 jbd2/sda9-8(1207) 20 vendor.samsung.(1854) 12
+07-20 16:27:14.401  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:14.401  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:14.401  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:14.401  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:14.415  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.017, current:2.879687, soc:0.35, temperature:36.6, status:2, timestamp:1784579234414, voltage_chg:null}
+07-20 16:27:14.415  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:14.704  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 1
+07-20 16:27:14.757  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:14.757  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:14.757  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:15.402  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:15.402  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:15.402  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:15.403  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:15.415  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.019, current:2.914843, soc:0.35, temperature:36.6, status:2, timestamp:1784579235415, voltage_chg:null}
+07-20 16:27:15.416  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:15.663 10737 10737 W adbd    : timeout expired while flushing socket, closing
+07-20 16:27:15.758  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:15.759  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:15.759  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:16.223  4226  4226 I wpa_supplicant: Heartbeat 1195
+07-20 16:27:16.356  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:ec53:40ff:feaa:ce6e/64 on ifindex 45 flags 0x00000100 scope 0
+07-20 16:27:16.357  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:df32:ddbe:60f6:f63b/64 on ifindex 45 flags 0x00000001 scope 0
+07-20 16:27:16.357  4268  5130 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@74d426c
+07-20 16:27:16.359  4268  5130 D ApfFilter: (wlan0): Ignoring RA RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0  which matches RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0 
+07-20 16:27:16.365  1221  1221 D io_stats: !@   8,0 r 6058899 104702105 w 732536 13228488 d 52378 9072984 f 19856 72704 iot 1322732 0 th 0 0 0 pt 0 inp 0 0 10069.610
+07-20 16:27:16.402  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:16.403  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:16.403  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:16.403  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:16.414  3221  3392 D MARsPolicyManager: triggerAction called!
+07-20 16:27:16.414  3221  3392 I NSLocationMonitor: getGPSUsingApps() called
+07-20 16:27:16.415  5492  5532 I NSLocationManager_FLP: getGPSUsingApps, No change
+07-20 16:27:16.416  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.017, current:2.878906, soc:0.35, temperature:36.6, status:2, timestamp:1784579236416, voltage_chg:null}
+07-20 16:27:16.416  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:16.760  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:16.760  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:16.760  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:16.863  1850 29608 I QC2Comp : [av1D_57] Stats: Pending(11) i/p-done(7) Works: Q: 183/Done 173|Work-Rate: Q(0.0/s Avg=0.1/s) Done(0.000/s Avg=0.126/s)| Stream: 24.00fps 1.0Mbps
+07-20 16:27:16.864  1850 29608 I QC2Comp : [av1D_57] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-49: 19 bufs 0.297 MB] [2D-50: 23 bufs 56.602 MB] | Total: 96.898 MB
+07-20 16:27:17.404  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:17.404  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:17.404  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:17.404  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:17.416  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.021, current:2.967187, soc:0.35, temperature:36.6, status:2, timestamp:1784579237416, voltage_chg:null}
+07-20 16:27:17.417  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:17.761  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:17.761  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:17.761  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:18.142  1802  6822 I sensors-hal: handle_sns_std_sensor_event:137, [SSC_LIGHT] A: 17(17),m:11,c:0,b:0,c0:7499,l:17,r:100,bl:100,j:-1
+07-20 16:27:18.366  1221  1221 D io_stats: !@   8,0 r 6058900 104702109 w 732545 13229504 d 52378 9072984 f 19856 72704 iot 1322744 0 th 0 0 0 pt 0 inp 0 0 10071.611
+07-20 16:27:18.366  1221  1221 D io_stats: !@ Read_top(KB): kworker/u16:2(25080) 4
+07-20 16:27:18.366  1221  1221 D io_stats: !@ Write_top(KB): kworker/u16:2(25080) 1016 soft.appmanager(9526) 16
+07-20 16:27:18.405  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:18.405  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:18.405  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:18.406  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:18.418  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.018, current:2.853125, soc:0.35, temperature:36.6, status:2, timestamp:1784579238418, voltage_chg:null}
+07-20 16:27:18.418  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:18.516  7111  8092 I SDHMS:x : SIOP:: AP:406 BAT:366 USB:380 CHG:462 PA:412 CP:409 WIFI:384 CF:372 BLK:0 SUBBAT:0 SKIN:378 SKINF:378 SKINB:366 LRP:378 LRP2:378 LRF2:378 LRB2:366 AP2:378 CHG2:376 WIFI2:373 UANT2:374 RCV2:367 SPK2:374 FCAM:379 UPSPK:372 DNSPK:378 VAP02:413 VWIFI:387 AMB:369 AMB2:324 AVGCUR:2892 AVGSYS:34 POWER:11614
+07-20 16:27:18.762  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:18.762  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:18.762  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:19.203  3221  7176 D PowerManagerService: [api] release WakeLock DRAW_WAKE_LOCK                    'charging_info' ACQ=-5s502ms (uid=10041 isFrozen=false pid=4800 displayId=0 lock=f8b28cf)
+07-20 16:27:19.204  3221  7176 D PowerManagerService: displayReady: false groupId=0
+07-20 16:27:19.205  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:19.209  3221  7176 D PowerManagerService: [PWL] sb acquire: PowerManagerService.Display
+07-20 16:27:19.214  3221  3404 I DisplayPowerController[0]: BrightnessEvent: brt=0.04705883(38.0%), nits=10.387, lux=-1.0, reason=doze, strat=DozeBrightnessStrategy, state=DOZE_SUSPEND, stateReason=UNKNOWN, policy=DOZE, flags=low_power_mode , initBrt=0.04705883, rcmdBrt=NaN, preBrt=NaN, preLux=0.0, wasShortTermModelActive=false, autoBrightness=true (default), unclampedBrt=0.04705883, hbmMax=1.0, hbmMode=off, thrmMax=1.0, rbcStrength=-1, powerFactor=0.9, physDisp=Built-in Screen(local:4630947093241269891), logicalId=0, slowChange=false, rampSpeed=0.0
+07-20 16:27:19.215  3221  4094 D DisplayManagerService: !@display_state requestDisplayStateInternal: DOZE -> DOZE_SUSPEND displayId=0
+07-20 16:27:19.216  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] EARLY: DOZE(3) -> DOZE_SUSPEND(4)
+07-20 16:27:19.217  3221  3319 I DisplayDeviceRepository: Display device changed state: "Built-in Screen", DOZE_SUSPEND
+07-20 16:27:19.217  3221  3816 D SemInputDevice:TSP: ActivateTask: 4,0 [07-20 16:27:19.216]
+07-20 16:27:19.217  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 1 ms
+07-20 16:27:19.218  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 1 ms
+07-20 16:27:19.218  3221  4094 D LocalDisplayAdapter: notifyStateChangeStart: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:19.218  3221  4094 W LocalDisplayAdapter: !@display_state - 156 : DOZE -> DOZE_SUSPEND (MAIN)
+07-20 16:27:19.218  1926  1926 D SurfaceFlinger: Setting power mode 3 on physical display 4630947093241269891
+07-20 16:27:19.218  1926  1926 D SurfaceFlinger: setPhysicalDisplayPowerMode: Optimizing thread scheduling: optimizeForPerformance
+07-20 16:27:19.218  1926  1926 D SurfaceFlinger: Enabling synthetic vsync
+07-20 16:27:19.219  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onStart : DOZE_SUSPEND, DOZE_SUSPEND, DEFAULT_DISPLAY
+07-20 16:27:19.219  1846  2164 I SDM     : HWCDisplay::SetPowerMode: display = 0, mode = DozeSuspend
+07-20 16:27:19.219  1846  2164 I SDM     : DisplayBase::SetDisplayState: Set state = 3, display 66-0, teardown = 0
+07-20 16:27:19.219  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 0
+07-20 16:27:19.219  3221  3317 D WindowManager: DeferredDisplayUpdater: partially applying DisplayInfo(1440 x 3088) immediately
+07-20 16:27:19.219  1846  2164 I SDM     : HWDeviceDRM::NullCommit: Null commit succeeded crtc=174
+07-20 16:27:19.220  1846  2164 I SDM     : DisplayBase::WaitForCompletion: Wait for cached retire fence to be in steady state
+07-20 16:27:19.220  1857  1857 I sysinput:Touch: activate:96, 4,0 OK
+07-20 16:27:19.224  6885  6885 I VRI[InputMethod]@df8c22f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.225  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),4,true ret=0
+07-20 16:27:19.225  1909  6385 D AudioFlinger: setParameters: filtered dev setParameters keyvalue screen_state=off
+07-20 16:27:19.226  1783  1808 D AHAL: AudioDevice: SetParameters: 1799: enter
+07-20 16:27:19.226  4800  4831 I VRI[ShellDropTarget]@fda9a37: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.226  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 171: Enter
+07-20 16:27:19.226  1783  1808 D AHAL: AudioVoice: VoiceSetParameters: 416: Exit ret: 0
+07-20 16:27:19.226  1783  1808 D AHAL: hfp: hfp_set_parameters: 447: enter
+07-20 16:27:19.226  1783  1808 D AHAL: AudioDevice: SetParameters: 1882:  - screen = off
+07-20 16:27:19.226  1783  1808 I PAL: ResourceManager: setParameter: 9250: Screen State:0
+07-20 16:27:19.226  1783  1808 D AHAL: AudioDevice: SetParameters: 2617: exit: screen_state=off
+07-20 16:27:19.226  1783  1808 I Audio_a2dpsink_hw: adev_set_parameters: kevpairs=[screen_state=off]
+07-20 16:27:19.226  3221  4758 D WifiDisplayAdapter: isFitToActiveDisplayLocked : false
+07-20 16:27:19.227  3221  3404 D BrightnessThermalClamper: Thermal status observer already started
+07-20 16:27:19.227  4800  4800 D DisplayLifecycle: updateDisplay id = 0
+07-20 16:27:19.227  4800  4878 D StackScroller: onDisplayChanged for predraw skip to 4
+07-20 16:27:19.227  4800  4800 I Keyguard.AODTouchModeManager: onDisplayChanged newDisplayState=4, currentDisplayState=3, displayId=0
+07-20 16:27:19.228  3221  3976 D AS.DesktopUtils: isDesktopWindowing( false )
+07-20 16:27:19.228  3221  3976 D AS.DesktopModeHelper: setDesktopModePath caller = onDisplayChanged #Id=0, isInDesktopWindowing=false, isAudioOutputToDisplay : true
+07-20 16:27:19.231  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2 - display changed
+07-20 16:27:19.231  8023  8023 I CAMERA_CONTROLLER: [2]a.n():2
+07-20 16:27:19.231  8023  8023 I CAMERA_CONTROLLER: [2]ProviderServiceImpl.checkDisplayModePortrait():39 - presentationDisplaynull
+07-20 16:27:19.232  8023  8023 W CAMERA_CONTROLLER: [2]a.A():2 - presentationDisplay is null, return
+07-20 16:27:19.232  8023  8023 W CAMERA_CONTROLLER: [2]ProviderServiceImpl$registerDisplayListener$displayListener$1.onDisplayChanged():17 - display is not portrait mode 
+07-20 16:27:19.233  5145 30485 I HoneySpace.Memory-Monitor: current state = 4, didTrim = true
+07-20 16:27:19.233  5145  5145 I VRI[RecentsTransitionOverlay]@9ba9ba1: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.233  5145  5145 I VRI[CocktailBarService]@400297: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.233  5145  5145 I VRI[LauncherActivity]@4464a22: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.233  5145  5145 I VRI[RecentsActivity]@30ab7a: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.234 11143 11143 I VRI[HintService]@e83b0: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.236  9907  9907 I VRI[PlayProtectDialogsActivity]@5131a1f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.236  9907  9907 I VRI[PlayProtectDialogsActivity]@ea52556: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.237  4800  4800 I AODTriggers: onAODEventDispatched = 4 / eventData = aod.q0@9be0b0b
+07-20 16:27:19.237  4800  4800 I AOD_LIVE_CLOCK@LiveClockController: updateDisplayState: DISPLAY_STATE_DOZE_SUSPEND
+07-20 16:27:19.237  4800  4800 I VRI[LockscreenShortcutBlur]@6491b12: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.237  4800  4800 I VRI[NavigationBar0]@35810b9: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.237  4800  4800 I VRI[DisplayBackGestureHandler 0]@2f2fb4f: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.238  4800  4800 I VRI[NotificationShade]@c2a085d: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.238  4800  4800 I VRI[StatusBar]@1d0ce91: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.238  4552  4552 I NearbyDiscovery: (REDACTED) FastPairDisplayObserver: %s -> %s
+07-20 16:27:19.238  4800  4800 I VRI[Bouncer]@b0f9642: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.238  4800  4800 I VRI[SecondaryHomeHandle0]@a5b5f00: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.239  7646  7646 I VRI[FP Iconview]@6a76b96: onDisplayChanged oldDisplayState=3 newDisplayState=4
+07-20 16:27:19.243  1846  2164 I SDM     : DisplayBase::WaitForCompletion: Cached retire fence is in ready state
+07-20 16:27:19.243  1846  2164 I SDM     : DisplayBase::SetDisplayState: active 0-0 state 3-3 pending_power_state_ 0
+07-20 16:27:19.244  1926  1926 D SurfaceFlinger: Finished setting power mode 3 on physical display 4630947093241269891
+07-20 16:27:19.244  3221  4094 I LocalDisplayAdapter: SF.setDisplayPowerMode took 27ms
+07-20 16:27:19.244  3221  4094 W LocalDisplayAdapter: !@display_state - 156 : DOZE_SUSPEND (MAIN) took 26 ms
+07-20 16:27:19.245  3221  4094 D SemInputDeviceManagerService: setDisplayState[1] LATE: DOZE_SUSPEND(4) -> DOZE_SUSPEND(4)
+07-20 16:27:19.245  3221  3816 D SemInputDevice:TSP: ActivateTask: 4,1 [07-20 16:27:19.245]
+07-20 16:27:19.245  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.samsung.android.hardware.secinputdev.external.DisplayStateListenerWrapper$1@dafc74e took 0 ms
+07-20 16:27:19.246  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.biometrics.SemBiometricDisplayStateMonitor@b37b5ad took 1 ms
+07-20 16:27:19.246  3221  4094 D LocalDisplayAdapter: notifyStateChangeFinish: com.android.server.display.mode.RefreshRateModeManager$1@bf1107d took 0 ms
+07-20 16:27:19.246  1857  1857 I sysinput:Touch: activate:96, 4,1 OK
+07-20 16:27:19.246  3221  3404 D DisplayPowerController[0]: setActualDisplayState: DOZE -> DOZE_SUSPEND
+07-20 16:27:19.246  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:19.246  3221  3849 I SemBiometricDisplayStateMonitor: DisplayStateListener#onFinish : DOZE_SUSPEND, DOZE_SUSPEND, DEFAULT_DISPLAY
+07-20 16:27:19.246  3221  3816 D SysinputHAL_V1_3(V1_2): setTspEnable(TSP(1)),4,false ret=0
+07-20 16:27:19.247  3221  3404 D DisplayPowerController[0]: animateScreenStateChange: target=DOZE_SUSPEND, mIsEnabled=true
+07-20 16:27:19.247  7646  7646 I BSS_DisplayStateManager: handleDisplayStateChanged: DOZE -> DOZE_SUSPEND
+07-20 16:27:19.247  3221  3404 D PowerManagerService: displayReady: true groupId=0
+07-20 16:27:19.247  3221  3404 D PowerManagerService: [PWL] sb release: PowerManagerService.Display
+07-20 16:27:19.326  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:ec53:40ff:feaa:ce6e/64 on ifindex 45 flags 0x00000100 scope 0
+07-20 16:27:19.326  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:df32:ddbe:60f6:f63b/64 on ifindex 45 flags 0x00000001 scope 0
+07-20 16:27:19.327  4268  5130 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@74d426c
+07-20 16:27:19.328  4268  5130 D ApfFilter: (wlan0): Adding RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0 
+07-20 16:27:19.407  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:19.413  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:19.414  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:19.414  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:19.426  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.015, current:2.811718, soc:0.35, temperature:36.6, status:2, timestamp:1784579239426, voltage_chg:null}
+07-20 16:27:19.426  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:19.763  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:19.763  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:19.763  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:20.220  1926  2226 I SurfaceFlinger: [4630947093241269891] ExpiredDisplayPowerTimer: 1
+07-20 16:27:20.367  1221  1221 D io_stats: !@   8,0 r 6058903 104702129 w 732617 13229788 d 52386 9073180 f 19857 72711 iot 1322780 0 th 0 0 0 pt 0 inp 0 0 10073.613
+07-20 16:27:20.409  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:20.409  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:20.409  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:20.409  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:20.421  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.021, current:2.934375, soc:0.35, temperature:36.6, status:2, timestamp:1784579240421, voltage_chg:null}
+07-20 16:27:20.421  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:20.764  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:20.764  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:20.764  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:21.388  3221  7219 D NetdEventListenerService: CSC Feature value: true
+07-20 16:27:21.390  3221  7219 D NetdEventListenerService: CSC Feature value: true
+07-20 16:27:21.410  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:21.410  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:21.410  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:21.411  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:21.424  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.017, current:2.886718, soc:0.35, temperature:36.6, status:2, timestamp:1784579241423, voltage_chg:null}
+07-20 16:27:21.424  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:21.431  3221  3392 D MARsPolicyManager: triggerAction called!
+07-20 16:27:21.431  3221  3392 I NSLocationMonitor: getGPSUsingApps() called
+07-20 16:27:21.432  5492  5532 I NSLocationManager_FLP: getGPSUsingApps, No change
+07-20 16:27:21.434 10737 10737 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:pidof com.wonderfood.app.foss'
+07-20 16:27:21.510 10737 10737 I adbd    : adbd service requested 'exec:screencap '-p''
+07-20 16:27:21.765  2379  3431 I bauth_FPBAuthService: pcf : 0x1012, 0 ,1 ,0 ,1 ,0 ,0, 16.0.0.0
+07-20 16:27:21.765  2379  3431 I bauth_FPBAuthService: thread id : 1, preenroll_flag : 0, nd cnt : 0, cso : 0, et : 0
+07-20 16:27:21.765  2379  3431 I bauth_FPBAuthService: FPBAuthService::timerHandler complete
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [                 contacts = {contacts=397, raw_contacts=908, data=4583, account={secphone(1)=0, google(2)=399, sim(3)=0, sim2(4)=0, agg(5)=0, samsung(6)=1, mobileservice(7)=0, google(10)=1, whatsapp(16)=334, google(32)=1, google(48)=0, google(49)=0, google(51)=0, com.microsoft.workaccount(60)=0, com.microsoft.workaccount(61)=0, com.microsoft.skydrive(82)=0, coreapp(86)=14, com.microsoft.workaccount(89)=0, com.microsoft.workaccount(210)=0, com.github.android(222)=0, com.microsoft.workaccount(227)=0, com.airbnb.android(228)=0, www.instagram.com(234)=0, app.revanced(241)=0, com.reddit.account(243)=0, com.reddit.account(244)=0, com.reddit.account(245)=0, telegram(246)=158}, trash=0, trash_acc={}, trash_sync=0, database=contacts2.db} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [               aggregated = {[10,16,2]=1, [2,16,16,246]=3, [2,16,16,86,246]=1, [2,16,16]=4, [2,16,246,246]=2, [2,16,246]=123, [2,16,86,246]=7, [2,16,86]=4, [2,16]=175, [2,2,16,16]=1, [2,2,16,246]=1, [2,2,16]=1, [2,246]=12, [2,2]=1, [2,86,16,246]=1, [2,86,246]=1, [246]=4, [2]=57, [32,16,246]=1, [6]=1} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [                  request = {} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [                    calls = {types={[100]=1918, [200]=5, [300]=495, [900]=36, [950]=16, [1150]=30}, database=calllog.db} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [                  profile = {contacts=0, raw_contacts=0, data=0, account={secphone(1)=0, google(2)=0, sim(3)=0, sim2(4)=0, agg(5)=0, samsung(6)=0, mobileservice(7)=0, google(10)=0, whatsapp(16)=0, google(32)=0, google(48)=0, google(49)=0, google(51)=0, com.microsoft.workaccount(60)=0, com.microsoft.workaccount(61)=0, com.microsoft.skydrive(82)=0, coreapp(86)=0, com.microsoft.workaccount(89)=0, com.microsoft.workaccount(199)=0, com.github.android(207)=0, com.microsoft.workaccount(211)=0, com.airbnb.android(212)=0, www.instagram.com(216)=0, app.revanced(219)=0, com.reddit.account(220)=0, com.reddit.account(221)=0, com.reddit.account(222)=0}, trash=0, trash_acc={}, trash_sync=0, database=profile.db} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [               sa_profile = {contacts=1, raw_contacts=1, data=1, account={secphone(1)=1, google(2)=0, sim(3)=0, sim2(4)=0, agg(5)=0, samsung(6)=0, mobileservice(7)=0, google(10)=0, whatsapp(16)=0, google(32)=0, google(48)=0, google(49)=0, google(51)=0, com.microsoft.workaccount(60)=0, com.microsoft.workaccount(61)=0, com.microsoft.skydrive(82)=0, coreapp(86)=0, com.microsoft.workaccount(89)=0, com.microsoft.workaccount(199)=0, com.github.android(207)=0, com.microsoft.workaccount(211)=0, com.airbnb.android(212)=0, www.instagram.com(216)=0, app.revanced(219)=0, com.reddit.account(220)=0, com.reddit.account(221)=0, com.reddit.account(222)=0}, trash=0, trash_acc={}, trash_sync=0, database=profile_sa.db} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: [                      etc = {binders=0, country_iso=US, version=15.8.31, db_version=2008, db_size=6, db_wal_size=1, csc=XAA/XAA, sec_enabled=false, is_roaming=false} ]
+07-20 16:27:21.814  6397  7208 V CpEventLog(u0): [P] cp_state: ------------------------------------------------------------------------------
+07-20 16:27:21.864  1850 29608 I QC2Comp : [av1D_57] Stats: Pending(11) i/p-done(7) Works: Q: 183/Done 173|Work-Rate: Q(0.0/s Avg=0.1/s) Done(0.000/s Avg=0.125/s)| Stream: 24.00fps 1.0Mbps
+07-20 16:27:21.864  1850 29608 I QC2Comp : [av1D_57] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-49: 19 bufs 0.297 MB] [2D-50: 23 bufs 56.602 MB] | Total: 96.898 MB
+07-20 16:27:21.984  2254  2282 I shsusrd : shsusr_check_cpu_usage(): Output of /proc/2254/stat/ : 2254 (shsusrd0) S 1 2254 0 0 -1 1077936384 3430 0 1335 0 61 349 0 0 20 0 11 0 791 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 0 0 0 17 4 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.984  2254  2282 I shsusrd : 
+07-20 16:27:21.984  2254  2282 I shsusrd : shsusr_check_cpu_usage(): utime 61 stime 349 cpu_time_last 410
+07-20 16:27:21.984  2254  2282 I shsusrd : shsusr_check_cpu_usage(): user time = 61 | system time = 349 | total = 410 | cpu_time_delta = 0, clk_tck 100
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage(): time_cur 1784579241 time_last 1784579231
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage(): shsusrd is using 0 pct of CPU - time_delta 10
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage(): shsusrd usage 0
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): time_delta for combined : 10 time_cur 1784579241 time_last_combined 1784579231
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2254/stat: 2254 (shsusrd0) S 1 2254 0 0 -1 1077936384 1194 0 10 0 1 1 0 0 20 0 11 0 791 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 17 4 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.985  2254  2282 I shsusrd : 
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2254 utime 1 stime 1 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2277/stat: 2277 (shsusrd12) S 1 2254 0 0 -1 4194368 1666 0 465 0 1 32 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.985  2254  2282 I shsusrd : 
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2277 utime 1 stime 32 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2280/stat: 2280 (shsusrd2) S 1 2254 0 0 -1 4194368 164 0 0 0 0 14 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.985  2254  2282 I shsusrd : 
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2280 utime 0 stime 14 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.985  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2281/stat: 2281 (shsusrd13) S 1 2254 0 0 -1 1077936192 9 0 40 0 0 0 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.985  2254  2282 I shsusrd : 
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2281 utime 0 stime 0 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2282/stat: 2282 (shsusrd42) R 1 2254 0 0 -1 4194368 219 0 654 0 55 234 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 0 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.986  2254  2282 I shsusrd : 
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2282 utime 55 stime 234 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2283/stat: 2283 (shsusrd4) S 1 2254 0 0 -1 4194368 0 0 0 0 0 12 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.986  2254  2282 I shsusrd : 
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2283 utime 0 stime 12 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/2284/stat: 2284 (shsusrd14) S 1 2254 0 0 -1 4194368 33 0 24 0 0 15 0 0 20 0 11 0 797 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.986  2254  2282 I shsusrd : 
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2284 utime 0 stime 15 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5367/stat: 5367 (shsusrd14) S 1 2254 0 0 -1 4194368 0 0 7 0 0 13 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.986  2254  2282 I shsusrd : 
+07-20 16:27:21.986  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5367 utime 0 stime 13 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5369/stat: 5369 (shsusrd7) S 1 2254 0 0 -1 4194368 5 0 7 0 0 13 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.987  2254  2282 I shsusrd : 
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5369 utime 0 stime 13 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5372/stat: 5372 (shsusrd5) S 1 2254 0 0 -1 4194368 2 0 7 0 0 12 0 0 20 0 11 0 2242 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 1 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.987  2254  2282 I shsusrd : 
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5372 utime 0 stime 12 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2254/task/5645/stat: 5645 (HwBinder:2254_1) S 1 2254 0 0 -1 1077936192 4 0 0 0 0 0 0 0 20 0 11 0 2337 2517532672 657 18446744073709551615 414572621824 414572880280 549241283504 0 0 0 0 0 1073794810 1 0 0 -1 5 0 0 0 0 0 414572903360 414572904296 415567335424 549241284621 549241284664 549241284664 549241290717 0
+07-20 16:27:21.987  2254  2282 I shsusrd : 
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): tid 5645 utime 0 stime 0 time_delta 10 clk_tck 100, usage 0
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined CPU usage: total_utime 57 total_stime 346 total_cpu_time_seconds 0.00, clk_tck 100
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage 0
+07-20 16:27:21.987  2254  2282 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage FINAL 0
+07-20 16:27:22.213 14346 14346 W libbinder.BackendUnifiedServiceManager: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: SurfaceFlingerAIDL
+07-20 16:27:22.214 14346 14346 W libbinder.BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+07-20 16:27:22.215 14346 14346 W libbinder.BackendUnifiedServiceManager: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: edmnativehelper
+07-20 16:27:22.215  3221  7219 I EDMNativeHelperService: isScreenCaptureEnabled
+07-20 16:27:22.216  3221  7219 D RestrictionPolicy: isScreenCaptureEnabled : ret=true userId=0
+07-20 16:27:22.216 14346 14346 W libbinder.ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+07-20 16:27:22.216 14346 14346 I SurfaceComposerClient: captureDisplay:Display-4630947093241269891
+07-20 16:27:22.228  1926  2023 I SurfaceFlinger: Capture layer list: 	 StatusBar$_4800#100(preserveDisplayColors:0)
+07-20 16:27:22.229  1926  2023 I SurfaceFlinger: Capture layer list: 	 NotificationShade$_4800#2644(preserveDisplayColors:0)
+07-20 16:27:22.251  1926  2064 D SurfaceFlinger: [SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer ScreenCaptureFillLayer at index 0
+07-20 16:27:22.258  1926  2064 D SurfaceFlinger: [SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer StatusBar$_4800#100 at index 1
+07-20 16:27:22.264  1926  2064 D SurfaceFlinger: [SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer NotificationShade$_4800#2644 at index 2
+07-20 16:27:22.288  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:ec53:40ff:feaa:ce6e/64 on ifindex 45 flags 0x00000100 scope 0
+07-20 16:27:22.289  4268  5130 D IpClient/wlan0: addressUpdated: 2601:c6:c07f:9ac0:df32:ddbe:60f6:f63b/64 on ifindex 45 flags 0x00000001 scope 0
+07-20 16:27:22.289  4268  5130 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@74d426c
+07-20 16:27:22.289  4268  5130 D ApfFilter: (wlan0): Ignoring RA RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0  which matches RA fe80::82da:c2ff:fedc:dc5d -> ff02::1 180s 2601:c6:c07f:9ac0::/64 296998s/296998s DNS 180s 2001:558:feed::1 2001:558:feed::2 RIO 180s ::/0 
+07-20 16:27:22.360 14346 14347 I AdrenoUtils: <ReadGpuID:407>: Reading chip ID through GSL
+07-20 16:27:22.368  1221  1221 D io_stats: !@   8,0 r 6060319 104727857 w 732617 13229788 d 52386 9073180 f 19857 72711 iot 1323552 0 th 0 0 0 pt 0 inp 0 0 10075.614
+07-20 16:27:22.369  1221  1221 D io_stats: !@ Read_top(KB): sh(14346) 22608 surfaceflinger(1926) 1708 kworker/u16:2(25080) 640
+07-20 16:27:22.369  1221  1221 D io_stats: !@ Write_top(KB): f2fs_ckpt-254:6(1423) 48 init(1) 32 kworker/u16:2(25080) 16
+07-20 16:27:22.411  3221  9650 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+07-20 16:27:22.411  3221  9650 D BSOHChargingDataCollector: performBatteryWork++
+07-20 16:27:22.411  3221  9650 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@57c2b24
+07-20 16:27:22.413  3221  9650 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+07-20 16:27:22.425  3221  9650 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.014, current:2.860937, soc:0.35, temperature:36.6, status:2, timestamp:1784579242425, voltage_chg:null}
+07-20 16:27:22.425  3221  9650 D BSOHChargingDataCollector: performBatteryWork--
+07-20 16:27:22.667 10737 10737 I adbd    : adbd service requested 'shell,v2,TERM=dumb:export ANDROID_LOG_TAGS=''; exec logcat '-d' '-t' '1000''

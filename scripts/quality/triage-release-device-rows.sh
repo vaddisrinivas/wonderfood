@@ -10,6 +10,10 @@ MATRIX="${MATRIX:-.planning/2026-07-20-wonderfood-105-accelerated-release-campa/
 mkdir -p "$OUT_DIR"
 
 report="$OUT_DIR/release-device-row-triage.md"
+gradle_file="android/app/build.gradle"
+if [[ ! -f "$gradle_file" && -f "app/build.gradle.kts" ]]; then
+  gradle_file="app/build.gradle.kts"
+fi
 
 row_status() {
   local id="$1"
@@ -76,8 +80,9 @@ record_command() {
   echo "- Git head: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
   echo "- Branch: $(git branch --show-current 2>/dev/null || echo unknown)"
   echo "- Dirty files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
-  echo "- Version name: $(awk -F'"' '/^[[:space:]]*versionName = / { print $2; exit }' app/build.gradle.kts)"
-  echo "- Version code: $(awk '/^[[:space:]]*versionCode = / { print $3; exit }' app/build.gradle.kts)"
+  echo "- Version file: $gradle_file"
+  echo "- Version name: $(sed -n 's/^[[:space:]]*versionName[[:space:]=]*(\{0,1\}"\([^"]*\)".*/\1/p' "$gradle_file" | head -n 1)"
+  echo "- Version code: $(sed -n 's/^[[:space:]]*versionCode[[:space:]=]*(\{0,1\}\([0-9][0-9]*\).*/\1/p' "$gradle_file" | head -n 1)"
   echo
 } > "$report"
 
@@ -99,7 +104,15 @@ record_command "Connected Proof Tasks" printf '%s\n' \
   './gradlew :app:connectedPlayDebugAndroidTest' \
   './gradlew :core:data:connectedDebugAndroidTest'
 
-record_command "Release APK Candidates" find app/build/outputs/apk -maxdepth 6 -path '*/release/*.apk' -type f
+apk_roots=()
+for dir in android/app/build/outputs/apk app/build/outputs/apk; do
+  [[ -d "$dir" ]] && apk_roots+=("$dir")
+done
+if [[ "${#apk_roots[@]}" -gt 0 ]]; then
+  record_command "Release APK Candidates" find "${apk_roots[@]}" -maxdepth 6 -path '*/release/*.apk' -type f
+else
+  record_command "Release APK Candidates" printf '%s\n' "none"
+fi
 record_command "Existing Checksum Files" find build app/build \( -name 'SHA256SUMS.txt' -o -name '*.sha256' \)
 
 if command -v gh >/dev/null 2>&1 && git remote get-url origin >/dev/null 2>&1; then

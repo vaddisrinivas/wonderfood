@@ -17,6 +17,20 @@ if [[ "${WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV:-0}" != "1" &&
 fi
 
 missing=0
+if [[ -z "${SSL_CERT_FILE:-}" ]]; then
+  cert_file="$(python3 - <<'PY' 2>/dev/null || true
+try:
+    import certifi
+    print(certifi.where())
+except Exception:
+    pass
+PY
+)"
+  if [[ -n "$cert_file" && -f "$cert_file" ]]; then
+    export SSL_CERT_FILE="$cert_file"
+  fi
+fi
+
 require_one_of() {
   local label="$1"
   shift
@@ -45,7 +59,6 @@ for provider in "${PROVIDERS[@]}"; do
   case "$provider" in
     notion)
       require_one_of notion-token NOTION_TOKEN NOTION_API_KEY
-      require_one_of notion-page NOTION_TEST_PAGE_ID
       ;;
     sheets|google-sheets)
       if [[ -z "${GOOGLE_SHEETS_ACCESS_TOKEN:-}" ]]; then
@@ -73,10 +86,10 @@ fi
 for provider in "${PROVIDERS[@]}"; do
   case "$provider" in
     notion)
-      scripts/quality/run-notion-live-proof.sh
+      scripts/quality/run-notion-scenario-proof.sh
       ;;
     sheets|google-sheets)
-      scripts/quality/run-google-sheets-live-proof.sh
+      scripts/quality/run-google-sheets-scenario-proof.sh
       ;;
     postgres)
       scripts/quality/run-postgres-live-proof.sh

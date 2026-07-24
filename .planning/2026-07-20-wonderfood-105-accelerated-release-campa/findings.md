@@ -63,3 +63,42 @@ No deliverable was removed. The original plan, architecture, schema, workspace p
 - The currently open Google Sheet is blank and is not V4 integration proof. No connected Sheets document-control session is available, and the Google Drive native-import plugin is not installed.
 - GitHub reference review identified concrete Sheets gaps: relation fields lack `ONE_OF_RANGE` validation, table ranges/column metadata need reconciliation, spreadsheet reads omit some tables/metadata/protected-range state, and repeated bootstrap can duplicate protections.
 - The acceptance matrix still reports 65 PASS / 11 TODO, but C09-C19 evidence must be audited because several notes describe the rejected V3 projection.
+
+## Portable Control Plane Findings
+
+- The missing v5 pillar is not a visual/dashboard issue; it is the control-plane/data-plane split. Config is data, but not household records.
+- Existing code already had most hard contracts: typed config sources, fetchers for local/GitHub/URL/Notion/Sheets, additive merge, conflict gating, AI preview/accept/rollback, and SQLite `config_*` tables.
+- The main hard gaps found today were fail-safe behavior and recovery proof, not fetcher shape.
+- Added evidence now proves invalid/failed remote config keeps the last-good control plane and that workflow run checkpoints survive recovery along with records/config.
+- Static separation now has its own gate: config modules cannot write record tables, and provider/data-sync modules cannot write config tables.
+- Remaining C4 UI is product-critical but should sit on these contracts: add/reorder/disable source, preview diff, accept/undo, show conflicts/errors/freshness, no token display.
+
+## Provider Writeback Findings
+
+- Direct live provider writeback must prove more than create. It now proves create, update, and archive for Notion and Sheets.
+- Notion page archive/trash delivery uses `in_trash: true`; using the older archive field failed live delivery/readback.
+- Sheets direct archive is represented as an appended provider write row with archived=true, then proof cleanup clears the appended proof rows.
+
+## Load-bearing Guard Audit Findings
+
+- The AI capability gate is real for current manifests: `DomainManifest.collections` is a string array, so collection scope checks are not a type illusion.
+- One-write-path had a create-overwrite hole: `create` on an existing record could mutate without an expected revision if the idempotency key did not catch it. This is now rejected.
+- Provider local-copy clear/disconnect directly deletes local provider-owned rows by design. The operation-boundary gate now explicitly allowlists that lifecycle exception so future broad direct deletes are visible.
+- Config merge had a precedence semantics bug: scalar disagreements always conflicted. Runtime now tracks path ownership so higher-precedence sources win and equal-precedence disagreements go to review.
+- Direct operation apply also needed its own domain guard; AI checked domain scope, but non-AI callers could still pass an operation for another domain into the active manifest path. `applyOperation` now rejects `domain_scope_rejected:<domain>` before record writes.
+- Destructive config detection must recurse. A top-level-only check misses realistic package edits such as `domains.food.collections.inventory.remove`. Nested destructive keys now force migration review.
+- Workflow cancellation cannot be a soft visual state. After cancellation, step writes must be rejected until resume; cancellation during a non-cancellable active step should leave a failed run, not a false cancelled success.
+- Browser accessibility smoke should not use `networkidle` as product readiness. The mobile record page timed out despite zero unlabeled controls, zero severe touch failures, and zero console errors; rendered DOM is the correct smoke anchor.
+
+## Standalone Provider Authority Findings
+
+- The old `run-provider-standalone-visual-proof.sh` was invalid after the Expo migration because it depended on Gradle test targets from the previous Android app.
+- The replacement should be treated as an authority receipt: it proves live Notion and Sheets seed/read/edit/archive/undo/repair plus direct app create/update/archive write delivery under one redacted receipt.
+- It should not be used to claim direct manual UX inspection of the user's final Notion/Sheets dashboards; that remains separate product visual proof.
+- `check-live-provider-writeback.ts` now supports `PROVIDER_WRITEBACK_OUT`, so composite live receipts can keep all evidence in one directory instead of scattering proof files.
+- Provider writeback needs an explicit restore operation. Treating archive Undo as generic update is insufficient because Notion keeps the page in trash unless the write payload sends `in_trash:false`.
+
+## Release Readiness Findings
+
+- Local Android and iOS build/export evidence can be refreshed without release credentials, but a real release remains externally blocked until signing/App Store env exists.
+- The release readiness gate should stay non-secret: record env names and boolean readiness, never env values or keystore paths.

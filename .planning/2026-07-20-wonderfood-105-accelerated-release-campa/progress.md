@@ -16,6 +16,17 @@
 - Current rollup: `60 PASS / 0 BLOCKED / 16 TODO`
 - Next action: continue remaining gesture/visual/live-provider/device/release proof rows, avoiding parallel Gradle unit-test tasks that write the same XML result files.
 
+- 2026-07-23 LifeOS control-plane addendum: added the v5 portable control-plane track to `docs/lifeos/implementation-ledger.md` and implemented hard C0 first. `src/config/types.ts` now defines config-source/snapshot/conflict/control-plane contracts. SQLite `DATABASE_VERSION` is now 5 and creates `config_sources`, `config_snapshots`, and `config_conflicts` separately from household `records`. Verified `npm run check:control-plane-c0`, `npm run typecheck`, `npm run config:validate`, and `git diff --check`. Next action: C1 config fetcher registry for local/GitHub/URL/Notion/Sheets with no data-plane writes.
+- 2026-07-23 LifeOS control-plane C1: added `src/config/fetchers.ts` and `tests/config/fetchers.test.ts`. Local, GitHub, URL, Notion and Sheets config sources now fetch into unvalidated snapshots without a DB handle or record-writer path. Verified `npm run check:control-plane-c1`, `npm run typecheck`, `npm test`, and `git diff --check`. Next action: C2 validation/merge/apply/undo for config proposals.
+- 2026-07-23 LifeOS control-plane C2: added `src/config/runtime.ts` and `tests/config/runtime.test.ts`. Config snapshots now validate JSON/YAML-lite, merge additively by precedence, block scalar/destructive conflicts for review, apply only clean proposals, and undo to the prior control-plane state. Verified `npm run check:control-plane-c2`, `npm run typecheck`, `npm test`, and `git diff --check`. Next action: C3 persistence/sync guard so control-plane writes cannot mutate household records.
+- 2026-07-23 LifeOS control-plane C3: added `src/config/sync.ts`, `src/db/config.ts`, and `tests/config/sync.test.ts`. Config sync now saves source/snapshot/conflict rows only, skips disabled-source fetches, stores conflicts without applying disputed config, and has a SQLite guard proving no `records` writes. Verified `npm run check:control-plane-c3`, `npm run typecheck`, `npm test`, and `git diff --check`. Next action: C4 Config Sources UX in app Settings/Config Studio.
+- 2026-07-23 LifeOS control-plane C5 core: added `src/config/ai.ts` and `tests/config/ai.test.ts`. AI-authored config now previews added/changed keys, accepts only clean proposals through the same config runtime, rolls back with the undo receipt, and rejects household-record mutations disguised as config. Verified `npm run check:control-plane-c5`, `npm run typecheck`, `npm test`, and `git diff --check`. C4 UI remains pending because the repo instructions restrict Expo UI edits unless explicitly reopened.
+- 2026-07-23 LifeOS control-plane gate integration: added umbrella `npm run check:control-plane` and wired it into `check:product` and `quality`. Verified `npm run check:control-plane`, `npm run typecheck`, `npm test`, `npm run config:validate`, and `git diff --check`.
+- 2026-07-23 live provider refresh: patched live proof wrappers to set `SSL_CERT_FILE` from certifi when unset, patched quality `tsx` runners to pass root `tsconfig.json`, aligned direct Notion app writeback with the passing data-source parent shape, and made Notion parent discovery climb to the shallowest accessible parent page. Verified `scripts/quality/run-provider-live-proofs.sh notion sheets` with private env: fresh evidence `notion_scenarios-1784830715.json` and `google_sheets_scenarios-1784830731.json`. Verified `npm run check:live-provider-writeback` with Homebrew Node first in PATH and temp npm cache: fresh evidence `direct_provider_writeback-1784831123.json`. Notion row cleanup passed, but temporary proof database cleanup remains manual because Notion rejected archive for that database block path.
+- 2026-07-23 product/native gate refresh: `check:product` initially failed because recovery import rejected new `config_sources`; fixed `src/db/recovery.ts` and seeded/restored config rows in `scripts/quality/check-roundtrip.ts`. Verified `npm run check:roundtrip`, `npm run typecheck`, and full `NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run check:product` PASS. Native gates: `npm run phase8:check:health-connect` PASS, `npm run phase8:check:android-release-artifacts` PASS, and `npm run check:native-emulator` PASS after the script opened the Health Connect permission manager directly instead of relying on a flaky deep-link handoff for the system permission screen.
+- 2026-07-23 release signing audit: private env has no Android keystore/password/alias/key password and no Expo/App Store Connect release variables. `npm run phase8:check:android-release-signed` fails with `APK is debug-signed`. Signed Play release and iOS/TestFlight remain real external blockers.
+- 2026-07-23 Notion proof cleanup: added `scripts/quality/cleanup-notion-proof-artifacts.mjs`, patched Notion scenario proof to trash its scenario page, and patched direct provider writeback proof to archive its temporary Notion database through `/databases/{id}`. Ran cleanup against exact `WonderFood ... Proof` titles only; final evidence `notion-proof-cleanup-1784831987.json` passed with `archived_count=8`, `failed_count=0`. Fresh live proof evidence: `direct_provider_writeback-1784832006.json` passed with Notion `cleanup_database_archived=true`; `notion_scenarios-1784832028.json` passed with `cleanup_scenario_page_trashed=true`; `google_sheets_scenarios-1784832041.json` passed.
+
 - Latest acceleration: added non-secret release/device row triage for `E01`, `E07`, `E09`, and `E12`-`E16`. The helper is read-only and records matrix status, scoped dirty state, ADB visibility, connected proof tasks, existing release APK/checksum candidates, and read-only GitHub PR/CI/release state when `gh` is available. It explicitly does not use signing secrets, install builds, create PRs, publish tags/releases, or mark rows PASS.
 
 - Latest milestone: AppFunctionService now has focused canonical write evidence tests.
@@ -705,3 +716,218 @@
 - S23 Ultra is currently connected over adb; Notion token and cached Google OAuth proof credentials are available without exposing values. Android release-signing variables remain missing.
 - Found a Notion spending defect: Food amount and Non-food amount both rolled up every line. Added hidden per-line food/non-food formula components and separate rollups.
 - First live formula attempt failed with Notion `Type error with formula`; changed the select comparison to explicit `format(...)`. The verification rerun was then interrupted by the Sheets worker's incomplete shared-worktree edit, so integrated Gradle runs are paused until that worker completes.
+
+## 2026-07-23 portable control-plane + workflow recovery hardening
+
+- Read the new v5 control-plane note and folded it into the active campaign plan as a blocking addendum.
+- Confirmed existing control-plane implementation covers C0/C1/C2/C3/C5 with `src/config/*`, `src/db/config.ts`, and `tests/config/*`.
+- Strengthened C3 sync proof: bad remote fetch and invalid remote config now keep previous last-good control-plane manifests instead of silently governing the app.
+- Added `scripts/quality/check-control-plane-separation.sh` and wired it into `npm run check:control-plane` so table-boundary drift fails CI.
+- Strengthened recovery proof: `scripts/quality/check-roundtrip.ts` now seeds and asserts `workflow_runs` so cancelled/resumed workflow state survives export/import restore.
+- Updated `docs/lifeos/implementation-ledger.md` with C3 last-good evidence and Phase 7 workflow recovery evidence.
+- Verified:
+  - `npm run check:control-plane` ✅
+  - `npm run check:control-plane-separation` ✅
+  - `npm run check:workflow-runtime` ✅
+  - `npm run check:roundtrip` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Still open after this hard slice: C4 Config Sources UX, provider/device Undo across every adapter, full Notion/Sheets authority UX, final visual polish, signed Android/iOS release.
+
+## 2026-07-23 fresh live provider authority proof
+
+- Ran live provider checks through `agent-env` without printing secrets.
+- Verified `npm run check:live-providers` ✅.
+- Fresh evidence:
+  - `app/build/evidence/live-workspace/notion_scenarios-1784832454.json` — all scenarios passed, scenario page trashed.
+  - `app/build/evidence/live-workspace/google_sheets_scenarios-1784832468.json` — all scenarios passed.
+  - `app/build/evidence/live-workspace/direct_provider_writeback-1784832477.json` — direct Notion/Sheets writeback passed.
+- Updated `docs/lifeos/implementation-ledger.md` Phase 5/6 evidence paths.
+- Still open: standalone provider-authority UX and native visual proof; live scripts prove backend/provider authority slices only.
+
+## 2026-07-23 live provider create/update/archive hardening
+
+- Found that direct live writeback only proved create+cleanup, not update/archive authority.
+- Extended `scripts/quality/check-live-provider-writeback.ts` to prove Notion and Google Sheets create → update → archive delivery.
+- Fixed Notion archive delivery to use `in_trash: true` for page trash/archive on the current API.
+- Added focused unit coverage in `tests/providers/writeback.test.ts` so Notion archive delivery targets the provider page and uses the trash request body.
+- Verified:
+  - `npm run check:provider-writeback` ✅
+  - `npm run typecheck` ✅
+  - `npm run check:control-plane` ✅
+  - `npm run check:live-providers` ✅
+  - `git diff --check` ✅
+- Fresh live evidence:
+  - `app/build/evidence/live-workspace/notion_scenarios-1784832719.json`
+  - `app/build/evidence/live-workspace/google_sheets_scenarios-1784832734.json`
+  - `app/build/evidence/live-workspace/direct_provider_writeback-1784832741.json` — Notion and Sheets create/update/archive delivered; Notion proof artifacts cleaned.
+
+## 2026-07-23 load-bearing guard audit
+
+- Read the external review note recommending hard audit of `apply.ts`, `ai/runtime.ts`, and `config/*`.
+- Audited one-write-path and capability flow.
+- Found and fixed a real one-write-path hole: a second `create` without an idempotency replay could overwrite an existing record. `applyOperation` now rejects this as `record_already_exists`.
+- Added regression coverage in `tests/ops/apply.test.ts`.
+- Strengthened operation-boundary grep so direct record deletes are not missed; provider local-copy clear remains an explicit audited lifecycle exception, not accidental silence.
+- Verified:
+  - `npm run check:operation-boundary` ✅
+  - `npm exec -- vitest run tests/ops/apply.test.ts tests/ops/writer-boundary.test.ts tests/ai/runtime.test.ts` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+
+## 2026-07-23 final product gate after audit hardening
+
+- Re-ran `npm run check:product` after the create-overwrite guard and operation-boundary grep hardening.
+- Result: PASS ✅.
+- Notable current counts: full Vitest suite `16 passed / 58 tests`, config valid with 3 domains, 29 Food collections, 5 workflows, 7 agents.
+- Exports passed again for web, Android, and iOS; chat send, rollback idempotency, and cross-surface client proof also passed.
+
+## 2026-07-23 config precedence audit
+
+- Audited `src/config/runtime.ts` after the external review note called out `config/*` as load-bearing.
+- Found a real C2 semantics gap: scalar config changes conflicted regardless of precedence, even though the plan says higher precedence wins and equal precedence conflicts.
+- Fixed merge ownership tracking by config path:
+  - previous last-good manifests act as the low-precedence base;
+  - higher-precedence sources override scalar keys;
+  - equal-precedence scalar disagreement creates a `needs_review` conflict;
+  - arrays remain additive unions.
+- Updated tests for runtime, sync, and AI config behavior.
+- Verified:
+  - `npm run check:control-plane` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Re-ran `npm run check:product` after the precedence fix: PASS ✅ (`16 passed / 59 tests`, web/Android/iOS exports, chat send/rollback/cross-surface proofs).
+
+## 2026-07-23 native/release evidence refresh
+
+- Ran native/release gates after the product/config hardening:
+  - `npm run phase8:check:health-connect` ✅
+  - `npm run phase8:check:android-release-artifacts` ✅
+  - `npm run check:native-emulator` ✅ — emulator-5554 API 34 Health Connect permission + write/read/delete round trip.
+- Fresh signed-release check:
+  - `npm run phase8:check:android-release-signed` ❌ — APK is debug-signed.
+- Verified without printing secret values that `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, and `APPLE_TEAM_ID` are still missing.
+- Phase 8 remains in progress: native Health Connect proof is good; signed Android/Play and iOS/TestFlight remain blocked by missing credentials plus remaining native capture/share/background-sync/release-matrix work.
+
+## 2026-07-23 standalone provider authority receipt
+
+- Found the old standalone provider visual proof script was stale after the Expo migration; it still tried to run `./gradlew`, which no longer exists in this app direction.
+- Replaced it with an Expo-era authority receipt gate and added `npm run check:provider-standalone-authority`.
+- The gate now runs live Notion scenario proof, live Google Sheets scenario proof, and direct app writeback in one output directory, then produces one redacted JSON/HTML/PNG receipt.
+- Fresh passed evidence:
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.json`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.html`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.png`
+  - `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof-mobile.png`
+- Receipt result: `all_authority_checks_passed=true`; Notion and Sheets both prove seed export, provider edit readback, archive readback, undo archive readback, repair, create/update/archive/restore write delivery, and no token/secret visibility.
+- Honest boundary: this closes a stale automated authority proof gap; it is not a manual direct-browser UX inspection of the user's production Notion/Sheets surfaces.
+
+## 2026-07-23 provider archive Undo writeback
+
+- Found a real provider Undo gap: archive Undo became a local `restore` operation, but provider writeback only knew create/update/archive. That could restore SQLite while leaving Notion trashed.
+- Added explicit `restore_record` provider write payloads.
+- Notion restore delivery uses `in_trash:false` on `Notion-Version: 2026-03-11`; Sheets restore delivery appends a canonical row with `archived=false`.
+- Verified:
+  - `npm run check:provider-writeback` ✅ — 8 tests, including Notion and Sheets restore payloads.
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+  - `npm run check:live-provider-writeback` ✅ through `agent-env`, evidence `app/build/evidence/live-workspace/direct_provider_writeback-1784834264.json`.
+  - `npm run check:provider-standalone-authority` ✅, evidence `app/build/evidence/live-workspace/provider-standalone-authority-1784834281/provider-standalone-authority-proof.json`.
+  - `npm run check:product` ✅ after the restore fix — full Vitest suite `16` files / `61` tests, config/control/schema/template/web/accessibility/roundtrip/sync/provider/chat/export gates all passed.
+
+## 2026-07-23 release readiness audit
+
+- Added `scripts/quality/check-release-readiness.mjs` and `npm run phase8:check:release-readiness`.
+- The audit writes `app/build/evidence/release-readiness.json` and records only missing variable names / boolean file checks, never secret values.
+- Refreshed current release evidence:
+  - `npm run phase8:check:android-release-artifacts` ✅ — APK/AAB exist, Health Connect permissions present; APK is debug-signed and AAB unsigned.
+  - `npm run check:ios-export` ✅ — iOS export bundle and assets exist.
+  - `npm run phase8:check:release-readiness` ✅ as an audit, with `release_ready=false`.
+- Current blockers in the evidence: `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
+- Missing Android release env names: `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `EXPO_TOKEN`.
+- Missing Apple release env names: `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_KEY_PATH`, `APPLE_TEAM_ID`.
+
+## 2026-07-23 follow-up guard/workflow audit
+
+- Continued the `2cb4386` review by auditing load-bearing `apply.ts`, `ai/runtime.ts`, and `config/*` boundaries against current code, not commit summaries.
+- Found and fixed a direct operation-domain hole: `applyOperation` now rejects operations whose `op.domain` does not match the loaded manifest before any record write.
+- Found and fixed a nested config migration hole: destructive `remove`/`delete`/`rename`/`migrations` keys are now detected anywhere inside config documents, not only at the root.
+- Hardened workflow runtime:
+  - cancelled/failed/completed runs reject new step writes until resume;
+  - unsafe cancellation of a non-cancellable active step marks the run `failed`;
+  - resume resets cancelled/failed pending work and preserves completed receipts.
+- Added `scripts/quality/check-workflow-resume-cancel.ts` and `npm run phase7:check:workflow-resume-cancel`; evidence path: `app/build/evidence/workflow/workflow-resume-cancel-proof.json`.
+- Fixed brittle accessibility smoke behavior: route checks now wait for rendered `body` after `domcontentloaded` instead of `networkidle`, which had timed out on mobile record pages despite zero actual accessibility failures.
+- Verified focused gates:
+  - `npm run check:operation-boundary` ✅
+  - `npm run check:control-plane` ✅
+  - `npm run check:ai-runtime` ✅
+  - `npm run check:workflow-runtime` ✅
+  - `npm run phase7:check:workflow-resume-cancel` ✅
+  - `npm run check:accessibility-smoke` ✅
+  - `npm run typecheck` ✅
+  - `git diff --check` ✅
+- Verified integrated gate: `NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run check:product` ✅ with `16` Vitest files / `65` tests plus config/control/schema/template/web/accessibility/roundtrip/sync/provider/workflow/export/chat gates.
+- Refreshed `npm run phase8:check:release-readiness` as an audit: `release_ready=false`; current blockers include stale Android release artifacts for the pre-commit build, debug-signed APK, unsigned AAB, Android signing env missing, and iOS release env missing.
+- After committing `7b38fd7`, refreshed release artifacts/readiness:
+  - `npm run phase8:check:android-release-artifacts` ✅ — artifacts current for `7b38fd7`, APK debug-signed, AAB unsigned.
+  - `npm run phase8:check:release-readiness` ✅ as audit — `release_ready=false`; blockers now exclude stale artifacts and remain `android_apk_not_release_signed`, `android_aab_unsigned`, `android_signing_env_missing`, `ios_release_env_missing`.
+- Refreshed live Notion/Sheets standalone authority after `7b38fd7` with private env and Homebrew Node path: `npm run check:provider-standalone-authority` ✅. Evidence: `app/build/evidence/live-workspace/provider-standalone-authority-1784835678/provider-standalone-authority-proof.json`, `all_authority_checks_passed=true`.
+
+## 2026-07-23 completion audit gate
+
+- Added `scripts/quality/check-lifeos-completion-audit.mjs` and `npm run phase9:check:completion-audit`.
+- The audit rolls up the active goal directly: live user-token Notion/Sheets authority proof, workflow resume/cancel, Android/iOS release, final visual/accessibility polish, current Android artifacts, and iOS export evidence.
+- Fresh result after refreshing Android artifact evidence: `complete=false`.
+- Passed items:
+  - live user-token Notion/Sheets authority proof
+  - workflow resume/cancel proof
+  - Android release artifacts are current for the latest pushed HEAD
+  - iOS export evidence exists
+- Still open:
+  - Android/iOS release is blocked by debug-signed APK, unsigned AAB, missing Android signing env, and missing Apple release env.
+  - Final visual/accessibility polish is partial: web/accessibility smokes pass, but full visual state matrix, native visual proof, responsive screenshots, and product-grade UI review remain open.
+
+## 2026-07-23 web visual state matrix proof
+
+- Added `scripts/quality/check-visual-state-matrix.mjs` and `npm run phase9:check:visual-state-matrix`.
+- The verifier checks durable desktop/mobile screenshots for Home, Food, record detail, collection, Chat, Sources, Settings, Config, Capture, Search and Health diagnostics, plus the existing web smoke and accessibility smoke results.
+- Fresh result: `npm run phase9:check:visual-state-matrix` ✅ with `22/22` screenshots; evidence `app/build/evidence/visual-state-matrix/visual-state-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit` after adding visual-matrix evidence. New rollup: `complete=false`, `5 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining completion blockers are now sharper: Android/iOS release signing/App Store env is blocked; final visual polish remains partial because native full-state matrix, tablet/foldable review and manual product-grade UI review are not complete.
+
+## 2026-07-23 native visual matrix proof
+
+- Added `scripts/quality/check-native-visual-matrix.sh` and `npm run phase9:check:native-visual-matrix`.
+- The verifier installs the release APK on the active emulator, opens native deep links, checks stable UI labels, and captures screenshot + UI XML evidence for Home, Food, record detail, Chat, Sources, Settings, and Capture.
+- Iterated label anchors to match native text rather than web-only headings:
+  - Food: `LIFEOS / FOOD` + `Green dal + rice`
+  - Record: `Record` + `Green dal + rice`
+  - Chat: `Ask about food records` + `Send`
+  - Sources: `LIFEOS / SOURCES` + `Food authority`
+  - Settings: `LIFEOS / CONNECTIONS` + `Control center`
+  - Capture: `LIFEOS / CAPTURE` + `Save capture`
+- Fresh result: `npm run phase9:check:native-visual-matrix` ✅ with `7/7` native routes; evidence `app/build/evidence/native-visual-matrix/native-visual-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `6 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining visual polish is now narrower: tablet/foldable review and manual product-grade UI review remain open; web visual matrix, Android native visual matrix, and accessibility smoke are proven.
+
+## 2026-07-23 tablet/foldable responsive visual matrix proof
+
+- Added `scripts/quality/check-responsive-visual-matrix.mjs` and `npm run phase9:check:responsive-visual-matrix`.
+- The verifier captures Home, Food, record detail, Chat, Sources, Config and Settings across four viewports: tablet portrait, tablet landscape, foldable portrait, foldable landscape.
+- First run found a brittle record-title assertion: the responsive record page hides `Green dal + rice` while still showing the meal-plan metadata and nutrition detail. Updated the anchor to `Meal plan · Meal plan · Thursday dinner` + `Nutrition profile`.
+- Fresh result: `npm run phase9:check:responsive-visual-matrix` ✅ with `28/28` screenshots and no horizontal overflow; evidence `app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `7 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining visual polish is now manual/product-grade review only; web, native Android and responsive tablet/foldable matrices are all proven.
+
+## 2026-07-23 performance budget proof
+
+- Added `scripts/quality/check-performance-budget.mjs` and `npm run phase9:check:performance-budget`.
+- The verifier checks current exported bundle sizes:
+  - web entry <= 2.2 MB
+  - web worker <= 300 KB
+  - Android Hermes bundle <= 4.5 MB
+  - iOS Hermes bundle <= 4.5 MB
+- Fresh result: `npm run phase9:check:performance-budget` ✅; evidence `app/build/evidence/performance/performance-budget.json`.
+- Re-ran `npm run phase9:check:completion-audit`: `complete=false`, `8 passed`, `1 partial`, `1 blocked`, `0 missing`.
+- Remaining non-release polish is now manual/product-grade UI review; release remains blocked by signing/App Store env.

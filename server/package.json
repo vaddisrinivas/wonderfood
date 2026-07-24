@@ -1,0 +1,19 @@
+{
+  "name": "wonderfood-lifeos-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LifeOS server runtimes and AI/action APIs (placeholder scaffold).",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "start:dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "fast-json-patch": "^3.1.1",
+    "json-logic-js": "^2.0.5",
+    "tsx": "^4.19.4",
+    "xstate": "^5.32.5",
+    "zod": "^4.4.3"
+  }
+}

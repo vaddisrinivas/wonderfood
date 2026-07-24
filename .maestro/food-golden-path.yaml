@@ -1,0 +1,66 @@
+appId: com.wonderfood.app
+name: Food golden path debug app
+---
+- launchApp:
+    clearState: true
+- openLink: wonderfood:///food
+- assertVisible:
+    id: food-screen
+- assertVisible: What should we cook next?
+- tapOn:
+    id: food-show-kitchen-lab
+- assertVisible: No meals yet. Add your first pantry item or load the demo household.
+- tapOn:
+    id: food-add-pantry
+- assertVisible: Added Baby spinach.
+- tapOn:
+    id: food-add-meal
+- assertVisible: Added Salmon rice bowls.
+- tapOn:
+    id: food-add-shopping
+- assertVisible: Added Rice vinegar.
+- tapOn:
+    id: food-tab-shop
+- assertVisible: Rice vinegar
+- tapOn: Toggle Rice vinegar
+- assertVisible: Rice vinegar is now in cart.
+- tapOn:
+    id: food-open-search
+- assertVisible:
+    id: food-search-screen
+- tapOn:
+    id: food-search-input
+- inputText: spinach
+- assertVisible: Baby spinach
+- tapOn: Open search result Baby spinach
+- assertVisible:
+    id: record-title-input
+- tapOn:
+    id: record-details-input
+- inputText: Maestro checked pantry edit
+- tapOn: Save changes
+- assertVisible: Saved locally in this view. Open Settings to connect a writable source.
+- back
+- openLink: wonderfood:///food
+- assertVisible:
+    id: food-screen
+- tapOn:
+    id: food-archive-first
+- assertVisible: Undo is available.
+- tapOn:
+    id: food-undo-archive
+- assertVisible: Undo complete. Record restored.
+- tapOn:
+    id: food-export-backup
+- assertVisible: Kitchen backup saved
+- tapOn:
+    id: food-restore-backup
+- assertVisible: Kitchen backup restored.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: wonderfood:///food
+- assertVisible:
+    id: food-screen
+- assertVisible: Salmon rice bowls
+- assertVisible: Baby spinach

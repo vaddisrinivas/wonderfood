@@ -107,6 +107,9 @@ def test_anthropic(working: list[dict], api_key: str | None) -> None:
             },
         )
         last = f"{model} status {status}"
+        if isinstance(status, int) and "credit balance is too low" in text.lower():
+            print(f"Anthropic\tBLOCKED_BILLING\t{last}")
+            return
         if isinstance(status, int) and 200 <= status < 300 and "ok" in text.lower():
             print(f"Anthropic\tOK\t{last}")
             working.append(
@@ -286,6 +289,13 @@ def available_provider_configs(env: dict[str, str]) -> list[dict]:
     return deduped
 
 
+def redact_config(config: dict) -> dict:
+    return {
+        key: ("<redacted>" if key == "api_key" and value else value)
+        for key, value in config.items()
+    } | {"api_key_present": bool(config.get("api_key"))}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -294,7 +304,7 @@ def main() -> int:
         default=[],
         help="Optional local env file. May be repeated; never commit these files.",
     )
-    parser.add_argument("--write-config", help="Optional path for working provider configs. Contains secrets; keep outside git.")
+    parser.add_argument("--write-config", help="Optional path for redacted provider configs. Secret values are never written.")
     parser.add_argument(
         "--write-config-mode",
         choices=["working", "available"],
@@ -338,7 +348,7 @@ def main() -> int:
     if args.write_config:
         output = Path(args.write_config)
         configs_to_write = working if args.write_config_mode == "working" else available_provider_configs(env)
-        output.write_text(json.dumps(configs_to_write))
+        output.write_text(json.dumps([redact_config(config) for config in configs_to_write]))
         os.chmod(output, 0o600)
         print(f"working_configs={len(working)} available_configs={len(available_provider_configs(env))} saved={output}")
     else:

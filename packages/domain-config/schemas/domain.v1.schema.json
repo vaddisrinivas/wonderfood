@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wonderfood.app/schemas/domain.v1.schema.json",
+  "title": "LifeOS domain package",
+  "type": "object",
+  "required": ["schema_version", "id", "label", "surfaces", "collections", "relations", "skills", "workflows", "data_homes", "mcp"],
+  "properties": {
+    "schema_version": { "const": "lifeos.domain.v1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "label": { "type": "string", "minLength": 1 },
+    "home_surface": { "type": "string" },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "collections"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "icon": { "type": "string" },
+          "image_url": { "type": "string" },
+          "views": { "type": "array", "items": { "type": "string" } },
+          "collections": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "collections": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "visual_identity": {
+      "type": "object",
+      "properties": {
+        "domain": { "$ref": "#/$defs/visual_token" },
+        "surfaces": { "$ref": "#/$defs/visual_token_map" },
+        "collections": { "$ref": "#/$defs/visual_token_map" },
+        "statuses": { "$ref": "#/$defs/visual_token_map" },
+        "actions": { "$ref": "#/$defs/visual_token_map" },
+        "sources": { "$ref": "#/$defs/visual_token_map" },
+        "skills": { "$ref": "#/$defs/visual_token_map" },
+        "agents": { "$ref": "#/$defs/visual_token_map" }
+      },
+      "additionalProperties": false
+    },
+    "relations": { "type": "array" },
+    "skills": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "workflows": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "data_homes": { "type": "array", "items": { "enum": ["notion", "google_sheets", "sqlite", "postgres"] }, "uniqueItems": true },
+    "rich_detail_schema": { "type": "string" },
+    "provider_template_fields": {
+      "type": "object",
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "rich_detail_json": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "relations_json": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "dashboard_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "surface", "title", "kind", "tone", "query", "href"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_:-]*$" },
+          "surface": { "type": "string" },
+          "title": { "type": "string", "minLength": 1 },
+          "subtitle": { "type": "string" },
+          "kind": { "enum": ["spotlight", "metric", "list", "action"] },
+          "tone": { "enum": ["neutral", "moss", "amber", "plum", "blue"] },
+          "size": { "enum": ["compact", "standard", "wide", "feature"] },
+          "query": {
+            "type": "object",
+            "properties": {
+              "collections": { "type": "array", "items": { "type": "string" } },
+              "match": { "type": "string" },
+              "limit": { "type": "integer", "minimum": 0, "maximum": 20 }
+            },
+            "additionalProperties": false
+          },
+          "href": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "render": {
+      "type": "object",
+      "properties": {
+        "answer_label": { "type": "string" },
+        "empty_intro": { "type": "string" },
+        "default_title": { "type": "string" },
+        "default_intro": { "type": "string" },
+        "default_columns": { "type": "array", "items": { "type": "string" } },
+        "default_fields": { "type": "array", "items": { "type": "string" } },
+        "card_bullets": { "type": "array", "items": { "type": "string" } },
+        "source_quote_fields": { "type": "array", "items": { "type": "string" } },
+        "source_exclude_fields": { "type": "array", "items": { "type": "string" } },
+        "intents": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "terms": { "type": "array", "items": { "type": "string" } },
+              "title": { "type": "string" },
+              "intro": { "type": "string" },
+              "columns": { "type": "array", "items": { "type": "string" } },
+              "fields": { "type": "array", "items": { "type": "string" } },
+              "boost_collections": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp": { "type": "object", "required": ["resources", "tools"] }
+  },
+  "$defs": {
+    "visual_token": {
+      "type": "object",
+      "properties": {
+        "icon": { "type": "string" },
+        "emoji": { "type": "string" },
+        "image_url": { "type": "string" },
+        "accent": { "enum": ["neutral", "moss", "amber", "plum", "blue"] }
+      },
+      "additionalProperties": false
+    },
+    "visual_token_map": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/visual_token" }
+    }
+  },
+  "additionalProperties": false
+}
