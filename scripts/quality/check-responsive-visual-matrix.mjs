@@ -2,8 +2,11 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
+const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 const baseUrl = process.env.LIFEOS_WEB_BASE_URL || 'http://127.0.0.1:8094';
 const outDir = join(root, 'app', 'build', 'evidence', 'responsive-visual-matrix');
 const chromeCandidates = [
@@ -102,6 +105,7 @@ await browser.close();
 const evidence = {
   proof: 'lifeos_responsive_visual_matrix',
   checked_at: new Date().toISOString(),
+  git: currentGit(root),
   status: results.every((result) => result.ok) ? 'passed' : 'failed',
   baseUrl,
   viewports,

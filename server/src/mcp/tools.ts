@@ -132,7 +132,9 @@ export type WorkflowExecutionResult = {
       tool: string;
       status: 'ok' | 'failed' | 'skipped' | 'cancelled';
       result: unknown;
+      output?: string;
     }[];
+    outputs?: Record<string, unknown>;
     changedRecords?: string[];
     error?: string;
     source_snapshot?: Record<string, unknown>;
@@ -142,6 +144,7 @@ export type WorkflowExecutionResult = {
     tool: string;
     status: 'ok' | 'failed' | 'skipped' | 'cancelled';
     result: unknown;
+    output?: string;
   }[];
   changedRecords: string[];
   checkpointRunId?: string;
@@ -152,10 +155,32 @@ export type WorkflowExecutionResult = {
 type ParsedWorkflowStepInput = {
   id: string;
   tool: string;
+  skill?: string;
   required: boolean;
   input: Record<string, unknown>;
+  input_from?: string[];
+  output?: string;
   [key: string]: unknown;
 };
+
+export type WorkflowDependencyResult = {
+  step_id: string;
+  output?: string;
+  result: unknown;
+};
+
+export type WorkflowInputBinding =
+  | {
+      ok: true;
+      input: Record<string, unknown>;
+      bindings: Record<string, unknown>;
+    }
+  | {
+      ok: false;
+      input: Record<string, unknown>;
+      bindings: Record<string, unknown>;
+      missing: string[];
+    };
 
 function getActionIdFromToolResult(result: ToolResult): string | null {
   if (!isObject(result.json)) {
@@ -684,6 +709,39 @@ function parseWorkflowStepInput(step: Record<string, unknown>, contextSeed: stri
   };
 }
 
+export function bindWorkflowStepInput(
+  step: {
+    input?: Record<string, unknown>;
+    input_from?: string[];
+  },
+  completed: readonly WorkflowDependencyResult[],
+): WorkflowInputBinding {
+  const explicitInput = isObject(step.input) ? step.input : {};
+  const bindings: Record<string, unknown> = {};
+  const missing: string[] = [];
+
+  for (const sourceId of step.input_from ?? []) {
+    const source = completed.find((entry) => entry.step_id === sourceId);
+    if (!source) {
+      missing.push(sourceId);
+      continue;
+    }
+    if (isObject(source.result)) {
+      Object.assign(bindings, source.result);
+    }
+    const bindingKey = source.output?.trim() || source.step_id;
+    bindings[bindingKey] = source.result;
+  }
+
+  const input = {
+    ...bindings,
+    ...explicitInput,
+  };
+  return missing.length > 0
+    ? { ok: false, input, bindings, missing }
+    : { ok: true, input, bindings };
+}
+
 function getContextSourceSnapshot(context: WorkflowExecutionContext): Record<string, unknown> {
   return {
     workflow_run_id: context.workflowRunId,
@@ -902,7 +960,23 @@ async function runWorkflowStep(
     };
   }
 
-  const tool = normalizeWorkflowToolName(ensureTool(toolInput.tool));
+  const declaredSkill = ensureTool(toolInput.skill);
+  const rawTool = ensureTool(toolInput.tool);
+  if (!rawTool && declaredSkill) {
+    // Skills are executable-data handoffs, not a second write path. They
+    // return a deterministic proposal payload for a later typed operation.
+    return {
+      status: 'ok',
+      tool: `skill:${declaredSkill}`,
+      stepResult: {
+        status: 'ok',
+        skill: declaredSkill,
+        input: isObject(toolInput.input) ? toolInput.input : {},
+      },
+      changedRecords: [],
+    };
+  }
+  const tool = normalizeWorkflowToolName(rawTool);
   if (!tool) {
     return {
       status: 'failed',
@@ -946,7 +1020,7 @@ async function runWorkflowStep(
     return {
       status: 'ok',
       tool,
-      stepResult: { count: records.length },
+      stepResult: { count: records.length, records },
       changedRecords: [],
     };
   }
@@ -1483,7 +1557,9 @@ export async function runWorkflow(
     tool: string;
     status: 'ok' | 'failed' | 'skipped' | 'cancelled';
     result: unknown;
+    output?: string;
   }> = [];
+  const completedOutputs: WorkflowDependencyResult[] = [];
   const changed: string[] = [];
   const isNested = options?.isNested === true;
   const executionSeed = options?.seed
@@ -1528,6 +1604,11 @@ export async function runWorkflow(
         contextSeed: executionSeed,
       }),
     );
+    const binding = bindWorkflowStepInput(parsed, completedOutputs);
+    const parsedWithBindings: ParsedWorkflowStepInput = {
+      ...parsed,
+      input: binding.input,
+    };
     const startedAt = new Date().toISOString();
     const stepSeed = buildWorkflowStepSeed({
       workflowId: workflow.id,
@@ -1536,12 +1617,22 @@ export async function runWorkflow(
       checkpointRunId,
       contextSeed: executionSeed,
     });
-    const resolved = await runWorkflowStep(parsed, actor, workflow, context, {
-      checkpointRunId,
-      isNested: true,
-      signal: options?.signal,
-      seed: stepSeed,
-    });
+    const resolved = binding.ok
+      ? await runWorkflowStep(parsedWithBindings, actor, workflow, context, {
+          checkpointRunId,
+          isNested: true,
+          signal: options?.signal,
+          seed: stepSeed,
+        })
+      : {
+          status: 'failed' as const,
+          tool: parsed.tool,
+          stepResult: {
+            error: `workflow dependencies missing: ${binding.missing.join(', ')}`,
+            missing_dependencies: binding.missing,
+          },
+          changedRecords: [],
+        };
     const finishedAt = new Date().toISOString();
     markWorkflowStep({
       runId: checkpointRunId,
@@ -1555,7 +1646,20 @@ export async function runWorkflow(
       finishedAt,
     });
 
-    stepReports.push({ id: parsed.id, tool: parsed.tool, status: resolved.status, result: resolved.stepResult });
+    stepReports.push({
+      id: parsed.id,
+      tool: parsed.tool,
+      status: resolved.status,
+      result: resolved.stepResult,
+      ...(typeof parsed.output === 'string' && parsed.output.trim() ? { output: parsed.output.trim() } : {}),
+    });
+    if (resolved.status === 'ok') {
+      completedOutputs.push({
+        step_id: parsed.id,
+        ...(typeof parsed.output === 'string' && parsed.output.trim() ? { output: parsed.output.trim() } : {}),
+        result: resolved.stepResult,
+      });
+    }
     for (const id of resolved.changedRecords) {
       changed.push(id);
       context.visitedRecords.add(id);
@@ -1683,6 +1787,11 @@ export async function runWorkflow(
     stepResult: {
       status: 'ok',
       details: stepReports,
+      outputs: Object.fromEntries(
+        completedOutputs
+          .filter((entry) => Boolean(entry.output))
+          .map((entry) => [entry.output!, entry.result]),
+      ),
       changedRecords: dedupeIds(changed),
       source_snapshot: buildWorkflowRunSourceSnapshot({
         workflowRunId: checkpointRunId,

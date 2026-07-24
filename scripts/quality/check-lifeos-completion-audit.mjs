@@ -2,19 +2,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { currentGit, readEvidence, validateEvidenceEnvelope, validateSha256Artifact } from './evidence-provenance.mjs';
 
 const root = process.cwd();
 const evidenceDir = join(root, 'app', 'build', 'evidence');
 const outPath = join(evidenceDir, 'lifeos-completion-audit.json');
 
 function readJson(relativePath) {
-  const path = join(root, relativePath);
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
-    return null;
-  }
+  return readEvidence(root, relativePath);
 }
 
 function git(args) {
@@ -55,7 +50,11 @@ function item(id, label, status, evidence, remaining = []) {
 
 const head = git(['rev-parse', '--short', 'HEAD']);
 const branch = git(['branch', '--show-current']);
+const current = currentGit(root);
 const providerAuthority = newestProviderAuthorityReceipt();
+const providerProvenance = providerAuthority
+  ? validateEvidenceEnvelope(root, providerAuthority.relative_path, providerAuthority.receipt, current)
+  : { valid: false, issues: ['evidence_missing_or_invalid_json'] };
 const workflow = readJson('app/build/evidence/workflow/workflow-resume-cancel-proof.json');
 const release = readJson('app/build/evidence/release-readiness.json');
 const accessibility = readJson('app/build/evidence/accessibility/accessibility-smoke.json');
@@ -68,16 +67,43 @@ const productPolish = readJson('app/build/evidence/product-polish/product-polish
 const androidArtifacts = readJson('app/build/evidence/android-release-artifacts.json');
 const iosExport = readJson('app/build/evidence/ios-export.json');
 
-const authorityPassed = providerAuthority?.receipt?.all_authority_checks_passed === true;
-const workflowPassed = workflow?.all_passed === true;
-const releaseReady = release?.release_ready === true;
-const visualSmokePassed = accessibility?.pass === true && webProduct?.pass === true;
-const visualMatrixPassed = visualMatrix?.status === 'passed';
-const nativeVisualMatrixPassed = nativeVisualMatrix?.status === 'passed';
-const responsiveVisualMatrixPassed = responsiveVisualMatrix?.status === 'passed';
-const performanceBudgetPassed = performanceBudget?.status === 'passed';
-const productPolishPassed = productPolish?.status === 'passed';
-const androidArtifactsCurrent = androidArtifacts?.git_head === head;
+const evidencePaths = {
+  workflow: 'app/build/evidence/workflow/workflow-resume-cancel-proof.json',
+  release: 'app/build/evidence/release-readiness.json',
+  accessibility: 'app/build/evidence/accessibility/accessibility-smoke.json',
+  webProduct: 'app/build/evidence/web-product-smoke/web-product-smoke.json',
+  visualMatrix: 'app/build/evidence/visual-state-matrix/visual-state-matrix.json',
+  nativeVisualMatrix: 'app/build/evidence/native-visual-matrix/native-visual-matrix.json',
+  responsiveVisualMatrix: 'app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json',
+  performanceBudget: 'app/build/evidence/performance/performance-budget.json',
+  productPolish: 'app/build/evidence/product-polish/product-polish-review.json',
+  androidArtifacts: 'app/build/evidence/android-release-artifacts.json',
+  iosExport: 'app/build/evidence/ios-export.json',
+};
+const provenance = Object.fromEntries(Object.entries(evidencePaths).map(([key, path]) => [key, validateEvidenceEnvelope(root, path, readJson(path), current)]));
+const androidArtifactContentIssues = androidArtifacts
+  ? validateSha256Artifact(root, androidArtifacts.apk).concat(validateSha256Artifact(root, androidArtifacts.aab))
+  : ['artifact_missing:android_release_artifacts'];
+if (androidArtifactContentIssues.length) {
+  provenance.androidArtifacts = {
+    ...(provenance.androidArtifacts ?? { valid: false, issues: [] }),
+    valid: false,
+    issues: [...(provenance.androidArtifacts?.issues ?? []), ...androidArtifactContentIssues],
+  };
+}
+const valid = (key) => provenance[key]?.valid === true;
+const provenanceRemaining = (key) => provenance[key]?.issues?.map((issue) => `evidence_provenance:${issue}`) ?? ['evidence_provenance:missing'];
+
+const authorityPassed = providerProvenance.valid && providerAuthority?.receipt?.all_authority_checks_passed === true;
+const workflowPassed = valid('workflow') && workflow?.all_passed === true;
+const releaseReady = valid('release') && release?.release_ready === true;
+const visualSmokePassed = valid('accessibility') && valid('webProduct') && accessibility?.pass === true && webProduct?.pass === true;
+const visualMatrixPassed = valid('visualMatrix') && visualMatrix?.status === 'passed';
+const nativeVisualMatrixPassed = valid('nativeVisualMatrix') && nativeVisualMatrix?.status === 'passed';
+const responsiveVisualMatrixPassed = valid('responsiveVisualMatrix') && responsiveVisualMatrix?.status === 'passed';
+const performanceBudgetPassed = valid('performanceBudget') && performanceBudget?.status === 'passed';
+const productPolishPassed = valid('productPolish') && productPolish?.status === 'passed';
+const androidArtifactsCurrent = valid('androidArtifacts') && provenance.androidArtifacts?.git_head === head;
 
 const items = [
   item(
@@ -85,49 +111,49 @@ const items = [
     'Live user-token Notion and Sheets authority proof',
     authorityPassed ? 'passed' : 'missing',
     providerAuthority?.relative_path ?? null,
-    authorityPassed ? [] : ['Run check:provider-standalone-authority with live Notion and Sheets credentials.'],
+    authorityPassed ? [] : providerProvenance.issues.map((issue) => `evidence_provenance:${issue}`).concat(['Run check:provider-standalone-authority with live Notion and Sheets credentials.']),
   ),
   item(
     'workflow_resume_cancel',
     'Workflow resume/cancel proof',
     workflowPassed ? 'passed' : 'missing',
     'app/build/evidence/workflow/workflow-resume-cancel-proof.json',
-    workflowPassed ? [] : ['Run phase7:check:workflow-resume-cancel and inspect all_passed.'],
+    workflowPassed ? [] : (provenanceRemaining('workflow').concat(['Run phase7:check:workflow-resume-cancel and inspect all_passed.'])),
   ),
   item(
     'android_ios_release',
     'Android/iOS release readiness',
     releaseReady ? 'passed' : 'blocked',
     'app/build/evidence/release-readiness.json',
-    releaseReady ? [] : (release?.blockers ?? ['release_readiness_evidence_missing']),
+    releaseReady ? [] : (provenanceRemaining('release').concat(release?.blockers ?? ['release_readiness_evidence_missing'])),
   ),
   item(
     'web_visual_state_matrix',
     'Web visual state matrix',
     visualMatrixPassed ? 'passed' : 'missing',
     'app/build/evidence/visual-state-matrix/visual-state-matrix.json',
-    visualMatrixPassed ? [] : ['Run phase9:check:visual-state-matrix after check:web-product and check:accessibility-smoke.'],
+    visualMatrixPassed ? [] : provenanceRemaining('visualMatrix').concat(['Run phase9:check:visual-state-matrix after check:web-product and check:accessibility-smoke.']),
   ),
   item(
     'native_visual_state_matrix',
     'Native visual state matrix',
     nativeVisualMatrixPassed ? 'passed' : 'missing',
     'app/build/evidence/native-visual-matrix/native-visual-matrix.json',
-    nativeVisualMatrixPassed ? [] : ['Run phase9:check:native-visual-matrix on an Android emulator with the release APK.'],
+    nativeVisualMatrixPassed ? [] : provenanceRemaining('nativeVisualMatrix').concat(['Run phase9:check:native-visual-matrix on an Android emulator with the release APK.']),
   ),
   item(
     'responsive_visual_state_matrix',
     'Tablet/foldable responsive visual matrix',
     responsiveVisualMatrixPassed ? 'passed' : 'missing',
     'app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json',
-    responsiveVisualMatrixPassed ? [] : ['Run phase9:check:responsive-visual-matrix against tablet/foldable viewports.'],
+    responsiveVisualMatrixPassed ? [] : provenanceRemaining('responsiveVisualMatrix').concat(['Run phase9:check:responsive-visual-matrix against tablet/foldable viewports.']),
   ),
   item(
     'performance_budget',
     'Performance budget',
     performanceBudgetPassed ? 'passed' : 'missing',
     'app/build/evidence/performance/performance-budget.json',
-    performanceBudgetPassed ? [] : ['Run phase9:check:performance-budget after web/android/iOS exports.'],
+    performanceBudgetPassed ? [] : provenanceRemaining('performanceBudget').concat(['Run phase9:check:performance-budget after web/android/iOS exports.']),
   ),
   item(
     'final_visual_accessibility_polish',
@@ -157,14 +183,14 @@ const items = [
     'Android release artifacts match current HEAD',
     androidArtifactsCurrent ? 'passed' : 'blocked',
     'app/build/evidence/android-release-artifacts.json',
-    androidArtifactsCurrent ? [] : ['Run phase8:check:android-release-artifacts after the latest commit.'],
+    androidArtifactsCurrent ? [] : provenanceRemaining('androidArtifacts').concat(['Run phase8:check:android-release-artifacts after the latest commit.']),
   ),
   item(
     'ios_export_present',
     'iOS export evidence exists',
-    iosExport?.status === 'passed' ? 'passed' : 'missing',
+    valid('iosExport') && iosExport?.status === 'passed' ? 'passed' : 'missing',
     'app/build/evidence/ios-export.json',
-    iosExport?.status === 'passed' ? [] : ['Run check:ios-export.'],
+    valid('iosExport') && iosExport?.status === 'passed' ? [] : provenanceRemaining('iosExport').concat(['Run check:ios-export.']),
   ),
 ];
 
@@ -185,7 +211,9 @@ const payload = {
   },
   items,
   no_secret_values_written: true,
+  evidence_provenance: provenance,
 };
+payload.evidence_provenance.providerAuthority = providerProvenance;
 
 mkdirSync(evidenceDir, { recursive: true });
 writeFileSync(outPath, JSON.stringify(payload, null, 2));

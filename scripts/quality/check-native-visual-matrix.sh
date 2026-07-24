@@ -6,6 +6,7 @@ sdk_dir="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 emulator_bin="$sdk_dir/emulator/emulator"
 adb_bin="$sdk_dir/platform-tools/adb"
 avd_name="${LIFEOS_EMULATOR_AVD:-Pixel_3a_API_34_extension_level_7_arm64-v8a}"
+requested_serial="${LIFEOS_ANDROID_SERIAL:-${ANDROID_SERIAL:-}}"
 package_name="com.wonderfood.app"
 activity="$package_name/.MainActivity"
 apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
@@ -23,8 +24,15 @@ fail() {
 [[ -f "$apk" ]] || fail "release APK missing: $apk"
 
 "$adb_bin" start-server >/dev/null
-serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
-if [[ -z "$serial" ]]; then
+serial=""
+if [[ -n "$requested_serial" ]]; then
+  state="$("$adb_bin" -s "$requested_serial" get-state 2>/dev/null || true)"
+  [[ "$state" == "device" ]] || fail "requested Android device is not connected and ready: $requested_serial"
+  serial="$requested_serial"
+else
+  serial="$("$adb_bin" devices | awk '$2 == "device" { print $1; exit }')"
+fi
+if [[ -z "$serial" && -z "$requested_serial" ]]; then
   log_file="$(mktemp -t lifeos-native-visual.XXXXXX)"
   "$emulator_bin" -avd "$avd_name" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
   for _ in $(seq 1 120); do
@@ -49,7 +57,7 @@ routes=(
   "home|wonderfood:///|LIFEOS / HOME|Green dal + rice"
   "food|wonderfood:///food|LIFEOS / FOOD|Green dal + rice"
   "record-green-dal|wonderfood:///record/meal-green-dal|Record|Green dal + rice"
-  "chat|wonderfood:///chat|Ask about food records|Send"
+  "chat|wonderfood:///chat|Chat message|Send"
   "sources|wonderfood:///sources|LIFEOS / SOURCES|Food authority"
   "settings|wonderfood:///settings|LIFEOS / CONNECTIONS|Control center"
   "capture|wonderfood:///capture|LIFEOS / CAPTURE|Save capture"
@@ -86,13 +94,18 @@ for entry in "${routes[@]}"; do
 done
 
 git_head="$(git -C "$root_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+git_tree="$(git -C "$root_dir" rev-parse HEAD^{tree} 2>/dev/null || echo unknown)"
+git_branch="$(git -C "$root_dir" branch --show-current 2>/dev/null || echo unknown)"
+dirty_status="$(git -C "$root_dir" status --porcelain=v1 2>/dev/null || true)"
+dirty="false"; [[ -n "$dirty_status" ]] && dirty="true"
+dirty_diff_hash="$(printf '%s' "$dirty_status" | shasum -a 256 | awk '{print $1}')"
 checked_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 route_json="${route_json%,}"
 cat >"$json" <<JSON
 {
   "proof": "lifeos_native_visual_matrix",
   "checked_at": "$checked_at",
-  "git_head": "$git_head",
+  "git": { "branch": "$git_branch", "head": "$git_head", "tree": "$git_tree", "dirty": $dirty, "dirty_diff_hash": "$dirty_diff_hash" },
   "avd": "$avd_name",
   "serial": "$serial",
   "package": "$package_name",

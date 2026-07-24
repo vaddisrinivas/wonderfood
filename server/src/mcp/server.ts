@@ -2,8 +2,8 @@ import { callMcpTool, listMcpTools } from './tools';
 import { listMcpResources, readMcpResource, resolveResourceMimeType } from './resources';
 import { isMcpToolAllowed, isMcpToolReadOnly } from './policy';
 import { isMcpToolAuthorized } from './auth';
+import { isAllowedMcpOrigin, isMcpProtocolVersion, negotiateMcpProtocolVersion } from './protocol-compat';
 
-const MCP_PROTOCOL_VERSION = '2026-03-11';
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
 const MCP_SERVER_VERSION = '1.0.0';
 
@@ -228,7 +228,7 @@ async function responseFor(request: JsonRpcRequest, headers: HeaderMap): Promise
     ? request.params
     : {};
 
-  if (typeof method !== 'string' || !method) {
+  if (request.jsonrpc !== '2.0' || typeof method !== 'string' || !method) {
     return { jsonrpc: '2.0', id: requestId, error: { code: -32600, message: 'Invalid request' } };
   }
 
@@ -241,7 +241,7 @@ async function responseFor(request: JsonRpcRequest, headers: HeaderMap): Promise
       jsonrpc: '2.0',
       id: requestId,
       result: {
-        protocolVersion: MCP_PROTOCOL_VERSION,
+        protocolVersion: negotiateMcpProtocolVersion(params.protocolVersion),
         capabilities: { tools: {}, resources: {} },
         serverInfo: { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
       },
@@ -345,6 +345,24 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
       { jsonrpc: '2.0', error: { code: -405, message: 'Method not allowed. Use POST.' } },
       405,
     );
+    return true;
+  }
+
+  const origin = Array.isArray(req.headers?.origin) ? req.headers.origin[0] : req.headers?.origin;
+  const configuredOrigins = String(process.env.LIFEOS_MCP_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!isAllowedMcpOrigin(origin, configuredOrigins)) {
+    writeJson(res, { jsonrpc: '2.0', error: { code: -32002, message: 'Origin not allowed' } }, 403);
+    return true;
+  }
+
+  const protocolHeader = Array.isArray(req.headers?.['mcp-protocol-version'])
+    ? req.headers['mcp-protocol-version'][0]
+    : req.headers?.['mcp-protocol-version'];
+  if (protocolHeader !== undefined && !isMcpProtocolVersion(protocolHeader)) {
+    writeJson(res, { jsonrpc: '2.0', error: { code: -32602, message: 'Unsupported MCP-Protocol-Version' } }, 400);
     return true;
   }
 

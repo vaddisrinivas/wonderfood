@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { basename, dirname, join } from 'node:path';
 import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
 import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
+import { executeQuery, QueryPredicate, QuerySort } from '../kernel/query';
+import { notifyOperationCommit } from '../kernel/operation-observer';
 
 type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
 
@@ -31,6 +33,8 @@ export type McpRecord = {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Monotonic canonical revision. Legacy records may omit it until rewritten. */
+  revision?: number;
 };
 
 type ActionState = {
@@ -56,6 +60,10 @@ export type ActionEvent = {
   conversation_id: string | null;
   source_ids: string[];
   command: string;
+  /** Causal links shared by action, operation, effect and verification records. */
+  operation_id: string;
+  cause_id: string;
+  expected_revision: number | null;
 };
 
 type PersistedStore = {
@@ -73,6 +81,10 @@ export type WorkflowStep = {
   id: string;
   action?: string;
   tool?: string;
+  skill?: string;
+  input?: Record<string, unknown>;
+  input_from?: string[];
+  output?: string;
   required?: boolean;
   [key: string]: unknown;
 };
@@ -82,6 +94,7 @@ export type WorkflowDocument = {
   id: string;
   domain: string;
   label: string;
+  trigger?: Record<string, unknown>;
   steps: WorkflowStep[];
   write_policy: string;
   [key: string]: unknown;
@@ -150,7 +163,14 @@ function loadStore(): PersistedStore {
       version: 1,
       updated_at: String(parsed.updated_at),
       records: parsed.records as Record<string, McpRecord>,
-      actions: parsed.actions as Record<string, ActionEvent>,
+      actions: Object.fromEntries(
+        Object.entries(parsed.actions as Record<string, ActionEvent>).map(([id, action]) => [id, {
+          ...action,
+          operation_id: action.operation_id || `${action.id || id}:operation`,
+          cause_id: action.cause_id || action.id || id,
+          expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
+        }]),
+      ),
     };
   } catch {
     return {
@@ -280,6 +300,7 @@ function normalizeRecord(
     archived_at: typeof record.archived_at === 'string' && record.archived_at.trim().length > 0 ? record.archived_at : null,
     created_at: record.created_at ?? nowIso(),
     updated_at: record.updated_at ?? nowIso(),
+    revision: typeof record.revision === 'number' && Number.isInteger(record.revision) && record.revision >= 0 ? record.revision : 0,
   };
 }
 
@@ -295,6 +316,7 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
       title: next.title || exists.title,
       created_at: createdAt,
       updated_at: nowIso(),
+      revision: (exists.revision ?? 0) + 1,
       archived_at: next.archived_at ?? exists.archived_at,
     };
   } else {
@@ -303,6 +325,7 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
       id: next.id,
       created_at: nowIso(),
       updated_at: nowIso(),
+      revision: next.revision ?? 1,
     };
   }
 
@@ -359,6 +382,7 @@ function parseWorkflowDocument(raw: unknown, fallbackDomain: string): WorkflowDo
     id?: unknown;
     domain?: unknown;
     label?: unknown;
+    trigger?: unknown;
     steps?: unknown;
     write_policy?: unknown;
   };
@@ -393,8 +417,19 @@ function parseWorkflowDocument(raw: unknown, fallbackDomain: string): WorkflowDo
       if (typeof (step as { action?: unknown }).action === 'string') {
         parsed.action = String((step as { action: string }).action);
       }
+      if (typeof (step as { skill?: unknown }).skill === 'string') {
+        parsed.skill = String((step as { skill: string }).skill);
+      }
       if (typeof (step as { input?: unknown }).input === 'object' && (step as { input: unknown }).input !== null) {
         parsed.input = (step as { input: Record<string, unknown> }).input;
+      }
+      if (Array.isArray((step as { input_from?: unknown }).input_from)) {
+        parsed.input_from = (step as { input_from: unknown[] }).input_from
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+          .map((id) => id.trim());
+      }
+      if (typeof (step as { output?: unknown }).output === 'string') {
+        parsed.output = String((step as { output: string }).output);
       }
       if (typeof (step as { required?: unknown }).required === 'boolean') {
         parsed.required = (step as { required: boolean }).required;
@@ -413,6 +448,7 @@ function parseWorkflowDocument(raw: unknown, fallbackDomain: string): WorkflowDo
     domain:
       typeof candidate.domain === 'string' && candidate.domain.trim().length > 0 ? candidate.domain.trim() : fallbackDomain,
     label: candidate.label.trim(),
+    ...(isObject(candidate.trigger) ? { trigger: { ...candidate.trigger } } : {}),
     steps,
     write_policy: candidate.write_policy.trim(),
   };
@@ -475,6 +511,9 @@ function loadCatalogWorkflows(): WorkflowDocument[] {
 function cloneActionEvent(action: ActionEvent): ActionEvent {
   return {
     ...action,
+    operation_id: action.operation_id || `${action.id}:operation`,
+    cause_id: action.cause_id || action.id,
+    expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
     record_ids: [...action.record_ids],
     source_ids: [...action.source_ids],
   };
@@ -486,6 +525,9 @@ export function listRecords(input: {
   includeArchived?: boolean;
   query?: string;
   limit?: number;
+  offset?: number;
+  where?: QueryPredicate;
+  orderBy?: QuerySort[];
 }) {
   const items = Object.values(store.records)
     .filter((record) => {
@@ -514,7 +556,20 @@ export function listRecords(input: {
     })
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
-  return typeof input.limit === 'number' && input.limit > 0 ? items.slice(0, input.limit) : items;
+  const result = executeQuery(items as unknown as Record<string, unknown>[], {
+    from: 'records',
+    where: input.where,
+    orderBy: input.orderBy,
+    limit: input.limit,
+    offset: input.offset,
+    getField: (row, field) => {
+      if (field.startsWith('properties.')) return row.properties && typeof row.properties === 'object'
+        ? (row.properties as Record<string, unknown>)[field.slice('properties.'.length)]
+        : undefined;
+      return row[field];
+    },
+  });
+  return result.rows as unknown as McpRecord[];
 }
 
 export function findRecord(id: string) {
@@ -698,6 +753,15 @@ export function createRecordWithAction(input: {
   );
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record }, { persist: false }) ?? actionSeed;
   persistStore();
+  notifyOperationCommit({
+    actionId: action.id,
+    operationId: action.operation_id,
+    causeId: action.cause_id,
+    domain: action.domain,
+    recordId: record.id,
+    before: input.before ?? null,
+    after: record,
+  });
   return {
     action,
     record,
@@ -723,6 +787,9 @@ export function updateRecordWithAction(input: {
     before?: unknown;
     record_id?: string;
   };
+  expectedRevision?: number;
+  operationId?: string;
+  causeId?: string;
 }): ActionWriteResult {
   const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
   const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
@@ -760,6 +827,34 @@ export function updateRecordWithAction(input: {
         ),
       replayed: false,
     };
+  }
+
+  if (input.expectedRevision !== undefined && (previous.revision ?? 0) !== input.expectedRevision) {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      },
+      { persist: false },
+    );
+    const failed = markActionFailed(action.id, 'revision conflict', { persist: false }) ?? action;
+    persistStore();
+    return { action: failed, record: previous, replayed: false };
   }
 
   const updated = updateRecord(
@@ -815,11 +910,23 @@ export function updateRecordWithAction(input: {
       undoPayload,
       sourceIds: input.sourceIds,
       conversationId: input.conversationId ?? null,
+      operationId: input.operationId,
+      causeId: input.causeId,
+      expectedRevision: input.expectedRevision,
     },
     { persist: false },
   );
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: updated.after }, { persist: false }) ?? actionSeed;
   persistStore();
+  notifyOperationCommit({
+    actionId: action.id,
+    operationId: action.operation_id,
+    causeId: action.cause_id,
+    domain: action.domain,
+    recordId: updated.after.id,
+    before: updated.before,
+    after: updated.after,
+  });
   return {
     action,
     record: updated.after,
@@ -920,6 +1027,16 @@ export function archiveRecordWithAction(input: {
   }
   persistStore();
 
+  notifyOperationCommit({
+    actionId: action.id,
+    operationId: action.operation_id,
+    causeId: action.cause_id,
+    domain: action.domain,
+    recordId: resolvedAfter.id,
+    before: archived.before,
+    after: resolvedAfter,
+  });
+
   return {
     action,
     record: resolvedAfter,
@@ -956,6 +1073,9 @@ export function createActionEvent(input: {
   status?: ActionState['status'];
   sourceIds?: string[];
   conversationId?: string | null;
+  operationId?: string;
+  causeId?: string;
+  expectedRevision?: number;
 }, options: PersistOptions = {}): ActionEvent {
   const now = nowIso();
   const idempotencyKey = input.idempotencyKey?.trim() || null;
@@ -986,6 +1106,9 @@ export function createActionEvent(input: {
     conversation_id: input.conversationId ?? null,
     source_ids: input.sourceIds ?? [],
     command: input.command,
+    operation_id: input.operationId?.trim() || `${input.id}:operation`,
+    cause_id: input.causeId?.trim() || input.id,
+    expected_revision: input.expectedRevision ?? null,
   };
 
   store.actions[event.id] = event;

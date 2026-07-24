@@ -272,6 +272,8 @@ ${contextSourceText}`;
           actionRun.receipt.status === 'completed' &&
           actionRun.receipt.tool !== 'chat_reply' &&
           actionRun.receipt.record_ids.length > 0,
+        actualStatus: actionRun.receipt.status,
+        actualRecordIds: actionRun.receipt.record_ids,
       })
     : null;
 

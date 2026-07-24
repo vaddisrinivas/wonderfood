@@ -1,5 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { currentGit } from './evidence-provenance.mjs';
+import { execFileSync } from 'node:child_process';
 
 import { MemoryDb } from '../../tests/helpers/memory-db';
 import {
@@ -150,6 +152,7 @@ function persistedRestart(source: MemoryDb) {
   writeFileSync(outPath, JSON.stringify({
     proof: 'workflow_resume_cancel',
     checked_at: new Date().toISOString(),
+    git: currentGit(process.cwd()),
     run_id: runId,
     restarted_from_persisted_row: true,
     cancel_guard_rejected_step_before_resume: true,

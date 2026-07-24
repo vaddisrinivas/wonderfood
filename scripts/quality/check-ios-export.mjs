@@ -2,8 +2,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
+const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 const distDir = join(root, 'dist', 'ios');
 const evidenceDir = join(root, 'app', 'build', 'evidence');
 const evidencePath = join(evidenceDir, 'ios-export.json');
@@ -40,8 +42,10 @@ if (expo.ios?.buildNumber !== '1') throw new Error('iOS buildNumber mismatch');
 if (expo.scheme !== 'wonderfood') throw new Error('Deep link scheme mismatch');
 
 const evidence = {
+  proof: 'lifeos_ios_export',
   status: 'passed',
   checked_at: new Date().toISOString(),
+  git: currentGit(root),
   platform: 'ios',
   app_name: expo.name,
   bundle_identifier: expo.ios.bundleIdentifier,

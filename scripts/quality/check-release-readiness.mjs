@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
 const evidenceDir = join(root, 'app', 'build', 'evidence');
@@ -42,13 +43,14 @@ const androidArtifacts = readJson(join(evidenceDir, 'android-release-artifacts.j
 const iosExport = readJson(join(evidenceDir, 'ios-export.json'));
 const head = git(['rev-parse', '--short', 'HEAD']) || 'unknown';
 const branch = git(['branch', '--show-current']) || 'unknown';
+const artifactHead = androidArtifacts?.git?.head || androidArtifacts?.git_head;
 const missingAndroidEnv = androidEnvNames.filter((name) => !androidEnv[name]);
 const missingAppleEnv = appleEnvNames.filter((name) => !appleEnv[name]);
 const keystorePath = process.env.ANDROID_KEYSTORE_PATH?.trim() || '';
 
 const checks = {
   android_release_artifacts_present: androidArtifacts?.status === 'passed',
-  android_artifacts_current_head: androidArtifacts?.git_head === head,
+  android_artifacts_current_head: artifactHead === head,
   android_apk_release_signed: androidArtifacts?.apk?.signing === 'release',
   android_aab_signed: androidArtifacts?.aab?.signed === true,
   android_signing_env_present: missingAndroidEnv.length === 0,
@@ -70,7 +72,7 @@ if (!checks.ios_release_env_present) blockers.push('ios_release_env_missing');
 const payload = {
   proof: 'lifeos_release_readiness',
   checked_at: new Date().toISOString(),
-  git: { branch, head },
+  git: currentGit(root),
   release_ready: blockers.length === 0,
   blockers,
   checks,

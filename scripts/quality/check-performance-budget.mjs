@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
 const outDir = join(root, 'app', 'build', 'evidence', 'performance');
@@ -65,10 +66,7 @@ const passed = missing.length === 0 && overBudget.length === 0;
 const payload = {
   proof: 'lifeos_performance_budget',
   checked_at: new Date().toISOString(),
-  git: {
-    branch: git(['branch', '--show-current']),
-    head: git(['rev-parse', '--short', 'HEAD']),
-  },
+  git: currentGit(root),
   status: passed ? 'passed' : 'failed',
   budgets,
   measured,

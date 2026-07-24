@@ -21,9 +21,12 @@ PROVIDER_WRITEBACK_OUT="$OUT_DIR" NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-/tmp/won
 
 PROVIDER_VISUAL_OUT="$OUT_DIR" python3 - <<'PY'
 import glob
+import hashlib
 import html
 import json
 import os
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 out_dir = Path(os.environ["PROVIDER_VISUAL_OUT"])
@@ -93,6 +96,14 @@ checks = {
 
 payload = {
     "proof": "provider_standalone_authority_receipt",
+    "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "git": {
+        "branch": subprocess.check_output(["git", "branch", "--show-current"], text=True).strip(),
+        "head": subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip(),
+        "tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
+        "dirty": bool(subprocess.check_output(["git", "status", "--porcelain=v1"], text=True).strip()),
+        "dirty_diff_hash": hashlib.sha256(subprocess.check_output(["git", "status", "--porcelain=v1"], text=True).encode()).hexdigest(),
+    },
     "captured_at": writeback.get("captured_at") or sheets.get("captured_at") or notion.get("captured_at"),
     "notion_evidence": notion_path.name,
     "sheets_evidence": sheets_path.name,

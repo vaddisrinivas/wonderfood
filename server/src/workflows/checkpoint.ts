@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { transitionWorkflow, WorkflowControlEvent, WorkflowControlState } from './control-machine';
 
 type WorkflowCheckpointStepStatus = 'ok' | 'failed' | 'skipped' | 'cancelled';
-type WorkflowCheckpointRunStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'compensated';
+type WorkflowCheckpointRunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'compensating' | 'compensated';
 
 export type WorkflowStepCheckpoint = {
   id: string;
@@ -205,6 +206,14 @@ export function completeWorkflowCheckpoint(
     return;
   }
 
+  const event: WorkflowControlEvent = opts.status === 'completed'
+    ? 'COMPLETE'
+    : opts.status === 'failed' ? 'FAIL' : 'CANCEL';
+  const next = transitionWorkflow(run.status as WorkflowControlState, event);
+  if (next !== opts.status) {
+    throw new Error(`Invalid workflow transition ${run.status} -> ${opts.status}`);
+  }
+
   run.status = opts.status;
   run.updated_at = nowIso();
   run.finished_at = nowIso();
@@ -217,12 +226,38 @@ export function completeWorkflowCheckpoint(
   persist();
 }
 
+export function pauseWorkflowCheckpoint(runId: string): void {
+  transitionCheckpoint(runId, 'PAUSE', 'paused');
+}
+
+export function resumeWorkflowCheckpoint(runId: string): void {
+  transitionCheckpoint(runId, 'RESUME', 'running');
+}
+
+function transitionCheckpoint(runId: string, event: WorkflowControlEvent, expected: WorkflowCheckpointRunStatus) {
+  load();
+  const run = store.runs[runId];
+  if (!run) return;
+  const next = transitionWorkflow(run.status as WorkflowControlState, event);
+  if (next !== expected) throw new Error(`Invalid workflow transition ${run.status} -> ${expected}`);
+  run.status = expected;
+  run.updated_at = nowIso();
+  persist();
+}
+
 export function finalizeWorkflowCompensated(runId: string, message?: string) {
   load();
   const run = store.runs[runId];
   if (!run) {
     return;
   }
+  if (run.status === 'failed') {
+    const compensating = transitionWorkflow('failed', 'COMPENSATE');
+    if (compensating !== 'compensating') throw new Error('Invalid workflow compensation transition');
+    run.status = 'compensating';
+  }
+  const compensated = transitionWorkflow(run.status as WorkflowControlState, 'COMPENSATED');
+  if (compensated !== 'compensated') throw new Error(`Invalid workflow transition ${run.status} -> compensated`);
   run.status = 'compensated';
   run.updated_at = nowIso();
   run.finished_at = nowIso();

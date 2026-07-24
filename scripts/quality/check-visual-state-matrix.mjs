@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
 const smokeDir = join(root, 'app', 'build', 'evidence', 'web-product-smoke');
 const outDir = join(root, 'app', 'build', 'evidence', 'visual-state-matrix');
 const outPath = join(outDir, 'visual-state-matrix.json');
+const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 
 function readJson(relativePath) {
   const path = join(root, relativePath);
@@ -58,6 +61,7 @@ const passed = missing.length === 0 && webSmokePassed && accessibilityPassed;
 const payload = {
   proof: 'lifeos_visual_state_matrix',
   checked_at: new Date().toISOString(),
+  git: currentGit(root),
   status: passed ? 'passed' : 'failed',
   scope: 'web_visual_matrix_plus_accessibility_smoke',
   required_screens: requiredScreens,

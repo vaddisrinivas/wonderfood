@@ -33,6 +33,7 @@ import {
 } from './chat-storage';
 import { ChatStreamEvent } from './responses';
 import { getActionEvent, runUndo } from './mcp/state';
+import { installReactiveRuntime } from './kernel/install-reactive-runtime';
 import {
   deleteHealthSnapshot,
   exportHealthSnapshots,
@@ -46,6 +47,8 @@ const idempotencyCache = new Map<string, { messageId: string; runId: string; con
 const runStatus = new Map<string, { status: 'running' | 'completed' | 'cancelled' | 'failed'; controller: AbortController; conversationId: string }>();
 const runByConversation = new Map<string, string>();
 const previousResponseByConversation = new Map<string, string>();
+
+installReactiveRuntime();
 
 const DEFAULT_AUTH_TOKEN = process.env.LIFEOS_SERVER_TOKEN;
 const CORS_ORIGINS = new Set(

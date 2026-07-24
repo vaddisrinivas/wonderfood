@@ -2,10 +2,13 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
+import { currentGit } from './evidence-provenance.mjs';
 
 const root = process.cwd();
 const baseUrl = process.env.LIFEOS_WEB_BASE_URL || 'http://127.0.0.1:8094';
 const outDir = join(root, 'app', 'build', 'evidence', 'web-product-smoke');
+const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 const chromeCandidates = [
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -462,9 +465,11 @@ for (const viewport of viewports) {
 await browser.close();
 
 const evidence = {
+  proof: 'lifeos_web_product_smoke',
   pass: results.every((result) => result.ok),
   baseUrl,
-  checkedAt: new Date().toISOString(),
+  checked_at: new Date().toISOString(),
+  git: currentGit(root),
   results,
 };
 
