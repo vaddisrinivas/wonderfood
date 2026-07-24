@@ -71,6 +71,24 @@ export function buildAppPackageFromManifest(
       collections,
       queries,
       views,
+      presentation: {
+        label: manifest.label,
+        ...(manifest.home_surface ? { homeSurface: manifest.home_surface } : {}),
+        surfaces: manifest.surfaces.map((surface) => ({
+          id: surface.id,
+          label: surface.label,
+          ...(surface.icon ? { icon: surface.icon } : {}),
+          ...(surface.image_url ? { imageUrl: surface.image_url } : {}),
+          ...(surface.views ? { views: surface.views } : {}),
+          collections: [...surface.collections],
+        })),
+        ...(manifest.visual_identity ? { visualIdentity: cleanJson(manifest.visual_identity) as Record<string, unknown> } : {}),
+        ...(manifest.dashboard_blocks ? { dashboardBlocks: cleanJson(manifest.dashboard_blocks) as Record<string, unknown>[] } : {}),
+        ...(manifest.render ? { render: cleanJson(manifest.render) as Record<string, unknown> } : {}),
+        ...(manifest.rich_detail_schema ? { richDetailSchema: manifest.rich_detail_schema } : {}),
+        ...(manifest.provider_template_fields ? { providerTemplateFields: cleanJson(manifest.provider_template_fields) as Record<string, unknown> } : {}),
+        sourceSchemaVersion: manifest.schema_version,
+      },
       rules: [],
       capabilities: [
         ...manifest.data_homes.map((home) => `data-home:${home}`),
@@ -85,6 +103,18 @@ export function buildAppPackageFromManifest(
     },
     warnings,
   };
+}
+
+function cleanJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cleanJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, child]) => child !== undefined)
+        .map(([key, child]) => [key, cleanJson(child)]),
+    );
+  }
+  return value;
 }
 
 function providerFields(manifest: DomainManifest): CollectionSpec['fields'] {

@@ -62,6 +62,7 @@ export const appPackageSchema = {
         },
       },
     },
+    presentation: { $ref: '#/$defs/presentation' },
     computedFields: {
       type: 'array',
       items: {
@@ -96,6 +97,47 @@ export const appPackageSchema = {
     },
   },
   $defs: {
+    jsonValue: {
+      anyOf: [
+        { type: 'null' },
+        { type: 'string' },
+        { type: 'number' },
+        { type: 'boolean' },
+        { type: 'array', items: { $ref: '#/$defs/jsonValue' } },
+        { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
+      ],
+    },
+    presentation: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['label', 'surfaces'],
+      properties: {
+        label: { type: 'string', minLength: 1 },
+        homeSurface: { type: 'string', minLength: 1 },
+        surfaces: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'label', 'collections'],
+            properties: {
+              id: { type: 'string', minLength: 1 },
+              label: { type: 'string', minLength: 1 },
+              icon: { type: 'string' },
+              imageUrl: { type: 'string' },
+              views: { type: 'array', items: { type: 'string' } },
+              collections: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        visualIdentity: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
+        dashboardBlocks: { type: 'array', items: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } } },
+        render: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
+        richDetailSchema: { type: 'string', minLength: 1 },
+        providerTemplateFields: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
+        sourceSchemaVersion: { type: 'string', minLength: 1 },
+      },
+    },
     viewLayout: {
       type: 'object',
       additionalProperties: false,

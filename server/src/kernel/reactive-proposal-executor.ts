@@ -35,8 +35,12 @@ export type ReactiveProposalApprovalReceipt = Readonly<{
   approver: string;
   authority: string;
   proposalId: string;
+  idempotencyKey: string;
+  operationId: string;
+  operationHash: string;
   proposalHash: string;
   operationTemplateHash: string;
+  localActor: string;
   approvedAt: string;
   expiresAt?: string;
   revoked?: boolean;
@@ -99,7 +103,7 @@ function executeReactiveProposalInternal(
     return { ok: true, receipt: { actionId: verifiedAction.id, idempotencyKey: envelope.idempotencyKey, replayed: true, status: verifiedAction.status, verification: refreshed } };
   }
 
-  const approval = input.approval ? validateApproval(input.approval, item) : { ok: false as const, error: 'proposal_approval_required' };
+  const approval = input.approval ? validateApproval(input.approval, item, actor) : { ok: false as const, error: 'proposal_approval_required' };
   if (input.approval && !approval.ok) return { ok: false, error: approval.error };
 
   if (!commandPreview.ok || (envelope.review.required && !approval.ok)) {
@@ -245,6 +249,8 @@ function executeApprovedCommand(input: {
         archived_at: null,
       },
       idempotencyKey: envelope.idempotencyKey,
+      operationId: operationIdForProposal(input.item),
+      causeId: envelope.causeId,
       before: { proposal: envelope, commandPreview: input.commandPreview },
       undoPayload: { operation: 'delete_record', record_id: recordId },
     });
@@ -270,7 +276,7 @@ function executeApprovedCommand(input: {
       source: input.source,
       expectedRevision: template.expectedRevision,
       idempotencyKey: envelope.idempotencyKey,
-      operationId: `proposal:${input.item.proposalId}:operation`,
+      operationId: operationIdForProposal(input.item),
       causeId: envelope.causeId,
     });
     return { ...write, verification: verifyForAction({ item: input.item, actionId: write.action.id, operationId: write.action.operation_id, beforeRevision, providerWriteback: input.providerWriteback }) };
@@ -290,7 +296,7 @@ function executeApprovedCommand(input: {
         after: null,
         undoPayload: null,
         status: 'failed',
-        operationId: `proposal:${input.item.proposalId}:operation`,
+        operationId: operationIdForProposal(input.item),
         causeId: envelope.causeId,
       }),
       replayed: false,
@@ -310,7 +316,7 @@ function executeApprovedCommand(input: {
     source: input.source,
     expectedRevision: template.expectedRevision,
     idempotencyKey: envelope.idempotencyKey,
-    operationId: `proposal:${input.item.proposalId}:operation`,
+    operationId: operationIdForProposal(input.item),
     causeId: envelope.causeId,
   });
   return { ...write, verification: verifyForAction({ item: input.item, actionId: write.action.id, operationId: write.action.operation_id, beforeRevision, providerWriteback: input.providerWriteback }) };
@@ -624,16 +630,33 @@ function providerReceipt(input: {
   };
 }
 
-function validateApproval(approval: ReactiveProposalApprovalReceipt | undefined, item: ReactiveOutboxItem): { ok: true } | { ok: false; error: string } {
+function validateApproval(approval: ReactiveProposalApprovalReceipt | undefined, item: ReactiveOutboxItem, actor: string): { ok: true } | { ok: false; error: string } {
   if (!approval) return { ok: false, error: 'proposal_approval_required' };
   if (approval.schemaVersion !== 'wonder.reactive-proposal-approval.v1') return { ok: false, error: 'proposal_approval_invalid' };
   if (approval.revoked === true) return { ok: false, error: 'proposal_approval_revoked' };
   if (approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now()) return { ok: false, error: 'proposal_approval_expired' };
-  if (!approval.approver.trim() || !approval.authority.trim()) return { ok: false, error: 'proposal_approval_invalid' };
+  if (!approval.approver.trim() || !approval.authority.trim() || !approval.localActor.trim()) return { ok: false, error: 'proposal_approval_invalid' };
+  if (approval.localActor !== actor || approval.approver !== actor) return { ok: false, error: 'proposal_approval_actor_mismatch' };
   if (approval.proposalId !== item.proposalId) return { ok: false, error: 'proposal_approval_mismatch' };
+  if (approval.idempotencyKey !== item.proposal.envelope.idempotencyKey) return { ok: false, error: 'proposal_approval_mismatch' };
+  if (approval.operationId !== operationIdForProposal(item)) return { ok: false, error: 'proposal_approval_mismatch' };
+  if (approval.operationHash !== hashValue(operationApprovalPayload(item))) return { ok: false, error: 'proposal_approval_mismatch' };
   if (approval.proposalHash !== hashValue(item.proposal.envelope)) return { ok: false, error: 'proposal_approval_mismatch' };
   if (approval.operationTemplateHash !== hashValue(item.proposal.envelope.operationTemplate)) return { ok: false, error: 'proposal_approval_mismatch' };
   return { ok: true };
+}
+
+function operationIdForProposal(item: ReactiveOutboxItem): string {
+  return `proposal:${item.proposalId}:operation`;
+}
+
+function operationApprovalPayload(item: ReactiveOutboxItem): Record<string, unknown> {
+  return {
+    proposalId: item.proposalId,
+    operation: item.proposal.operation,
+    operationTemplate: item.proposal.envelope.operationTemplate,
+    idempotencyKey: item.proposal.envelope.idempotencyKey,
+  };
 }
 
 function isVerificationBoundToProposal(

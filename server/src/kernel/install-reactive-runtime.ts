@@ -7,6 +7,7 @@ import { listRecords } from '../mcp/state';
 import { setOperationCommitObserver } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';
 import { createReactiveReceiptStore, parseReactiveReceiptStore, type ReactiveReceiptStore } from './reactive-receipts';
+import { PackageRegistry } from './package-registry';
 import {
   createReactiveOutboxStore,
   drainReactiveOutbox,
@@ -30,6 +31,8 @@ const legacyReceiptPath = process.env.LIFEOS_REACTIVE_RECEIPTS_PATH?.trim()
   || `${process.cwd()}/server-data/reactive-receipts.json`;
 const defaultRuntimePath = process.env.LIFEOS_REACTIVE_RUNTIME_PATH?.trim()
   || `${process.cwd()}/server-data/reactive-runtime.json`;
+const defaultPackageRegistryPath = process.env.LIFEOS_PACKAGE_REGISTRY_PATH?.trim()
+  || `${process.cwd()}/server-data/package-registry.json`;
 
 function loadReceipts(path: string): ReactiveReceiptStore {
   if (!existsSync(path)) return createReactiveReceiptStore();
@@ -86,11 +89,13 @@ function writeRuntimeStore(path: string, store: ReactiveRuntimeStore): void {
 /** Install the default manifest-backed observer at server startup. */
 export function installReactiveRuntime(path = defaultRuntimePath): void {
   const manifest = loadCatalog().activeManifest;
-  const { package: appPackage } = buildAppPackageFromManifest(manifest);
+  const registry = new PackageRegistry({ path: defaultPackageRegistryPath });
+  const activePackage = registry.getActive();
+  const appPackage = activePackage ?? registry.activate(buildAppPackageFromManifest(manifest).package);
   let runtime = loadRuntimeStore(path);
   setOperationCommitObserver(createReactiveCycleObserver({
     package: appPackage,
-    getRows: () => listRecords({ domain: manifest.id, includeArchived: true }) as unknown as Record<string, unknown>[],
+    getRows: () => listRecords({ domain: appPackage.id, includeArchived: true }) as unknown as Record<string, unknown>[],
     getReceiptStore: () => runtime.receipts,
     setReceiptStore: (next) => {
       runtime = { ...runtime, receipts: next };

@@ -300,6 +300,36 @@ const updateItem = {
 };
 assert.equal(executeReactiveProposal(updateItem).ok, true, 'review-required update should queue without approval');
 assert.equal(findRecord('auto-update-record')?.properties.status, 'open');
+const tamperedIdempotencyApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), idempotencyKey: 'tampered-key' },
+});
+assert.equal(tamperedIdempotencyApproval.ok, false);
+assert.equal(tamperedIdempotencyApproval.error, 'proposal_approval_mismatch');
+const tamperedOperationApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), operationHash: hashValue({ bad: true }) },
+});
+assert.equal(tamperedOperationApproval.ok, false);
+assert.equal(tamperedOperationApproval.error, 'proposal_approval_mismatch');
+const wrongActorApproval = executeReactiveProposal(updateItem, {
+  actor: 'different-actor',
+  approval: approvalFor(updateItem),
+});
+assert.equal(wrongActorApproval.ok, false);
+assert.equal(wrongActorApproval.error, 'proposal_approval_actor_mismatch');
+const expiredApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), expiresAt: '2026-01-01T00:00:00.000Z' },
+});
+assert.equal(expiredApproval.ok, false);
+assert.equal(expiredApproval.error, 'proposal_approval_expired');
+const revokedApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), revoked: true },
+});
+assert.equal(revokedApproval.ok, false);
+assert.equal(revokedApproval.error, 'proposal_approval_revoked');
 const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', approval: approvalFor(updateItem) });
 assert.equal(approvedUpdate.ok, true);
 assert.equal(approvedUpdate.receipt?.status, 'completed');
@@ -779,15 +809,29 @@ assert.equal(findRecord(staleArchiveSeed.id)?.archived_at, null);
 
 console.log('reactive-proposal-executor: passed');
 
-function approvalFor(item: { proposalId: string; proposal: { envelope: { operationTemplate: unknown } & Record<string, unknown> } }) {
+function approvalFor(item: { proposalId: string; proposal: { operation: string; envelope: { operationTemplate: unknown; idempotencyKey: string } & Record<string, unknown> } }, approver = 'approver') {
   return {
     schemaVersion: 'wonder.reactive-proposal-approval.v1' as const,
-    approver: 'test-approver',
+    approver,
     authority: 'test-authority',
     proposalId: item.proposalId,
+    idempotencyKey: item.proposal.envelope.idempotencyKey,
+    operationId: `proposal:${item.proposalId}:operation`,
+    operationHash: hashValue(operationApprovalPayload(item)),
     proposalHash: hashValue(item.proposal.envelope),
     operationTemplateHash: hashValue(item.proposal.envelope.operationTemplate),
+    localActor: approver,
     approvedAt: '2026-07-23T00:00:00.000Z',
+    expiresAt: '2999-01-01T00:00:00.000Z',
+  };
+}
+
+function operationApprovalPayload(item: { proposalId: string; proposal: { operation: string; envelope: { operationTemplate: unknown; idempotencyKey: string } } }) {
+  return {
+    proposalId: item.proposalId,
+    operation: item.proposal.operation,
+    operationTemplate: item.proposal.envelope.operationTemplate,
+    idempotencyKey: item.proposal.envelope.idempotencyKey,
   };
 }
 

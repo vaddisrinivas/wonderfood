@@ -16,6 +16,27 @@ const pkg = {
 assert.equal(validateAppPackage(pkg).valid, true);
 assert.equal(validateAppPackage({
   ...pkg,
+  presentation: {
+    label: 'Decisions',
+    homeSurface: 'decisions.inbox',
+    surfaces: [{ id: 'decisions.inbox', label: 'Inbox', icon: 'inbox', collections: ['decisions'] }],
+    visualIdentity: { domain: { icon: 'inbox', accent: 'blue' } },
+    dashboardBlocks: [{ id: 'open', title: 'Open decisions', query: { collections: ['decisions'] } }],
+    render: { default_title: 'Decision inbox' },
+    richDetailSchema: 'schemas/decision-detail.v1.schema.json',
+    providerTemplateFields: { required: ['id', 'title'] },
+    sourceSchemaVersion: 'lifeos.domain.v1',
+  },
+}).valid, true);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'bad', label: 'Bad', collections: [], script: 'bad' }],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
   rules: [{
     id: 'typed-update',
     trigger: { kind: 'operation' },

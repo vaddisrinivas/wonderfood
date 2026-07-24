@@ -20,6 +20,27 @@ export type ViewSpec = {
   layout?: Record<string, unknown>;
 };
 
+export type PackageSurfaceSpec = {
+  id: string;
+  label: string;
+  icon?: string;
+  imageUrl?: string;
+  views?: string[];
+  collections: string[];
+};
+
+export type PackagePresentationSpec = {
+  label: string;
+  homeSurface?: string;
+  surfaces: PackageSurfaceSpec[];
+  visualIdentity?: Record<string, unknown>;
+  dashboardBlocks?: Record<string, unknown>[];
+  render?: Record<string, unknown>;
+  richDetailSchema?: string;
+  providerTemplateFields?: Record<string, unknown>;
+  sourceSchemaVersion?: string;
+};
+
 export type RuleSpec = {
   id: string;
   trigger: {
@@ -48,6 +69,7 @@ export type AppPackageV2 = {
   collections: Record<string, CollectionSpec>;
   queries: Record<string, { from: string; where?: QueryPredicate; orderBy?: QuerySort[]; limit?: number }>;
   views: Record<string, ViewSpec>;
+  presentation?: PackagePresentationSpec;
   computedFields?: ComputedFieldSpec[];
   rules: RuleSpec[];
   capabilities: string[];
@@ -91,6 +113,7 @@ export function validateAppPackage(input: unknown): PackageValidation {
   if (!value.queries || typeof value.queries !== 'object') errors.push('queries are required');
   if (!value.views || typeof value.views !== 'object') errors.push('views are required');
   if (!Array.isArray(value.rules)) errors.push('rules must be an array');
+  if (value.presentation !== undefined && !object(value.presentation)) errors.push('presentation must be an object');
   if (value.computedFields !== undefined && !Array.isArray(value.computedFields)) errors.push('computedFields must be an array');
   if (!Array.isArray(value.capabilities)) errors.push('capabilities must be an array');
   if (!Array.isArray(value.acceptanceTests)) errors.push('acceptanceTests must be an array');
@@ -110,6 +133,16 @@ export function validateAppPackage(input: unknown): PackageValidation {
     if (!text(view?.id) || view.id !== id) errors.push(`view ${id} must have matching id`);
     if (!text(view?.query)) errors.push(`view ${id} must reference a query`);
     else if (!value.queries?.[view.query]) errors.push(`view ${id} references missing query ${view.query}`);
+  }
+  const presentation = value.presentation as Partial<PackagePresentationSpec> | undefined;
+  if (presentation) {
+    if (!text(presentation.label)) errors.push('presentation label is required');
+    if (!Array.isArray(presentation.surfaces)) errors.push('presentation surfaces must be an array');
+    for (const surface of presentation.surfaces ?? []) {
+      if (!text(surface?.id)) errors.push('presentation surface id is required');
+      if (!text(surface?.label)) errors.push(`presentation surface ${surface?.id ?? '<unknown>'} label is required`);
+      if (!Array.isArray(surface?.collections)) errors.push(`presentation surface ${surface?.id ?? '<unknown>'} collections must be an array`);
+    }
   }
   for (const rule of value.rules ?? []) {
     if (!identifier(rule?.id)) errors.push('rule id is required');

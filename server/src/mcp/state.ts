@@ -721,6 +721,9 @@ export function createRecordWithAction(input: {
   conversationId?: string | null;
   before?: unknown;
   undoPayload?: unknown;
+  operationId?: string;
+  causeId?: string;
+  expectedRevision?: number;
 }): ActionWriteResult {
   const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
   const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
@@ -752,6 +755,9 @@ export function createRecordWithAction(input: {
       undoPayload: input.undoPayload ?? { operation: 'delete_record', record_id: record.id, record },
       sourceIds: input.sourceIds,
       conversationId: input.conversationId ?? null,
+      operationId: input.operationId,
+      causeId: input.causeId,
+      expectedRevision: input.expectedRevision,
     },
     { persist: false },
   );

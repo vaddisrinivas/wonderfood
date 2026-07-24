@@ -13,6 +13,13 @@ const pkg: AppPackageV2 = {
   collections: { decisions: { id: 'decisions', fields: { state: { type: 'text' } } } },
   queries: { all: { from: 'decisions' } },
   views: { list: { id: 'list', query: 'all', mode: 'list', fields: ['state'] } },
+  presentation: {
+    label: 'Persistent ledger',
+    homeSurface: 'ledger.list',
+    surfaces: [{ id: 'ledger.list', label: 'Ledger list', collections: ['decisions'] }],
+    visualIdentity: { domain: { icon: 'ledger' } },
+    render: { default_title: 'Ledger' },
+  },
   rules: [],
   capabilities: ['mcp-tool:decisions'],
   acceptanceTests: ['package:persistence'],
@@ -29,6 +36,8 @@ assert.equal(registry.getReceipts().length, 2);
 
 const restored = new PackageRegistry({ path, now });
 assert.equal(restored.getActive()?.version, '2.0.0');
+assert.equal(restored.getActive()?.presentation?.label, 'Persistent ledger');
+assert.equal(restored.getActive()?.presentation?.surfaces[0]?.id, 'ledger.list');
 assert.equal(restored.rollback()?.version, '1.0.0');
 assert.equal(restored.getActive()?.version, '1.0.0');
 
