@@ -104,7 +104,7 @@ git_tree="$(git -C "$root_dir" rev-parse HEAD^{tree} 2>/dev/null || echo unknown
 git_branch="$(git -C "$root_dir" branch --show-current 2>/dev/null || echo unknown)"
 dirty_status="$(git -C "$root_dir" status --porcelain=v1 2>/dev/null || true)"
 dirty="false"; [[ -n "$dirty_status" ]] && dirty="true"
-dirty_diff_hash="$(printf '%s' "$dirty_status" | shasum -a 256 | awk '{print $1}')"
+dirty_diff_hash="$(node --input-type=module -e "import { currentDirtyDiffHash } from './scripts/quality/evidence-provenance.mjs'; process.stdout.write(currentDirtyDiffHash(process.cwd()));")"
 checked_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 route_json="${route_json%,}"
 cat >"$json" <<JSON

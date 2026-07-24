@@ -102,7 +102,7 @@ payload = {
         "head": subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip(),
         "tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
         "dirty": bool(subprocess.check_output(["git", "status", "--porcelain=v1"], text=True).strip()),
-        "dirty_diff_hash": hashlib.sha256(subprocess.check_output(["git", "status", "--porcelain=v1"], text=True).strip().encode()).hexdigest(),
+        "dirty_diff_hash": subprocess.check_output(["node", "--input-type=module", "-e", "import { currentDirtyDiffHash } from './scripts/quality/evidence-provenance.mjs'; process.stdout.write(currentDirtyDiffHash(process.cwd()));"], text=True).strip(),
     },
     "captured_at": writeback.get("captured_at") or sheets.get("captured_at") or notion.get("captured_at"),
     "notion_evidence": notion_path.name,

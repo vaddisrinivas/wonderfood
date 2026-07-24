@@ -6,12 +6,20 @@ apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
 aab="$root_dir/android/app/build/outputs/bundle/release/app-release.aab"
 evidence_dir="$root_dir/app/build/evidence"
 evidence="$evidence_dir/android-release-artifacts.json"
+build_receipt="$evidence_dir/android-release-build-receipt.json"
 mkdir -p "$evidence_dir"
 
 fail() {
   echo "Android release artifact check: FAIL ($*)" >&2
   exit 1
 }
+
+if [[ "${BUILD_RELEASE_ARTIFACTS:-0}" == "1" ]]; then
+  WF_ANDROID_BUILD_COMMAND="android/gradlew :app:assembleRelease :app:bundleRelease" \
+    bash -c 'cd android && ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease'
+  WF_ANDROID_BUILD_COMMAND="android/gradlew :app:assembleRelease :app:bundleRelease" \
+    node scripts/quality/write-android-release-build-receipt.mjs "$apk" "$aab" "$build_receipt"
+fi
 
 [[ -f "$apk" ]] || fail "release APK missing: $apk"
 [[ -f "$aab" ]] || fail "release AAB missing: $aab"
@@ -61,12 +69,44 @@ apk_sha="$(shasum -a 256 "$apk" | awk '{print $1}')"
 aab_sha="$(shasum -a 256 "$aab" | awk '{print $1}')"
 apk_size="$(stat -f%z "$apk")"
 aab_size="$(stat -f%z "$aab")"
+build_receipt_issues="$(node --input-type=module - "$build_receipt" "$apk_sha" "$apk_size" "$aab_sha" "$aab_size" <<'NODE'
+import { existsSync, readFileSync } from 'node:fs';
+import { validateSourceArtifactReceipt } from './scripts/quality/evidence-provenance.mjs';
+
+const [receiptPath, apkSha, apkBytes, aabSha, aabBytes] = process.argv.slice(2);
+if (!existsSync(receiptPath)) {
+  console.log('missing:android_release_build_receipt');
+  process.exit(0);
+}
+let receipt;
+try {
+  receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+} catch {
+  console.log('invalid:android_release_build_receipt_json');
+  process.exit(0);
+}
+const issues = validateSourceArtifactReceipt(process.cwd(), receipt, {
+  apk: {
+    path: 'android/app/build/outputs/apk/release/app-release.apk',
+    sha256: apkSha,
+    bytes: Number(apkBytes),
+  },
+  aab: {
+    path: 'android/app/build/outputs/bundle/release/app-release.aab',
+    sha256: aabSha,
+    bytes: Number(aabBytes),
+  },
+});
+console.log(issues.join('\n'));
+NODE
+)"
+[[ -z "$build_receipt_issues" ]] || fail "build receipt does not prove current artifacts: ${build_receipt_issues//$'\n'/, }"
 git_head="$(git -C "$root_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 git_tree="$(git -C "$root_dir" rev-parse HEAD^{tree} 2>/dev/null || echo unknown)"
 git_branch="$(git -C "$root_dir" branch --show-current 2>/dev/null || echo unknown)"
 dirty_status="$(git -C "$root_dir" status --porcelain=v1 2>/dev/null || true)"
 dirty="false"; [[ -n "$dirty_status" ]] && dirty="true"
-dirty_diff_hash="$(printf '%s' "$dirty_status" | shasum -a 256 | awk '{print $1}')"
+dirty_diff_hash="$(node --input-type=module -e "import { currentDirtyDiffHash } from './scripts/quality/evidence-provenance.mjs'; process.stdout.write(currentDirtyDiffHash(process.cwd()));")"
 checked_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 cat > "$evidence" <<JSON
@@ -75,6 +115,7 @@ cat > "$evidence" <<JSON
   "status": "passed",
   "checked_at": "$checked_at",
   "git": { "branch": "$git_branch", "head": "$git_head", "tree": "$git_tree", "dirty": $dirty, "dirty_diff_hash": "$dirty_diff_hash" },
+  "build_receipt": "app/build/evidence/android-release-build-receipt.json",
   "package": "com.wonderfood.app",
   "version_name": "1.0.0",
   "version_code": 1,
