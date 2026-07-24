@@ -1,7 +1,7 @@
 import type { AppPackageV2 } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
-import { evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
+import { createOperationProposalIdempotencyKey, evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
 import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 
 export type ReactiveCycleInput = {
@@ -94,7 +94,7 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
 
   const rawProposals: Array<OperationProposal & { eventId: string }> = [];
   rawProposals.push(...evaluateRules(input.package.rules, {
-    event: input.event,
+    event: { ...input.event },
     data: input.data ?? {},
     packageVersion: input.package.version,
     causeId: input.causeId,
@@ -117,14 +117,19 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
       input: input.data ?? {},
     };
     rawProposals.push(...evaluateRules(input.package.rules, {
-      event: transition,
+      event: {
+        kind: 'query_transition',
+        id: `${transition.id}:${transition.transition}`,
+        queryId: transition.id,
+        transition: transition.transition,
+      },
       data,
       packageVersion: input.package.version,
       causeId: input.causeId,
       depth,
     }).map((proposal) => ({
       ...proposal,
-      eventId: `${transition.id}:${transition.transition}`,
+      eventId: proposal.event.id,
     })));
     if (rawProposals.length > budget.maxProposals) {
       throw new Error('reactive_cycle_proposal_budget_exceeded');
@@ -140,6 +145,7 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
         eventId: proposal.eventId,
         ruleId: proposal.ruleId,
         operation: proposal.operation,
+        operationTemplate: proposal.operationTemplate,
       });
       return {
         ...proposal,
@@ -174,30 +180,34 @@ function createProposalEnvelope(input: {
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
 }): OperationProposalEnvelope {
-  const [queryId, transition] = input.eventId.includes(':')
-    ? input.eventId.split(':', 2)
-    : ['', ''];
+  const queryId = input.proposal.event.kind === 'query_transition' ? input.proposal.event.queryId : undefined;
+  const transition = input.proposal.event.kind === 'query_transition' ? input.proposal.event.transition : undefined;
   const queryEvidence = queryId ? input.queryHashes[queryId] : undefined;
   return {
     schemaVersion: 'wonder.operation-proposal.v1',
     proposalId: input.proposalId,
     operation: input.proposal.operation,
+    operationTemplate: input.proposal.operationTemplate,
     mode: input.proposal.mode,
     ruleId: input.proposal.ruleId,
     packageId: input.packageId,
     packageVersion: input.proposal.packageVersion,
     eventId: input.eventId,
+    event: input.proposal.event,
     causeId: input.proposal.causeId,
     depth: input.proposal.depth,
-    idempotencyKey: stableId({
-      schemaVersion: 'wonder.operation-proposal.v1',
-      proposalId: input.proposalId,
-      operation: input.proposal.operation,
+    idempotencyKey: createOperationProposalIdempotencyKey({
+      packageId: input.packageId,
+      packageVersion: input.proposal.packageVersion,
+      ruleId: input.proposal.ruleId,
+      event: input.proposal.event,
       causeId: input.proposal.causeId,
+      operationTemplate: input.proposal.operationTemplate,
+      evidence: queryEvidence ? { queryId, transition, beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : undefined,
     }),
     review: {
-      required: input.proposal.mode !== 'automatic',
-      reason: input.proposal.mode === 'automatic' ? 'automatic_mode' : 'suggest_mode',
+      required: true,
+      reason: input.proposal.mode === 'automatic' ? 'policy_required' : 'suggest_mode',
     },
     evidence: {
       ...(queryId ? { queryId } : {}),
@@ -234,6 +244,7 @@ function dedupeProposals<T extends OperationProposal & { eventId: string }>(prop
       eventId: proposal.eventId,
       ruleId: proposal.ruleId,
       operation: proposal.operation,
+      operationTemplate: proposal.operationTemplate,
       mode: proposal.mode,
       causeId: proposal.causeId,
       packageVersion: proposal.packageVersion,

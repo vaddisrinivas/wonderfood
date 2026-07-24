@@ -20,10 +20,12 @@ const proposals = evaluateRules(rules, {
 assert.deepEqual(proposals, [{
   ruleId: 'high-risk-review',
   operation: 'request_review',
+  operationTemplate: { kind: 'custom', tool: 'request_review' },
   mode: 'suggest',
   causeId: 'action-1',
   packageVersion: '1.0.0',
   depth: 0,
+  event: { kind: 'operation', id: 'op-1' },
 }]);
 assert.equal(evaluateRules(rules, { event: { kind: 'schedule', id: 'nightly' }, data: { risk: 4 }, packageVersion: '1.0.0', causeId: 'a', depth: 0 }).length, 0);
 console.log('rule-engine: passed');

@@ -13,8 +13,21 @@ import {
 } from '../src/kernel/reactive-outbox';
 import type { ReactiveCycleResult } from '../src/kernel/reactive-cycle';
 import type { OperationCommitEvent } from '../src/kernel/operation-observer';
+import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 
 const now = '2026-07-23T00:00:00.000Z';
+const proposalEvent = { kind: 'query_transition' as const, id: 'open:enter', queryId: 'open', transition: 'enter' as const };
+const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const proposalEvidence = { queryId: 'open', transition: 'enter' as const, beforeHash: 'before-hash', afterHash: 'after-hash' };
+const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
+  packageId: 'package-a',
+  packageVersion: '1.0.0',
+  ruleId: 'rule-a',
+  event: proposalEvent,
+  causeId: 'cause-a',
+  operationTemplate,
+  evidence: proposalEvidence,
+});
 const event: OperationCommitEvent = {
   actionId: 'action-a',
   operationId: 'operation-a',
@@ -31,8 +44,10 @@ const cycle: ReactiveCycleResult = {
   proposals: [{
     id: 'proposal-a',
     eventId: 'open:enter',
+    event: proposalEvent,
     ruleId: 'rule-a',
     operation: 'request_review',
+    operationTemplate,
     mode: 'suggest',
     causeId: 'cause-a',
     packageVersion: '1.0.0',
@@ -41,16 +56,18 @@ const cycle: ReactiveCycleResult = {
       schemaVersion: 'wonder.operation-proposal.v1',
       proposalId: 'proposal-a',
       operation: 'request_review',
+      operationTemplate,
       mode: 'suggest',
       ruleId: 'rule-a',
       packageId: 'package-a',
       packageVersion: '1.0.0',
       eventId: 'open:enter',
+      event: proposalEvent,
       causeId: 'cause-a',
       depth: 0,
-      idempotencyKey: 'proposal-a:idempotency',
+      idempotencyKey: proposalIdempotencyKey,
       review: { required: true, reason: 'suggest_mode' },
-      evidence: { queryId: 'open', transition: 'enter', beforeHash: 'before-hash', afterHash: 'after-hash' },
+      evidence: proposalEvidence,
     },
   }],
 };
@@ -61,7 +78,7 @@ assert.equal(Object.keys(queued.items).length, 1);
 assert.equal(queued.items['proposal-a'].status, 'pending');
 assert.equal(queued.items['proposal-a'].attempts, 0);
 assert.equal(queued.items['proposal-a'].proposal.envelope.schemaVersion, 'wonder.operation-proposal.v1');
-assert.equal(queued.items['proposal-a'].proposal.envelope.idempotencyKey, 'proposal-a:idempotency');
+assert.equal(queued.items['proposal-a'].proposal.envelope.idempotencyKey, proposalIdempotencyKey);
 assert.deepEqual(listRunnableReactiveOutboxItems(queued, now).map((item) => item.proposalId), ['proposal-a']);
 
 const replay = enqueueReactiveProposals(queued, { cycle, event, proposalIds: ['proposal-a'], now });
@@ -99,6 +116,41 @@ assert.throws(
     },
   })),
   /missing its proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, packageId: '' } } } },
+  })),
+  /inconsistent proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, event: { kind: 'query_transition', id: 'open:enter', queryId: 'other', transition: 'enter' } } } } },
+  })),
+  /inconsistent proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, review: { required: false, reason: 'policy_required' } } } } },
+  })),
+  /inconsistent proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, evidence: { ...failed.items['proposal-a'].proposal.envelope.evidence, afterHash: 'tampered' } } } } },
+  })),
+  /invalid idempotency key/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, idempotencyKey: 'tampered' } } } },
+  })),
+  /invalid idempotency key/,
 );
 assert.throws(
   () => enqueueReactiveProposals(empty, { cycle, event, proposalIds: ['missing-proposal'], now }),

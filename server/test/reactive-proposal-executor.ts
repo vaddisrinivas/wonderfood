@@ -7,11 +7,24 @@ import { drainReactiveOutbox } from '../src/kernel/reactive-outbox';
 import { createReactiveOutboxStore, enqueueReactiveProposals } from '../src/kernel/reactive-outbox';
 import type { ReactiveCycleResult } from '../src/kernel/reactive-cycle';
 import type { OperationCommitEvent } from '../src/kernel/operation-observer';
+import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-proposal-'));
 process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
 const { executeReactiveProposal } = await import('../src/kernel/reactive-proposal-executor');
 const { findActionByIdempotencyKey, getActionEvent } = await import('../src/mcp/state');
+const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
+const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const proposalEvidence = { queryId: 'review', transition: 'enter' as const, beforeHash: 'before-hash', afterHash: 'after-hash' };
+const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'review-rule',
+  event: proposalEvent,
+  causeId: 'source-cause',
+  operationTemplate,
+  evidence: proposalEvidence,
+});
 
 const event: OperationCommitEvent = {
   actionId: 'source-action',
@@ -29,8 +42,10 @@ const cycle: ReactiveCycleResult = {
   proposals: [{
     id: 'proposal-ledger',
     eventId: 'review:enter',
+    event: proposalEvent,
     ruleId: 'review-rule',
     operation: 'request_review',
+    operationTemplate,
     mode: 'suggest',
     causeId: 'source-cause',
     packageVersion: '1.0.0',
@@ -39,16 +54,18 @@ const cycle: ReactiveCycleResult = {
       schemaVersion: 'wonder.operation-proposal.v1',
       proposalId: 'proposal-ledger',
       operation: 'request_review',
+      operationTemplate,
       mode: 'suggest',
       ruleId: 'review-rule',
       packageId: 'food',
       packageVersion: '1.0.0',
       eventId: 'review:enter',
+      event: proposalEvent,
       causeId: 'source-cause',
       depth: 0,
-      idempotencyKey: 'reactive-proposal:review-rule:source-cause',
+      idempotencyKey: proposalIdempotencyKey,
       review: { required: true, reason: 'suggest_mode' },
-      evidence: { queryId: 'review', transition: 'enter', beforeHash: 'before-hash', afterHash: 'after-hash' },
+      evidence: proposalEvidence,
     },
   }],
 };
@@ -68,7 +85,7 @@ const drained = await drainReactiveOutbox({
 });
 assert.deepEqual(drained.acked, ['proposal-ledger']);
 
-const action = findActionByIdempotencyKey('reactive-proposal:review-rule:source-cause');
+const action = findActionByIdempotencyKey(proposalIdempotencyKey);
 assert.ok(action);
 assert.equal(action.id, 'reactive-proposal:proposal-ledger');
 assert.equal(action.actor, 'test-reactive');

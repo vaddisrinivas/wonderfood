@@ -119,7 +119,12 @@ export const appPackageSchema = {
           required: ['kind', 'operation'],
           properties: {
             kind: { const: 'propose_operation' },
-            operation: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+            operation: {
+              oneOf: [
+                { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+                { $ref: '#/$defs/operationTemplate' },
+              ],
+            },
           },
         },
         mode: { enum: ['suggest', 'automatic'] },
@@ -142,6 +147,56 @@ export const appPackageSchema = {
             kind: { const: 'query_transition' },
             query: { type: 'string', minLength: 1 },
             transition: { enum: ['enter', 'leave', 'change'] },
+          },
+        },
+      ],
+    },
+    operationTemplate: {
+      oneOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'tool'],
+          properties: {
+            kind: { const: 'custom' },
+            tool: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'collection'],
+          properties: {
+            kind: { const: 'create_record' },
+            domain: { type: 'string', minLength: 1 },
+            collection: { type: 'string', minLength: 1 },
+            recordId: { type: 'string', minLength: 1 },
+            properties: { type: 'object' },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'recordId', 'changes'],
+          properties: {
+            kind: { const: 'update_record' },
+            domain: { type: 'string', minLength: 1 },
+            collection: { type: 'string', minLength: 1 },
+            recordId: { type: 'string', minLength: 1 },
+            expectedRevision: { type: 'integer', minimum: 0 },
+            changes: { type: 'object' },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'recordId'],
+          properties: {
+            kind: { enum: ['archive_record', 'restore_record'] },
+            domain: { type: 'string', minLength: 1 },
+            collection: { type: 'string', minLength: 1 },
+            recordId: { type: 'string', minLength: 1 },
+            expectedRevision: { type: 'integer', minimum: 0 },
           },
         },
       ],

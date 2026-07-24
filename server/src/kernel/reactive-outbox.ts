@@ -1,5 +1,6 @@
 import type { OperationCommitEvent } from './operation-observer';
 import type { ReactiveCycleProposal, ReactiveCycleResult } from './reactive-cycle';
+import { createOperationProposalIdempotencyKey } from './rules';
 
 export const REACTIVE_OUTBOX_SCHEMA_VERSION = 'wonder.reactive-outbox.v1' as const;
 
@@ -210,16 +211,50 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
     if (!isObject(envelope) || envelope.schemaVersion !== 'wonder.operation-proposal.v1' || envelope.proposalId !== proposalId) {
       throw new Error(`Reactive outbox item ${proposalId} is missing its proposal envelope.`);
     }
+    if (!isProposalEvent(item.proposal.event) || !isProposalEvent(envelope.event)) {
+      throw new Error(`Reactive outbox item ${proposalId} has an invalid proposal event.`);
+    }
+    if (!isOperationTemplate(item.proposal.operationTemplate) || !isOperationTemplate(envelope.operationTemplate)) {
+      throw new Error(`Reactive outbox item ${proposalId} has an invalid operation template.`);
+    }
     if (
       envelope.operation !== item.proposal.operation
+      || stableJson(envelope.operationTemplate) !== stableJson(item.proposal.operationTemplate)
       || envelope.ruleId !== item.proposal.ruleId
+      || envelope.eventId !== item.proposal.eventId
+      || envelope.eventId !== item.eventId
+      || stableJson(envelope.event) !== stableJson(item.proposal.event)
       || envelope.causeId !== item.proposal.causeId
+      || envelope.causeId !== item.causeId
       || envelope.packageVersion !== item.proposal.packageVersion
+      || typeof envelope.packageId !== 'string'
+      || !envelope.packageId.trim()
       || envelope.mode !== item.proposal.mode
-      || typeof envelope.idempotencyKey !== 'string'
-      || !envelope.idempotencyKey.trim()
+      || envelope.depth !== item.proposal.depth
+      || envelope.review?.required !== true
+      || (envelope.review.reason !== 'suggest_mode' && envelope.review.reason !== 'policy_required')
     ) {
       throw new Error(`Reactive outbox item ${proposalId} has an inconsistent proposal envelope.`);
+    }
+    validateEnvelopeEvidence(proposalId, envelope);
+    const expectedKey = createOperationProposalIdempotencyKey({
+      packageId: envelope.packageId,
+      packageVersion: envelope.packageVersion,
+      ruleId: envelope.ruleId,
+      event: envelope.event,
+      causeId: envelope.causeId,
+      operationTemplate: envelope.operationTemplate,
+      evidence: envelope.evidence.beforeHash && envelope.evidence.afterHash
+        ? {
+          queryId: envelope.evidence.queryId,
+          transition: envelope.evidence.transition,
+          beforeHash: envelope.evidence.beforeHash,
+          afterHash: envelope.evidence.afterHash,
+        }
+        : undefined,
+    });
+    if (envelope.idempotencyKey !== expectedKey) {
+      throw new Error(`Reactive outbox item ${proposalId} has an invalid idempotency key.`);
     }
     items[proposalId] = immutable({ ...item });
   }
@@ -251,6 +286,70 @@ function isStatus(value: unknown): value is ReactiveOutboxStatus {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isProposalEvent(value: unknown): value is ReactiveCycleProposal['event'] {
+  if (!isObject(value) || typeof value.id !== 'string' || !value.id.trim()) return false;
+  if (value.kind !== 'operation' && value.kind !== 'schedule' && value.kind !== 'query_transition') return false;
+  if (value.queryId !== undefined && (typeof value.queryId !== 'string' || !value.queryId.trim())) return false;
+  if (value.transition !== undefined && value.transition !== 'enter' && value.transition !== 'leave' && value.transition !== 'change') return false;
+  if (value.kind === 'query_transition' && (!value.queryId || !value.transition)) return false;
+  if (value.kind !== 'query_transition' && (value.queryId !== undefined || value.transition !== undefined)) return false;
+  return true;
+}
+
+function isOperationTemplate(value: unknown): value is ReactiveCycleProposal['operationTemplate'] {
+  if (!isObject(value) || typeof value.kind !== 'string') return false;
+  if (value.kind === 'custom') return typeof value.tool === 'string' && Boolean(value.tool.trim());
+  if (value.kind === 'create_record') {
+    return typeof value.collection === 'string' && Boolean(value.collection.trim())
+      && (value.recordId === undefined || (typeof value.recordId === 'string' && Boolean(value.recordId.trim())))
+      && (value.properties === undefined || isObject(value.properties));
+  }
+  if (value.kind === 'update_record') {
+    return typeof value.recordId === 'string' && Boolean(value.recordId.trim())
+      && isObject(value.changes)
+      && (value.collection === undefined || (typeof value.collection === 'string' && Boolean(value.collection.trim())))
+      && (value.expectedRevision === undefined || (typeof value.expectedRevision === 'number' && Number.isInteger(value.expectedRevision) && value.expectedRevision >= 0));
+  }
+  if (value.kind === 'archive_record' || value.kind === 'restore_record') {
+    return typeof value.recordId === 'string' && Boolean(value.recordId.trim())
+      && (value.collection === undefined || (typeof value.collection === 'string' && Boolean(value.collection.trim())))
+      && (value.expectedRevision === undefined || (typeof value.expectedRevision === 'number' && Number.isInteger(value.expectedRevision) && value.expectedRevision >= 0));
+  }
+  return false;
+}
+
+function validateEnvelopeEvidence(proposalId: string, envelope: ReactiveCycleProposal['envelope']): void {
+  if (!isObject(envelope.evidence)) throw new Error(`Reactive outbox item ${proposalId} has invalid evidence.`);
+  if (envelope.event.kind === 'query_transition') {
+    if (envelope.evidence.queryId !== envelope.event.queryId || envelope.evidence.transition !== envelope.event.transition) {
+      throw new Error(`Reactive outbox item ${proposalId} has inconsistent query evidence.`);
+    }
+  } else if (envelope.evidence.queryId !== undefined || envelope.evidence.transition !== undefined) {
+    throw new Error(`Reactive outbox item ${proposalId} has unexpected query evidence.`);
+  }
+  for (const field of ['beforeHash', 'afterHash']) {
+    const value = envelope.evidence[field as 'beforeHash' | 'afterHash'];
+    if (value !== undefined && (typeof value !== 'string' || !value.trim())) {
+      throw new Error(`Reactive outbox item ${proposalId} has invalid evidence hash.`);
+    }
+  }
+  if ((envelope.evidence.beforeHash === undefined) !== (envelope.evidence.afterHash === undefined)) {
+    throw new Error(`Reactive outbox item ${proposalId} has incomplete evidence hashes.`);
+  }
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 function sortRecord<T>(value: Record<string, T>): Record<string, T> {

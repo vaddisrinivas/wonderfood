@@ -87,6 +87,41 @@ assert.equal(first.proposals[0].envelope.evidence.transition, 'enter');
 assert.equal(first.proposals[0].envelope.evidence.beforeHash, first.queryHashes['high-risk-open'].before);
 assert.equal(first.proposals[0].envelope.evidence.afterHash, first.queryHashes['high-risk-open'].after);
 
+const colonQueryPackage: AppPackageV2 = {
+  ...pkg,
+  id: 'colon-query-package',
+  queries: {
+    'surface:home': pkg.queries['high-risk-open'],
+  },
+  rules: [{
+    id: 'auto-home-review',
+    trigger: { kind: 'query_transition', query: 'surface:home', transition: 'enter' },
+    effect: { kind: 'propose_operation', operation: { kind: 'update_record', collection: 'decisions', recordId: 'decision-a', changes: { status: 'needs_review' } } },
+    mode: 'automatic',
+    maxRunsPerEvent: 1,
+  }],
+};
+const colonCycle = runReactiveCycle({
+  ...input,
+  package: colonQueryPackage,
+});
+assert.equal(colonCycle.proposals.length, 1);
+assert.equal(colonCycle.proposals[0].operation, 'update_record');
+assert.deepEqual(colonCycle.proposals[0].operationTemplate, {
+  kind: 'update_record',
+  collection: 'decisions',
+  recordId: 'decision-a',
+  changes: { status: 'needs_review' },
+});
+assert.equal(colonCycle.proposals[0].envelope.event.queryId, 'surface:home');
+assert.equal(colonCycle.proposals[0].envelope.event.transition, 'enter');
+assert.equal(colonCycle.proposals[0].envelope.evidence.queryId, 'surface:home');
+assert.equal(colonCycle.proposals[0].envelope.evidence.beforeHash, colonCycle.queryHashes['surface:home'].before);
+assert.equal(colonCycle.proposals[0].envelope.evidence.afterHash, colonCycle.queryHashes['surface:home'].after);
+assert.equal(colonCycle.proposals[0].envelope.review.required, true);
+assert.equal(colonCycle.proposals[0].envelope.review.reason, 'policy_required');
+assert.match(colonCycle.proposals[0].envelope.idempotencyKey, /^reactive:[a-f0-9]{64}$/);
+
 const noChange = runReactiveCycle({
   ...input,
   beforeRows: after,

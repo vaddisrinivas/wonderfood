@@ -28,10 +28,18 @@ export type RuleSpec = {
     transition?: 'enter' | 'leave' | 'change';
   };
   when?: Expression;
-  effect: { kind: 'propose_operation'; operation: string };
+  effect: { kind: 'propose_operation'; operation: string | OperationTemplate };
   mode: 'suggest' | 'automatic';
   maxRunsPerEvent: number;
 };
+
+export type OperationTemplate = Readonly<
+  | { kind: 'custom'; tool: string }
+  | { kind: 'create_record'; domain?: string; collection: string; recordId?: string; properties?: Record<string, unknown> }
+  | { kind: 'update_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number; changes: Record<string, unknown> }
+  | { kind: 'archive_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number }
+  | { kind: 'restore_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number }
+>;
 
 export type AppPackageV2 = {
   schemaVersion: 'wonder.app-package.v2';
@@ -58,6 +66,10 @@ function name(value: unknown): value is string {
 
 function identifier(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(value);
+}
+
+function object(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function hasExecutableCode(value: unknown): boolean {
@@ -105,7 +117,9 @@ export function validateAppPackage(input: unknown): PackageValidation {
     if (rule?.trigger?.kind === 'query_transition' && (!text(rule.trigger.query) || !value.queries?.[rule.trigger.query])) {
       errors.push(`rule ${rule?.id ?? '<unknown>'} references missing query ${rule?.trigger?.query ?? '<missing>'}`);
     }
-    if (!identifier(rule?.effect?.operation)) errors.push(`rule ${rule?.id ?? '<unknown>'} operation is required`);
+    if (!validateOperationTemplate(rule?.effect?.operation, value).valid) {
+      errors.push(`rule ${rule?.id ?? '<unknown>'} operation is required`);
+    }
     if (!Number.isInteger(rule?.maxRunsPerEvent) || (rule?.maxRunsPerEvent ?? 0) < 1) errors.push(`rule ${rule?.id ?? '<unknown>'} maxRunsPerEvent must be positive`);
     else if ((rule.maxRunsPerEvent ?? 0) > 64) errors.push(`rule ${rule?.id ?? '<unknown>'} maxRunsPerEvent must be <= 64`);
   }
@@ -123,4 +137,39 @@ export function validateAppPackage(input: unknown): PackageValidation {
   }
 
   return errors.length ? { valid: false, errors } : { valid: true, package: value as AppPackageV2 };
+}
+
+export function normalizeOperationTemplate(input: string | OperationTemplate): OperationTemplate {
+  return typeof input === 'string' ? { kind: 'custom', tool: input } : input;
+}
+
+export function operationTemplateName(input: string | OperationTemplate): string {
+  const template = normalizeOperationTemplate(input);
+  return template.kind === 'custom' ? template.tool : template.kind;
+}
+
+function validateOperationTemplate(input: unknown, pkg: Partial<AppPackageV2>): { valid: true } | { valid: false } {
+  if (identifier(input)) return { valid: true };
+  if (!object(input) || typeof input.kind !== 'string') return { valid: false };
+  if (input.kind === 'custom') return identifier(input.tool) ? { valid: true } : { valid: false };
+  if (input.domain !== undefined && !text(input.domain)) return { valid: false };
+  const expectedRevision = input.expectedRevision;
+  if (expectedRevision !== undefined && (!Number.isInteger(expectedRevision) || typeof expectedRevision !== 'number' || expectedRevision < 0)) return { valid: false };
+  if (input.kind === 'create_record') {
+    if (!text(input.collection) || !pkg.collections?.[input.collection]) return { valid: false };
+    if (input.recordId !== undefined && !text(input.recordId)) return { valid: false };
+    if (input.properties !== undefined && !object(input.properties)) return { valid: false };
+    return { valid: true };
+  }
+  if (input.kind === 'update_record') {
+    if (!text(input.recordId) || !object(input.changes)) return { valid: false };
+    if (input.collection !== undefined && !text(input.collection)) return { valid: false };
+    return { valid: true };
+  }
+  if (input.kind === 'archive_record' || input.kind === 'restore_record') {
+    if (!text(input.recordId)) return { valid: false };
+    if (input.collection !== undefined && !text(input.collection)) return { valid: false };
+    return { valid: true };
+  }
+  return { valid: false };
 }

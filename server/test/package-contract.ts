@@ -14,6 +14,16 @@ const pkg = {
 };
 
 assert.equal(validateAppPackage(pkg).valid, true);
+assert.equal(validateAppPackage({
+  ...pkg,
+  rules: [{
+    id: 'typed-update',
+    trigger: { kind: 'operation' },
+    effect: { kind: 'propose_operation', operation: { kind: 'update_record', collection: 'decisions', recordId: 'decision-a', expectedRevision: 3, changes: { state: 'review' } } },
+    mode: 'suggest',
+    maxRunsPerEvent: 1,
+  }],
+}).valid, true);
 assert.equal(validateAppPackage({ ...pkg, javascript: 'bad' }).valid, false);
 assert.equal(validateAppPackage({ ...pkg, views: { inbox: { id: 'wrong', query: '', mode: 'table', fields: [] } } }).valid, false);
 assert.equal(validateAppPackage({ ...pkg, queries: { inbox: { from: 'records', limit: -1 } } }).valid, false);
@@ -44,6 +54,10 @@ assert.equal(validateAppPackage({
 assert.equal(validateAppPackage({
   ...pkg,
   rules: [{ id: 'too-many', trigger: { kind: 'operation' }, effect: { kind: 'propose_operation', operation: 'approve' }, mode: 'suggest', maxRunsPerEvent: 65 }],
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  rules: [{ id: 'bad-template', trigger: { kind: 'operation' }, effect: { kind: 'propose_operation', operation: { kind: 'create_record', collection: 'missing' } }, mode: 'suggest', maxRunsPerEvent: 1 }],
 }).valid, false);
 assert.equal(validateAppPackage({
   ...pkg,

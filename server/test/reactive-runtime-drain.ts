@@ -8,8 +8,19 @@ import { createReactiveOutboxStore, enqueueReactiveProposals } from '../src/kern
 import { createReactiveReceiptStore } from '../src/kernel/reactive-receipts';
 import type { ReactiveCycleResult } from '../src/kernel/reactive-cycle';
 import type { OperationCommitEvent } from '../src/kernel/operation-observer';
+import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 
 const runtimePath = join(mkdtempSync(join(tmpdir(), 'wonderfood-reactive-runtime-')), 'runtime.json');
+const proposalEvent = { kind: 'query_transition' as const, id: 'runtime-query:enter', queryId: 'runtime-query', transition: 'enter' as const };
+const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
+  packageId: 'runtime-package',
+  packageVersion: '1.0.0',
+  ruleId: 'runtime-rule',
+  event: proposalEvent,
+  causeId: 'runtime-cause',
+  operationTemplate,
+});
 const event: OperationCommitEvent = {
   actionId: 'runtime-action',
   operationId: 'runtime-operation',
@@ -26,8 +37,10 @@ const cycle: ReactiveCycleResult = {
   proposals: [{
     id: 'runtime-proposal',
     eventId: 'runtime-query:enter',
+    event: proposalEvent,
     ruleId: 'runtime-rule',
     operation: 'request_review',
+    operationTemplate,
     mode: 'suggest',
     causeId: 'runtime-cause',
     packageVersion: '1.0.0',
@@ -36,14 +49,16 @@ const cycle: ReactiveCycleResult = {
       schemaVersion: 'wonder.operation-proposal.v1',
       proposalId: 'runtime-proposal',
       operation: 'request_review',
+      operationTemplate,
       mode: 'suggest',
       ruleId: 'runtime-rule',
       packageId: 'runtime-package',
       packageVersion: '1.0.0',
       eventId: 'runtime-query:enter',
+      event: proposalEvent,
       causeId: 'runtime-cause',
       depth: 0,
-      idempotencyKey: 'runtime-proposal:idempotency',
+      idempotencyKey: proposalIdempotencyKey,
       review: { required: true, reason: 'suggest_mode' },
       evidence: { queryId: 'runtime-query', transition: 'enter' },
     },
