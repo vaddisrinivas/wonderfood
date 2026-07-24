@@ -14,11 +14,13 @@ export type ComputedFieldInput = {
   record: Readonly<Record<string, unknown>>;
   rows?: readonly Record<string, unknown>[];
   queries?: AppPackageV2['queries'];
+  context?: ComputedFieldEvaluationContext;
   budget?: {
     maxFields?: number;
     maxDependencyEdges?: number;
     maxQueries?: number;
     maxRows?: number;
+    maxQueryEvaluations?: number;
     maxExpressionNodes?: number;
     maxExpressionDepth?: number;
   };
@@ -37,11 +39,21 @@ export type ComputedFieldGraphInput = {
   budget?: ComputedFieldInput['budget'];
 };
 
+export type ComputedFieldEvaluationContext = {
+  queryCache: Map<string, {
+    summaries: Record<string, { total: number; rows: Record<string, unknown>[]; resultHash: string }>;
+    hashes: Record<string, string>;
+  }>;
+  queryEvaluations: number;
+  budget: typeof DEFAULT_BUDGET;
+};
+
 const DEFAULT_BUDGET = {
   maxFields: 128,
   maxDependencyEdges: 512,
   maxQueries: 128,
   maxRows: 10_000,
+  maxQueryEvaluations: 128,
   maxExpressionNodes: 256,
   maxExpressionDepth: 32,
 };
@@ -93,7 +105,7 @@ export function validateComputedFieldGraph(input: ComputedFieldGraphInput): void
  * record and query rows are never mutated or persisted.
  */
 export function evaluateComputedFields(input: ComputedFieldInput): ComputedFieldResult {
-  const budget = { ...DEFAULT_BUDGET, ...(input.budget ?? {}) };
+  const budget = { ...DEFAULT_BUDGET, ...(input.context?.budget ?? {}), ...(input.budget ?? {}) };
   const collection = text(input.record.collection, 'computed_record_collection');
   const specs = input.specs.filter((spec) => spec.collection === '*' || spec.collection === collection);
   if (specs.length > budget.maxFields) throw new Error('computed_field_budget_exceeded');
@@ -152,12 +164,23 @@ export function applyComputedFieldsToRows(
   specs: readonly ComputedFieldSpec[] = [],
   queries: AppPackageV2['queries'] = {},
   queryRows: readonly Record<string, unknown>[] = rows,
+  context = createComputedFieldEvaluationContext(),
 ): Record<string, unknown>[] {
   if (!specs.length) return rows.map((row) => ({ ...row }));
   return rows.map((row) => ({
     ...row,
-    ...evaluateComputedFields({ specs, record: row, rows: queryRows, queries }).values,
+    ...evaluateComputedFields({ specs, record: row, rows: queryRows, queries, context }).values,
   }));
+}
+
+export function createComputedFieldEvaluationContext(
+  budget: ComputedFieldInput['budget'] = {},
+): ComputedFieldEvaluationContext {
+  return {
+    queryCache: new Map(),
+    queryEvaluations: 0,
+    budget: { ...DEFAULT_BUDGET, ...budget },
+  };
 }
 
 function evaluateQueries(
@@ -171,6 +194,19 @@ function evaluateQueries(
   if (rows.length > budget.maxRows) throw new Error('computed_field_row_budget_exceeded');
   const entries = Object.entries(input.queries ?? {}).sort(([left], [right]) => left.localeCompare(right));
   if (entries.length > budget.maxQueries) throw new Error('computed_field_query_budget_exceeded');
+  const cacheKey = stableId({
+    rows: rows.map(stableJson).sort(),
+    queries: input.queries ?? {},
+  });
+  const context = input.context;
+  const cached = context?.queryCache.get(cacheKey);
+  if (cached) return cached;
+  if (context) {
+    context.queryEvaluations += entries.length;
+    if (context.queryEvaluations > context.budget.maxQueryEvaluations) {
+      throw new Error('computed_field_query_evaluation_budget_exceeded');
+    }
+  }
 
   const stableRows = [...rows].sort((left, right) => rowKey(left).localeCompare(rowKey(right)));
   const summaries: Record<string, { total: number; rows: Record<string, unknown>[]; resultHash: string }> = {};
@@ -187,7 +223,9 @@ function evaluateQueries(
     };
     hashes[id] = result.resultHash;
   }
-  return { summaries, hashes };
+  const result = { summaries, hashes };
+  context?.queryCache.set(cacheKey, result);
+  return result;
 }
 
 function topologicalOrder(byId: Map<string, ComputedFieldSpec>): string[] {

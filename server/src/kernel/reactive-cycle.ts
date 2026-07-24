@@ -2,7 +2,7 @@ import type { AppPackageV2 } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
 import { evaluateRules, type OperationProposal } from './rules';
-import { applyComputedFieldsToRows } from './computed-fields';
+import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 
 export type ReactiveCycleInput = {
   package: AppPackageV2;
@@ -53,15 +53,24 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
 
   const queryEntries = Object.entries(input.package.queries).sort(([left], [right]) => left.localeCompare(right));
   if (queryEntries.length > budget.maxQueries) throw new Error('reactive_cycle_query_budget_exceeded');
+  const computedBudget = {
+    maxQueries: budget.maxQueries,
+    maxRows: budget.maxRows,
+    maxQueryEvaluations: budget.maxQueries * 2,
+  };
   const beforeRows = applyComputedFieldsToRows(
     input.beforeRows,
     input.package.computedFields ?? [],
     input.package.queries,
+    input.beforeRows,
+    createComputedFieldEvaluationContext(computedBudget),
   );
   const afterRows = applyComputedFieldsToRows(
     input.afterRows,
     input.package.computedFields ?? [],
     input.package.queries,
+    input.afterRows,
+    createComputedFieldEvaluationContext(computedBudget),
   );
 
   const transitions: QueryTransitionEvent[] = [];

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
-import { evaluateComputedFields, type ComputedFieldSpec } from '../src/kernel/computed-fields';
+import {
+  applyComputedFieldsToRows,
+  createComputedFieldEvaluationContext,
+  evaluateComputedFields,
+  type ComputedFieldSpec,
+} from '../src/kernel/computed-fields';
 import { validateAppPackage, type AppPackageV2 } from '../src/kernel/package';
 import { evaluatePackage } from '../src/kernel/runtime';
 
@@ -106,5 +111,30 @@ assert.throws(() => evaluateComputedFields({
   specs: [{ id: 'huge', collection: 'projects', dependsOn: [], expression: { and: [true, true, true] } }],
   budget: { maxExpressionNodes: 2 },
 }), /expression_budget_exceeded/);
+
+const cachedRows = applyComputedFieldsToRows(
+  [
+    { id: 'project-b', collection: 'projects' },
+    { id: 'project-a', collection: 'projects' },
+    { id: 'project-c', collection: 'projects' },
+  ],
+  specs,
+  queries,
+  rows,
+  createComputedFieldEvaluationContext({ maxQueryEvaluations: 1 }),
+);
+assert.deepEqual(cachedRows.map((row) => [row.id, row.open_count]), [
+  ['project-b', 2],
+  ['project-a', 2],
+  ['project-c', 2],
+]);
+
+const tightContext = createComputedFieldEvaluationContext({ maxQueryEvaluations: 1 });
+evaluateComputedFields({ ...input, context: tightContext });
+assert.throws(() => evaluateComputedFields({
+  ...input,
+  rows: [...rows, { id: 'task-d', collection: 'tasks', status: 'open' }],
+  context: tightContext,
+}), /computed_field_query_evaluation_budget_exceeded/);
 
 console.log('computed-fields-replay: passed');

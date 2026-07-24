@@ -1,7 +1,7 @@
 import { AppPackageV2, ViewSpec } from './package';
 import { executeQuery, QueryResult } from './query';
 import { renderView, ViewModel } from './view';
-import { applyComputedFieldsToRows } from './computed-fields';
+import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 
 export type PackageRuntimeInput = {
   package: AppPackageV2;
@@ -22,10 +22,11 @@ export type PackageRuntimeOutput = {
 export function evaluatePackage(input: PackageRuntimeInput): PackageRuntimeOutput {
   const { package: appPackage, collections } = input;
   const allRows = Object.values(collections).flatMap((rows) => [...rows]);
+  const computedContext = createComputedFieldEvaluationContext();
   const computedCollections = Object.fromEntries(
     Object.entries(collections).map(([id, rows]) => [
       id,
-      applyComputedFieldsToRows(rows, appPackage.computedFields ?? [], appPackage.queries, allRows),
+      applyComputedFieldsToRows(rows, appPackage.computedFields ?? [], appPackage.queries, allRows, computedContext),
     ]),
   );
   const queries: Record<string, QueryResult<Record<string, unknown>>> = {};
