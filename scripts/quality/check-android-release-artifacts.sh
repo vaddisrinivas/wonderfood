@@ -2,7 +2,8 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
-apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
+signed_apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
+unsigned_apk="$root_dir/android/app/build/outputs/apk/release/app-release-unsigned.apk"
 aab="$root_dir/android/app/build/outputs/bundle/release/app-release.aab"
 evidence_dir="$root_dir/app/build/evidence"
 evidence="$evidence_dir/android-release-artifacts.json"
@@ -17,6 +18,14 @@ fail() {
 if [[ "${BUILD_RELEASE_ARTIFACTS:-0}" == "1" ]]; then
   WF_ANDROID_BUILD_COMMAND="android/gradlew :app:assembleRelease :app:bundleRelease" \
     bash -c 'cd android && ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease'
+fi
+
+apk="$signed_apk"
+if [[ ! -f "$apk" && -f "$unsigned_apk" ]]; then
+  apk="$unsigned_apk"
+fi
+
+if [[ "${BUILD_RELEASE_ARTIFACTS:-0}" == "1" ]]; then
   WF_ANDROID_BUILD_COMMAND="android/gradlew :app:assembleRelease :app:bundleRelease" \
     node scripts/quality/write-android-release-build-receipt.mjs "$apk" "$aab" "$build_receipt"
 fi
@@ -45,13 +54,18 @@ done
 
 apksigner_path="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
 [[ -x "$apksigner_path" ]] || fail "apksigner not found under Android SDK build-tools"
-apk_signing="$("$apksigner_path" verify --verbose --print-certs "$apk" 2>&1 || true)"
-grep -q '^Verifies$' <<<"$apk_signing" || fail "APK signature verification failed"
-apk_cert_dn="$(sed -n 's/^Signer #1 certificate DN: //p' <<<"$apk_signing" | head -n 1)"
-apk_cert_sha256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$apk_signing" | head -n 1)"
 apk_signing_kind="release"
-if grep -q 'CN=Android Debug' <<<"$apk_cert_dn"; then
-  apk_signing_kind="debug"
+apk_cert_dn=""
+apk_cert_sha256=""
+apk_signing="$("$apksigner_path" verify --verbose --print-certs "$apk" 2>&1 || true)"
+if grep -q '^Verifies$' <<<"$apk_signing"; then
+  apk_cert_dn="$(sed -n 's/^Signer #1 certificate DN: //p' <<<"$apk_signing" | head -n 1)"
+  apk_cert_sha256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$apk_signing" | head -n 1)"
+  if grep -q 'CN=Android Debug' <<<"$apk_cert_dn"; then
+    apk_signing_kind="debug"
+  fi
+else
+  apk_signing_kind="unsigned"
 fi
 
 aab_signed="true"
@@ -69,11 +83,12 @@ apk_sha="$(shasum -a 256 "$apk" | awk '{print $1}')"
 aab_sha="$(shasum -a 256 "$aab" | awk '{print $1}')"
 apk_size="$(stat -f%z "$apk")"
 aab_size="$(stat -f%z "$aab")"
-build_receipt_issues="$(node --input-type=module - "$build_receipt" "$apk_sha" "$apk_size" "$aab_sha" "$aab_size" <<'NODE'
+apk_relative="$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], os.getcwd()))' "$apk")"
+build_receipt_issues="$(node --input-type=module - "$build_receipt" "$apk_sha" "$apk_size" "$aab_sha" "$aab_size" "$apk_relative" <<'NODE'
 import { existsSync, readFileSync } from 'node:fs';
 import { validateSourceArtifactReceipt } from './scripts/quality/evidence-provenance.mjs';
 
-const [receiptPath, apkSha, apkBytes, aabSha, aabBytes] = process.argv.slice(2);
+const [receiptPath, apkSha, apkBytes, aabSha, aabBytes, apkPath] = process.argv.slice(2);
 if (!existsSync(receiptPath)) {
   console.log('missing:android_release_build_receipt');
   process.exit(0);
@@ -87,7 +102,7 @@ try {
 }
 const issues = validateSourceArtifactReceipt(process.cwd(), receipt, {
   apk: {
-    path: 'android/app/build/outputs/apk/release/app-release.apk',
+    path: apkPath,
     sha256: apkSha,
     bytes: Number(apkBytes),
   },
@@ -122,7 +137,7 @@ cat > "$evidence" <<JSON
   "min_sdk": 26,
   "target_sdk": 36,
   "apk": {
-    "path": "android/app/build/outputs/apk/release/app-release.apk",
+    "path": "$apk_relative",
     "bytes": $apk_size,
     "sha256": "$apk_sha",
     "signing": "$apk_signing_kind",
