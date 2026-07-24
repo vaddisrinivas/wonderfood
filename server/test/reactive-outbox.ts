@@ -5,6 +5,7 @@ import {
   enqueueReactiveProposals,
   listRunnableReactiveOutboxItems,
   markReactiveOutboxAcked,
+  drainReactiveOutbox,
   markReactiveOutboxFailed,
   markReactiveOutboxRunning,
   parseReactiveOutboxStore,
@@ -73,5 +74,30 @@ assert.throws(
   () => enqueueReactiveProposals(empty, { cycle, event, proposalIds: ['missing-proposal'], now }),
   /missing from cycle/,
 );
+
+const drainChanges: string[] = [];
+const drained = await drainReactiveOutbox({
+  store: queued,
+  now,
+  retryDelayMs: 1_000,
+  executeProposal: (item) => item.proposal.operation === 'request_review'
+    ? { ok: true }
+    : { ok: false, error: 'unexpected operation' },
+  onStoreChange: (store) => drainChanges.push(store.items['proposal-a'].status),
+});
+assert.deepEqual(drained.attempted, ['proposal-a']);
+assert.deepEqual(drained.acked, ['proposal-a']);
+assert.equal(drained.store.items['proposal-a'].status, 'acked');
+assert.deepEqual(drainChanges, ['running', 'acked']);
+
+const failing = await drainReactiveOutbox({
+  store: queued,
+  now,
+  retryDelayMs: 1_000,
+  executeProposal: () => ({ ok: false, error: 'kernel rejected proposal' }),
+});
+assert.deepEqual(failing.failed, [{ proposalId: 'proposal-a', error: 'kernel rejected proposal' }]);
+assert.equal(failing.store.items['proposal-a'].status, 'pending');
+assert.equal(failing.store.items['proposal-a'].attempts, 1);
 
 console.log('reactive-outbox: passed');

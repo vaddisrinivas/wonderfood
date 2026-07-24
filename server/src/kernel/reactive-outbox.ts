@@ -26,6 +26,18 @@ export type ReactiveOutboxStore = Readonly<{
   items: Readonly<Record<string, ReactiveOutboxItem>>;
 }>;
 
+export type ReactiveOutboxExecutionResult = Readonly<
+  | { ok: true }
+  | { ok: false; error: string }
+>;
+
+export type ReactiveOutboxDrainResult = Readonly<{
+  store: ReactiveOutboxStore;
+  attempted: readonly string[];
+  acked: readonly string[];
+  failed: readonly { proposalId: string; error: string }[];
+}>;
+
 export function createReactiveOutboxStore(): ReactiveOutboxStore {
   return immutable({
     schemaVersion: REACTIVE_OUTBOX_SCHEMA_VERSION,
@@ -114,6 +126,51 @@ export function markReactiveOutboxFailed(
     nextAttemptAt: new Date(Date.parse(now) + retryDelayMs).toISOString(),
     lastError: input.error,
   });
+}
+
+export async function drainReactiveOutbox(input: {
+  store: ReactiveOutboxStore;
+  executeProposal: (item: ReactiveOutboxItem) => Promise<ReactiveOutboxExecutionResult> | ReactiveOutboxExecutionResult;
+  now?: string;
+  maxItems?: number;
+  retryDelayMs?: number;
+  onStoreChange?: (store: ReactiveOutboxStore) => void;
+}): Promise<ReactiveOutboxDrainResult> {
+  const now = input.now ?? new Date().toISOString();
+  const maxItems = input.maxItems ?? 16;
+  let store = input.store;
+  const attempted: string[] = [];
+  const acked: string[] = [];
+  const failed: { proposalId: string; error: string }[] = [];
+
+  for (const item of listRunnableReactiveOutboxItems(store, now).slice(0, maxItems)) {
+    attempted.push(item.proposalId);
+    store = markReactiveOutboxRunning(store, item.proposalId, now);
+    input.onStoreChange?.(store);
+    try {
+      const result = await input.executeProposal(store.items[item.proposalId]);
+      if (result.ok) {
+        store = markReactiveOutboxAcked(store, item.proposalId, new Date().toISOString());
+        acked.push(item.proposalId);
+      } else {
+        store = markReactiveOutboxFailed(store, item.proposalId, {
+          error: result.error,
+          retryDelayMs: input.retryDelayMs,
+        });
+        failed.push({ proposalId: item.proposalId, error: result.error });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      store = markReactiveOutboxFailed(store, item.proposalId, {
+        error: message,
+        retryDelayMs: input.retryDelayMs,
+      });
+      failed.push({ proposalId: item.proposalId, error: message });
+    }
+    input.onStoreChange?.(store);
+  }
+
+  return immutable({ store, attempted, acked, failed });
 }
 
 export function serializeReactiveOutboxStore(store: ReactiveOutboxStore): string {

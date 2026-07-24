@@ -7,7 +7,15 @@ import { listRecords } from '../mcp/state';
 import { setOperationCommitObserver } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';
 import { createReactiveReceiptStore, parseReactiveReceiptStore, type ReactiveReceiptStore } from './reactive-receipts';
-import { createReactiveOutboxStore, enqueueReactiveProposals, parseReactiveOutboxStore, type ReactiveOutboxStore } from './reactive-outbox';
+import {
+  createReactiveOutboxStore,
+  drainReactiveOutbox,
+  enqueueReactiveProposals,
+  parseReactiveOutboxStore,
+  type ReactiveOutboxExecutionResult,
+  type ReactiveOutboxItem,
+  type ReactiveOutboxStore,
+} from './reactive-outbox';
 
 const REACTIVE_RUNTIME_SCHEMA_VERSION = 'wonder.reactive-runtime.v1' as const;
 
@@ -101,4 +109,29 @@ export function installReactiveRuntime(path = defaultRuntimePath): void {
       writeRuntimeStore(path, runtime);
     },
   }));
+}
+
+export async function drainReactiveRuntimeOutbox(input: {
+  path?: string;
+  executeProposal: (item: ReactiveOutboxItem) => Promise<ReactiveOutboxExecutionResult> | ReactiveOutboxExecutionResult;
+  now?: string;
+  maxItems?: number;
+  retryDelayMs?: number;
+}) {
+  const path = input.path ?? defaultRuntimePath;
+  let runtime = loadRuntimeStore(path);
+  const result = await drainReactiveOutbox({
+    store: runtime.outbox,
+    executeProposal: input.executeProposal,
+    now: input.now,
+    maxItems: input.maxItems,
+    retryDelayMs: input.retryDelayMs,
+    onStoreChange: (outbox) => {
+      runtime = { ...runtime, outbox };
+      writeRuntimeStore(path, runtime);
+    },
+  });
+  runtime = { ...runtime, outbox: result.store };
+  writeRuntimeStore(path, runtime);
+  return result;
 }
