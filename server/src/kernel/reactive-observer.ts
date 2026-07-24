@@ -1,5 +1,5 @@
 import type { AppPackageV2 } from './package';
-import { recordReactiveCycle, type ReactiveReceiptStore } from './reactive-receipts';
+import { recordReactiveCycle, type ReactiveReceiptStore, type RecordReactiveCycleResult } from './reactive-receipts';
 import { runReactiveCycle, type ReactiveCycleResult } from './reactive-cycle';
 import type { OperationCommitEvent, OperationCommitObserver } from './operation-observer';
 
@@ -8,6 +8,11 @@ export type ReactiveObserverConfig = {
   getRows: () => readonly Record<string, unknown>[];
   getReceiptStore: () => ReactiveReceiptStore;
   setReceiptStore: (store: ReactiveReceiptStore) => void;
+  commitCycle?: (input: {
+    receipt: RecordReactiveCycleResult;
+    cycle: ReactiveCycleResult;
+    event: OperationCommitEvent;
+  }) => void;
   onNewProposals?: (proposalIds: readonly string[], cycle: ReactiveCycleResult, event: OperationCommitEvent) => void;
 };
 
@@ -31,6 +36,10 @@ export function createReactiveCycleObserver(config: ReactiveObserverConfig): Ope
       cycleId: cycle.cycleId,
       proposals: cycle.proposals,
     });
+    if (config.commitCycle) {
+      config.commitCycle({ receipt, cycle, event });
+      return;
+    }
     config.setReceiptStore(receipt.store);
     if (receipt.newProposalIds.length && config.onNewProposals) {
       config.onNewProposals(receipt.newProposalIds, cycle, event);

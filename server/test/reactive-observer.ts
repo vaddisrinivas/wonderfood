@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createReactiveCycleObserver } from '../src/kernel/reactive-observer';
 import { createReactiveReceiptStore } from '../src/kernel/reactive-receipts';
+import { createReactiveOutboxStore, enqueueReactiveProposals } from '../src/kernel/reactive-outbox';
 import { setOperationCommitObserver } from '../src/kernel/operation-observer';
 import { createRecordWithAction, deleteRecord, listRecords } from '../src/mcp/state';
 import type { AppPackageV2 } from '../src/kernel/package';
@@ -15,13 +16,18 @@ const appPackage: AppPackageV2 = {
   }], capabilities: [], acceptanceTests: [],
 };
 let store = createReactiveReceiptStore();
+let outbox = createReactiveOutboxStore();
 const proposals: string[] = [];
 const observer = createReactiveCycleObserver({
   package: appPackage,
   getRows: () => listRecords({ domain: 'food', collection: 'recipe' }) as unknown as Record<string, unknown>[],
   getReceiptStore: () => store,
   setReceiptStore: (next) => { store = next; },
-  onNewProposals: (ids) => proposals.push(...ids),
+  commitCycle: ({ receipt, cycle, event }) => {
+    outbox = enqueueReactiveProposals(outbox, { cycle, event, proposalIds: receipt.newProposalIds, now: '2026-07-23T00:00:00.000Z' });
+    store = receipt.store;
+    proposals.push(...receipt.newProposalIds);
+  },
 });
 setOperationCommitObserver(observer);
 const result = createRecordWithAction({
@@ -32,5 +38,7 @@ setOperationCommitObserver(null);
 assert.equal(result.replayed, false);
 assert.equal(proposals.length, 1);
 assert.equal(Object.keys(store.cycles).length, 1);
+assert.equal(Object.keys(outbox.items).length, 1);
+assert.equal(outbox.items[proposals[0]].status, 'pending');
 deleteRecord('reactive-observer-record');
 console.log('reactive-observer: passed');
