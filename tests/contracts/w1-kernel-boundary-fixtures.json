@@ -1,0 +1,146 @@
+{
+  "boundary": {
+    "canonicalWriteAuthority": [
+      "src/ops/apply.ts",
+      "src/ops/undo.ts",
+      "src/db/recovery.ts",
+      "src/providers/provider-local-copy.ts"
+    ]
+  },
+  "querySpec": {
+    "rows": [
+      {
+        "id": "dinner-1",
+        "collection": "notes",
+        "status": "open",
+        "score": 2
+      },
+      {
+        "id": "meal-2",
+        "collection": "inventory",
+        "status": "open",
+        "score": 4
+      },
+      {
+        "id": "meal-1",
+        "collection": "inventory",
+        "status": "closed",
+        "score": 9
+      },
+      {
+        "id": "meal-3",
+        "collection": "inventory",
+        "status": "open",
+        "score": 4
+      }
+    ],
+    "reorderedRows": [
+      { "id": "meal-3", "collection": "inventory", "status": "open", "score": 4 },
+      { "id": "meal-1", "collection": "inventory", "status": "closed", "score": 9 },
+      { "id": "dinner-1", "collection": "notes", "status": "open", "score": 2 },
+      { "id": "meal-2", "collection": "inventory", "status": "open", "score": 4 }
+    ],
+    "spec": {
+      "from": "records",
+      "where": {
+        "op": "and",
+        "args": [
+          { "op": "eq", "field": "status", "value": "open" }
+        ]
+      },
+      "orderBy": [
+        { "field": "score", "direction": "desc" },
+        { "field": "id", "direction": "asc" }
+      ],
+      "limit": 3,
+      "offset": 0,
+      "project": ["id", "collection", "status", "score"],
+      "provenance": "kernel.contracts.query.v1"
+    },
+    "compiled": {
+      "from": "records",
+      "where": {
+        "op": "eq",
+        "field": "status",
+        "value": "open"
+      },
+      "orderBy": [{ "field": "score", "direction": "desc" }],
+      "limit": 2
+    }
+  },
+  "apply": {
+    "recordId": "kernel-contract-meal",
+    "collection": "inventory",
+    "create": {
+      "title": "Kernel contract record",
+      "properties": {
+        "body": "Kernel baseline",
+        "quantity": 2,
+        "status": "draft"
+      }
+    },
+    "update": {
+      "quantity": 3,
+      "status": "active"
+    }
+  },
+  "reactive": {
+    "package": {
+      "schemaVersion": "wonder.app-package.v2",
+      "id": "kernel-contract-package",
+      "version": "1.1.0",
+      "collections": {
+        "decisions": {
+          "id": "decisions",
+          "fields": {
+            "status": { "type": "text", "indexed": true },
+            "risk": { "type": "number", "indexed": true }
+          }
+        }
+      },
+      "queries": {
+        "high-risk-open": {
+          "from": "decisions",
+          "where": {
+            "op": "and",
+            "args": [
+              { "op": "eq", "field": "status", "value": "open" },
+              { "op": "gte", "field": "risk", "value": 3 }
+            ]
+          },
+          "orderBy": [{ "field": "id", "direction": "asc" }]
+        }
+      },
+      "views": {},
+      "rules": [{
+        "id": "kernel-contract-review-rule",
+        "trigger": {
+          "kind": "query_transition",
+          "query": "high-risk-open",
+          "transition": "enter"
+        },
+        "effect": {
+          "kind": "propose_operation",
+          "operation": {
+            "kind": "update_record",
+            "collection": "decisions",
+            "recordId": "decision-kernel",
+            "changes": { "status": "ready" }
+          }
+        },
+        "mode": "automatic",
+        "maxRunsPerEvent": 1
+      }],
+      "capabilities": [],
+      "acceptanceTests": ["kernel-contract-acceptance"]
+    },
+    "eventId": "op-kernel-contract",
+    "causeId": "cause-kernel-contract",
+    "beforeRows": [
+      { "id": "decision-kernel", "collection": "decisions", "status": "closed", "risk": 4, "revision": 1 }
+    ],
+    "afterRows": [
+      { "id": "decision-kernel", "collection": "decisions", "status": "open", "risk": 4, "revision": 2 }
+    ]
+  }
+}
