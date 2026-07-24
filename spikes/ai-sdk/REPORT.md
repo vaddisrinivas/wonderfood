@@ -10,7 +10,7 @@
 - Base SHA (main): `5f9b091c9667593f74e383554e59eb562211c4dd`
 - Baseline commit at start: `114a0931a3d7099e9eaaad851317b26b794d4cab`
 - Current spike commit SHA: `206e6f5dded7ee49412d7045dd702e3fec8196a6`
-- Current report/merge tip SHA: `8d6da5e502a8aa85d6b9a4829425dbdc8c000155`
+- Current report/merge tip SHA: `1f0a447115e3a1871ff0354fe3f579f1cf5cc0aa`
 
 ## Package pinning
 - `ai`: `7.0.37`
