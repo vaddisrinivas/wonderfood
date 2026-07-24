@@ -8,7 +8,7 @@ Model policy:
 - Model: `gpt-5.3-codex-spark` only.
 - Model fallback is forbidden; report blocked if Spark is unavailable.
 - Tasks must run from `.orchestry/tasks` through `orch run`, not ad hoc parallel shells.
-- Max concurrent ORCH agents: 4.
+- Max concurrent ORCH agents: 10.
 
 Reuse policy:
 

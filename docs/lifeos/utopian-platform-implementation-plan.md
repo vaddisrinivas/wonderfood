@@ -5,7 +5,7 @@
 **Baseline commit:** `a3fc52e`  
 **Scope:** Web and Android debug application  
 **Execution strategy:** Inventory contracts, delete custom infrastructure in an isolated ORCH worktree, adopt the official library, verify, then merge  
-**Maximum parallel implementation lanes:** Four  
+**Maximum parallel implementation lanes:** Ten  
 **Only execution control plane:** ORCH  
 **Only worker adapter:** `codex`  
 **Only worker model:** `gpt-5.3-codex-spark`  
@@ -29,7 +29,7 @@ defaults:
     adapter: codex
     model: gpt-5.3-codex-spark
 scheduling:
-  max_concurrent_agents: 4
+  max_concurrent_agents: 10
 ```
 
 Hard rules:
@@ -40,7 +40,7 @@ Hard rules:
 - Every task references its plan ID and exact section.
 - Every task declares owned paths, forbidden paths, dependencies, checks,
   rollback, report path, and stop conditions.
-- Four agents is a ceiling. Overlapping write scopes run serially.
+- Ten agents is a ceiling. Overlapping write scopes run serially.
 - Every report records ORCH task/run/agent IDs, confirmed model, baseline and
   result commits, changed files, checks, evidence class, remaining risk, and
   deletion unlocked.
@@ -475,12 +475,18 @@ If two tasks need the same file:
 
 ## 6.4 Maximum concurrency
 
-Maximum four active lanes:
+Maximum ten active lanes:
 
 1. Kernel/contracts
 2. AI/chat
 3. Runtime/workflow/provider
 4. MCP or focused product proof
+5. Query contracts and parity
+6. Rules
+7. Workflow lifecycle
+8. Provider verification
+9. Android/Food integration
+10. Independent verification and cleanup
 
 Concurrency is a cap, not a target. Use fewer lanes when files overlap.
 
