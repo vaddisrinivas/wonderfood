@@ -12,7 +12,7 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-proposal-'));
 process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
 const { executeReactiveProposal } = await import('../src/kernel/reactive-proposal-executor');
-const { findActionByIdempotencyKey, getActionEvent } = await import('../src/mcp/state');
+const { createRecord, findActionByIdempotencyKey, findRecord, getActionEvent } = await import('../src/mcp/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
 const authorization = {
@@ -146,7 +146,201 @@ assert.equal(blocked.error, 'proposal_policy_blocked');
 
 const replay = executeReactiveProposal(queued.items['proposal-ledger'], { actor: 'ignored' });
 assert.equal(replay.ok, true);
-assert.equal(replay.receipt?.replayed, true);
+assert.equal(replay.receipt?.replayed, false);
 assert.equal(replay.receipt?.actionId, action.id);
+
+const autoEvent = { kind: 'operation' as const, id: 'auto-source-operation' };
+const autoTemplate = { kind: 'create_record' as const, collection: 'recipe', recordId: 'auto-created-record', properties: { title: 'Auto created', status: 'queued' } };
+const autoAuthorization = {
+  policyId: 'wonder.reactive-proposal-policy' as const,
+  policyVersion: 'v1' as const,
+  allowed: true,
+  risk: 'low' as const,
+  reviewRequired: false,
+  requiredCapability: 'reactive:auto:create_record',
+  capabilityPresent: true,
+  reason: 'automatic_policy_authorized',
+};
+const autoDryRun = {
+  ok: true,
+  effect: 'queue_review_action' as const,
+  executable: true,
+  reason: 'proposal_can_be_queued',
+};
+const autoKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-create-rule',
+  event: autoEvent,
+  causeId: 'auto-cause',
+  operationTemplate: autoTemplate,
+});
+const autoItem = {
+  ...queued.items['proposal-ledger'],
+  proposalId: 'auto-create-proposal',
+  eventId: 'auto-source-operation',
+  causeId: 'auto-cause',
+  proposal: {
+    ...queued.items['proposal-ledger'].proposal,
+    id: 'auto-create-proposal',
+    eventId: 'auto-source-operation',
+    event: autoEvent,
+    ruleId: 'auto-create-rule',
+    operation: 'create_record',
+    operationTemplate: autoTemplate,
+    mode: 'automatic' as const,
+    causeId: 'auto-cause',
+    envelope: {
+      ...queued.items['proposal-ledger'].proposal.envelope,
+      proposalId: 'auto-create-proposal',
+      operation: 'create_record',
+      operationTemplate: autoTemplate,
+      mode: 'automatic' as const,
+      ruleId: 'auto-create-rule',
+      eventId: 'auto-source-operation',
+      event: autoEvent,
+      causeId: 'auto-cause',
+      idempotencyKey: autoKey,
+      review: { required: false, reason: 'policy_authorized' as const, policyId: autoAuthorization.policyId, policyVersion: autoAuthorization.policyVersion },
+      authorization: autoAuthorization,
+      dryRun: autoDryRun,
+      evidence: {},
+    },
+  },
+};
+const executed = executeReactiveProposal(autoItem, { actor: 'test-reactive' });
+assert.equal(executed.ok, true);
+assert.equal(executed.receipt?.status, 'completed');
+assert.equal(findRecord('auto-created-record')?.properties.status, 'queued');
+const executedReplay = executeReactiveProposal(autoItem, { actor: 'ignored' });
+assert.equal(executedReplay.ok, true);
+assert.equal(executedReplay.receipt?.replayed, true);
+
+const updateSeed = createRecord({
+  id: 'auto-update-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Auto update seed',
+  properties: { status: 'open' },
+  relations: [],
+  source: { provider: 'user', external_id: 'auto-update-record', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const updateEvent = { kind: 'operation' as const, id: 'auto-update-operation' };
+const updateTemplate = { kind: 'update_record' as const, collection: 'recipe', recordId: 'auto-update-record', expectedRevision: updateSeed.revision, changes: { status: 'done' } };
+const updateAuthorization = {
+  ...autoAuthorization,
+  risk: 'standard' as const,
+  reviewRequired: true,
+  requiredCapability: 'reactive:propose:update_record',
+  capabilityPresent: false,
+  reason: 'automatic_requires_policy_or_review',
+};
+const updateKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-update-rule',
+  event: updateEvent,
+  causeId: 'update-cause',
+  operationTemplate: updateTemplate,
+});
+const updateItem = {
+  ...autoItem,
+  proposalId: 'auto-update-proposal',
+  eventId: 'auto-update-operation',
+  causeId: 'update-cause',
+  proposal: {
+    ...autoItem.proposal,
+    id: 'auto-update-proposal',
+    eventId: 'auto-update-operation',
+    event: updateEvent,
+    ruleId: 'auto-update-rule',
+    operation: 'update_record',
+    operationTemplate: updateTemplate,
+    causeId: 'update-cause',
+    envelope: {
+      ...autoItem.proposal.envelope,
+      proposalId: 'auto-update-proposal',
+      operation: 'update_record',
+      operationTemplate: updateTemplate,
+      ruleId: 'auto-update-rule',
+      eventId: 'auto-update-operation',
+      event: updateEvent,
+      causeId: 'update-cause',
+      idempotencyKey: updateKey,
+      review: { required: true, reason: 'policy_required' as const, policyId: updateAuthorization.policyId, policyVersion: updateAuthorization.policyVersion },
+      authorization: updateAuthorization,
+    },
+  },
+};
+assert.equal(executeReactiveProposal(updateItem).ok, true, 'review-required update should queue without approval');
+assert.equal(findRecord('auto-update-record')?.properties.status, 'open');
+const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', approved: true });
+assert.equal(approvedUpdate.ok, true);
+assert.equal(approvedUpdate.receipt?.status, 'completed');
+assert.equal(findRecord('auto-update-record')?.properties.status, 'done');
+
+const archiveSeed = createRecord({
+  id: 'auto-archive-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Auto archive seed',
+  properties: { status: 'stale' },
+  relations: [],
+  source: { provider: 'user', external_id: 'auto-archive-record', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const archiveEvent = { kind: 'operation' as const, id: 'auto-archive-operation' };
+const archiveTemplate = { kind: 'archive_record' as const, collection: 'recipe', recordId: archiveSeed.id };
+const archiveAuthorization = {
+  ...autoAuthorization,
+  risk: 'sensitive' as const,
+  reviewRequired: true,
+  requiredCapability: 'reactive:propose:archive_record',
+  capabilityPresent: false,
+  reason: 'automatic_requires_policy_or_review',
+};
+const archiveKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-archive-rule',
+  event: archiveEvent,
+  causeId: 'archive-cause',
+  operationTemplate: archiveTemplate,
+});
+const archiveItem = {
+  ...updateItem,
+  proposalId: 'auto-archive-proposal',
+  eventId: 'auto-archive-operation',
+  causeId: 'archive-cause',
+  proposal: {
+    ...updateItem.proposal,
+    id: 'auto-archive-proposal',
+    eventId: 'auto-archive-operation',
+    event: archiveEvent,
+    ruleId: 'auto-archive-rule',
+    operation: 'archive_record',
+    operationTemplate: archiveTemplate,
+    causeId: 'archive-cause',
+    envelope: {
+      ...updateItem.proposal.envelope,
+      proposalId: 'auto-archive-proposal',
+      operation: 'archive_record',
+      operationTemplate: archiveTemplate,
+      ruleId: 'auto-archive-rule',
+      eventId: 'auto-archive-operation',
+      event: archiveEvent,
+      causeId: 'archive-cause',
+      idempotencyKey: archiveKey,
+      authorization: archiveAuthorization,
+    },
+  },
+};
+assert.equal(executeReactiveProposal(archiveItem).ok, true, 'review-required archive should queue without approval');
+assert.equal(findRecord('auto-archive-record')?.archived_at, null);
+const approvedArchive = executeReactiveProposal(archiveItem, { actor: 'approver', approved: true });
+assert.equal(approvedArchive.ok, true);
+assert.equal(approvedArchive.receipt?.status, 'completed');
+assert.ok(findRecord('auto-archive-record')?.archived_at);
 
 console.log('reactive-proposal-executor: passed');
