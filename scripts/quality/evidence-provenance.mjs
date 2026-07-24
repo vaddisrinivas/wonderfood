@@ -15,8 +15,10 @@ export function currentGit(root) {
     head: git(root, ['rev-parse', '--short', 'HEAD']),
     fullHead: git(root, ['rev-parse', 'HEAD']),
     tree: git(root, ['rev-parse', 'HEAD^{tree}']),
+    tree_hash: git(root, ['rev-parse', 'HEAD^{tree}']),
     dirty: dirtyStatus.length > 0,
     dirtyDiffHash: createHash('sha256').update(dirtyStatus).digest('hex'),
+    dirty_diff_hash: createHash('sha256').update(dirtyStatus).digest('hex'),
   };
 }
 
