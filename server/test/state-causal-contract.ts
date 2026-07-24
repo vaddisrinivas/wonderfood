@@ -27,6 +27,8 @@ const write = state.updateRecordWithAction({
   patch: { title: 'Causal contract updated' },
 });
 assert.equal(write.action.status, 'completed');
+const verified = state.attachActionVerification(write.action.id, { ok: true, verifierVersion: 'test.verifier.v1' });
+assert.equal((verified?.verification_json as { ok?: boolean }).ok, true);
 assert.equal(write.action.operation_id, 'operation-causal-1');
 assert.equal(write.action.cause_id, 'cause-causal-1');
 assert.equal(write.action.expected_revision, record.revision);

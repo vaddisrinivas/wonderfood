@@ -64,6 +64,7 @@ export type ActionEvent = {
   operation_id: string;
   cause_id: string;
   expected_revision: number | null;
+  verification_json?: unknown | null;
 };
 
 type PersistedStore = {
@@ -169,6 +170,7 @@ function loadStore(): PersistedStore {
           operation_id: action.operation_id || `${action.id || id}:operation`,
           cause_id: action.cause_id || action.id || id,
           expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
+          verification_json: action.verification_json ?? null,
         }]),
       ),
     };
@@ -514,6 +516,7 @@ function cloneActionEvent(action: ActionEvent): ActionEvent {
     operation_id: action.operation_id || `${action.id}:operation`,
     cause_id: action.cause_id || action.id,
     expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
+    verification_json: action.verification_json ?? null,
     record_ids: [...action.record_ids],
     source_ids: [...action.source_ids],
   };
@@ -1109,6 +1112,7 @@ export function createActionEvent(input: {
     operation_id: input.operationId?.trim() || `${input.id}:operation`,
     cause_id: input.causeId?.trim() || input.id,
     expected_revision: input.expectedRevision ?? null,
+    verification_json: null,
   };
 
   store.actions[event.id] = event;
@@ -1129,6 +1133,22 @@ export function markActionCompleted(id: string, command?: string, after?: unknow
     status: 'completed',
     command: command ?? existing.command,
     after_json: after ?? existing.after_json,
+    updated_at: nowIso(),
+  };
+  if (options.persist !== false) {
+    persistStore();
+  }
+  return cloneActionEvent(store.actions[id]);
+}
+
+export function attachActionVerification(id: string, verification: unknown, options: PersistOptions = {}) {
+  const existing = store.actions[id];
+  if (!existing) {
+    return null;
+  }
+  store.actions[id] = {
+    ...existing,
+    verification_json: verification,
     updated_at: nowIso(),
   };
   if (options.persist !== false) {

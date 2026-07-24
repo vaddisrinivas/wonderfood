@@ -212,10 +212,12 @@ const executed = executeReactiveProposal(autoItem, { actor: 'test-reactive' });
 assert.equal(executed.ok, true);
 assert.equal(executed.receipt?.status, 'completed');
 assert.equal(executed.receipt?.verification?.reason, 'canonical_create_verified');
+assert.equal(getActionEvent(executed.receipt?.actionId ?? '')?.verification_json && (getActionEvent(executed.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_create_verified');
 assert.equal(findRecord('auto-created-record')?.properties.status, 'queued');
 const executedReplay = executeReactiveProposal(autoItem, { actor: 'ignored' });
 assert.equal(executedReplay.ok, true);
 assert.equal(executedReplay.receipt?.replayed, true);
+assert.equal(executedReplay.receipt?.verification?.reason, 'canonical_create_verified');
 
 const updateSeed = createRecord({
   id: 'auto-update-record',
@@ -280,6 +282,7 @@ const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', 
 assert.equal(approvedUpdate.ok, true);
 assert.equal(approvedUpdate.receipt?.status, 'completed');
 assert.equal(approvedUpdate.receipt?.verification?.reason, 'canonical_update_verified');
+assert.equal((getActionEvent(approvedUpdate.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_update_verified');
 assert.equal(findRecord('auto-update-record')?.properties.status, 'done');
 
 const archiveSeed = createRecord({
@@ -344,6 +347,7 @@ const approvedArchive = executeReactiveProposal(archiveItem, { actor: 'approver'
 assert.equal(approvedArchive.ok, true);
 assert.equal(approvedArchive.receipt?.status, 'completed');
 assert.equal(approvedArchive.receipt?.verification?.reason, 'canonical_archive_verified');
+assert.equal((getActionEvent(approvedArchive.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_archive_verified');
 assert.ok(findRecord('auto-archive-record')?.archived_at);
 
 console.log('reactive-proposal-executor: passed');

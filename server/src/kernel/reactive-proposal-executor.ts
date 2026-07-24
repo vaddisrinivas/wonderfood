@@ -1,5 +1,6 @@
 import {
   archiveRecordWithAction,
+  attachActionVerification,
   createActionEvent,
   createRecordWithAction,
   findActionByIdempotencyKey,
@@ -55,6 +56,7 @@ export function executeReactiveProposal(
         idempotencyKey: envelope.idempotencyKey,
         replayed: true,
         status: existing.status,
+        verification: isVerificationReceipt(existing.verification_json) ? existing.verification_json : undefined,
       },
     };
   }
@@ -72,13 +74,14 @@ export function executeReactiveProposal(
     if (!write.verification?.ok) {
       return { ok: false, error: write.verification?.reason ?? 'proposal_verification_failed' };
     }
+    const verifiedAction = attachActionVerification(write.action.id, write.verification) ?? write.action;
     return {
       ok: true,
       receipt: {
-        actionId: write.action.id,
+        actionId: verifiedAction.id,
         idempotencyKey: envelope.idempotencyKey,
         replayed: write.replayed,
-        status: write.action.status,
+        status: verifiedAction.status,
         verification: write.verification,
       },
     };
@@ -228,4 +231,12 @@ function executeApprovedCommand(input: {
     idempotencyKey: envelope.idempotencyKey,
   });
   return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(template.recordId) }) };
+}
+
+function isVerificationReceipt(value: unknown): value is ReactiveProposalVerificationReceipt {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && (value as { verifierVersion?: unknown }).verifierVersion === 'wonder.reactive-proposal-verifier.v1'
+    && typeof (value as { ok?: unknown }).ok === 'boolean';
 }
