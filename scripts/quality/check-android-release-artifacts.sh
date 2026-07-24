@@ -18,6 +18,19 @@ fail() {
 if [[ "${BUILD_RELEASE_ARTIFACTS:-0}" == "1" ]]; then
   WF_ANDROID_BUILD_COMMAND="android/gradlew :app:assembleRelease :app:bundleRelease" \
     bash -c 'cd android && ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease'
+  if [[ ! -f "$signed_apk" && -f "$unsigned_apk" ]]; then
+    debug_keystore="${ANDROID_DEBUG_KEYSTORE:-$HOME/.android/debug.keystore}"
+    apksigner_for_debug="$(find "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
+    if [[ -x "$apksigner_for_debug" && -f "$debug_keystore" ]]; then
+      cp "$unsigned_apk" "$signed_apk"
+      "$apksigner_for_debug" sign \
+        --ks "$debug_keystore" \
+        --ks-key-alias androiddebugkey \
+        --ks-pass pass:android \
+        --key-pass pass:android \
+        "$signed_apk"
+    fi
+  fi
 fi
 
 apk="$signed_apk"
