@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findRecord, getActionEvent } from '../mcp/state';
 
 export type VerificationResult = {
   actionId: string;
@@ -59,17 +60,39 @@ export async function verifyResult(input: VerifyInput): Promise<VerificationResu
     };
   }
 
-  if (input.actualStatus !== 'completed') {
+  const action = getActionEvent(input.actionId);
+  if (!action) {
     return {
       actionId: input.actionId,
       expected: input.expected,
       status: 'denied',
-      checks: ['input_shape', 'canonical_postcondition'],
-      reason: `Action status is ${input.actualStatus ?? 'unknown'}; canonical completion was not proven.`,
+      checks: ['action_event', 'canonical_postcondition'],
+      reason: 'Canonical action event was not found.',
     };
   }
 
-  if ((reversibleRecordAction || input.expectedSupportsUndo) && (!input.actualRecordIds || input.actualRecordIds.length === 0)) {
+  if (action.tool !== input.expected) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['action_event', 'action_tool'],
+      reason: `Action tool is ${action.tool}; expected ${input.expected}.`,
+    };
+  }
+
+  if (action.status !== 'completed') {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['action_event', 'canonical_postcondition'],
+      reason: `Action status is ${action.status}; canonical completion was not proven.`,
+    };
+  }
+
+  const canonicalRecordIds = action.record_ids.filter((id) => typeof id === 'string' && id.trim().length > 0);
+  if ((reversibleRecordAction || input.expectedSupportsUndo) && canonicalRecordIds.length === 0) {
     return {
       actionId: input.actionId,
       expected: input.expected,
@@ -79,8 +102,29 @@ export async function verifyResult(input: VerifyInput): Promise<VerificationResu
     };
   }
 
-  const checks = ['idempotent', 'canonical_postcondition', 'source_bound'];
-  if (!input.sourceBound) {
+  const missingRecordId = canonicalRecordIds.find((recordId) => !findRecord(recordId));
+  if (missingRecordId) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['canonical_postcondition', 'record_identity', 'record_reread'],
+      reason: `Affected record ${missingRecordId} was not found in canonical state.`,
+    };
+  }
+
+  if (supportsUndo && (action.undo_payload_json === null || action.undo_payload_json === undefined)) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['canonical_postcondition', 'undo_ready'],
+      reason: 'Undo payload was not found on the canonical action event.',
+    };
+  }
+
+  const checks = ['action_event', 'idempotent', 'canonical_postcondition', 'record_reread', 'source_bound'];
+  if (action.source_ids.length === 0) {
     checks.push('source_bound_fallback');
   }
   if (supportsUndo) {
