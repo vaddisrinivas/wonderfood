@@ -86,6 +86,9 @@ assert.equal(first.proposals[0].envelope.evidence.queryId, 'high-risk-open');
 assert.equal(first.proposals[0].envelope.evidence.transition, 'enter');
 assert.equal(first.proposals[0].envelope.evidence.beforeHash, first.queryHashes['high-risk-open'].before);
 assert.equal(first.proposals[0].envelope.evidence.afterHash, first.queryHashes['high-risk-open'].after);
+assert.match(first.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.match(first.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.equal(first.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
 
 const colonQueryPackage: AppPackageV2 = {
   ...pkg,
@@ -118,6 +121,9 @@ assert.equal(colonCycle.proposals[0].envelope.event.transition, 'enter');
 assert.equal(colonCycle.proposals[0].envelope.evidence.queryId, 'surface:home');
 assert.equal(colonCycle.proposals[0].envelope.evidence.beforeHash, colonCycle.queryHashes['surface:home'].before);
 assert.equal(colonCycle.proposals[0].envelope.evidence.afterHash, colonCycle.queryHashes['surface:home'].after);
+assert.match(colonCycle.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.match(colonCycle.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.equal(colonCycle.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
 assert.equal(colonCycle.proposals[0].envelope.review.required, true);
 assert.equal(colonCycle.proposals[0].envelope.review.reason, 'policy_required');
 assert.match(colonCycle.proposals[0].envelope.idempotencyKey, /^reactive:[a-f0-9]{64}$/);

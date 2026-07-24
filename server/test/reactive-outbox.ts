@@ -18,7 +18,15 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 const now = '2026-07-23T00:00:00.000Z';
 const proposalEvent = { kind: 'query_transition' as const, id: 'open:enter', queryId: 'open', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
-const proposalEvidence = { queryId: 'open', transition: 'enter' as const, beforeHash: 'before-hash', afterHash: 'after-hash' };
+const proposalEvidence = {
+  queryId: 'open',
+  transition: 'enter' as const,
+  beforeHash: 'before-hash',
+  afterHash: 'after-hash',
+  querySpecHash: 'sha256:query',
+  packageHash: 'sha256:package',
+  evaluatorVersion: 'wonder.query-evaluator.v1',
+};
 const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
   packageId: 'package-a',
   packageVersion: '1.0.0',

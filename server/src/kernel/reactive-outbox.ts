@@ -250,6 +250,9 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
           transition: envelope.evidence.transition,
           beforeHash: envelope.evidence.beforeHash,
           afterHash: envelope.evidence.afterHash,
+          querySpecHash: envelope.evidence.querySpecHash,
+          packageHash: envelope.evidence.packageHash,
+          evaluatorVersion: envelope.evidence.evaluatorVersion,
         }
         : undefined,
     });
@@ -337,6 +340,16 @@ function validateEnvelopeEvidence(proposalId: string, envelope: ReactiveCyclePro
   }
   if ((envelope.evidence.beforeHash === undefined) !== (envelope.evidence.afterHash === undefined)) {
     throw new Error(`Reactive outbox item ${proposalId} has incomplete evidence hashes.`);
+  }
+  const hasResultHashes = envelope.evidence.beforeHash !== undefined && envelope.evidence.afterHash !== undefined;
+  for (const field of ['querySpecHash', 'packageHash', 'evaluatorVersion']) {
+    const value = envelope.evidence[field as 'querySpecHash' | 'packageHash' | 'evaluatorVersion'];
+    if (hasResultHashes && (typeof value !== 'string' || !value.trim())) {
+      throw new Error(`Reactive outbox item ${proposalId} has incomplete evidence context.`);
+    }
+    if (!hasResultHashes && value !== undefined) {
+      throw new Error(`Reactive outbox item ${proposalId} has unexpected evidence context.`);
+    }
   }
 }
 

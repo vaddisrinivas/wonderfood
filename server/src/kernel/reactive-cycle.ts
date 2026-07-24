@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { AppPackageV2 } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
@@ -39,6 +40,7 @@ const DEFAULT_BUDGET = {
   maxTransitions: 256,
   maxProposals: 256,
 };
+const QUERY_EVALUATOR_VERSION = 'wonder.query-evaluator.v1' as const;
 
 /**
  * Deterministic reactive pass. Queries observe immutable before/after rows;
@@ -153,7 +155,7 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
         envelope: createProposalEnvelope({
           proposalId: id,
           proposal,
-          packageId: input.package.id,
+          package: input.package,
           eventId: proposal.eventId,
           queryHashes,
         }),
@@ -176,13 +178,21 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
 function createProposalEnvelope(input: {
   proposalId: string;
   proposal: OperationProposal & { eventId: string };
-  packageId: string;
+  package: AppPackageV2;
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
 }): OperationProposalEnvelope {
   const queryId = input.proposal.event.kind === 'query_transition' ? input.proposal.event.queryId : undefined;
   const transition = input.proposal.event.kind === 'query_transition' ? input.proposal.event.transition : undefined;
   const queryEvidence = queryId ? input.queryHashes[queryId] : undefined;
+  const packageHash = stableSha256(input.package);
+  const querySpecHash = queryId && input.package.queries[queryId] ? stableSha256(input.package.queries[queryId]) : undefined;
+  const evidence = {
+    ...(queryId ? { queryId } : {}),
+    ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
+    ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
+    ...(querySpecHash ? { querySpecHash, packageHash, evaluatorVersion: QUERY_EVALUATOR_VERSION } : {}),
+  };
   return {
     schemaVersion: 'wonder.operation-proposal.v1',
     proposalId: input.proposalId,
@@ -190,30 +200,26 @@ function createProposalEnvelope(input: {
     operationTemplate: input.proposal.operationTemplate,
     mode: input.proposal.mode,
     ruleId: input.proposal.ruleId,
-    packageId: input.packageId,
+    packageId: input.package.id,
     packageVersion: input.proposal.packageVersion,
     eventId: input.eventId,
     event: input.proposal.event,
     causeId: input.proposal.causeId,
     depth: input.proposal.depth,
     idempotencyKey: createOperationProposalIdempotencyKey({
-      packageId: input.packageId,
+      packageId: input.package.id,
       packageVersion: input.proposal.packageVersion,
       ruleId: input.proposal.ruleId,
       event: input.proposal.event,
       causeId: input.proposal.causeId,
       operationTemplate: input.proposal.operationTemplate,
-      evidence: queryEvidence ? { queryId, transition, beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : undefined,
+      evidence: queryEvidence ? evidence : undefined,
     }),
     review: {
       required: true,
       reason: input.proposal.mode === 'automatic' ? 'policy_required' : 'suggest_mode',
     },
-    evidence: {
-      ...(queryId ? { queryId } : {}),
-      ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
-      ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
-    },
+    evidence,
   };
 }
 
@@ -264,6 +270,10 @@ function stableId(value: unknown) {
     hash = Math.imul(hash, 16777619);
   }
   return `reactive:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function stableSha256(value: unknown) {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
 }
 
 function stableJson(value: unknown): string {

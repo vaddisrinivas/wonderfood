@@ -15,7 +15,15 @@ const { executeReactiveProposal } = await import('../src/kernel/reactive-proposa
 const { findActionByIdempotencyKey, getActionEvent } = await import('../src/mcp/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
-const proposalEvidence = { queryId: 'review', transition: 'enter' as const, beforeHash: 'before-hash', afterHash: 'after-hash' };
+const proposalEvidence = {
+  queryId: 'review',
+  transition: 'enter' as const,
+  beforeHash: 'before-hash',
+  afterHash: 'after-hash',
+  querySpecHash: 'sha256:query',
+  packageHash: 'sha256:package',
+  evaluatorVersion: 'wonder.query-evaluator.v1',
+};
 const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
   packageId: 'food',
   packageVersion: '1.0.0',
