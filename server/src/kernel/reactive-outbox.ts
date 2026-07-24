@@ -262,9 +262,12 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
           querySpecHash: envelope.evidence.querySpecHash,
           packageHash: envelope.evidence.packageHash,
           evaluatorVersion: envelope.evidence.evaluatorVersion,
-          beforeStateRevision: envelope.evidence.beforeStateRevision,
-          afterStateRevision: envelope.evidence.afterStateRevision,
-          eventOffset: envelope.evidence.eventOffset,
+          targetRecordId: envelope.evidence.targetRecordId,
+          targetBeforeRevision: envelope.evidence.targetBeforeRevision,
+          targetAfterRevision: envelope.evidence.targetAfterRevision,
+          beforeVersionVectorHash: envelope.evidence.beforeVersionVectorHash,
+          afterVersionVectorHash: envelope.evidence.afterVersionVectorHash,
+          sourceEventId: envelope.evidence.sourceEventId,
         }
         : undefined,
     });

@@ -81,7 +81,7 @@ function evaluateProviderAuthority(input: {
   authorityProvider?: string;
 }): ReactiveProposalPolicyResult['providerAuthority'] {
   const targetProvider = normalizeProvider(input.targetProvider);
-  const authorityProvider = normalizeProvider(input.authorityProvider ?? process.env.LIFEOS_AUTHORITY_PROVIDER ?? 'notion');
+  const authorityProvider = normalizeProvider(input.authorityProvider ?? 'notion');
   const localProvider = targetProvider === 'user' || targetProvider === 'sqlite' || targetProvider === 'local_sqlite';
   const requiredCapability = localProvider || input.operationTemplate.kind === 'custom'
     ? null

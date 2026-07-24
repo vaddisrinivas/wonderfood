@@ -89,9 +89,9 @@ assert.equal(first.proposals[0].envelope.evidence.afterHash, first.queryHashes['
 assert.match(first.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.match(first.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.equal(first.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
-assert.equal(first.proposals[0].envelope.evidence.beforeStateRevision, 7);
-assert.equal(first.proposals[0].envelope.evidence.afterStateRevision, 7);
-assert.equal(first.proposals[0].envelope.evidence.eventOffset, 'op-open-decision-a');
+assert.equal(first.proposals[0].envelope.evidence.sourceEventId, 'op-open-decision-a');
+assert.match(first.proposals[0].envelope.evidence.beforeVersionVectorHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.match(first.proposals[0].envelope.evidence.afterVersionVectorHash ?? '', /^sha256:[a-f0-9]{64}$/);
 
 const colonQueryPackage: AppPackageV2 = {
   ...pkg,
@@ -127,7 +127,10 @@ assert.equal(colonCycle.proposals[0].envelope.evidence.afterHash, colonCycle.que
 assert.match(colonCycle.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.match(colonCycle.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.equal(colonCycle.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
-assert.equal(colonCycle.proposals[0].envelope.evidence.eventOffset, 'op-open-decision-a');
+assert.equal(colonCycle.proposals[0].envelope.evidence.sourceEventId, 'op-open-decision-a');
+assert.equal(colonCycle.proposals[0].envelope.evidence.targetRecordId, 'decision-a');
+assert.equal(colonCycle.proposals[0].envelope.evidence.targetBeforeRevision, 1);
+assert.equal(colonCycle.proposals[0].envelope.evidence.targetAfterRevision, 2);
 assert.equal(colonCycle.proposals[0].envelope.review.required, true);
 assert.equal(colonCycle.proposals[0].envelope.review.reason, 'policy_required');
 assert.equal(colonCycle.proposals[0].envelope.authorization.requiredCapability, 'reactive:auto:update_record');

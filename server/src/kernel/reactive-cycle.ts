@@ -161,12 +161,10 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
           eventId: proposal.eventId,
           queryHashes,
           rows: [...afterRows, ...beforeRows],
+          beforeRows,
+          afterRows,
           authorityProvider: input.authorityProvider,
-          stateEvidence: {
-            beforeStateRevision: maxRevision(beforeRows),
-            afterStateRevision: maxRevision(afterRows),
-            eventOffset: input.event.id,
-          },
+          sourceEventId: input.event.id,
         }),
       };
     })
@@ -191,12 +189,10 @@ function createProposalEnvelope(input: {
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
   rows: readonly Record<string, unknown>[];
+  beforeRows: readonly Record<string, unknown>[];
+  afterRows: readonly Record<string, unknown>[];
   authorityProvider?: string;
-  stateEvidence: {
-    beforeStateRevision?: number;
-    afterStateRevision?: number;
-    eventOffset: string;
-  };
+  sourceEventId: string;
 }): OperationProposalEnvelope {
   const queryId = input.proposal.event.kind === 'query_transition' ? input.proposal.event.queryId : undefined;
   const transition = input.proposal.event.kind === 'query_transition' ? input.proposal.event.transition : undefined;
@@ -219,7 +215,10 @@ function createProposalEnvelope(input: {
     ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
     ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
     ...(querySpecHash ? { querySpecHash, packageHash, evaluatorVersion: QUERY_EVALUATOR_VERSION } : {}),
-    ...input.stateEvidence,
+    ...targetRevisionEvidence(input.proposal.operationTemplate, input.beforeRows, input.afterRows),
+    beforeVersionVectorHash: versionVectorHash(input.beforeRows),
+    afterVersionVectorHash: versionVectorHash(input.afterRows),
+    sourceEventId: input.sourceEventId,
   };
   return {
     schemaVersion: 'wonder.operation-proposal.v1',
@@ -277,13 +276,6 @@ function rowKey(row: Record<string, unknown>) {
   return typeof row.id === 'string' ? row.id : stableJson(row);
 }
 
-function maxRevision(rows: readonly Record<string, unknown>[]): number | undefined {
-  const revisions = rows
-    .map((row) => row.revision)
-    .filter((revision): revision is number => typeof revision === 'number' && Number.isInteger(revision) && revision >= 0);
-  return revisions.length ? Math.max(...revisions) : undefined;
-}
-
 function targetProviderFor(operationTemplate: OperationProposal['operationTemplate'], rows: readonly Record<string, unknown>[]): string {
   if (operationTemplate.kind === 'custom' || operationTemplate.kind === 'create_record') return 'user';
   const record = rows.find((row) => row.id === operationTemplate.recordId);
@@ -291,6 +283,38 @@ function targetProviderFor(operationTemplate: OperationProposal['operationTempla
   if (!source || typeof source !== 'object' || Array.isArray(source)) return 'user';
   const provider = (source as { provider?: unknown }).provider;
   return typeof provider === 'string' && provider.trim() ? provider.trim() : 'user';
+}
+
+function targetRevisionEvidence(
+  operationTemplate: OperationProposal['operationTemplate'],
+  beforeRows: readonly Record<string, unknown>[],
+  afterRows: readonly Record<string, unknown>[],
+): { targetRecordId?: string; targetBeforeRevision?: number; targetAfterRevision?: number } {
+  if (operationTemplate.kind === 'custom') return {};
+  const targetRecordId = operationTemplate.kind === 'create_record'
+    ? operationTemplate.recordId
+    : operationTemplate.recordId;
+  if (!targetRecordId) return {};
+  const before = beforeRows.find((row) => row.id === targetRecordId);
+  const after = afterRows.find((row) => row.id === targetRecordId);
+  return {
+    targetRecordId,
+    ...(revisionOf(before) !== undefined ? { targetBeforeRevision: revisionOf(before) } : {}),
+    ...(revisionOf(after) !== undefined ? { targetAfterRevision: revisionOf(after) } : operationTemplate.kind === 'create_record' ? { targetAfterRevision: 1 } : {}),
+  };
+}
+
+function revisionOf(row: Record<string, unknown> | undefined): number | undefined {
+  return typeof row?.revision === 'number' && Number.isInteger(row.revision) && row.revision >= 0 ? row.revision : undefined;
+}
+
+function versionVectorHash(rows: readonly Record<string, unknown>[]): string {
+  return stableSha256(rows
+    .map((row) => ({
+      id: typeof row.id === 'string' ? row.id : rowKey(row),
+      revision: revisionOf(row),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id)));
 }
 
 function dedupeProposals<T extends OperationProposal & { eventId: string }>(proposals: T[]): T[] {

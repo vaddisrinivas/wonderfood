@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +13,7 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-proposal-'));
 process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
 const { executeReactiveProposal } = await import('../src/kernel/reactive-proposal-executor');
-const { createRecord, findActionByIdempotencyKey, findRecord, getActionEvent } = await import('../src/mcp/state');
+const { attachActionVerification, createRecord, findActionByIdempotencyKey, findRecord, getActionEvent, updateRecord } = await import('../src/mcp/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
 const authorization = {
@@ -234,6 +235,11 @@ const executedReplay = executeReactiveProposal(autoItem, { actor: 'ignored' });
 assert.equal(executedReplay.ok, true);
 assert.equal(executedReplay.receipt?.replayed, true);
 assert.equal(executedReplay.receipt?.verification?.reason, 'canonical_create_verified');
+updateRecord('auto-created-record', { properties: { title: 'Auto created', status: 'tampered' } }, { persist: false });
+attachActionVerification(executed.receipt?.actionId ?? '', null, { persist: false });
+const failedVerificationReplay = executeReactiveProposal(autoItem, { actor: 'ignored' });
+assert.equal(failedVerificationReplay.ok, false);
+assert.equal(failedVerificationReplay.error, 'canonical_create_mismatch');
 
 const updateSeed = createRecord({
   id: 'auto-update-record',
@@ -294,12 +300,63 @@ const updateItem = {
 };
 assert.equal(executeReactiveProposal(updateItem).ok, true, 'review-required update should queue without approval');
 assert.equal(findRecord('auto-update-record')?.properties.status, 'open');
-const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', approved: true });
+const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', approval: approvalFor(updateItem) });
 assert.equal(approvedUpdate.ok, true);
 assert.equal(approvedUpdate.receipt?.status, 'completed');
 assert.equal(approvedUpdate.receipt?.verification?.reason, 'canonical_update_verified');
 assert.equal((getActionEvent(approvedUpdate.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_update_verified');
 assert.equal(findRecord('auto-update-record')?.properties.status, 'done');
+assert.equal(findActionByIdempotencyKey(updateKey)?.id, 'reactive-proposal:auto-update-proposal');
+const updateRevision = findRecord('auto-update-record')?.revision;
+const approvedUpdateReplay = executeReactiveProposal(updateItem, { actor: 'approver', approval: approvalFor(updateItem) });
+assert.equal(approvedUpdateReplay.ok, true);
+assert.equal(approvedUpdateReplay.receipt?.replayed, true);
+assert.equal(approvedUpdateReplay.receipt?.actionId, approvedUpdate.receipt?.actionId);
+assert.equal(approvedUpdateReplay.receipt?.verification?.operationId, approvedUpdate.receipt?.verification?.operationId);
+assert.equal(findRecord('auto-update-record')?.revision, updateRevision);
+
+const providerUpdateKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-provider-update-rule',
+  event: updateEvent,
+  causeId: 'provider-update-cause',
+  operationTemplate: updateTemplate,
+});
+const providerUpdateItem = {
+  ...updateItem,
+  proposalId: 'auto-provider-update-proposal',
+  causeId: 'provider-update-cause',
+  proposal: {
+    ...updateItem.proposal,
+    id: 'auto-provider-update-proposal',
+    ruleId: 'auto-provider-update-rule',
+    causeId: 'provider-update-cause',
+    envelope: {
+      ...updateItem.proposal.envelope,
+      proposalId: 'auto-provider-update-proposal',
+      ruleId: 'auto-provider-update-rule',
+      causeId: 'provider-update-cause',
+      idempotencyKey: providerUpdateKey,
+      authorization: {
+        ...updateAuthorization,
+        capabilityPresent: true,
+        providerAuthority: {
+          targetProvider: 'notion',
+          authorityProvider: 'notion',
+          allowed: true,
+          requiredCapability: 'reactive:provider:notion:update_record',
+          capabilityPresent: true,
+          reason: 'provider_authority_ok',
+        },
+      },
+    },
+  },
+};
+const providerWriteback = executeReactiveProposal(providerUpdateItem, { actor: 'approver', approval: approvalFor(providerUpdateItem) });
+assert.equal(providerWriteback.ok, false);
+assert.equal(providerWriteback.error, 'provider_writeback_verification_missing');
+assert.equal(findRecord('auto-update-record')?.revision, updateRevision);
 
 const archiveSeed = createRecord({
   id: 'auto-archive-record',
@@ -312,7 +369,7 @@ const archiveSeed = createRecord({
   archived_at: null,
 }, { persist: false });
 const archiveEvent = { kind: 'operation' as const, id: 'auto-archive-operation' };
-const archiveTemplate = { kind: 'archive_record' as const, collection: 'recipe', recordId: archiveSeed.id };
+const archiveTemplate = { kind: 'archive_record' as const, collection: 'recipe', recordId: archiveSeed.id, expectedRevision: archiveSeed.revision };
 const archiveAuthorization = {
   ...autoAuthorization,
   risk: 'sensitive' as const,
@@ -359,11 +416,92 @@ const archiveItem = {
 };
 assert.equal(executeReactiveProposal(archiveItem).ok, true, 'review-required archive should queue without approval');
 assert.equal(findRecord('auto-archive-record')?.archived_at, null);
-const approvedArchive = executeReactiveProposal(archiveItem, { actor: 'approver', approved: true });
+const approvedArchive = executeReactiveProposal(archiveItem, { actor: 'approver', approval: approvalFor(archiveItem) });
 assert.equal(approvedArchive.ok, true);
 assert.equal(approvedArchive.receipt?.status, 'completed');
 assert.equal(approvedArchive.receipt?.verification?.reason, 'canonical_archive_verified');
 assert.equal((getActionEvent(approvedArchive.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_archive_verified');
 assert.ok(findRecord('auto-archive-record')?.archived_at);
+const archiveRevision = findRecord('auto-archive-record')?.revision;
+assert.equal(archiveRevision, (archiveSeed.revision ?? 0) + 1);
+const approvedArchiveReplay = executeReactiveProposal(archiveItem, { actor: 'approver', approval: approvalFor(archiveItem) });
+assert.equal(approvedArchiveReplay.ok, true);
+assert.equal(approvedArchiveReplay.receipt?.replayed, true);
+assert.equal(approvedArchiveReplay.receipt?.actionId, approvedArchive.receipt?.actionId);
+assert.equal(approvedArchiveReplay.receipt?.verification?.operationId, approvedArchive.receipt?.verification?.operationId);
+assert.equal(findRecord('auto-archive-record')?.revision, archiveRevision);
+
+const staleArchiveSeed = createRecord({
+  id: 'auto-stale-archive-record',
+  domain: 'food',
+  collection: 'recipe',
+  title: 'Auto stale archive seed',
+  properties: { status: 'stale' },
+  relations: [],
+  source: { provider: 'user', external_id: 'auto-stale-archive-record', url: null, observed_at: new Date().toISOString(), content_hash: null },
+  archived_at: null,
+}, { persist: false });
+const staleArchiveTemplate = { kind: 'archive_record' as const, collection: 'recipe', recordId: staleArchiveSeed.id, expectedRevision: staleArchiveSeed.revision };
+updateRecord(staleArchiveSeed.id, { properties: { status: 'changed-before-approval' } }, { persist: false });
+const staleArchiveKey = createOperationProposalIdempotencyKey({
+  packageId: 'food',
+  packageVersion: '1.0.0',
+  ruleId: 'auto-stale-archive-rule',
+  event: archiveEvent,
+  causeId: 'stale-archive-cause',
+  operationTemplate: staleArchiveTemplate,
+});
+const staleArchiveItem = {
+  ...archiveItem,
+  proposalId: 'auto-stale-archive-proposal',
+  causeId: 'stale-archive-cause',
+  proposal: {
+    ...archiveItem.proposal,
+    id: 'auto-stale-archive-proposal',
+    ruleId: 'auto-stale-archive-rule',
+    operationTemplate: staleArchiveTemplate,
+    causeId: 'stale-archive-cause',
+    envelope: {
+      ...archiveItem.proposal.envelope,
+      proposalId: 'auto-stale-archive-proposal',
+      ruleId: 'auto-stale-archive-rule',
+      operationTemplate: staleArchiveTemplate,
+      causeId: 'stale-archive-cause',
+      idempotencyKey: staleArchiveKey,
+    },
+  },
+};
+const staleArchive = executeReactiveProposal(staleArchiveItem, { actor: 'approver', approval: approvalFor(staleArchiveItem) });
+assert.equal(staleArchive.ok, false);
+assert.equal(staleArchive.error, 'canonical_archive_mismatch');
+assert.equal(findRecord(staleArchiveSeed.id)?.archived_at, null);
 
 console.log('reactive-proposal-executor: passed');
+
+function approvalFor(item: { proposalId: string; proposal: { envelope: { operationTemplate: unknown } & Record<string, unknown> } }) {
+  return {
+    schemaVersion: 'wonder.reactive-proposal-approval.v1' as const,
+    approver: 'test-approver',
+    authority: 'test-authority',
+    proposalId: item.proposalId,
+    proposalHash: hashValue(item.proposal.envelope),
+    operationTemplateHash: hashValue(item.proposal.envelope.operationTemplate),
+    approvedAt: '2026-07-23T00:00:00.000Z',
+  };
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}

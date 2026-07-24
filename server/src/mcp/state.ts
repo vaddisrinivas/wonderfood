@@ -302,7 +302,7 @@ function normalizeRecord(
     archived_at: typeof record.archived_at === 'string' && record.archived_at.trim().length > 0 ? record.archived_at : null,
     created_at: record.created_at ?? nowIso(),
     updated_at: record.updated_at ?? nowIso(),
-    revision: typeof record.revision === 'number' && Number.isInteger(record.revision) && record.revision >= 0 ? record.revision : 0,
+    revision: typeof record.revision === 'number' && Number.isInteger(record.revision) && record.revision >= 0 ? record.revision : 1,
   };
 }
 
@@ -327,7 +327,7 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
       id: next.id,
       created_at: nowIso(),
       updated_at: nowIso(),
-      revision: next.revision ?? 1,
+      revision: typeof next.revision === 'number' && next.revision > 0 ? next.revision : 1,
     };
   }
 
@@ -686,6 +686,7 @@ export function archiveRecord(id: string, options: PersistOptions = {}) {
     ...existing,
     archived_at: archivedAt,
     updated_at: archivedAt,
+    revision: (existing.revision ?? 0) + 1,
   };
   if (options.persist !== false) {
     persistStore();
@@ -732,7 +733,7 @@ export function createRecordWithAction(input: {
     };
   }
 
-  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' && existing.id !== input.actionId ? undefined : idempotencyKey;
   const record = createRecord({
     ...input.record,
   }, { persist: false });
@@ -805,7 +806,7 @@ export function updateRecordWithAction(input: {
     };
   }
 
-  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' && existing.id !== input.actionId ? undefined : idempotencyKey;
   const previous = findRecord(input.id);
   if (!previous) {
     return {
@@ -949,6 +950,9 @@ export function archiveRecordWithAction(input: {
   sourceIds?: string[];
   conversationId?: string | null;
   source?: McpRecord['source'];
+  expectedRevision?: number;
+  operationId?: string;
+  causeId?: string;
   undoPayload?: {
     operation: string;
     before?: unknown;
@@ -966,9 +970,9 @@ export function archiveRecordWithAction(input: {
     };
   }
 
-  const effectiveIdempotencyKey = existing && existing.status !== 'completed' ? undefined : idempotencyKey;
-  const archived = archiveRecord(input.id, { persist: false });
-  if (!archived) {
+  const effectiveIdempotencyKey = existing && existing.status !== 'completed' && existing.id !== input.actionId ? undefined : idempotencyKey;
+  const previous = findRecord(input.id);
+  if (!previous) {
     const action = createActionEvent(
       {
         id: input.actionId,
@@ -984,6 +988,10 @@ export function archiveRecordWithAction(input: {
         undoPayload: null,
         sourceIds: input.sourceIds,
         conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
       },
       { persist: false },
     );
@@ -991,6 +999,37 @@ export function archiveRecordWithAction(input: {
     persistStore();
     return { action: failure, replayed: false };
   }
+
+  if (input.expectedRevision !== undefined && (previous.revision ?? 0) !== input.expectedRevision) {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      },
+      { persist: false },
+    );
+    const failed = markActionFailed(action.id, 'revision conflict', { persist: false }) ?? action;
+    persistStore();
+    return { action: failed, record: previous, replayed: false };
+  }
+
+  const archived = archiveRecord(input.id, { persist: false });
+  if (!archived) throw new Error('archive precondition violated');
 
   const payload = input.undoPayload ?? {
     operation: 'restore_after_archive',
@@ -1020,6 +1059,9 @@ export function archiveRecordWithAction(input: {
       undoPayload: payload,
       sourceIds: input.sourceIds,
       conversationId: input.conversationId ?? null,
+      operationId: input.operationId,
+      causeId: input.causeId,
+      expectedRevision: input.expectedRevision,
     },
     { persist: false },
   );
@@ -1086,6 +1128,31 @@ export function createActionEvent(input: {
   if (idempotencyKey) {
     const existing = findActionByIdempotencyKey(idempotencyKey);
     if (existing) {
+      if (existing.status !== 'completed' && existing.id === input.id) {
+        store.actions[existing.id] = {
+          ...store.actions[existing.id],
+          actor: input.actor,
+          domain: input.domain,
+          tool: input.tool,
+          risk: input.risk,
+          status: input.status ?? existing.status,
+          record_ids: input.recordIds,
+          before_json: input.before ?? null,
+          after_json: input.after ?? null,
+          undo_payload_json: input.undoPayload ?? null,
+          source_ids: input.sourceIds ?? [],
+          conversation_id: input.conversationId ?? null,
+          command: input.command,
+          operation_id: input.operationId?.trim() || existing.operation_id,
+          cause_id: input.causeId?.trim() || existing.cause_id,
+          expected_revision: input.expectedRevision ?? null,
+          updated_at: now,
+        };
+        if (options.persist !== false) {
+          persistStore();
+        }
+        return cloneActionEvent(store.actions[existing.id]);
+      }
       return existing;
     }
   }

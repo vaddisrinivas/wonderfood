@@ -110,9 +110,12 @@ export const operationProposalEnvelopeSchema = z.object({
     querySpecHash: nonEmpty.optional(),
     packageHash: nonEmpty.optional(),
     evaluatorVersion: nonEmpty.optional(),
-    beforeStateRevision: z.number().int().nonnegative().optional(),
-    afterStateRevision: z.number().int().nonnegative().optional(),
-    eventOffset: nonEmpty.optional(),
+    targetRecordId: nonEmpty.optional(),
+    targetBeforeRevision: z.number().int().nonnegative().optional(),
+    targetAfterRevision: z.number().int().nonnegative().optional(),
+    beforeVersionVectorHash: nonEmpty.optional(),
+    afterVersionVectorHash: nonEmpty.optional(),
+    sourceEventId: nonEmpty.optional(),
   }).strict(),
 }).strict();
 

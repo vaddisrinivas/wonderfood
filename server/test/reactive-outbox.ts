@@ -50,9 +50,12 @@ const proposalEvidence = {
   querySpecHash: 'sha256:query',
   packageHash: 'sha256:package',
   evaluatorVersion: 'wonder.query-evaluator.v1',
-  beforeStateRevision: 1,
-  afterStateRevision: 2,
-  eventOffset: 'operation-a',
+  targetRecordId: 'record-a',
+  targetBeforeRevision: 1,
+  targetAfterRevision: 2,
+  beforeVersionVectorHash: 'sha256:before-version-vector',
+  afterVersionVectorHash: 'sha256:after-version-vector',
+  sourceEventId: 'operation-a',
 };
 const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
   packageId: 'package-a',
@@ -220,7 +223,7 @@ assert.throws(
 assert.throws(
   () => parseReactiveOutboxStore(JSON.stringify({
     ...failed,
-    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, evidence: { ...failed.items['proposal-a'].proposal.envelope.evidence, eventOffset: 'other-operation' } } } } },
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, evidence: { ...failed.items['proposal-a'].proposal.envelope.evidence, sourceEventId: 'other-operation' } } } } },
   })),
   /invalid idempotency key/,
 );

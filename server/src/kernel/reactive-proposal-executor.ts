@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   archiveRecordWithAction,
   attachActionVerification,
@@ -23,9 +25,21 @@ export type ReactiveProposalExecutionResult = ReactiveOutboxExecutionResult & Re
   receipt?: ReactiveProposalExecutionReceipt;
 }>;
 
+export type ReactiveProposalApprovalReceipt = Readonly<{
+  schemaVersion: 'wonder.reactive-proposal-approval.v1';
+  approver: string;
+  authority: string;
+  proposalId: string;
+  proposalHash: string;
+  operationTemplateHash: string;
+  approvedAt: string;
+  expiresAt?: string;
+  revoked?: boolean;
+}>;
+
 export function executeReactiveProposal(
   item: ReactiveOutboxItem,
-  input: { actor?: string; approved?: boolean } = {},
+  input: { actor?: string; approval?: ReactiveProposalApprovalReceipt } = {},
 ): ReactiveProposalExecutionResult {
   const envelope = item.proposal.envelope;
   const actor = input.actor?.trim() || 'reactive-runtime';
@@ -49,30 +63,56 @@ export function executeReactiveProposal(
 
   const existing = findActionByIdempotencyKey(envelope.idempotencyKey);
   if (existing?.status === 'completed') {
+    const verification = isVerificationReceipt(existing.verification_json) ? existing.verification_json : undefined;
+    if (isVerificationBoundToProposal(verification, item, existing.operation_id)) {
+      return {
+        ok: true,
+        receipt: {
+          actionId: existing.id,
+          idempotencyKey: envelope.idempotencyKey,
+          replayed: true,
+          status: existing.status,
+          verification,
+        },
+      };
+    }
+    const refreshed = verifyForAction({ item, actionId: existing.id, operationId: existing.operation_id });
+    if (!refreshed.ok) {
+      return { ok: false, error: refreshed.reason };
+    }
+    const verifiedAction = attachActionVerification(existing.id, refreshed) ?? existing;
     return {
       ok: true,
       receipt: {
-        actionId: existing.id,
+        actionId: verifiedAction.id,
         idempotencyKey: envelope.idempotencyKey,
         replayed: true,
-        status: existing.status,
-        verification: isVerificationReceipt(existing.verification_json) ? existing.verification_json : undefined,
+        status: verifiedAction.status,
+        verification: refreshed,
       },
     };
   }
 
-  if (commandPreview.ok && (!envelope.review.required || input.approved === true)) {
+  const approval = input.approval ? validateApproval(input.approval, item) : { ok: false as const, error: 'proposal_approval_required' };
+  if (input.approval && !approval.ok) return { ok: false, error: approval.error };
+
+  if (commandPreview.ok && (!envelope.review.required || approval.ok)) {
+    const targetProvider = envelope.authorization.providerAuthority.targetProvider;
+    if (!isLocalWriteProvider(targetProvider)) {
+      return { ok: false, error: 'provider_writeback_verification_missing' };
+    }
     const write = executeApprovedCommand({
       item,
       actionId,
       actor,
       commandPreview,
+      approval: input.approval,
     });
-    if (write.action.status !== 'completed') {
-      return { ok: false, error: write.action.command || 'proposal_execution_failed' };
-    }
     if (!write.verification?.ok) {
       return { ok: false, error: write.verification?.reason ?? 'proposal_verification_failed' };
+    }
+    if (write.action.status !== 'completed') {
+      return { ok: false, error: write.action.command || 'proposal_execution_failed' };
     }
     const verifiedAction = attachActionVerification(write.action.id, write.verification) ?? write.action;
     return {
@@ -126,11 +166,16 @@ export function executeReactiveProposal(
   };
 }
 
+function isLocalWriteProvider(provider: string): boolean {
+  return provider === 'user' || provider === 'sqlite' || provider === 'local_sqlite';
+}
+
 function executeApprovedCommand(input: {
   item: ReactiveOutboxItem;
   actionId: string;
   actor: string;
   commandPreview: Extract<ReturnType<typeof previewReactiveProposalCommand>, { ok: true }>;
+  approval?: ReactiveProposalApprovalReceipt;
 }): ReturnType<typeof createRecordWithAction> & { verification?: ReactiveProposalVerificationReceipt } {
   const envelope = input.item.proposal.envelope;
   const template = envelope.operationTemplate;
@@ -140,7 +185,7 @@ function executeApprovedCommand(input: {
     operationTemplate: template,
     commandPreview: input.commandPreview,
     authorization: envelope.authorization,
-    approved: envelope.review.required,
+    approval: input.approval ?? null,
   });
   const risk = envelope.authorization.risk === 'restricted' ? 'sensitive' : envelope.authorization.risk;
   if (template.kind === 'create_record') {
@@ -172,7 +217,7 @@ function executeApprovedCommand(input: {
       before: { proposal: envelope, commandPreview: input.commandPreview },
       undoPayload: { operation: 'delete_record', record_id: recordId },
     });
-    return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(recordId) }) };
+    return { ...write, verification: verifyForAction({ item: input.item, actionId: write.action.id, operationId: write.action.operation_id, record: write.record }) };
   }
   if (template.kind === 'update_record') {
     const existing = findRecord(template.recordId);
@@ -196,7 +241,7 @@ function executeApprovedCommand(input: {
       operationId: `proposal:${input.item.proposalId}:operation`,
       causeId: envelope.causeId,
     });
-    return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(template.recordId), beforeRevision }) };
+    return { ...write, verification: verifyForAction({ item: input.item, actionId: write.action.id, operationId: write.action.operation_id, beforeRevision }) };
   }
   if (template.kind !== 'archive_record') {
     const failed = {
@@ -218,8 +263,10 @@ function executeApprovedCommand(input: {
       }),
       replayed: false,
     };
-    return { ...failed, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: null }) };
+    return { ...failed, verification: verifyForAction({ item: input.item, actionId: failed.action.id, operationId: failed.action.operation_id }) };
   }
+  const existing = findRecord(template.recordId);
+  const beforeRevision = existing?.revision;
   const write = archiveRecordWithAction({
     actionId: input.actionId,
     actor: input.actor,
@@ -228,9 +275,57 @@ function executeApprovedCommand(input: {
     risk,
     command,
     id: template.recordId,
+    expectedRevision: template.expectedRevision,
     idempotencyKey: envelope.idempotencyKey,
+    operationId: `proposal:${input.item.proposalId}:operation`,
+    causeId: envelope.causeId,
   });
-  return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(template.recordId) }) };
+  return { ...write, verification: verifyForAction({ item: input.item, actionId: write.action.id, operationId: write.action.operation_id, beforeRevision }) };
+}
+
+function verifyForAction(input: {
+  item: ReactiveOutboxItem;
+  actionId: string;
+  operationId: string;
+  beforeRevision?: number;
+  record?: ReturnType<typeof findRecord>;
+}): ReactiveProposalVerificationReceipt {
+  const template = input.item.proposal.envelope.operationTemplate;
+  const record = input.record ?? (template.kind === 'custom' ? null
+    : template.kind === 'create_record' ? findRecord(template.recordId ?? '')
+    : findRecord(template.recordId));
+  return verifyReactiveProposalPostcondition({
+    operationTemplate: template,
+    record,
+    beforeRevision: input.beforeRevision,
+    actionId: input.actionId,
+    operationId: input.operationId,
+    proposalId: input.item.proposalId,
+    operationTemplateHash: hashValue(template),
+  });
+}
+
+function validateApproval(approval: ReactiveProposalApprovalReceipt | undefined, item: ReactiveOutboxItem): { ok: true } | { ok: false; error: string } {
+  if (!approval) return { ok: false, error: 'proposal_approval_required' };
+  if (approval.schemaVersion !== 'wonder.reactive-proposal-approval.v1') return { ok: false, error: 'proposal_approval_invalid' };
+  if (approval.revoked === true) return { ok: false, error: 'proposal_approval_revoked' };
+  if (approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now()) return { ok: false, error: 'proposal_approval_expired' };
+  if (!approval.approver.trim() || !approval.authority.trim()) return { ok: false, error: 'proposal_approval_invalid' };
+  if (approval.proposalId !== item.proposalId) return { ok: false, error: 'proposal_approval_mismatch' };
+  if (approval.proposalHash !== hashValue(item.proposal.envelope)) return { ok: false, error: 'proposal_approval_mismatch' };
+  if (approval.operationTemplateHash !== hashValue(item.proposal.envelope.operationTemplate)) return { ok: false, error: 'proposal_approval_mismatch' };
+  return { ok: true };
+}
+
+function isVerificationBoundToProposal(
+  verification: ReactiveProposalVerificationReceipt | undefined,
+  item: ReactiveOutboxItem,
+  operationId: string,
+): verification is ReactiveProposalVerificationReceipt {
+  return Boolean(verification?.ok)
+    && verification?.proposalId === item.proposalId
+    && verification?.operationId === operationId
+    && verification?.operationTemplateHash === hashValue(item.proposal.envelope.operationTemplate);
 }
 
 function isVerificationReceipt(value: unknown): value is ReactiveProposalVerificationReceipt {
@@ -238,5 +333,25 @@ function isVerificationReceipt(value: unknown): value is ReactiveProposalVerific
     && typeof value === 'object'
     && !Array.isArray(value)
     && (value as { verifierVersion?: unknown }).verifierVersion === 'wonder.reactive-proposal-verifier.v1'
-    && typeof (value as { ok?: unknown }).ok === 'boolean';
+    && typeof (value as { ok?: unknown }).ok === 'boolean'
+    && typeof (value as { actionId?: unknown }).actionId === 'string'
+    && typeof (value as { operationId?: unknown }).operationId === 'string'
+    && typeof (value as { proposalId?: unknown }).proposalId === 'string'
+    && typeof (value as { operationTemplateHash?: unknown }).operationTemplateHash === 'string';
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }

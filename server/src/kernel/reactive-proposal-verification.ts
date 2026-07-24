@@ -4,9 +4,14 @@ import type { McpRecord } from '../mcp/state';
 export type ReactiveProposalVerificationReceipt = Readonly<{
   ok: boolean;
   verifierVersion: 'wonder.reactive-proposal-verifier.v1';
+  actionId: string;
+  operationId: string;
+  proposalId: string;
+  operationTemplateHash: string;
   recordId: string | null;
   expected: Record<string, unknown>;
   observed: Record<string, unknown> | null;
+  resultingRevision: number | null;
   reason: string;
 }>;
 
@@ -14,13 +19,23 @@ export function verifyReactiveProposalPostcondition(input: {
   operationTemplate: OperationTemplate;
   record: McpRecord | null | undefined;
   beforeRevision?: number;
+  actionId: string;
+  operationId: string;
+  proposalId: string;
+  operationTemplateHash: string;
 }): ReactiveProposalVerificationReceipt {
   const template = input.operationTemplate;
+  const identity = {
+    actionId: input.actionId,
+    operationId: input.operationId,
+    proposalId: input.proposalId,
+    operationTemplateHash: input.operationTemplateHash,
+  };
   if (template.kind === 'custom') {
-    return receipt(false, null, {}, null, 'custom_operation_has_no_canonical_postcondition');
+    return receipt(identity, false, null, {}, null, 'custom_operation_has_no_canonical_postcondition');
   }
   if (template.kind === 'restore_record') {
-    return receipt(false, template.recordId, {}, observedRecord(input.record), 'restore_postcondition_requires_undo_context');
+    return receipt(identity, false, template.recordId, {}, observedRecord(input.record), 'restore_postcondition_requires_undo_context');
   }
   if (template.kind === 'create_record') {
     const recordId = template.recordId ?? input.record?.id ?? null;
@@ -33,7 +48,7 @@ export function verifyReactiveProposalPostcondition(input: {
     const ok = Boolean(input.record)
       && input.record?.collection === template.collection
       && hasProperties(input.record.properties, template.properties ?? {});
-    return receipt(ok, recordId, expected, observed, ok ? 'canonical_create_verified' : 'canonical_create_mismatch');
+    return receipt(identity, ok, recordId, expected, observed, ok ? 'canonical_create_verified' : 'canonical_create_mismatch');
   }
   if (template.kind === 'update_record') {
     const observed = observedRecord(input.record);
@@ -45,15 +60,39 @@ export function verifyReactiveProposalPostcondition(input: {
     const ok = Boolean(input.record)
       && hasProperties(input.record?.properties ?? {}, template.changes)
       && (input.beforeRevision === undefined || input.record?.revision === input.beforeRevision + 1);
-    return receipt(ok, template.recordId, expected, observed, ok ? 'canonical_update_verified' : 'canonical_update_mismatch');
+    return receipt(identity, ok, template.recordId, expected, observed, ok ? 'canonical_update_verified' : 'canonical_update_mismatch');
   }
   const observed = observedRecord(input.record);
-  const ok = Boolean(input.record?.archived_at);
-  return receipt(ok, template.recordId, { archived: true }, observed, ok ? 'canonical_archive_verified' : 'canonical_archive_mismatch');
+  const expected = {
+    archived: true,
+    revisionAfter: input.beforeRevision === undefined ? undefined : input.beforeRevision + 1,
+  };
+  const ok = Boolean(input.record?.archived_at)
+    && (input.beforeRevision === undefined || input.record?.revision === input.beforeRevision + 1);
+  return receipt(identity, ok, template.recordId, expected, observed, ok ? 'canonical_archive_verified' : 'canonical_archive_mismatch');
 }
 
 function hasProperties(observed: Record<string, unknown>, expected: Record<string, unknown>): boolean {
-  return Object.entries(expected).every(([key, value]) => Object.is(observed[key], value));
+  return Object.entries(expected).every(([key, value]) => deepEqual(observed[key], value));
+}
+
+function deepEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => deepEqual(value, right[index]));
+  }
+  if (left && right && typeof left === 'object' && typeof right === 'object') {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord).filter((key) => leftRecord[key] !== undefined).sort();
+    const rightKeys = Object.keys(rightRecord).filter((key) => rightRecord[key] !== undefined).sort();
+    return leftKeys.length === rightKeys.length
+      && leftKeys.every((key, index) => key === rightKeys[index] && deepEqual(leftRecord[key], rightRecord[key]));
+  }
+  return false;
 }
 
 function observedRecord(record: McpRecord | null | undefined): Record<string, unknown> | null {
@@ -68,6 +107,12 @@ function observedRecord(record: McpRecord | null | undefined): Record<string, un
 }
 
 function receipt(
+  identity: {
+    actionId: string;
+    operationId: string;
+    proposalId: string;
+    operationTemplateHash: string;
+  },
   ok: boolean,
   recordId: string | null,
   expected: Record<string, unknown>,
@@ -77,9 +122,11 @@ function receipt(
   return {
     ok,
     verifierVersion: 'wonder.reactive-proposal-verifier.v1',
+    ...identity,
     recordId,
     expected,
     observed,
+    resultingRevision: typeof observed?.revision === 'number' ? observed.revision : null,
     reason,
   };
 }
