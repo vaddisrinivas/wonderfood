@@ -4,8 +4,8 @@
 - Task: `W1-MCP Isolated official MCP SDK parity proof`
 - Branch base: `main`
 - Base SHA: `5f9b091c9667593f74e383554e59eb562211c4dd`
-- Current SHA: `db32c45663dd54995e79d7f11b1b3f88fa78dd7a`
-- Current tree: `3625803c85f483971a5e15fe7ff5d8d65fb215f7`
+- Current SHA: `157db3629e66103b92a11e77ca31259c4331a425`
+- Current tree: `3021feb6eaca22311532caad1ac49eaf0f3b686a`
 - Spike artifact SHA: `4ebbe8247edf0534d8bc4601150972d4ae00a6bd`
 - Path scope: `spikes/mcp-sdk/**`
 
