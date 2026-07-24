@@ -9,7 +9,9 @@ avd_name="${LIFEOS_EMULATOR_AVD:-Pixel_3a_API_34_extension_level_7_arm64-v8a}"
 requested_serial="${LIFEOS_ANDROID_SERIAL:-${ANDROID_SERIAL:-}}"
 package_name="com.wonderfood.app"
 activity="$package_name/.MainActivity"
-apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
+signed_apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
+unsigned_apk="$root_dir/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+apk="$signed_apk"
 evidence_dir="$root_dir/app/build/evidence/native-visual-matrix"
 json="$evidence_dir/native-visual-matrix.json"
 mkdir -p "$evidence_dir"
@@ -21,6 +23,9 @@ fail() {
 
 [[ -x "$emulator_bin" ]] || fail "Android emulator not found at $emulator_bin"
 [[ -x "$adb_bin" ]] || fail "adb not found at $adb_bin"
+if [[ ! -f "$apk" && -f "$unsigned_apk" ]]; then
+  apk="$unsigned_apk"
+fi
 [[ -f "$apk" ]] || fail "release APK missing: $apk"
 
 "$adb_bin" start-server >/dev/null
