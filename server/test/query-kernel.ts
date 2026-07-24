@@ -31,4 +31,26 @@ assert.equal(evaluateExpression({ decision: { risk: 4, title: 'Rotate key' } }, 
     { '==': [{ var: 'decision.title' }, 'Rotate key'] },
   ],
 }), true);
+
+const conformanceRows = [
+  { id: 'b', value: null, label: '100% real', rank: 1 },
+  { id: 'a', label: '100x real', rank: 1 },
+  { id: 'c', value: 'present', label: '100_percent', rank: 1 },
+];
+assert.deepEqual(executeQuery(conformanceRows, {
+  from: 'records',
+  where: { op: 'exists', field: 'value' },
+}).rows.map((row) => row.id), ['c'], 'exists must match SQL IS NOT NULL semantics');
+assert.deepEqual(executeQuery(conformanceRows, {
+  from: 'records',
+  where: { op: 'exists', field: 'value', value: false },
+}).rows.map((row) => row.id), ['b', 'a'], 'exists false must include null and missing fields');
+assert.deepEqual(executeQuery(conformanceRows, {
+  from: 'records',
+  where: { op: 'eq', field: 'value', value: null },
+}).rows.map((row) => row.id), ['b']);
+assert.deepEqual(executeQuery(conformanceRows, {
+  from: 'records',
+  orderBy: [{ field: 'rank' }],
+}).rows.map((row) => row.id), ['a', 'b', 'c'], 'sort ties must be deterministic by id');
 console.log('query-kernel: passed');

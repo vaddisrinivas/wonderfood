@@ -17,29 +17,47 @@ function fieldSql(field: string): string {
   throw new Error('unsupported_query_field');
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
 function predicateSql(predicate: QueryPredicate, params: unknown[]): string {
+  const field = 'field' in predicate ? fieldSql(predicate.field) : '';
   switch (predicate.op) {
     case 'and': return `(${predicate.args.map((arg) => predicateSql(arg, params)).join(' AND ') || '1=1'})`;
     case 'or': return `(${predicate.args.map((arg) => predicateSql(arg, params)).join(' OR ') || '0=1'})`;
     case 'not': return `(NOT ${predicateSql(predicate.arg, params)})`;
-    case 'exists': return `${fieldSql(predicate.field)} IS ${predicate.value === false ? 'NULL' : 'NOT NULL'}`;
-    case 'eq': params.push(predicate.value); return `${fieldSql(predicate.field)} = ?`;
-    case 'neq': params.push(predicate.value); return `${fieldSql(predicate.field)} <> ?`;
-    case 'gt': params.push(predicate.value); return `${fieldSql(predicate.field)} > ?`;
-    case 'gte': params.push(predicate.value); return `${fieldSql(predicate.field)} >= ?`;
-    case 'lt': params.push(predicate.value); return `${fieldSql(predicate.field)} < ?`;
-    case 'lte': params.push(predicate.value); return `${fieldSql(predicate.field)} <= ?`;
-    case 'contains': params.push(`%${predicate.value}%`); return `${fieldSql(predicate.field)} LIKE ? COLLATE NOCASE`;
-    case 'starts_with': params.push(`${predicate.value}%`); return `${fieldSql(predicate.field)} LIKE ? COLLATE NOCASE`;
+    case 'exists': return `${field} IS ${predicate.value === false ? 'NULL' : 'NOT NULL'}`;
+    case 'eq':
+      if (predicate.value === null) return `${field} IS NULL`;
+      params.push(predicate.value); return `${field} = ?`;
+    case 'neq':
+      if (predicate.value === null) return `${field} IS NOT NULL`;
+      params.push(predicate.value); return `${field} <> ?`;
+    case 'gt': params.push(predicate.value); return `${field} > ?`;
+    case 'gte': params.push(predicate.value); return `${field} >= ?`;
+    case 'lt': params.push(predicate.value); return `${field} < ?`;
+    case 'lte': params.push(predicate.value); return `${field} <= ?`;
+    case 'contains': params.push(`%${escapeLike(predicate.value)}%`); return `${field} LIKE ? ESCAPE '\\' COLLATE NOCASE`;
+    case 'starts_with': params.push(`${escapeLike(predicate.value)}%`); return `${field} LIKE ? ESCAPE '\\' COLLATE NOCASE`;
   }
+}
+
+function withStableTieBreak(orderBy: readonly QuerySort[] | undefined): QuerySort[] {
+  const order = [...(orderBy ?? [])];
+  if (order.length && !order.some((sort) => sort.field === 'id')) {
+    order.push({ field: 'id', direction: 'asc' });
+  }
+  return order;
 }
 
 export function compileQueryToSql<T extends Record<string, unknown>>(spec: QuerySpec<T>): CompiledQuery {
   const params: unknown[] = [];
   const from = identifier(spec.from, 'collection');
   const where = spec.where ? ` WHERE ${predicateSql(spec.where, params)}` : '';
-  const order = spec.orderBy?.length
-    ? ` ORDER BY ${spec.orderBy.map((sort: QuerySort) => `${fieldSql(sort.field)} ${sort.direction === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`
+  const orderBy = withStableTieBreak(spec.orderBy);
+  const order = orderBy.length
+    ? ` ORDER BY ${orderBy.map((sort: QuerySort) => `${fieldSql(sort.field)} ${sort.direction === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`
     : '';
   // SQLite requires LIMIT before OFFSET. -1 means unbounded.
   const limit = spec.limit === undefined

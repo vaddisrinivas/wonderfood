@@ -44,6 +44,10 @@ function compare(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b));
 }
 
+function exists(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
+
 export function matches<T extends Record<string, unknown>>(
   row: T,
   predicate: QueryPredicate,
@@ -53,7 +57,7 @@ export function matches<T extends Record<string, unknown>>(
     case 'and': return predicate.args.every((arg) => matches(row, arg, getField));
     case 'or': return predicate.args.some((arg) => matches(row, arg, getField));
     case 'not': return !matches(row, predicate.arg, getField);
-    case 'exists': return (getField(row, predicate.field) !== undefined) === (predicate.value ?? true);
+    case 'exists': return exists(getField(row, predicate.field)) === (predicate.value ?? true);
     case 'eq': return getField(row, predicate.field) === predicate.value;
     case 'neq': return getField(row, predicate.field) !== predicate.value;
     case 'gt': return compare(getField(row, predicate.field), predicate.value) > 0;
@@ -92,7 +96,7 @@ export function executeQuery<T extends Record<string, unknown>>(rows: readonly T
         const result = compare(getField(left, sort.field), getField(right, sort.field));
         if (result !== 0) return sort.direction === 'desc' ? -result : result;
       }
-      return 0;
+      return compare(getField(left, 'id'), getField(right, 'id'));
     });
   }
   const offset = Math.max(0, spec.offset ?? 0);
