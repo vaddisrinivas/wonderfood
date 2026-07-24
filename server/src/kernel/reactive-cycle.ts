@@ -14,6 +14,7 @@ export type ReactiveCycleInput = {
   data?: unknown;
   causeId: string;
   depth?: number;
+  authorityProvider?: string;
   budget?: {
     maxQueries?: number;
     maxRows?: number;
@@ -159,6 +160,8 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
           package: input.package,
           eventId: proposal.eventId,
           queryHashes,
+          rows: [...afterRows, ...beforeRows],
+          authorityProvider: input.authorityProvider,
           stateEvidence: {
             beforeStateRevision: maxRevision(beforeRows),
             afterStateRevision: maxRevision(afterRows),
@@ -187,6 +190,8 @@ function createProposalEnvelope(input: {
   package: AppPackageV2;
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
+  rows: readonly Record<string, unknown>[];
+  authorityProvider?: string;
   stateEvidence: {
     beforeStateRevision?: number;
     afterStateRevision?: number;
@@ -202,6 +207,8 @@ function createProposalEnvelope(input: {
     operationTemplate: input.proposal.operationTemplate,
     requestedMode: input.proposal.mode,
     capabilities: input.package.capabilities,
+    targetProvider: targetProviderFor(input.proposal.operationTemplate, input.rows),
+    authorityProvider: input.authorityProvider,
   });
   const dryRun = dryRunReactiveProposal({
     operationTemplate: input.proposal.operationTemplate,
@@ -275,6 +282,15 @@ function maxRevision(rows: readonly Record<string, unknown>[]): number | undefin
     .map((row) => row.revision)
     .filter((revision): revision is number => typeof revision === 'number' && Number.isInteger(revision) && revision >= 0);
   return revisions.length ? Math.max(...revisions) : undefined;
+}
+
+function targetProviderFor(operationTemplate: OperationProposal['operationTemplate'], rows: readonly Record<string, unknown>[]): string {
+  if (operationTemplate.kind === 'custom' || operationTemplate.kind === 'create_record') return 'user';
+  const record = rows.find((row) => row.id === operationTemplate.recordId);
+  const source = record?.source;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return 'user';
+  const provider = (source as { provider?: unknown }).provider;
+  return typeof provider === 'string' && provider.trim() ? provider.trim() : 'user';
 }
 
 function dedupeProposals<T extends OperationProposal & { eventId: string }>(proposals: T[]): T[] {

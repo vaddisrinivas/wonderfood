@@ -21,6 +21,14 @@ const authorization = {
   reviewRequired: true,
   requiredCapability: 'reactive:propose:custom',
   capabilityPresent: false,
+  providerAuthority: {
+    targetProvider: 'user',
+    authorityProvider: 'notion',
+    allowed: true,
+    requiredCapability: null,
+    capabilityPresent: true,
+    reason: 'provider_authority_ok',
+  },
   reason: 'suggest_mode_requires_review',
 };
 const dryRun = {

@@ -86,6 +86,14 @@ export const operationProposalEnvelopeSchema = z.object({
     reviewRequired: z.boolean(),
     requiredCapability: nonEmpty,
     capabilityPresent: z.boolean(),
+    providerAuthority: z.object({
+      targetProvider: nonEmpty,
+      authorityProvider: nonEmpty,
+      allowed: z.boolean(),
+      requiredCapability: nonEmpty.nullable(),
+      capabilityPresent: z.boolean(),
+      reason: nonEmpty,
+    }).strict(),
     reason: nonEmpty,
   }).strict(),
   dryRun: z.object({

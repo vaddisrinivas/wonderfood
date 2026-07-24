@@ -136,6 +136,46 @@ assert.equal(colonCycle.proposals[0].envelope.authorization.reviewRequired, true
 assert.equal(colonCycle.proposals[0].envelope.dryRun.executable, true);
 assert.match(colonCycle.proposals[0].envelope.idempotencyKey, /^reactive:[a-f0-9]{64}$/);
 
+const providerOwnedBefore = [
+  { id: 'decision-a', collection: 'decisions', status: 'closed', risk: 4, revision: 1, source: { provider: 'notion' } },
+];
+const providerOwnedAfter = [
+  { id: 'decision-a', collection: 'decisions', status: 'open', risk: 4, revision: 2, source: { provider: 'notion' } },
+];
+const providerBlockedCycle = runReactiveCycle({
+  ...input,
+  package: colonQueryPackage,
+  beforeRows: providerOwnedBefore,
+  afterRows: providerOwnedAfter,
+  authorityProvider: 'notion',
+});
+assert.equal(providerBlockedCycle.proposals[0].envelope.authorization.allowed, false);
+assert.equal(providerBlockedCycle.proposals[0].envelope.authorization.reason, 'provider_authority_capability_missing');
+assert.deepEqual(providerBlockedCycle.proposals[0].envelope.authorization.providerAuthority, {
+  targetProvider: 'notion',
+  authorityProvider: 'notion',
+  allowed: false,
+  requiredCapability: 'reactive:provider:notion:update_record',
+  capabilityPresent: false,
+  reason: 'provider_authority_capability_missing',
+});
+assert.equal(providerBlockedCycle.proposals[0].envelope.dryRun.ok, false);
+
+const providerAuthorizedCycle = runReactiveCycle({
+  ...input,
+  package: {
+    ...colonQueryPackage,
+    capabilities: ['reactive:provider:notion:update_record'],
+  },
+  beforeRows: providerOwnedBefore,
+  afterRows: providerOwnedAfter,
+  authorityProvider: 'notion',
+});
+assert.equal(providerAuthorizedCycle.proposals[0].envelope.authorization.allowed, true);
+assert.equal(providerAuthorizedCycle.proposals[0].envelope.authorization.providerAuthority.allowed, true);
+assert.equal(providerAuthorizedCycle.proposals[0].envelope.authorization.providerAuthority.capabilityPresent, true);
+assert.equal(providerAuthorizedCycle.proposals[0].envelope.review.required, true);
+
 const authorizedAutoCycle = runReactiveCycle({
   ...input,
   package: {

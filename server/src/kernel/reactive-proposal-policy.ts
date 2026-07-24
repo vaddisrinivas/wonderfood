@@ -13,6 +13,14 @@ export type ReactiveProposalPolicyResult = Readonly<{
   reviewRequired: boolean;
   requiredCapability: string;
   capabilityPresent: boolean;
+  providerAuthority: {
+    targetProvider: string;
+    authorityProvider: string;
+    allowed: boolean;
+    requiredCapability: string | null;
+    capabilityPresent: boolean;
+    reason: string;
+  };
   reason: string;
 }>;
 
@@ -27,31 +35,78 @@ export function evaluateReactiveProposalPolicy(input: {
   operationTemplate: OperationTemplate;
   requestedMode: 'suggest' | 'automatic';
   capabilities: readonly string[];
+  targetProvider?: string;
+  authorityProvider?: string;
 }): ReactiveProposalPolicyResult {
   const risk = operationRisk(input.operationTemplate);
   const requiredCapability = requiredCapabilityFor(input.operationTemplate, input.requestedMode);
   const capabilityPresent = input.capabilities.includes(requiredCapability);
+  const providerAuthority = evaluateProviderAuthority({
+    operationTemplate: input.operationTemplate,
+    capabilities: input.capabilities,
+    targetProvider: input.targetProvider,
+    authorityProvider: input.authorityProvider,
+  });
   const automaticAllowed = input.requestedMode === 'automatic'
     && capabilityPresent
+    && providerAuthority.allowed
     && risk === 'low'
     && input.operationTemplate.kind !== 'custom';
   const blocked = risk === 'restricted';
   return {
     policyId: REACTIVE_PROPOSAL_POLICY_ID,
     policyVersion: REACTIVE_PROPOSAL_POLICY_VERSION,
-    allowed: !blocked,
+    allowed: !blocked && providerAuthority.allowed,
     risk,
     reviewRequired: !automaticAllowed,
     requiredCapability,
     capabilityPresent,
+    providerAuthority,
     reason: blocked
       ? 'operation_template_restricted'
+      : !providerAuthority.allowed
+        ? providerAuthority.reason
       : automaticAllowed
         ? 'automatic_policy_authorized'
         : input.requestedMode === 'automatic'
           ? 'automatic_requires_policy_or_review'
           : 'suggest_mode_requires_review',
   };
+}
+
+function evaluateProviderAuthority(input: {
+  operationTemplate: OperationTemplate;
+  capabilities: readonly string[];
+  targetProvider?: string;
+  authorityProvider?: string;
+}): ReactiveProposalPolicyResult['providerAuthority'] {
+  const targetProvider = normalizeProvider(input.targetProvider);
+  const authorityProvider = normalizeProvider(input.authorityProvider ?? process.env.LIFEOS_AUTHORITY_PROVIDER ?? 'notion');
+  const localProvider = targetProvider === 'user' || targetProvider === 'sqlite' || targetProvider === 'local_sqlite';
+  const requiredCapability = localProvider || input.operationTemplate.kind === 'custom'
+    ? null
+    : `reactive:provider:${targetProvider}:${input.operationTemplate.kind}`;
+  const capabilityPresent = requiredCapability ? input.capabilities.includes(requiredCapability) : true;
+  const allowed = localProvider
+    || input.operationTemplate.kind === 'custom'
+    || (targetProvider === authorityProvider && capabilityPresent);
+  return {
+    targetProvider,
+    authorityProvider,
+    allowed,
+    requiredCapability,
+    capabilityPresent,
+    reason: allowed
+      ? 'provider_authority_ok'
+      : targetProvider !== authorityProvider
+        ? 'provider_not_configured_authority'
+        : 'provider_authority_capability_missing',
+  };
+}
+
+function normalizeProvider(value?: string): string {
+  const normalized = value?.trim();
+  return normalized || 'user';
 }
 
 export function dryRunReactiveProposal(input: {

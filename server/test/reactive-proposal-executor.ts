@@ -23,6 +23,14 @@ const authorization = {
   reviewRequired: true,
   requiredCapability: 'reactive:propose:custom',
   capabilityPresent: false,
+  providerAuthority: {
+    targetProvider: 'user',
+    authorityProvider: 'notion',
+    allowed: true,
+    requiredCapability: null,
+    capabilityPresent: true,
+    reason: 'provider_authority_ok',
+  },
   reason: 'suggest_mode_requires_review',
 };
 const dryRun = {
@@ -159,6 +167,14 @@ const autoAuthorization = {
   reviewRequired: false,
   requiredCapability: 'reactive:auto:create_record',
   capabilityPresent: true,
+  providerAuthority: {
+    targetProvider: 'user',
+    authorityProvider: 'notion',
+    allowed: true,
+    requiredCapability: null,
+    capabilityPresent: true,
+    reason: 'provider_authority_ok',
+  },
   reason: 'automatic_policy_authorized',
 };
 const autoDryRun = {
