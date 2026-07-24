@@ -5,7 +5,7 @@
 - Branch base: `main`
 - Base SHA: `5f9b091c9667593f74e383554e59eb562211c4dd`
 - Current SHA: `8d60e1d0ac4cd912441da63c0eab20b951b2978b`
-- Current tree: `3a0b891fe45e168bea553fc03727311a4dfa40d6`
+- Current tree: `83051ddd09d6984484cedbbb0a3d3b9b9ab1f19d`
 - Spike artifact SHA: `4ebbe8247edf0534d8bc4601150972d4ae00a6bd`
 - Path scope: `spikes/mcp-sdk/**`
 
