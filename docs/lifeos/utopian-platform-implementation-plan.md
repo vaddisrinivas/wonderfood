@@ -4,8 +4,9 @@
 **Baseline branch:** `codex/lifeos-e2e-implementation`  
 **Baseline commit:** `a3fc52e`  
 **Scope:** Web and Android debug application  
-**Execution strategy:** Inventory contracts, delete custom infrastructure in an isolated ORCH worktree, adopt the official library, verify, then merge  
-**Maximum parallel implementation lanes:** Ten  
+**Execution strategy:** Freeze contracts, prove official libraries in isolation, then delete-and-replace custom infrastructure in one bounded task  
+**Maximum writable implementation lanes:** Four  
+**Additional read-only/scout agents:** Six  
 **Only execution control plane:** ORCH  
 **Only worker adapter:** `codex`  
 **Only worker model:** `gpt-5.3-codex-spark`  
@@ -29,7 +30,7 @@ defaults:
     adapter: codex
     model: gpt-5.3-codex-spark
 scheduling:
-  max_concurrent_agents: 10
+  max_concurrent_agents: 4
 ```
 
 Hard rules:
@@ -40,7 +41,8 @@ Hard rules:
 - Every task references its plan ID and exact section.
 - Every task declares owned paths, forbidden paths, dependencies, checks,
   rollback, report path, and stop conditions.
-- Ten agents is a ceiling. Overlapping write scopes run serially.
+- Four writable agents is the ceiling. Up to six additional agents remain
+  read-only or idle until assigned disjoint queued work.
 - Every report records ORCH task/run/agent IDs, confirmed model, baseline and
   result commits, changed files, checks, evidence class, remaining risk, and
   deletion unlocked.
@@ -59,10 +61,17 @@ Delete-first applies to replaceable infrastructure, not product semantics:
 | Ad-hoc record/package diff implementation | `fast-json-patch` |
 | Ad-hoc rule predicate evaluator | `json-logic-js` |
 
-Deletion happens first inside the task worktree. The same task immediately
-adopts the library and restores required behavior before it can merge. No
-compatibility shim, dual runtime, or old/new production switch survives the
-task.
+After isolated parity and target contracts merge, deletion happens first inside
+the bounded replacement task worktree. The same task immediately adopts the
+library and restores required behavior before it can merge.
+
+No indefinite compatibility runtime is allowed. A temporary migration adapter
+is permitted only when it has an owner, deletion task, expiry milestone, and
+parity test. This applies to persisted chat history, pending MCP requests,
+workflow snapshots, server JSON state, and database migrations.
+
+Spark unavailable blocks only the affected task. It must not fall back, touch
+the worktree, or prevent independent ready tasks from running.
 
 The following are product contracts, not replaceable infrastructure, and must
 not be deleted: `Operation`, `planOperation`, `applyOperation`, QuerySpec,
@@ -473,22 +482,17 @@ If two tasks need the same file:
 - shared edits are integrated by the orchestration owner;
 - agents do not resolve architectural conflicts independently.
 
-## 6.4 Maximum concurrency
+## 6.4 Maximum writable concurrency
 
-Maximum ten active lanes:
+Maximum four active writable lanes:
 
 1. Kernel/contracts
-2. AI/chat
-3. Runtime/workflow/provider
-4. MCP or focused product proof
-5. Query contracts and parity
-6. Rules
-7. Workflow lifecycle
-8. Provider verification
-9. Android/Food integration
-10. Independent verification and cleanup
+2. AI SDK isolated parity
+3. MCP SDK isolated parity
+4. Approval schema and threat fixtures
 
-Concurrency is a cap, not a target. Use fewer lanes when files overlap.
+Six other configured agents remain idle or perform read-only work. Concurrency
+is a cap, not a target. Use fewer lanes when files overlap.
 
 ---
 
@@ -649,22 +653,17 @@ npm run export:android
 
 ---
 
-## Task P0-02 — Delete fake agent/chat plumbing and adopt pinned AI SDK
+## Task P0-02 — Isolated pinned AI SDK parity proof
 
 ### Objective
 
-In an isolated ORCH worktree, delete the fake agent orchestration and manual
-chat-stream plumbing, adopt the pinned AI SDK, reconnect preserved Wonder
-conversation/proposal contracts, and merge only after parity checks pass.
+Prove the pinned AI SDK against frozen Wonder query/proposal contracts in an
+isolated spike. Do not modify or delete production chat or agent paths.
 
 ### Owned files
 
-- `server/src/agents/**`
-- `server/src/chat.ts`
-- focused AI/chat route modules extracted from `server/src/index.ts`
-- `src/chat/client.ts`
-- AI/chat tests
-- package manifests and lockfiles
+- `spikes/ai-sdk/**`
+- isolated spike tests and package manifest
 
 The visible Expo chat screen is forbidden except for minimal transport wiring;
 no design changes are allowed.
@@ -678,9 +677,9 @@ no design changes are allowed.
 5. Tool output can be attached and the conversation resumed.
 6. Cancellation compiles.
 7. No custom SSE parser is introduced.
-8. Static planner, regex executor, role registry, duplicate command processor,
-   and superseded manual stream parser are absent from production.
-9. No compatibility adapter preserves the old orchestration runtime.
+8. The spike compiles without importing production agent/chat runtimes.
+9. A replacement inventory identifies exact files deleted only after this proof
+   and kernel contracts merge.
 
 ### Example server tool
 
@@ -718,25 +717,21 @@ export const agent = new ToolLoopAgent({
 
 ---
 
-## Task P0-03 — Delete custom MCP protocol and adopt official SDK
+## Task P0-03 — Isolated official MCP SDK parity proof
 
 ### Objective
 
-In an isolated ORCH worktree, delete the handwritten MCP JSON-RPC,
-protocol-negotiation, SSE, and transport-validation implementation; adopt the
-official MCP v1.29 Streamable HTTP server; reconnect only Wonder-owned
-proposal/resource/policy handlers; and merge only after contract checks pass.
+Prove the official MCP v1.29 stateless Streamable HTTP server, authentication,
+tools, resources, prompts, and proposal-only mutation shape in an isolated
+spike. Do not modify or delete production MCP paths.
 
 ### Owned files
 
-- `server/src/mcp/**`
-- focused MCP route wiring extracted from `server/src/index.ts`
-- MCP tests
-- server package manifest and lockfile
+- `spikes/mcp-sdk/**`
+- isolated spike tests and package manifest
 
-MCP JSON record/action/workflow authority is not preserved. Required product
-handlers must use existing package/query/proposal contracts; provider and
-canonical local mutation semantics remain outside MCP.
+The spike must not import MCP JSON record/action/workflow authority. Provider
+and canonical local mutation semantics remain outside MCP.
 
 ### Required proof
 
@@ -748,8 +743,8 @@ canonical local mutation semantics remain outside MCP.
 - one prompt;
 - bearer-auth rejection fixture;
 - official client initialization and tool invocation.
-- removal of `protocol-compat.ts` and custom JSON-RPC/SSE parsing;
-- no old/new protocol switch or compatibility shim.
+- a deletion inventory for `protocol-compat.ts` and custom JSON-RPC/SSE parsing;
+- no production route switch or compatibility shim in this phase.
 
 ### Acceptance criteria
 
@@ -757,6 +752,36 @@ canonical local mutation semantics remain outside MCP.
 - No deprecated SSE transport.
 - Inspector or official client lists capabilities.
 - Mutation-like request returns proposal JSON only.
+
+---
+
+## Task P0-04 — Approval schema and threat fixtures
+
+### Objective
+
+Freeze the durable approval contract before AI or MCP production replacement.
+
+### Owned files
+
+- isolated approval JSON Schema and generated types;
+- approval threat fixtures and tests;
+- no production mutation or UI files.
+
+### Required proof
+
+- proposal hash binding;
+- unchanged action and idempotency identity;
+- target record and version-vector binding;
+- actor, workspace, scope, creation, expiry, decision, and source;
+- rejection of tampering, expiry, replay, changed revision, wrong actor, wrong
+  workspace, and capability escalation;
+- AI SDK approval responses cannot satisfy the durable receipt contract.
+
+### Acceptance criteria
+
+- Schema validates accepted fixtures and rejects every threat fixture.
+- No new database table or production write path is added in this phase.
+- Contract is usable by later migration and apply tasks without SDK types.
 
 ---
 
@@ -2419,9 +2444,10 @@ This convergence scope is complete only when all are true:
 Start only these tasks:
 
 1. **P0-01:** Baseline and evidence report.
-2. **P0-02:** Delete fake agent/chat plumbing and adopt pinned AI SDK.
-3. **P0-03:** Delete custom MCP protocol and adopt official MCP v1.29.
-4. After those merge:
+2. **P0-02:** Isolated pinned AI SDK parity proof.
+3. **P0-03:** Isolated official MCP v1.29 parity proof.
+4. **P0-04:** Approval receipt schema and threat fixtures.
+5. After those merge:
    - P1-A kernel conformance;
    - P1-B boundary enforcement;
    - P1-C minimal shared extraction;
