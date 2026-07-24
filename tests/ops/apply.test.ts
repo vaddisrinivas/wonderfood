@@ -139,6 +139,72 @@ describe('applyOperation', () => {
     expect(JSON.parse(db.records.get('unique-yogurt')?.properties).body).toBe('Original body');
   });
 
+  it('enforces canonical revision progression across create/archive/restore and idempotent replay', async () => {
+    const db = new MemoryDb() as any;
+    const created = await applyOperation(db, manifest, {
+      op_id: 'canonical-revision-create',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'cycle-revision',
+      record: {
+        title: 'Revision yogurt',
+        properties: { body: 'Original', quantity: 1 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'cycle-revision', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+    expect(created.status).toBe('applied');
+    expect(created.record?.revision).toBe(1);
+
+    const archive = await applyOperation(db, manifest, {
+      op_id: 'canonical-revision-archive',
+      kind: 'archive',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'cycle-revision',
+      expected_revision: 1,
+      actor: 'user',
+      origin: 'manual',
+      idempotency_key: 'idempotent-archive',
+    });
+    expect(archive.status).toBe('applied');
+    expect(archive.record?.revision).toBe(2);
+    expect(Boolean(db.records.get('cycle-revision')?.archived_at)).toBe(true);
+
+    const archiveReplay = await applyOperation(db, manifest, {
+      op_id: 'canonical-revision-archive-replay',
+      kind: 'archive',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'cycle-revision',
+      expected_revision: 1,
+      actor: 'user',
+      origin: 'manual',
+      idempotency_key: 'idempotent-archive',
+    });
+    expect(archiveReplay.status).toBe('duplicate');
+    expect(archiveReplay.op_id).toBe('canonical-revision-archive');
+    expect(db.records.get('cycle-revision')?.revision).toBe(2);
+
+    const restore = await applyOperation(db, manifest, {
+      op_id: 'canonical-revision-restore',
+      kind: 'restore',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'cycle-revision',
+      expected_revision: 2,
+      actor: 'user',
+      origin: 'manual',
+    });
+    expect(restore.status).toBe('applied');
+    expect(restore.record?.revision).toBe(3);
+    expect(db.records.get('cycle-revision')?.archived_at).toBeNull();
+  });
+
   it('rejects invalid records without partial record writes', async () => {
     const db = new MemoryDb() as any;
     const rejected = await applyOperation(db, manifest, {
