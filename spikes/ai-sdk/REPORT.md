@@ -9,7 +9,7 @@
 ## Baseline evidence
 - Base SHA (main): `5f9b091c9667593f74e383554e59eb562211c4dd`
 - Baseline commit at start: `114a0931a3d7099e9eaaad851317b26b794d4cab`
-- Current branch HEAD after task: `<pending commit>`
+- Current commit SHA: `206e6f5dded7ee49412d7045dd702e3fec8196a6`
 
 ## Package pinning
 - `ai`: `7.0.37`
@@ -17,6 +17,7 @@
 - `@ai-sdk/openai`: `4.0.20`
 
 ## Diff tree
+- `git diff-tree --stat --find-renames HEAD^ HEAD --`
 - Files added under spike:
   - `spikes/ai-sdk/package.json`
   - `spikes/ai-sdk/package-lock.json`
@@ -31,6 +32,21 @@
   - `spikes/ai-sdk/tsconfig.json`
   - `spikes/ai-sdk/REPORT.md`
   - `spikes/ai-sdk/deletion-inventory.md`
+
+- Command output:
+  - `spikes/ai-sdk/REPORT.md` (54 lines)
+  - `spikes/ai-sdk/deletion-inventory.md` (12 lines)
+  - `spikes/ai-sdk/package-lock.json` (8064 lines)
+  - `spikes/ai-sdk/package.json` (26 lines)
+  - `spikes/ai-sdk/scripts/validate-guards.mjs` (71 lines)
+  - `spikes/ai-sdk/src/client/approval.ts` (26 lines)
+  - `spikes/ai-sdk/src/client/chat-client.tsx` (64 lines)
+  - `spikes/ai-sdk/src/server/agent.ts` (39 lines)
+  - `spikes/ai-sdk/src/server/model.ts` (3 lines)
+  - `spikes/ai-sdk/src/server/stream-handler.ts` (37 lines)
+  - `spikes/ai-sdk/src/types/expo-fetch.d.ts` (4 lines)
+  - `spikes/ai-sdk/tests/guard.test.ts` (60 lines)
+  - `spikes/ai-sdk/tsconfig.json` (17 lines)
 
 ## Checks
 - `npm run check`
