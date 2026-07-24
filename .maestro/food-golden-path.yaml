@@ -3,10 +3,13 @@ name: Food golden path debug app
 ---
 - launchApp:
     clearState: true
-- openLink: wonderfood://food
+- openLink: wonderfood:///food
 - assertVisible:
     id: food-screen
-- assertVisible: Empty. Load demo or add real local records.
+- assertVisible: What should we cook next?
+- tapOn:
+    id: food-show-kitchen-lab
+- assertVisible: No meals yet. Add your first pantry item or load the demo household.
 - tapOn:
     id: food-add-pantry
 - assertVisible: Added Baby spinach.
@@ -38,7 +41,7 @@ name: Food golden path debug app
 - tapOn: Save changes
 - assertVisible: Saved locally in this view. Open Settings to connect a writable source.
 - back
-- openLink: wonderfood://food
+- openLink: wonderfood:///food
 - assertVisible:
     id: food-screen
 - tapOn:
@@ -49,14 +52,14 @@ name: Food golden path debug app
 - assertVisible: Undo complete. Record restored.
 - tapOn:
     id: food-export-backup
-- assertVisible: Backup captured in debug memory
+- assertVisible: Kitchen backup saved
 - tapOn:
     id: food-restore-backup
-- assertVisible: Backup restored into local SQLite.
+- assertVisible: Kitchen backup restored.
 - stopApp
 - launchApp:
     clearState: false
-- openLink: wonderfood://food
+- openLink: wonderfood:///food
 - assertVisible:
     id: food-screen
 - assertVisible: Salmon rice bowls

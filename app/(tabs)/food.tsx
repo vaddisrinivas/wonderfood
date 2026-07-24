@@ -51,7 +51,7 @@ const fallbackShop = [
 const viewCopy: Record<string, { title: string; subtitle: string; empty: string }> = {
   Overview: {
     title: 'Food home',
-    subtitle: 'Dinner, pantry, shopping and source-backed cooking memory.',
+    subtitle: 'Dinner, pantry, shopping and cooking memory.',
     empty: 'Capture a meal, pantry item or receipt to wake up this food space.',
   },
   Meals: {
@@ -62,7 +62,7 @@ const viewCopy: Record<string, { title: string; subtitle: string; empty: string 
   Kitchen: {
     title: 'Kitchen',
     subtitle: 'What you have, what expires, what needs correction.',
-    empty: 'Add pantry items or pull source updates to build the kitchen.',
+    empty: 'Add pantry items to build the kitchen.',
   },
   Shopping: {
     title: 'Shopping',
@@ -78,7 +78,7 @@ function copyForView(domainLabel: string, view: string) {
   return {
     title: view === 'Overview' ? `${domainLabel} command center` : view,
     subtitle: `${domainLabel} views, records and actions.`,
-    empty: `Connect sources or add a ${domainLabel.toLowerCase()} item to wake up this space.`,
+    empty: `Add a ${domainLabel.toLowerCase()} item to wake up this space.`,
   };
 }
 
@@ -372,7 +372,7 @@ export default function FoodScreen() {
       properties: {
         status: 'Active',
         tone: 'moss',
-        meta: 'Added from Food debug app',
+        meta: 'Added in WonderFood',
         body: '',
         source: 'user · local',
         ...properties,
@@ -428,7 +428,7 @@ export default function FoodScreen() {
     const snapshot = await exportRecoverySnapshot(db);
     setBackupSnapshot(snapshot);
     const totalRows = snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0);
-    setNotice(`Backup captured in debug memory: ${totalRows} rows.`);
+    setNotice(`Kitchen backup saved: ${totalRows} items.`);
   };
 
   const restoreBackup = async () => {
@@ -437,7 +437,7 @@ export default function FoodScreen() {
       return;
     }
     await importRecoverySnapshot(db, backupSnapshot);
-    setNotice('Backup restored into local SQLite.');
+    setNotice('Kitchen backup restored.');
     setRefreshNonce((value) => value + 1);
   };
 
@@ -500,7 +500,7 @@ export default function FoodScreen() {
       case 'widgets':
         return foodConfig.showWidgets && widgets.length ? (
           <View key={section}>
-            <SectionTitle title="Shortcuts" action="Edit" href="/config" />
+            <SectionTitle title="Shortcuts" />
             <View style={[styles.widgetGrid, compact && styles.boardCompact]}>
               {widgets.map((widget) => (
                 <Pressable key={`${widget.title}-${widget.href}`} accessibilityRole="button" onPress={() => router.push(widget.href as never)} style={({ pressed }) => [styles.widgetPress, pressed && styles.pressed]}>
@@ -532,12 +532,12 @@ export default function FoodScreen() {
       case 'collections':
         return active === 'Overview' && foodConfig.showCollectionAtlas ? (
           <View key={section}>
-            <SectionTitle title={`${domainLabel} collection atlas`} action="Edit schema" href="/config" />
+            <SectionTitle title={`${domainLabel} map`} action="Settings" href="/config" />
             <Card style={styles.atlasHero}>
               <View style={styles.atlasHeroCopy}>
-                <Text style={[styles.atlasKicker, { color: theme.colors.moss }]}>DATA PLANE</Text>
-                <Text style={[styles.atlasTitle, { color: theme.colors.ink }]}>{activeManifest.collections.length} managed collections, {activeManifest.relations.length} relations.</Text>
-                <Text style={[styles.atlasBody, { color: theme.colors.muted }]}>This is the Food graph behind meals, pantry, recipes, shopping, purchases, nutrition, source records and audit history.</Text>
+                <Text style={[styles.atlasKicker, { color: theme.colors.moss }]}>KITCHEN MEMORY</Text>
+                <Text style={[styles.atlasTitle, { color: theme.colors.ink }]}>{activeManifest.collections.length} food areas ready.</Text>
+                <Text style={[styles.atlasBody, { color: theme.colors.muted }]}>Meals, pantry, recipes, shopping, purchases and nutrition stay organized without making you manage the machinery.</Text>
               </View>
               <View style={styles.atlasStats}>
                 <CollectionStat label="Records loaded" value={String(records.length)} tone="moss" />
@@ -558,8 +558,8 @@ export default function FoodScreen() {
               ))}
               {unplacedCollections.length ? (
                 <CollectionGroup
-                  title="Support graph"
-                  subtitle="Shared records used by every Food view"
+                  title="More food context"
+                  subtitle="Extra details used when you ask for help"
                   collections={unplacedCollections}
                   counts={collectionCounts}
                   visuals={visualIdentity.collections ?? {}}
@@ -577,7 +577,7 @@ export default function FoodScreen() {
               {isFoodDomain ? (
                 <>
                   <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} visuals={visualIdentity.collections ?? {}} empty="Plan dinner from pantry." />
-                  <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} visuals={visualIdentity.collections ?? {}} empty="Add pantry or pull source updates." />
+                <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} visuals={visualIdentity.collections ?? {}} empty="Add pantry items." />
                   <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} visuals={visualIdentity.collections ?? {}} empty="No shopping pressure." />
                 </>
               ) : surfaceColumns.map((surface) => (
@@ -599,14 +599,14 @@ export default function FoodScreen() {
       case 'attention':
         return active === 'Overview' && foodConfig.showAttention ? (
           <View key={section}>
-            <SectionTitle title="Review before anything writes" />
+            <SectionTitle title="Needs your call" />
             <View style={[styles.attentionGrid, compact && styles.boardCompact]}>
               {reviewRows.length ? reviewRows.map((row) => (
                 <MiniRecord key={row.id} record={row} />
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>Nothing needs review</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>AI suggestions, source conflicts and reviewable changes land here before they change your {domainLabel.toLowerCase()} graph.</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Suggestions and possible changes wait here until you say yes.</Text>
                 </Card>
               )}
             </View>
@@ -625,7 +625,7 @@ export default function FoodScreen() {
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>{activeCopy.empty}</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{`Use capture, Sources, or ${domainLabel} AI. No code change required.`}</Text>
+                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{`Add food, ask ${domainLabel} AI, or load a sample kitchen.`}</Text>
                   <Link href="/capture" style={[styles.cardLink, { color: theme.colors.moss }]}>{`Capture ${domainLabel.toLowerCase()} →`}</Link>
                 </Card>
               )}
@@ -636,10 +636,10 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>{domainLabel} can be customized</Text>
-              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Views, card counts, operating boards, sources, skills and assistant behavior are editable from Settings.</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Want to change the kitchen?</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Ask AI to reshape the screen, or open Settings for advanced controls.</Text>
             </View>
-            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Tune</Link>
+            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Settings</Link>
           </Card>
         ) : null;
       default:
@@ -774,14 +774,14 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   const theme = useLifeOSTheme();
   const today = new Date();
   const title = mode === 'Today'
-    ? today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    ? 'WonderFood'
     : mode;
   const subtitle = {
-    Today: 'Meals, reviews, use first',
-    Kitchen: 'What you have',
-    Plan: 'This week from your kitchen',
-    Recipes: 'Make now, almost, all',
-    Shop: 'To buy, receipts, put away',
+    Today: today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
+    Kitchen: 'Fresh, frozen, pantry, use-first',
+    Plan: 'A calm week from what you already have',
+    Recipes: 'Cook now, almost ready, worth shopping for',
+    Shop: 'A list with reasons, not errands',
   }[mode];
   return (
     <Page>
@@ -809,6 +809,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
                 </Pressable>
               </View>
             </View>
+            <FoodHeroPlate records={records} meals={meals} kitchen={kitchen} shopping={shopping} onAsk={onAsk} onLoadDemo={onLoadDemo} />
             <FoodDemoBody
               mode={mode}
               records={records}
@@ -874,6 +875,62 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   return <><TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} />{tools}</>;
 }
 
+function FoodHeroPlate({ records, meals, kitchen, shopping, onAsk, onLoadDemo }: {
+  records: FoodRecordView[];
+  meals: FoodRecordView[];
+  kitchen: FoodRecordView[];
+  shopping: FoodRecordView[];
+  onAsk: () => void;
+  onLoadDemo: () => void;
+}) {
+  const theme = useLifeOSTheme();
+  const dinner = meals[0]?.title ?? 'Salmon rice bowls';
+  const useFirst = kitchen[0]?.title ?? 'Baby spinach';
+  const missing = shopping[0]?.title ?? 'Rice vinegar';
+  const hasRecords = records.length > 0;
+  return (
+    <View style={[styles.foodHeroPlate, { backgroundColor: theme.dark ? '#222018' : '#FFF2D8', borderColor: theme.dark ? '#3A3324' : '#F1D5A5' }]}>
+      <View style={styles.foodHeroGlow} />
+      <View style={styles.foodHeroArt} pointerEvents="none">
+        <Text style={styles.foodHeroPlateEmoji}>🍣</Text>
+        <Text style={styles.foodHeroLeafEmoji}>🥬</Text>
+        <Text style={styles.foodHeroSparkEmoji}>✦</Text>
+      </View>
+      <View style={styles.foodHeroTop}>
+        <Text style={[styles.foodHeroEyebrow, { color: theme.colors.amber }]}>WONDERFOOD</Text>
+        <View style={[styles.foodHeroBadge, { backgroundColor: theme.dark ? '#342B1D' : '#FFE5B7' }]}>
+          <Text style={[styles.foodHeroBadgeText, { color: theme.dark ? theme.colors.amber : '#8C4A18' }]}>{hasRecords ? `${records.length} items` : 'Fresh start'}</Text>
+        </View>
+      </View>
+      <Text style={[styles.foodHeroTitle, { color: theme.colors.ink }]}>What should we cook next?</Text>
+      <Text style={[styles.foodHeroBody, { color: theme.colors.muted }]}>Tonight looks like {dinner}. Use {useFirst} first, and grab {missing} if you want the bowl to sing.</Text>
+      <View style={styles.foodHeroStats}>
+        <FoodHeroStat label="Dinner" value={dinner} tone="moss" />
+        <FoodHeroStat label="Use first" value={useFirst} tone="amber" />
+        <FoodHeroStat label="Missing" value={missing} tone="blue" />
+      </View>
+      <View style={styles.foodHeroActions}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Ask WonderFood" onPress={onAsk} style={({ pressed }) => [styles.foodHeroPrimary, { backgroundColor: theme.dark ? theme.colors.amber : '#251812' }, pressed && styles.pressed]}>
+          <Text style={[styles.foodHeroPrimaryText, { color: theme.dark ? '#251812' : '#FFF8EA' }]}>Ask what to cook</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Load sample kitchen" testID="food-load-demo-hero" onPress={onLoadDemo} style={({ pressed }) => [styles.foodHeroSecondary, { borderColor: theme.dark ? '#4C4334' : '#E8C993' }, pressed && styles.pressed]}>
+          <Text style={[styles.foodHeroSecondaryText, { color: theme.colors.ink }]}>Try sample</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function FoodHeroStat({ label, value, tone }: { label: string; value: string; tone: FoodTone }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodHeroStat, foodToneStyle(tone, theme.colors)]}>
+      <Text style={[styles.foodHeroStatLabel, { color: theme.colors.muted }]}>{label}</Text>
+      <Text style={[styles.foodHeroStatValue, { color: theme.colors.ink }]} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
 function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
   meals: FoodRecordView[];
   kitchen: FoodRecordView[];
@@ -896,26 +953,26 @@ function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
       <FoodSummaryCard
         tone="neutral"
         glyphTone="moss"
-        glyph="🍽"
-        title="Meal timeline"
-        detail={`${rows.length + 1} meals planned from pantry ingredients`}
-        badge={`${Math.max(reviewRows.length, 3)} drafts to review`}
+        glyph="✨"
+        title="Today feels handled"
+        detail={`${rows.length + 1} meals shaped around what is already in your kitchen`}
+        badge={`${Math.max(reviewRows.length, 3)} ideas`}
       />
       {rows.map((row) => (
         <FoodDemoRow key={row.title} {...row} />
       ))}
       <FoodActionCard
         tone="moss"
-        title="Review queue"
-        detail={review?.meta || 'Receipt proposal from Market Basket'}
-        strong={review ? `Review: ${review.title}` : 'Add: salmon fillets, blueberries, spinach'}
-        note="You can edit quantities before saving."
-        cta="Review changes"
+        title="Ready to save"
+        detail={review?.meta || 'Found a grocery receipt and cleaned it into food items.'}
+        strong={review ? review.title : 'Salmon, blueberries, spinach'}
+        note="Edit anything first. The default is the safest good version."
+        cta="Looks good"
         href={review ? `/record/${review.id}` : '/chat'}
       />
       <FoodActionCard
         tone="neutral"
-        title="Pantry-aware suggestion"
+        title="Tiny kitchen magic"
         detail={useSoon ? `Cook around ${useSoon.title}.` : 'Cook lentil soup tomorrow: uses carrots, celery, and stock expiring soon.'}
         strong={shop ? `Missing: ${shop.title}` : undefined}
       />
@@ -942,10 +999,10 @@ function KitchenDemo({ records }: { records: FoodRecordView[] }) {
       {resolvedRows.map((row) => <FoodDemoRow key={row.title} {...row} />)}
       <FoodActionCard
         tone="amber"
-        title="Inventory context"
-        detail="Lots, expiry, prices, notes, and nutrition confidence stay local until you export or back up."
-        cta="CSV export ready"
-        href="/sources"
+        title="Use-first shelf"
+        detail="The food that should not be wasted rises to the top, with dinner ideas attached."
+        cta="Plan from this"
+        href="/chat"
       />
     </View>
   );
@@ -976,9 +1033,9 @@ function PlanDemo({ meals, kitchen }: { meals: FoodRecordView[]; kitchen: FoodRe
       {!meals.length ? fallbackMeals.map((row, index) => <FoodDemoRow key={row.title} title={`${days[index]}: ${row.title.replace(/^.*?: /, '')}`} detail={row.detail} badge={row.badge} tone={row.tone} />) : null}
       <FoodActionCard
         tone="blue"
-        title="Plan with my Kitchen"
-        detail={kitchen[0] ? `Start from ${kitchen[0].title}, then draft editable meals and shopping gaps.` : 'Draft meals from pantry and preferences before anything writes.'}
-        cta="Draft week"
+        title="Plan with my kitchen"
+        detail={kitchen[0] ? `Start from ${kitchen[0].title}, then build meals and a tiny shopping gap.` : 'Draft a week from pantry, habits, and cravings.'}
+        cta="Make my week"
         href="/chat"
       />
     </View>
@@ -1010,8 +1067,8 @@ function RecipesDemo({ meals, kitchen }: { meals: FoodRecordView[]; kitchen: Foo
       <FoodActionCard
         tone="moss"
         title="Recipe matching"
-        detail="Have/need matching appears before opening details, so dinner decisions are visible at a glance."
-        cta="Ask for ideas"
+        detail="Recipes are grouped by how close they are to dinner: make now, almost, and worth one errand."
+        cta="Surprise me"
         href="/chat"
       />
     </View>
@@ -1029,10 +1086,10 @@ function ShopDemo({ shopping, onToggleShopping }: { shopping: FoodRecordView[]; 
       </View>
       <FoodActionCard
         tone="neutral"
-        title="Receipt review"
-        detail="Market Basket, synthetic demo receipt"
+        title="Grocery receipt"
+        detail="Market Basket found likely groceries."
         strong="Salmon, spinach, blueberries"
-        cta="Edit before save"
+        cta="Review basket"
         href="/chat"
         ctaTone="red"
       />
@@ -1049,8 +1106,8 @@ function ShopDemo({ shopping, onToggleShopping }: { shopping: FoodRecordView[]; 
       )) : fallbackShop.map((row) => <FoodDemoRow key={row.title} {...row} />)}
       <FoodActionCard
         tone="blue"
-        title="Reviewable AI command"
-        detail="AI parsed the receipt into a typed draft. WonderFood validates fields and waits for approval."
+        title="AI made a list"
+        detail="WonderFood found likely groceries. Accept, edit, or toss it."
         actions={['Accept', 'Edit', 'Reject']}
       />
     </View>
@@ -1168,18 +1225,29 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
   onRestoreBackup: () => void;
 }) {
   const theme = useLifeOSTheme();
+  const [expanded, setExpanded] = useState(false);
   const addPantry = () => onQuickAdd('inventory', 'Baby spinach', { status: 'Use first', body: 'Fridge. Great for wraps, eggs, or rice bowls.', meta: '2 days left', quantity: '1 clamshell' });
   const addMeal = () => onQuickAdd('meal_plan', 'Salmon rice bowls', { status: 'Planned', body: 'Dinner plan from pantry plus shopping gaps.', meta: 'Tonight', planned_for: new Date().toISOString().slice(0, 10) });
   const addShopping = () => onQuickAdd('shopping_item', 'Rice vinegar', { status: 'To buy', body: 'Needed for salmon rice bowls.', meta: 'Missing ingredient' });
+  if (!expanded) {
+    return (
+      <View style={styles.foodLabCollapsed}>
+        {notice ? <Text style={[styles.foodLabNotice, { color: theme.colors.moss }]} testID="food-debug-notice">{notice}</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="Add food" testID="food-show-kitchen-lab" onPress={() => setExpanded(true)} style={({ pressed }) => [styles.foodLabButton, { backgroundColor: theme.dark ? theme.colors.paper : '#FFF8EC', borderColor: theme.colors.line }, pressed && styles.pressed]}>
+          <Text style={[styles.foodLabButtonText, { color: theme.colors.muted }]}>Add food</Text>
+        </Pressable>
+      </View>
+    );
+  }
   return (
     <View style={[styles.foodDebugTools, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]} testID="food-debug-tools">
       <View style={styles.foodDebugHeader}>
         <View>
-          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Debug kitchen</Text>
-          <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} live records` : 'Empty. Load demo or add real local records.'}</Text>
+          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Start your kitchen</Text>
+          <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} saved food items` : 'No meals yet. Add your first pantry item or load the demo household.'}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" testID="food-load-demo" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
-          <Text style={[styles.foodActionButtonText, { color: theme.colors.paper }]}>Load demo</Text>
+          <Text style={[styles.foodActionButtonText, { color: theme.colors.paper }]}>Sample</Text>
         </Pressable>
       </View>
       <View style={styles.foodActionButtons}>
@@ -1325,7 +1393,7 @@ function DinnerAssemblyTable({ meals, kitchen, shopping, compact }: {
           <Link key={row.meal.id} href={{ pathname: '/record/[id]', params: { id: row.meal.id } }} asChild>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.assemblyRow, compact && styles.assemblyRowCompact, { borderBottomColor: theme.colors.line }, pressed && styles.pressed]}>
               <AssemblyCell label={compact ? 'Meal / recipe' : undefined} title={row.meal.title} detail={row.meal.meta} tone="moss" />
-              <AssemblyCell label={compact ? 'Available' : undefined} title={row.available?.title ?? 'Not captured'} detail={row.available?.meta ?? 'Add pantry source'} tone="amber" />
+              <AssemblyCell label={compact ? 'Available' : undefined} title={row.available?.title ?? 'Not captured'} detail={row.available?.meta ?? 'Add pantry item'} tone="amber" />
               <AssemblyCell label={compact ? 'Need / cart' : undefined} title={row.missing?.title ?? 'Nothing missing'} detail={row.missing?.meta ?? 'No shopping blocker'} tone="blue" />
               <AssemblyCell label={compact ? 'Action' : undefined} title={row.action} detail={row.missing ? 'Open item or ask AI to substitute' : 'Open and log cooking'} tone={row.missing ? 'plum' : 'moss'} />
             </Pressable>
@@ -1577,8 +1645,8 @@ function commandToneStyle(tone: 'moss' | 'amber' | 'blue' | 'plum', themed: type
 
 const styles = StyleSheet.create({
   foodDemoRoot: { flex: 1 },
-  foodDemoContent: { alignSelf: 'center', maxWidth: 760, paddingHorizontal: 24, paddingTop: 42, paddingBottom: 158 },
-  foodDemoContentCompact: { alignSelf: 'stretch', paddingHorizontal: 16, paddingTop: 34 },
+  foodDemoContent: { alignSelf: 'center', maxWidth: 760, paddingHorizontal: 24, paddingTop: 34, paddingBottom: 158 },
+  foodDemoContentCompact: { alignSelf: 'stretch', paddingHorizontal: 16, paddingTop: 26 },
   foodDemoTopbar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 22 },
   foodDemoHeadline: { flex: 1, minWidth: 0 },
   foodDemoTitle: { color: colors.ink, fontSize: 32, lineHeight: 36, fontWeight: '900', letterSpacing: -1.4 },
@@ -1589,9 +1657,34 @@ const styles = StyleSheet.create({
   foodAskPill: { minWidth: 84, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   foodAskPillCompact: { minWidth: 58, paddingHorizontal: 10 },
   foodDemoStack: { gap: 14 },
+  foodHeroPlate: { position: 'relative', overflow: 'hidden', borderWidth: 1, borderRadius: 32, padding: 22, marginBottom: 18 },
+  foodHeroGlow: { position: 'absolute', right: -64, top: -70, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255, 177, 93, 0.34)' },
+  foodHeroArt: { position: 'absolute', right: 14, top: 58, width: 150, height: 150, opacity: 0.2 },
+  foodHeroPlateEmoji: { position: 'absolute', right: 0, top: 18, fontSize: 76, lineHeight: 86, transform: [{ rotate: '-10deg' }] },
+  foodHeroLeafEmoji: { position: 'absolute', left: 12, top: 0, fontSize: 42, lineHeight: 48, transform: [{ rotate: '16deg' }] },
+  foodHeroSparkEmoji: { position: 'absolute', left: 48, bottom: 8, color: colors.amber, fontSize: 42, lineHeight: 48, fontWeight: '900' },
+  foodHeroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  foodHeroEyebrow: { color: colors.amber, fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: 1.7 },
+  foodHeroBadge: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 },
+  foodHeroBadgeText: { color: '#8C4A18', fontSize: 12, lineHeight: 14, fontWeight: '900' },
+  foodHeroTitle: { color: colors.ink, fontSize: 38, lineHeight: 40, fontWeight: '900', letterSpacing: -1.6, marginTop: 30, maxWidth: 520 },
+  foodHeroBody: { color: colors.muted, fontSize: 17, lineHeight: 25, marginTop: 12, maxWidth: 590 },
+  foodHeroStats: { flexDirection: 'row', gap: 10, marginTop: 22, flexWrap: 'wrap' },
+  foodHeroStat: { flexGrow: 1, flexBasis: 145, minHeight: 74, borderWidth: 1, borderRadius: 20, padding: 13, justifyContent: 'center' },
+  foodHeroStatLabel: { color: colors.muted, fontSize: 10, lineHeight: 12, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  foodHeroStatValue: { color: colors.ink, fontSize: 15, lineHeight: 19, fontWeight: '900', marginTop: 7 },
+  foodHeroActions: { flexDirection: 'row', gap: 10, marginTop: 20, flexWrap: 'wrap' },
+  foodHeroPrimary: { flexGrow: 1, minHeight: 52, borderRadius: radius.pill, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  foodHeroPrimaryText: { color: '#FFF8EA', fontSize: 16, fontWeight: '900' },
+  foodHeroSecondary: { minHeight: 52, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  foodHeroSecondaryText: { color: colors.ink, fontSize: 16, fontWeight: '900' },
+  foodLabCollapsed: { marginTop: 16, alignItems: 'center', gap: 8 },
+  foodLabNotice: { fontSize: 13, lineHeight: 18, fontWeight: '800', textAlign: 'center' },
+  foodLabButton: { minHeight: 42, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  foodLabButtonText: { fontSize: 13, lineHeight: 17, fontWeight: '900' },
   foodRowPress: { alignSelf: 'stretch' },
-  foodSummaryCard: { minHeight: 96, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  foodDemoRow: { width: '100%', minHeight: 98, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden' },
+  foodSummaryCard: { minHeight: 96, borderRadius: 26, paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  foodDemoRow: { width: '100%', minHeight: 98, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper, borderRadius: 24, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden' },
   foodGlyph: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   foodGlyphText: { color: colors.moss, fontSize: 18, lineHeight: 22, fontWeight: '900' },
   foodRowCopy: { flex: 1, minWidth: 0, flexShrink: 1 },
@@ -1599,7 +1692,7 @@ const styles = StyleSheet.create({
   foodRowDetail: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
   foodBadge: { minWidth: 70, maxWidth: 104, minHeight: 34, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
   foodBadgeText: { color: colors.moss, fontSize: 12, lineHeight: 14, fontWeight: '900', textAlign: 'center' },
-  foodActionCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 20, minHeight: 132 },
+  foodActionCard: { borderWidth: 1, borderColor: colors.line, borderRadius: 26, padding: 20, minHeight: 132 },
   foodActionTitle: { color: colors.ink, fontSize: 25, lineHeight: 30, fontWeight: '900', letterSpacing: -0.7 },
   foodActionDetail: { color: colors.muted, fontSize: 17, lineHeight: 24, marginTop: 8 },
   foodActionStrong: { color: colors.ink, fontSize: 18, lineHeight: 25, fontWeight: '900', marginTop: 10 },
@@ -1778,7 +1871,7 @@ const styles = StyleSheet.create({
   configCopy: { flex: 1, minWidth: 240 },
   configTitle: { color: colors.ink, fontWeight: '900', fontSize: 15, marginBottom: 5 },
   configLink: { color: colors.moss, fontWeight: '900', fontSize: 12 },
-  foodDebugTools: { borderWidth: 1, borderRadius: 20, padding: 16, gap: 12, marginTop: 6 },
+  foodDebugTools: { borderWidth: 1, borderRadius: 26, padding: 16, gap: 12, marginTop: 6 },
   foodDebugHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   foodDebugPrimary: { minHeight: 42, borderRadius: radius.pill, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.36 },

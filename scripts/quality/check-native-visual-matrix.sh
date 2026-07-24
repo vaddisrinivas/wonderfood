@@ -91,7 +91,7 @@ echo "Native visual matrix: install complete"
 
 routes=(
   "home|wonderfood:///|LIFEOS / HOME|Green dal + rice"
-  "food|wonderfood:///food|Meal timeline|Review queue"
+  "food|wonderfood:///food|WonderFood|What should we cook next?"
   "record-green-dal|wonderfood:///record/meal-green-dal|Record|Green dal + rice"
   "chat|wonderfood:///chat|Chat|Settings"
   "sources|wonderfood:///sources|LIFEOS / SOURCES|Food authority"

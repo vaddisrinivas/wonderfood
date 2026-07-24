@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { currentGit } from './evidence-provenance.mjs';
+import { ensureWebBaseUrl } from './web-static-server.mjs';
 
 const root = process.cwd();
 const baseUrl = process.env.LIFEOS_WEB_BASE_URL || 'http://127.0.0.1:8094';
@@ -40,6 +41,14 @@ function chromeExecutable() {
   return chromeCandidates.find((candidate) => candidate && existsSync(candidate));
 }
 
+function isExpectedSqliteWasmFallback(message) {
+  return (
+    message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
+    message.includes('Incorrect response MIME type. Expected') &&
+    message.includes('application/wasm')
+  ) || message === 'falling back to ArrayBuffer instantiation';
+}
+
 const routes = [
   '/',
   '/food',
@@ -61,6 +70,7 @@ const viewports = [
 
 mkdirSync(outDir, { recursive: true });
 const { chromium } = requirePlaywright();
+const webServer = await ensureWebBaseUrl({ root, baseUrl });
 const browser = await chromium.launch({
   headless: true,
   ...(chromeExecutable() ? { executablePath: chromeExecutable() } : {}),
@@ -84,7 +94,8 @@ for (const viewport of viewports) {
     };
     page.removeAllListeners('console');
     page.on('console', (message) => {
-      if (message.type() === 'error') result.consoleErrors.push(message.text());
+      const text = message.text();
+      if (message.type() === 'error' && !isExpectedSqliteWasmFallback(text)) result.consoleErrors.push(text);
     });
 
     try {
@@ -190,6 +201,7 @@ for (const viewport of viewports) {
 }
 
 await browser.close();
+await webServer.close();
 
 const evidence = {
   proof: 'lifeos_accessibility_smoke',

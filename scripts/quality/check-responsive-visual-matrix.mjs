@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { currentGit } from './evidence-provenance.mjs';
+import { ensureWebBaseUrl } from './web-static-server.mjs';
 
 const root = process.cwd();
 const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
@@ -35,9 +36,17 @@ function chromeExecutable() {
   return chromeCandidates.find((candidate) => candidate && existsSync(candidate));
 }
 
+function isExpectedSqliteWasmFallback(message) {
+  return (
+    message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
+    message.includes('Incorrect response MIME type. Expected') &&
+    message.includes('application/wasm')
+  ) || message === 'falling back to ArrayBuffer instantiation';
+}
+
 const routes = [
   { name: 'home', path: '/', labels: ['LIFEOS / HOME', 'Review queue', 'Recent updates'] },
-  { name: 'food', path: '/food', labels: ['Meal timeline', 'Review queue'] },
+  { name: 'food', path: '/food', labels: ['WonderFood', 'What should we cook next?', 'Today feels handled'] },
   { name: 'chat', path: '/chat', labels: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.'] },
   { name: 'sources', path: '/sources', labels: ['LIFEOS / SOURCES', 'Your food data homes.'] },
   { name: 'config', path: '/config', labels: ['Active package contract', 'Screen Builder'] },
@@ -53,6 +62,7 @@ const viewports = [
 
 mkdirSync(outDir, { recursive: true });
 const { chromium } = requirePlaywright();
+const webServer = await ensureWebBaseUrl({ root, baseUrl });
 const browser = await chromium.launch({
   headless: true,
   ...(chromeExecutable() ? { executablePath: chromeExecutable() } : {}),
@@ -75,7 +85,8 @@ for (const viewport of viewports) {
     const consoleErrors = [];
     page.removeAllListeners('console');
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
+      const text = message.text();
+      if (message.type() === 'error' && !isExpectedSqliteWasmFallback(text)) consoleErrors.push(text);
     });
     try {
       await page.goto(`${baseUrl}/_sitemap`, { waitUntil: 'domcontentloaded', timeout: 20000 });
@@ -100,6 +111,7 @@ for (const viewport of viewports) {
   await page.close();
 }
 await browser.close();
+await webServer.close();
 
 const evidence = {
   proof: 'lifeos_responsive_visual_matrix',

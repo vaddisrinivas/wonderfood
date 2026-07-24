@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { currentGit } from './evidence-provenance.mjs';
+import { ensureWebBaseUrl } from './web-static-server.mjs';
 
 const root = process.cwd();
 const baseUrl = process.env.LIFEOS_WEB_BASE_URL || 'http://127.0.0.1:8094';
@@ -48,8 +49,8 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['Meal timeline', 'Review queue', 'Pantry-aware suggestion', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop', 'Load demo', 'Pantry', 'Meal', 'Archive', 'Undo', 'Export', 'Restore'],
-    forbidden: ['Record not found'],
+    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'Ready to save', 'Tiny kitchen magic', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop', 'Add food'],
+    forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab'],
   },
   {
     name: 'search',
@@ -87,6 +88,15 @@ const routes = [
 const { chromium } = requirePlaywright();
 const executablePath = chromeExecutable();
 mkdirSync(outDir, { recursive: true });
+const webServer = await ensureWebBaseUrl({ root, baseUrl });
+
+function isExpectedSqliteWasmFallback(message) {
+  return (
+    message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
+    message.includes('Incorrect response MIME type. Expected') &&
+    message.includes('application/wasm')
+  ) || message === 'falling back to ArrayBuffer instantiation';
+}
 
 const browser = await chromium.launch({
   headless: true,
@@ -117,7 +127,8 @@ for (const viewport of viewports) {
     const consoleErrors = [];
     page.removeAllListeners('console');
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
+      const text = message.text();
+      if (message.type() === 'error' && !isExpectedSqliteWasmFallback(text)) consoleErrors.push(text);
     });
     try {
       await page.goto(`${baseUrl}/_sitemap`, { waitUntil: 'domcontentloaded', timeout: 20000 });
@@ -159,6 +170,7 @@ for (const viewport of viewports) {
 }
 
 await browser.close();
+await webServer.close();
 
 const evidence = {
   proof: 'lifeos_web_product_smoke',

@@ -3,32 +3,32 @@ import { Platform, useColorScheme } from 'react-native';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 export const colors = {
-  ink: '#171914',
-  muted: '#666A5F',
-  canvas: '#F5F4EC',
-  paper: '#FFFEF8',
-  line: '#E2E0D4',
-  moss: '#536B45',
-  mossSoft: '#E4EBDD',
-  plum: '#664961',
-  plumSoft: '#EEE4ED',
-  amber: '#B86C32',
-  amberSoft: '#F6E6D5',
-  blue: '#3D6072',
-  blueSoft: '#E1EBEF',
-  red: '#9A4F46',
+  ink: '#241A13',
+  muted: '#806F5A',
+  canvas: '#FFF4E3',
+  paper: '#FFFDF7',
+  line: '#ECD9BE',
+  moss: '#2F7D4A',
+  mossSoft: '#DFF2D8',
+  plum: '#7B3F6A',
+  plumSoft: '#F3DDEC',
+  amber: '#C76D20',
+  amberSoft: '#FFE3B3',
+  blue: '#276A84',
+  blueSoft: '#D9F0F4',
+  red: '#C84932',
 };
 
 export const radius = { sm: 10, md: 16, lg: 24, pill: 999 };
 
 export const shadow = Platform.select({
-  web: { boxShadow: '0 6px 16px rgba(39, 41, 31, 0.08)' },
+  web: { boxShadow: '0 14px 34px rgba(111, 63, 24, 0.12)' },
   default: {
-    shadowColor: '#27291F',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    shadowColor: '#6F3F18',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 3,
   },
 }) ?? {};
 
