@@ -7,6 +7,7 @@ import {
   updateRecordWithAction,
 } from '../mcp/state';
 import { previewReactiveProposalCommand } from './reactive-proposal-command';
+import { verifyReactiveProposalPostcondition, type ReactiveProposalVerificationReceipt } from './reactive-proposal-verification';
 import type { ReactiveOutboxExecutionResult, ReactiveOutboxItem } from './reactive-outbox';
 
 export type ReactiveProposalExecutionReceipt = Readonly<{
@@ -14,6 +15,7 @@ export type ReactiveProposalExecutionReceipt = Readonly<{
   idempotencyKey: string;
   replayed: boolean;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  verification?: ReactiveProposalVerificationReceipt;
 }>;
 
 export type ReactiveProposalExecutionResult = ReactiveOutboxExecutionResult & Readonly<{
@@ -67,6 +69,9 @@ export function executeReactiveProposal(
     if (write.action.status !== 'completed') {
       return { ok: false, error: write.action.command || 'proposal_execution_failed' };
     }
+    if (!write.verification?.ok) {
+      return { ok: false, error: write.verification?.reason ?? 'proposal_verification_failed' };
+    }
     return {
       ok: true,
       receipt: {
@@ -74,6 +79,7 @@ export function executeReactiveProposal(
         idempotencyKey: envelope.idempotencyKey,
         replayed: write.replayed,
         status: write.action.status,
+        verification: write.verification,
       },
     };
   }
@@ -122,7 +128,7 @@ function executeApprovedCommand(input: {
   actionId: string;
   actor: string;
   commandPreview: Extract<ReturnType<typeof previewReactiveProposalCommand>, { ok: true }>;
-}) {
+}): ReturnType<typeof createRecordWithAction> & { verification?: ReactiveProposalVerificationReceipt } {
   const envelope = input.item.proposal.envelope;
   const template = envelope.operationTemplate;
   const command = JSON.stringify({
@@ -136,7 +142,7 @@ function executeApprovedCommand(input: {
   const risk = envelope.authorization.risk === 'restricted' ? 'sensitive' : envelope.authorization.risk;
   if (template.kind === 'create_record') {
     const recordId = String(input.commandPreview.args.id);
-    return createRecordWithAction({
+    const write = createRecordWithAction({
       actionId: input.actionId,
       actor: input.actor,
       domain: String(input.commandPreview.args.domain),
@@ -163,10 +169,12 @@ function executeApprovedCommand(input: {
       before: { proposal: envelope, commandPreview: input.commandPreview },
       undoPayload: { operation: 'delete_record', record_id: recordId },
     });
+    return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(recordId) }) };
   }
   if (template.kind === 'update_record') {
     const existing = findRecord(template.recordId);
-    return updateRecordWithAction({
+    const beforeRevision = existing?.revision;
+    const write = updateRecordWithAction({
       actionId: input.actionId,
       actor: input.actor,
       domain: String(input.commandPreview.args.domain),
@@ -185,9 +193,10 @@ function executeApprovedCommand(input: {
       operationId: `proposal:${input.item.proposalId}:operation`,
       causeId: envelope.causeId,
     });
+    return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(template.recordId), beforeRevision }) };
   }
   if (template.kind !== 'archive_record') {
-    return {
+    const failed = {
       action: createActionEvent({
         id: input.actionId,
         actor: input.actor,
@@ -206,8 +215,9 @@ function executeApprovedCommand(input: {
       }),
       replayed: false,
     };
+    return { ...failed, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: null }) };
   }
-  return archiveRecordWithAction({
+  const write = archiveRecordWithAction({
     actionId: input.actionId,
     actor: input.actor,
     domain: String(input.commandPreview.args.domain),
@@ -217,4 +227,5 @@ function executeApprovedCommand(input: {
     id: template.recordId,
     idempotencyKey: envelope.idempotencyKey,
   });
+  return { ...write, verification: verifyReactiveProposalPostcondition({ operationTemplate: template, record: findRecord(template.recordId) }) };
 }
