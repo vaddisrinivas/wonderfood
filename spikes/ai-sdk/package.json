@@ -1,0 +1,26 @@
+{
+  "name": "wonderfood-ai-sdk-spike",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests",
+    "check": "npm run typecheck && npm test",
+    "guard": "node scripts/validate-guards.mjs"
+  },
+  "dependencies": {
+    "ai": "7.0.37",
+    "@ai-sdk/react": "4.0.40",
+    "@ai-sdk/openai": "4.0.20",
+    "expo": "57.0.8",
+    "react": "19.2.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10",
+    "tsx": "4.20.0"
+  }
+}
