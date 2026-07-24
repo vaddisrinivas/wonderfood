@@ -3,8 +3,14 @@
 ## Scope
 - Task: `W1-MCP Isolated official MCP SDK parity proof`
 - Branch base: `main`
-- Current SHA (pre-commit snapshot): `114a0931a3d7099e9eaaad851317b26b794d4cab`
+- Base SHA: `5f9b091c9667593f74e383554e59eb562211c4dd`
+- Current SHA (committed spike SHA): `4ebbe8247edf0534d8bc4601150972d4ae00a6bd`
+- Current tree: `72f3493cf724636fd0345de6dde1c6ad689e9de8`
 - Path scope: `spikes/mcp-sdk/**`
+
+### Merge evidence
+- Merge-base: `5f9b091c9667593f74e383554e59eb562211c4dd`
+- Diff-tree: `spikes/mcp-sdk/REPORT.md`, `spikes/mcp-sdk/package-lock.json`, `spikes/mcp-sdk/package.json`, `spikes/mcp-sdk/src/server.ts`, `spikes/mcp-sdk/tests/parity.test.ts`, `spikes/mcp-sdk/tsconfig.json`
 
 ## Spike implementation
 - Pin SDK: `@modelcontextprotocol/sdk@1.29.0`
@@ -68,4 +74,4 @@ Target for next production-replacement task:
 ## Merge risk
 - Low: isolated spike, no production mutations.
 - Merge conditions: all listed checks pass and no task policy conflict.
-- Ready to merge: **TRUE** once commit and artifact fields are committed.
+- Ready to merge: **TRUE**
