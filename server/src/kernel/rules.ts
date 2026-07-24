@@ -59,6 +59,9 @@ export type OperationProposalEnvelope = Readonly<{
     querySpecHash?: string;
     packageHash?: string;
     evaluatorVersion?: string;
+    beforeStateRevision?: number;
+    afterStateRevision?: number;
+    eventOffset?: string;
   };
 }>;
 

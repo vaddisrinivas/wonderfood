@@ -43,12 +43,12 @@ const pkg: AppPackageV2 = {
 };
 
 const before = [
-  { id: 'decision-a', collection: 'decisions', status: 'closed', risk: 4 },
-  { id: 'unrelated', collection: 'notes', status: 'open', risk: 5 },
+  { id: 'decision-a', collection: 'decisions', status: 'closed', risk: 4, revision: 1 },
+  { id: 'unrelated', collection: 'notes', status: 'open', risk: 5, revision: 7 },
 ];
 const after = [
-  { id: 'decision-a', collection: 'decisions', status: 'open', risk: 4 },
-  { id: 'unrelated', collection: 'notes', status: 'open', risk: 5 },
+  { id: 'decision-a', collection: 'decisions', status: 'open', risk: 4, revision: 2 },
+  { id: 'unrelated', collection: 'notes', status: 'open', risk: 5, revision: 7 },
 ];
 const input = {
   package: pkg,
@@ -89,6 +89,9 @@ assert.equal(first.proposals[0].envelope.evidence.afterHash, first.queryHashes['
 assert.match(first.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.match(first.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.equal(first.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
+assert.equal(first.proposals[0].envelope.evidence.beforeStateRevision, 7);
+assert.equal(first.proposals[0].envelope.evidence.afterStateRevision, 7);
+assert.equal(first.proposals[0].envelope.evidence.eventOffset, 'op-open-decision-a');
 
 const colonQueryPackage: AppPackageV2 = {
   ...pkg,
@@ -124,6 +127,7 @@ assert.equal(colonCycle.proposals[0].envelope.evidence.afterHash, colonCycle.que
 assert.match(colonCycle.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.match(colonCycle.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.equal(colonCycle.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
+assert.equal(colonCycle.proposals[0].envelope.evidence.eventOffset, 'op-open-decision-a');
 assert.equal(colonCycle.proposals[0].envelope.review.required, true);
 assert.equal(colonCycle.proposals[0].envelope.review.reason, 'policy_required');
 assert.equal(colonCycle.proposals[0].envelope.authorization.requiredCapability, 'reactive:auto:update_record');

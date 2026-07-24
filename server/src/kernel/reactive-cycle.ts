@@ -159,6 +159,11 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
           package: input.package,
           eventId: proposal.eventId,
           queryHashes,
+          stateEvidence: {
+            beforeStateRevision: maxRevision(beforeRows),
+            afterStateRevision: maxRevision(afterRows),
+            eventOffset: input.event.id,
+          },
         }),
       };
     })
@@ -182,6 +187,11 @@ function createProposalEnvelope(input: {
   package: AppPackageV2;
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
+  stateEvidence: {
+    beforeStateRevision?: number;
+    afterStateRevision?: number;
+    eventOffset: string;
+  };
 }): OperationProposalEnvelope {
   const queryId = input.proposal.event.kind === 'query_transition' ? input.proposal.event.queryId : undefined;
   const transition = input.proposal.event.kind === 'query_transition' ? input.proposal.event.transition : undefined;
@@ -202,6 +212,7 @@ function createProposalEnvelope(input: {
     ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
     ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
     ...(querySpecHash ? { querySpecHash, packageHash, evaluatorVersion: QUERY_EVALUATOR_VERSION } : {}),
+    ...input.stateEvidence,
   };
   return {
     schemaVersion: 'wonder.operation-proposal.v1',
@@ -257,6 +268,13 @@ function executePackageQuery(
 
 function rowKey(row: Record<string, unknown>) {
   return typeof row.id === 'string' ? row.id : stableJson(row);
+}
+
+function maxRevision(rows: readonly Record<string, unknown>[]): number | undefined {
+  const revisions = rows
+    .map((row) => row.revision)
+    .filter((revision): revision is number => typeof revision === 'number' && Number.isInteger(revision) && revision >= 0);
+  return revisions.length ? Math.max(...revisions) : undefined;
 }
 
 function dedupeProposals<T extends OperationProposal & { eventId: string }>(proposals: T[]): T[] {
