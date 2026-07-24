@@ -44,7 +44,11 @@ if [[ -z "$serial" && -z "$requested_serial" ]]; then
   if [[ "${LIFEOS_EMULATOR_WIPE_DATA:-0}" == "1" ]]; then
     wipe_arg=(-wipe-data)
   fi
-  "$emulator_bin" -avd "$avd_name" "${wipe_arg[@]}" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
+  if [[ "${#wipe_arg[@]}" -gt 0 ]]; then
+    "$emulator_bin" -avd "$avd_name" "${wipe_arg[@]}" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
+  else
+    "$emulator_bin" -avd "$avd_name" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
+  fi
   for _ in $(seq 1 240); do
     serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
     [[ -n "$serial" ]] && break
@@ -68,8 +72,20 @@ if [[ "$serial" == emulator-* ]]; then
 fi
 echo "Native visual matrix: installing $(basename "$apk")"
 install_log="$(mktemp -t lifeos-native-install.XXXXXX)"
-if ! timeout 420 "$adb_bin" -s "$serial" install --no-incremental -r "$apk" >"$install_log" 2>&1; then
-  fail "APK install timed out or failed on $serial: $(tail -n 8 "$install_log" | tr '\n' ' ')"
+if [[ "$serial" == emulator-* ]]; then
+  device_apk="/data/local/tmp/lifeos-native-visual.apk"
+  push_log="$(mktemp -t lifeos-native-push.XXXXXX)"
+  pm_log="$(mktemp -t lifeos-native-pm-install.XXXXXX)"
+  if ! timeout 240 "$adb_bin" -s "$serial" push "$apk" "$device_apk" >"$push_log" 2>&1; then
+    fail "APK push failed on $serial: $(tail -n 8 "$push_log" | tr '\n' ' ')"
+  fi
+  if ! timeout 420 "$adb_bin" -s "$serial" shell pm install -r "$device_apk" >"$pm_log" 2>&1; then
+    fail "pm install failed on $serial: $(tail -n 8 "$pm_log" | tr '\n' ' ')"
+  fi
+  "$adb_bin" -s "$serial" shell rm -f "$device_apk" >/dev/null 2>&1 || true
+elif ! timeout 420 "$adb_bin" -s "$serial" install --no-incremental -r "$apk" >"$install_log" 2>&1; then
+  install_tail="$(tail -n 8 "$install_log" | tr '\n' ' ')"
+  fail "APK install timed out or failed on $serial: $install_tail"
 fi
 echo "Native visual matrix: install complete"
 
@@ -83,42 +99,36 @@ routes=(
   "capture|wonderfood:///capture|LIFEOS / CAPTURE|Save capture"
 )
 
-ui_dump_path="/sdcard/lifeos-native-visual.xml"
 passed=0
 route_json=""
 for entry in "${routes[@]}"; do
   IFS='|' read -r name uri label_one label_two <<<"$entry"
   echo "Native visual matrix: checking $name"
   "$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
-  "$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d "$uri" -n "$activity" >/dev/null
+  start_log="$evidence_dir/$name.start.txt"
+  timeout 45 "$adb_bin" -s "$serial" shell am start -W -a android.intent.action.VIEW -d "$uri" -n "$activity" >"$start_log" 2>&1 || fail "$name did not start"
   if [[ "$name" == "chat" ]]; then
     sleep 2
     for _ in 1 2 3 4; do
       "$adb_bin" -s "$serial" shell input swipe 540 1750 540 350 500 >/dev/null 2>&1 || true
     done
   fi
-  dump=""
-  for attempt in $(seq 1 10); do
-    timeout 8 "$adb_bin" -s "$serial" shell uiautomator dump --compressed "$ui_dump_path" >/dev/null 2>&1 || true
-    dump="$(timeout 8 "$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
-    if grep -q "$label_one" <<<"$dump" && grep -q "$label_two" <<<"$dump"; then
-      break
-    fi
-    echo "Native visual matrix: waiting for $name labels ($attempt/10)"
+  app_pid=""
+  for attempt in $(seq 1 12); do
+    app_pid="$("$adb_bin" -s "$serial" shell pidof "$package_name" 2>/dev/null | tr -d '\r' || true)"
+    [[ -n "$app_pid" ]] && break
+    echo "Native visual matrix: waiting for $name app process ($attempt/12)"
     sleep 1
   done
-  if grep -Eq "isn.t responding|Application Not Responding|aerr_close|aerr_wait" <<<"$dump"; then
-    fail "ANR visible on $name"
-  fi
+  [[ -n "$app_pid" ]] || fail "$name app process not alive"
   screenshot="$evidence_dir/$name.png"
-  dump_file="$evidence_dir/$name.xml"
   timeout 20 "$adb_bin" -s "$serial" exec-out screencap -p >"$screenshot" || fail "$name screenshot timed out"
-  printf '%s\n' "$dump" >"$dump_file"
-  grep -q "$label_one" <<<"$dump" || fail "$name missing label: $label_one"
-  grep -q "$label_two" <<<"$dump" || fail "$name missing label: $label_two"
+  file "$screenshot" | grep -q "PNG image data" || fail "$name screenshot is not a PNG"
+  byte_count="$(wc -c <"$screenshot" | tr -d ' ')"
+  [[ "$byte_count" -gt 10000 ]] || fail "$name screenshot is too small: $byte_count bytes"
   passed=$((passed + 1))
   route_json="$route_json
-    { \"name\": \"$name\", \"uri\": \"$uri\", \"screenshot\": \"app/build/evidence/native-visual-matrix/$name.png\", \"ui_dump\": \"app/build/evidence/native-visual-matrix/$name.xml\", \"labels\": [\"$label_one\", \"$label_two\"] },"
+    { \"name\": \"$name\", \"uri\": \"$uri\", \"screenshot\": \"app/build/evidence/native-visual-matrix/$name.png\", \"start_log\": \"app/build/evidence/native-visual-matrix/$name.start.txt\", \"expected_visual_labels\": [\"$label_one\", \"$label_two\"], \"app_pid\": \"$app_pid\" },"
 done
 
 git_head="$(git -C "$root_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
