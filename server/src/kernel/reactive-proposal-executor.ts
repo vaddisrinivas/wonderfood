@@ -1,0 +1,75 @@
+import { createActionEvent, findActionByIdempotencyKey } from '../mcp/state';
+import type { ReactiveOutboxExecutionResult, ReactiveOutboxItem } from './reactive-outbox';
+
+export type ReactiveProposalExecutionReceipt = Readonly<{
+  actionId: string;
+  idempotencyKey: string;
+  replayed: boolean;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+}>;
+
+export type ReactiveProposalExecutionResult = ReactiveOutboxExecutionResult & Readonly<{
+  receipt?: ReactiveProposalExecutionReceipt;
+}>;
+
+export function executeReactiveProposal(
+  item: ReactiveOutboxItem,
+  input: { actor?: string } = {},
+): ReactiveProposalExecutionResult {
+  const envelope = item.proposal.envelope;
+  if (envelope.schemaVersion !== 'wonder.operation-proposal.v1') {
+    return { ok: false, error: 'proposal_envelope_invalid' };
+  }
+  if (envelope.proposalId !== item.proposalId || envelope.operation !== item.proposal.operation) {
+    return { ok: false, error: 'proposal_envelope_mismatch' };
+  }
+  if (envelope.review.required && item.proposal.mode === 'automatic') {
+    return { ok: false, error: 'proposal_review_policy_conflict' };
+  }
+
+  const existing = findActionByIdempotencyKey(envelope.idempotencyKey);
+  if (existing) {
+    return {
+      ok: true,
+      receipt: {
+        actionId: existing.id,
+        idempotencyKey: envelope.idempotencyKey,
+        replayed: true,
+        status: existing.status,
+      },
+    };
+  }
+
+  const action = createActionEvent({
+    id: `reactive-proposal:${item.proposalId.replace(/[^A-Za-z0-9_.:-]/g, '_')}`,
+    actor: input.actor?.trim() || 'reactive-runtime',
+    domain: item.domain,
+    tool: envelope.operation,
+    risk: envelope.review.required ? 'standard' : 'low',
+    recordIds: [],
+    idempotencyKey: envelope.idempotencyKey,
+    command: JSON.stringify({
+      kind: 'reactive_proposal',
+      proposalId: item.proposalId,
+      operation: envelope.operation,
+      ruleId: envelope.ruleId,
+      eventId: envelope.eventId,
+    }),
+    before: null,
+    after: { proposal: envelope },
+    undoPayload: null,
+    status: 'queued',
+    operationId: `proposal:${item.proposalId}:operation`,
+    causeId: envelope.causeId,
+  });
+
+  return {
+    ok: true,
+    receipt: {
+      actionId: action.id,
+      idempotencyKey: envelope.idempotencyKey,
+      replayed: false,
+      status: action.status,
+    },
+  };
+}

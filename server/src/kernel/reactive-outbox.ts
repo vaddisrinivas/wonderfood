@@ -12,6 +12,7 @@ export type ReactiveOutboxItem = Readonly<{
   actionId: string;
   operationId: string;
   causeId: string;
+  domain: string;
   status: ReactiveOutboxStatus;
   attempts: number;
   createdAt: string;
@@ -70,6 +71,7 @@ export function enqueueReactiveProposals(
       actionId: input.event.actionId,
       operationId: input.event.operationId,
       causeId: input.event.causeId,
+      domain: input.event.domain,
       status: 'pending',
       attempts: 0,
       createdAt: now,
@@ -196,7 +198,7 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
     if (!isStatus(item.status) || !Number.isInteger(item.attempts) || item.attempts < 0) {
       throw new Error(`Reactive outbox item ${proposalId} has invalid retry state.`);
     }
-    for (const field of ['cycleId', 'eventId', 'actionId', 'operationId', 'causeId', 'createdAt', 'updatedAt', 'nextAttemptAt']) {
+    for (const field of ['cycleId', 'eventId', 'actionId', 'operationId', 'causeId', 'domain', 'createdAt', 'updatedAt', 'nextAttemptAt']) {
       if (typeof item[field as keyof ReactiveOutboxItem] !== 'string' || !String(item[field as keyof ReactiveOutboxItem]).trim()) {
         throw new Error(`Reactive outbox item ${proposalId} is missing ${field}.`);
       }
