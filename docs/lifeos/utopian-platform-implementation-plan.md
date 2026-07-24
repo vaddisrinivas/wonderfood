@@ -643,16 +643,25 @@ npm run export:android
 
 ---
 
-## Task P0-02 — Pinned AI SDK spike
+## Task P0-02 — Delete fake agent/chat plumbing and adopt pinned AI SDK
 
 ### Objective
 
-Prove the exact AI SDK versions compile in the current repository.
+In an isolated ORCH worktree, delete the fake agent orchestration and manual
+chat-stream plumbing, adopt the pinned AI SDK, reconnect preserved Wonder
+conversation/proposal contracts, and merge only after parity checks pass.
 
 ### Owned files
 
-- isolated spike under `spikes/ai-sdk/`
-- package manifests only if approved by primary owner
+- `server/src/agents/**`
+- `server/src/chat.ts`
+- focused AI/chat route modules extracted from `server/src/index.ts`
+- `src/chat/client.ts`
+- AI/chat tests
+- package manifests and lockfiles
+
+The visible Expo chat screen is forbidden except for minimal transport wiring;
+no design changes are allowed.
 
 ### Required proof
 
@@ -663,6 +672,9 @@ Prove the exact AI SDK versions compile in the current repository.
 5. Tool output can be attached and the conversation resumed.
 6. Cancellation compiles.
 7. No custom SSE parser is introduced.
+8. Static planner, regex executor, role registry, duplicate command processor,
+   and superseded manual stream parser are absent from production.
+9. No compatibility adapter preserves the old orchestration runtime.
 
 ### Example server tool
 
@@ -700,16 +712,25 @@ export const agent = new ToolLoopAgent({
 
 ---
 
-## Task P0-03 — Official MCP SDK spike
+## Task P0-03 — Delete custom MCP protocol and adopt official SDK
 
 ### Objective
 
-Prove official MCP v1.29 Streamable HTTP behavior independently from existing handlers.
+In an isolated ORCH worktree, delete the handwritten MCP JSON-RPC,
+protocol-negotiation, SSE, and transport-validation implementation; adopt the
+official MCP v1.29 Streamable HTTP server; reconnect only Wonder-owned
+proposal/resource/policy handlers; and merge only after contract checks pass.
 
 ### Owned files
 
-- `spikes/mcp-sdk/`
-- no current MCP production files
+- `server/src/mcp/**`
+- focused MCP route wiring extracted from `server/src/index.ts`
+- MCP tests
+- server package manifest and lockfile
+
+MCP JSON record/action/workflow authority is not preserved. Required product
+handlers must use existing package/query/proposal contracts; provider and
+canonical local mutation semantics remain outside MCP.
 
 ### Required proof
 
@@ -721,6 +742,8 @@ Prove official MCP v1.29 Streamable HTTP behavior independently from existing ha
 - one prompt;
 - bearer-auth rejection fixture;
 - official client initialization and tool invocation.
+- removal of `protocol-compat.ts` and custom JSON-RPC/SSE parsing;
+- no old/new protocol switch or compatibility shim.
 
 ### Acceptance criteria
 
@@ -2390,8 +2413,8 @@ This convergence scope is complete only when all are true:
 Start only these tasks:
 
 1. **P0-01:** Baseline and evidence report.
-2. **P0-02:** Pinned AI SDK server/Expo spike.
-3. **P0-03:** Official MCP v1.29 stateless spike.
+2. **P0-02:** Delete fake agent/chat plumbing and adopt pinned AI SDK.
+3. **P0-03:** Delete custom MCP protocol and adopt official MCP v1.29.
 4. After those merge:
    - P1-A kernel conformance;
    - P1-B boundary enforcement;

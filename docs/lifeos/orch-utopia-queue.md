@@ -29,8 +29,8 @@ Reuse policy:
 Initial ORCH wave:
 
 1. P0-01 baseline and evidence report.
-2. P0-02 pinned AI SDK/Expo transport spike.
-3. P0-03 official MCP v1.29 stateless spike.
+2. P0-02 delete fake agent/chat plumbing and adopt pinned AI SDK.
+3. P0-03 delete custom MCP protocol and adopt official MCP v1.29.
 
 Later tasks follow the dependency DAG in
 `docs/lifeos/utopian-platform-implementation-plan.md`.
