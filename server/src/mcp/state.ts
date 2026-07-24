@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
+import type { CanonicalRecord, CanonicalProvenance } from '@/src/domain/runtime';
+import type { Operation, OperationActor, OperationOrigin } from '@/src/ops/operation';
+import { planOperation } from '@/src/ops/plan';
 import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
 import { executeQuery, QueryPredicate, QuerySort } from '../kernel/query';
 import { notifyOperationCommit } from '../kernel/operation-observer';
@@ -124,6 +127,56 @@ function nowIso(): string {
 
 function nowDeadlineIso(): string {
   return new Date(Date.now() + ACTION_TTL_MS).toISOString();
+}
+
+function actorForAction(actor: string): OperationActor {
+  return actor === 'user' || actor === 'ai' || actor === 'import' || actor === 'sync' || actor === 'agent' || actor === 'api' || actor === 'workflow'
+    ? actor
+    : 'agent';
+}
+
+function originForAction(tool: string): OperationOrigin {
+  if (tool.includes('workflow')) return 'workflow';
+  if (tool.includes('import')) return 'import';
+  if (tool.includes('sync')) return 'sync';
+  return 'chat';
+}
+
+function provenanceForAction(input: { actor: string; command: string }): CanonicalProvenance {
+  return {
+    actor: actorForAction(input.actor),
+    confidence: null,
+    evidence: [],
+    reason: input.command || null,
+  };
+}
+
+function toCanonicalRecord(record: McpRecord | null): CanonicalRecord | null {
+  if (!record) return null;
+  return {
+    ...record,
+    revision: record.revision ?? 1,
+    schema_version: '1.0.0',
+    deleted: false,
+    privacy: 'personal',
+    provenance: null,
+  };
+}
+
+function toMcpRecord(record: CanonicalRecord): McpRecord {
+  return {
+    id: record.id,
+    domain: record.domain,
+    collection: record.collection,
+    title: record.title,
+    properties: record.properties,
+    relations: record.relations,
+    source: record.source,
+    archived_at: record.archived_at,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+    revision: record.revision,
+  };
 }
 
 function isValidStore(value: unknown): value is PersistedStore {
@@ -737,9 +790,54 @@ export function createRecordWithAction(input: {
   }
 
   const effectiveIdempotencyKey = existing && existing.status !== 'completed' && existing.id !== input.actionId ? undefined : idempotencyKey;
-  const record = createRecord({
-    ...input.record,
-  }, { persist: false });
+  const normalized = normalizeRecord(input.record);
+  const previous = toCanonicalRecord(findRecord(normalized.id));
+  const manifest = parseRecordManifest(input.domain);
+  const operation: Operation = {
+    op_id: input.operationId ?? `${input.actionId}:operation`,
+    kind: 'create',
+    domain: input.domain,
+    collection: normalized.collection,
+    record_id: normalized.id,
+    record: {
+      ...toCanonicalRecord(normalized),
+      provenance: provenanceForAction(input),
+    } as CanonicalRecord,
+    actor: actorForAction(input.actor),
+    origin: originForAction(input.tool),
+    idempotency_key: effectiveIdempotencyKey,
+    reason: input.command,
+  };
+  const plan = planOperation({ manifest, operation, current: previous });
+  if (plan.status !== 'planned') {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [normalized.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      },
+      { persist: false },
+    );
+    const failed = markActionFailed(action.id, plan.status === 'rejected' ? plan.reject_reason : 'operation_not_planned', { persist: false }) ?? action;
+    persistStore();
+    return { action: failed, record: previous ? toMcpRecord(previous) : undefined, replayed: false };
+  }
+  const record = toMcpRecord(plan.after);
+  store.records[record.id] = record;
   const actionSeed = createActionEvent(
     {
       id: input.actionId,
@@ -867,15 +965,25 @@ export function updateRecordWithAction(input: {
     return { action: failed, record: previous, replayed: false };
   }
 
-  const updated = updateRecord(
-    input.id,
-    {
+  const manifest = parseRecordManifest(previous.domain);
+  const operation: Operation = {
+    op_id: input.operationId ?? `${input.actionId}:operation`,
+    kind: 'update',
+    domain: previous.domain,
+    collection: previous.collection,
+    record_id: input.id,
+    expected_revision: input.expectedRevision,
+    record: {
       ...input.patch,
       ...(input.source ? { source: input.source } : {}),
-    },
-    { persist: false },
-  );
-  if (!updated) {
+    } as Partial<CanonicalRecord>,
+    actor: actorForAction(input.actor),
+    origin: originForAction(input.tool),
+    idempotency_key: effectiveIdempotencyKey,
+    reason: input.command,
+  };
+  const plan = planOperation({ manifest, operation, current: toCanonicalRecord(previous) });
+  if (plan.status !== 'planned') {
     const action = createActionEvent(
       {
         id: input.actionId,
@@ -891,13 +999,22 @@ export function updateRecordWithAction(input: {
         undoPayload: null,
         sourceIds: input.sourceIds,
         conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
       },
       { persist: false },
     );
-    const failure = markActionFailed(action.id, 'record could not be updated', { persist: false }) ?? action;
+    const failure = markActionFailed(action.id, plan.status === 'rejected' ? plan.reject_reason : 'record could not be updated', { persist: false }) ?? action;
     persistStore();
-    return { action: failure, replayed: false };
+    return { action: failure, record: previous, replayed: false };
   }
+  const updated = {
+    before: previous,
+    after: toMcpRecord(plan.after),
+  };
+  store.records[updated.after.id] = updated.after;
 
   const undoPayload = input.undoPayload ?? {
     operation: 'restore_after_update',
@@ -1034,21 +1151,56 @@ export function archiveRecordWithAction(input: {
     return { action: failed, record: previous, replayed: false };
   }
 
-  const archived = archiveRecord(input.id, { persist: false });
-  if (!archived) throw new Error('archive precondition violated');
+  const manifest = parseRecordManifest(previous.domain);
+  const operation: Operation = {
+    op_id: input.operationId ?? `${input.actionId}:operation`,
+    kind: 'archive',
+    domain: previous.domain,
+    collection: previous.collection,
+    record_id: input.id,
+    expected_revision: input.expectedRevision,
+    record: input.source ? { source: input.source } : undefined,
+    actor: actorForAction(input.actor),
+    origin: originForAction(input.tool),
+    idempotency_key: effectiveIdempotencyKey,
+    reason: input.command,
+  };
+  const plan = planOperation({ manifest, operation, current: toCanonicalRecord(previous) });
+  if (plan.status !== 'planned') {
+    const action = createActionEvent(
+      {
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey: effectiveIdempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      },
+      { persist: false },
+    );
+    const failed = markActionFailed(action.id, plan.status === 'rejected' ? plan.reject_reason : 'archive precondition violated', { persist: false }) ?? action;
+    persistStore();
+    return { action: failed, record: previous, replayed: false };
+  }
+  const resolvedAfter = toMcpRecord(plan.after);
+  store.records[resolvedAfter.id] = resolvedAfter;
 
   const payload = input.undoPayload ?? {
     operation: 'restore_after_archive',
-    before: archived.before,
-    record_id: archived.after.id,
+    before: previous,
+    record_id: resolvedAfter.id,
   };
-  const resolvedAfter = input.source
-    ? { ...archived.after, source: input.source }
-    : archived.after;
-  if (resolvedAfter !== archived.after) {
-    const restored = restoreRecord(resolvedAfter);
-    store.records[resolvedAfter.id] = restored;
-  }
 
   const actionSeed = createActionEvent(
     {
@@ -1060,7 +1212,7 @@ export function archiveRecordWithAction(input: {
       recordIds: [resolvedAfter.id],
       idempotencyKey: effectiveIdempotencyKey,
       command: input.command,
-      before: archived.before,
+      before: previous,
       after: resolvedAfter,
       undoPayload: payload,
       sourceIds: input.sourceIds,
@@ -1073,9 +1225,6 @@ export function archiveRecordWithAction(input: {
   );
 
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: resolvedAfter }, { persist: false }) ?? actionSeed;
-  if (resolvedAfter !== archived.after) {
-    store.records[resolvedAfter.id] = resolvedAfter;
-  }
   persistStore();
 
   notifyOperationCommit({
@@ -1084,7 +1233,7 @@ export function archiveRecordWithAction(input: {
     causeId: action.cause_id,
     domain: action.domain,
     recordId: resolvedAfter.id,
-    before: archived.before,
+    before: previous,
     after: resolvedAfter,
   });
 

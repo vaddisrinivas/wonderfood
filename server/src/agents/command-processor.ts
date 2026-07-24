@@ -736,6 +736,7 @@ export function executeCommandFromIntent(input: ParsedCommandExecutionInput): Pa
       };
     }
 
+    const targetRevision = findRecord(inverseSeed.id)?.revision;
     writeResult = updateRecordWithAction({
       actionId,
       actor: input.actor,
@@ -744,6 +745,7 @@ export function executeCommandFromIntent(input: ParsedCommandExecutionInput): Pa
       risk: policy.risk as ActionRisk,
       command: commandText,
       id: inverseSeed.id,
+      expectedRevision: targetRevision,
       patch: inverseSeed.patch ?? {},
       idempotencyKey,
       source: inverseSeed.source,
@@ -790,6 +792,7 @@ export function executeCommandFromIntent(input: ParsedCommandExecutionInput): Pa
       };
     }
 
+    const targetRevision = findRecord(inverseSeed.id)?.revision;
     writeResult = archiveRecordWithAction({
       actionId,
       actor: input.actor,
@@ -798,6 +801,7 @@ export function executeCommandFromIntent(input: ParsedCommandExecutionInput): Pa
       risk: policy.risk as ActionRisk,
       command: commandText,
       id: inverseSeed.id,
+      expectedRevision: targetRevision,
       idempotencyKey,
       source: inverseSeed.source,
       sourceIds: [],

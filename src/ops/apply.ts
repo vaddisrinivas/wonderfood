@@ -1,10 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { DomainManifest } from '@/src/domain/catalog';
-import type { CanonicalProvenance, CanonicalRecord, CanonicalRelation, RecordProvider } from '@/src/domain/runtime';
-import { validateCanonicalRecord } from '@/src/domain/runtime';
-import { computeInverse } from '@/src/ops/inverse';
-import type { ApplyOperationOptions, Operation, OperationDiff, OperationResult } from '@/src/ops/operation';
+import type { CanonicalProvenance, CanonicalRecord, RecordProvider } from '@/src/domain/runtime';
+import type { ApplyOperationOptions, Operation, OperationResult } from '@/src/ops/operation';
+import { planOperation } from '@/src/ops/plan';
 
 type SqlRecordRow = {
   id: string;
@@ -43,10 +42,6 @@ function nowIso() {
 }
 
 function safeJson(value: unknown) {
-  return JSON.stringify(value ?? null);
-}
-
-function stable(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
@@ -98,92 +93,6 @@ async function readRecord(db: SQLiteDatabase, id: string): Promise<CanonicalReco
   };
 }
 
-function mergePatch(base: Record<string, unknown>, patch: Record<string, unknown> | undefined) {
-  const next = { ...base };
-  for (const [key, value] of Object.entries(patch ?? {})) {
-    if (value === null) delete next[key];
-    else next[key] = value;
-  }
-  return next;
-}
-
-function mergeRelations(current: CanonicalRelation[], op: Operation) {
-  const byKey = new Map(current.map((relation) => [`${relation.name}:${relation.target_id}`, relation]));
-  for (const relation of op.relations_remove ?? []) {
-    byKey.delete(`${relation.name}:${relation.target_id}`);
-  }
-  for (const relation of op.relations_add ?? []) {
-    byKey.set(`${relation.name}:${relation.target_id}`, relation);
-  }
-  return Array.from(byKey.values());
-}
-
-function provenanceFor(op: Operation): CanonicalProvenance {
-  return {
-    actor: op.actor,
-    confidence: typeof op.confidence === 'number' ? op.confidence : null,
-    evidence: op.evidence ?? [],
-    reason: op.reason ?? null,
-  };
-}
-
-function buildNextRecord(manifest: DomainManifest, op: Operation, current: CanonicalRecord | null): CanonicalRecord {
-  const at = nowIso();
-  const base = current ?? {
-    id: op.record_id,
-    domain: manifest.id,
-    collection: op.collection,
-    title: String(op.record?.title ?? op.changes?.title ?? 'Untitled'),
-    properties: {},
-    relations: [],
-    source: op.record?.source ?? {
-      provider: 'sqlite' as const,
-      external_id: op.record_id,
-      url: null,
-      observed_at: at,
-      content_hash: null,
-    },
-    archived_at: null,
-    created_at: at,
-    updated_at: at,
-    revision: 0,
-    schema_version: manifest.schema_version ?? '1.0.0',
-    deleted: false,
-    privacy: 'personal' as const,
-    provenance: null,
-  };
-  const recordPatch = op.record ?? {};
-  const properties = recordPatch.properties && typeof recordPatch.properties === 'object' && !Array.isArray(recordPatch.properties)
-    ? recordPatch.properties as Record<string, unknown>
-    : mergePatch(base.properties, op.changes);
-  const archivedAt = op.kind === 'archive' || op.kind === 'delete'
-    ? (typeof recordPatch.archived_at === 'string' ? recordPatch.archived_at : at)
-    : op.kind === 'restore'
-      ? null
-      : recordPatch.archived_at !== undefined
-        ? recordPatch.archived_at ?? null
-        : base.archived_at;
-  return validateCanonicalRecord({
-    ...base,
-    ...recordPatch,
-    id: op.record_id,
-    domain: manifest.id,
-    collection: op.collection,
-    title: String(recordPatch.title ?? properties.title ?? base.title),
-    properties,
-    relations: mergeRelations(Array.isArray(recordPatch.relations) ? recordPatch.relations : base.relations, op),
-    source: recordPatch.source ?? base.source,
-    archived_at: archivedAt,
-    deleted: op.kind === 'delete' ? true : op.kind === 'restore' ? false : recordPatch.deleted ?? base.deleted,
-    privacy: recordPatch.privacy ?? base.privacy,
-    provenance: provenanceFor(op),
-    revision: base.revision + 1,
-    schema_version: recordPatch.schema_version ?? base.schema_version ?? manifest.schema_version ?? '1.0.0',
-    created_at: base.created_at || at,
-    updated_at: at,
-  }, manifest.id, manifest, 'operation');
-}
-
 async function insertOperation(db: SQLiteDatabase, op: Operation, before: CanonicalRecord | null, after: CanonicalRecord | null, status: 'applied' | 'rejected', reason?: string) {
   await db.runAsync(
     `INSERT INTO operations (
@@ -213,24 +122,6 @@ async function insertOperation(db: SQLiteDatabase, op: Operation, before: Canoni
   );
 }
 
-function diffRecords(before: CanonicalRecord | null, after: CanonicalRecord): OperationDiff {
-  const changed = new Set<string>();
-  if (!before) {
-    changed.add('record');
-  } else {
-    if (before.title !== after.title) changed.add('title');
-    if (before.archived_at !== after.archived_at) changed.add('archived_at');
-    if (before.deleted !== after.deleted) changed.add('deleted');
-    if (before.privacy !== after.privacy) changed.add('privacy');
-    if (stable(before.relations) !== stable(after.relations)) changed.add('relations');
-    const propertyKeys = new Set([...Object.keys(before.properties), ...Object.keys(after.properties)]);
-    for (const key of propertyKeys) {
-      if (stable(before.properties[key]) !== stable(after.properties[key])) changed.add(`properties.${key}`);
-    }
-  }
-  return { before, after, changed_fields: Array.from(changed).sort() };
-}
-
 async function rejectOperation(
   db: SQLiteDatabase,
   op: Operation,
@@ -246,43 +137,28 @@ async function rejectOperation(
 
 export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifest, op: Operation, options: ApplyOperationOptions = {}): Promise<OperationResult> {
   const dryRun = options.dryRun === true;
-  if (op.domain !== manifest.id) {
-    return rejectOperation(db, op, null, `domain_scope_rejected:${op.domain}`, dryRun);
-  }
+  let duplicate = null;
   if (!dryRun && op.idempotency_key) {
-    const duplicate = await db.getFirstAsync<OperationRow>('SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?', [op.idempotency_key]);
-    if (duplicate?.status === 'applied' || duplicate?.status === 'undone') {
-      return {
-        status: 'duplicate',
-        op_id: duplicate.op_id,
-        record: duplicate.after_json ? JSON.parse(duplicate.after_json) as CanonicalRecord : undefined,
-      };
-    }
+    const row = await db.getFirstAsync<OperationRow>('SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?', [op.idempotency_key]);
+    duplicate = row ? {
+      op_id: row.op_id,
+      status: row.status,
+      after: row.after_json ? JSON.parse(row.after_json) as CanonicalRecord : null,
+    } : null;
   }
 
   const current = await readRecord(db, op.record_id);
-  if (current && op.kind === 'create') {
-    return rejectOperation(db, op, current, 'record_already_exists', dryRun);
+  const plan = planOperation({ manifest, operation: op, current, duplicate });
+  if (plan.status === 'duplicate') {
+    return { status: 'duplicate', op_id: plan.op_id, record: plan.record };
   }
-  if (current && op.kind !== 'create' && op.expected_revision == null) {
-    return rejectOperation(db, op, current, 'expected_revision_required', dryRun);
+  if (plan.status === 'rejected') {
+    return rejectOperation(db, op, plan.before, plan.reject_reason, dryRun);
   }
-  if (current && op.expected_revision != null && op.expected_revision !== current.revision) {
-    return rejectOperation(db, op, current, 'revision_conflict', dryRun);
-  }
-
-  let next: CanonicalRecord;
-  try {
-    next = buildNextRecord(manifest, op, current);
-  } catch (error) {
-    const rejectReason = error instanceof Error ? error.message : 'validation_failed';
-    return rejectOperation(db, op, current, rejectReason, dryRun);
-  }
-  const inverse = computeInverse(current, op, next);
-  const diff = diffRecords(current, next);
+  const next = plan.after;
 
   if (dryRun) {
-    return { status: 'dry_run', op_id: op.op_id, record: next, inverse, diff };
+    return { status: 'dry_run', op_id: op.op_id, record: next, inverse: plan.inverse, diff: plan.diff };
   }
 
   await db.withTransactionAsync(async () => {
@@ -351,5 +227,5 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
     await insertOperation(db, op, current, next, 'applied');
   });
 
-  return { status: 'applied', op_id: op.op_id, record: next, inverse, diff };
+  return { status: 'applied', op_id: op.op_id, record: next, inverse: plan.inverse, diff: plan.diff };
 }
