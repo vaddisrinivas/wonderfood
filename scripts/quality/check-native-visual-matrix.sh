@@ -72,8 +72,8 @@ for entry in "${routes[@]}"; do
   "$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d "$uri" -n "$activity" >/dev/null
   dump=""
   for _ in $(seq 1 25); do
-    "$adb_bin" -s "$serial" shell uiautomator dump "$ui_dump_path" >/dev/null 2>&1 || true
-    dump="$("$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
+    timeout 8 "$adb_bin" -s "$serial" shell uiautomator dump --compressed "$ui_dump_path" >/dev/null 2>&1 || true
+    dump="$(timeout 8 "$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
     if grep -q "$label_one" <<<"$dump" && grep -q "$label_two" <<<"$dump"; then
       break
     fi
