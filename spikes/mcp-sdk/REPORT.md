@@ -4,13 +4,14 @@
 - Task: `W1-MCP Isolated official MCP SDK parity proof`
 - Branch base: `main`
 - Base SHA: `5f9b091c9667593f74e383554e59eb562211c4dd`
-- Current SHA (committed spike SHA): `4ebbe8247edf0534d8bc4601150972d4ae00a6bd`
-- Current tree: `72f3493cf724636fd0345de6dde1c6ad689e9de8`
+- Current SHA: `8d60e1d0ac4cd912441da63c0eab20b951b2978b`
+- Current tree: `3a0b891fe45e168bea553fc03727311a4dfa40d6`
+- Spike artifact SHA: `4ebbe8247edf0534d8bc4601150972d4ae00a6bd`
 - Path scope: `spikes/mcp-sdk/**`
 
 ### Merge evidence
 - Merge-base: `5f9b091c9667593f74e383554e59eb562211c4dd`
-- Diff-tree: `spikes/mcp-sdk/REPORT.md`, `spikes/mcp-sdk/package-lock.json`, `spikes/mcp-sdk/package.json`, `spikes/mcp-sdk/src/server.ts`, `spikes/mcp-sdk/tests/parity.test.ts`, `spikes/mcp-sdk/tsconfig.json`
+- Diff-tree (artifact commit): `spikes/mcp-sdk/REPORT.md`, `spikes/mcp-sdk/package-lock.json`, `spikes/mcp-sdk/package.json`, `spikes/mcp-sdk/src/server.ts`, `spikes/mcp-sdk/tests/parity.test.ts`, `spikes/mcp-sdk/tsconfig.json`
 
 ## Spike implementation
 - Pin SDK: `@modelcontextprotocol/sdk@1.29.0`
