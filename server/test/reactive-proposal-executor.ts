@@ -123,6 +123,11 @@ assert.deepEqual(action.record_ids, []);
 assert.equal((action.after_json as { proposal?: { proposalId?: string } }).proposal?.proposalId, 'proposal-ledger');
 assert.equal((action.after_json as { policy?: { policyId?: string } }).policy?.policyId, authorization.policyId);
 assert.equal((action.after_json as { dryRun?: { ok?: boolean } }).dryRun?.ok, true);
+assert.deepEqual((action.after_json as { commandPreview?: { ok?: boolean; reason?: string } }).commandPreview, {
+  ok: false,
+  reason: 'custom_operation_requires_review',
+  recordIds: [],
+});
 assert.equal(getActionEvent(action.id)?.id, action.id);
 
 const blocked = executeReactiveProposal({

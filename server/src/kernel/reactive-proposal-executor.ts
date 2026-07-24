@@ -1,4 +1,5 @@
 import { createActionEvent, findActionByIdempotencyKey } from '../mcp/state';
+import { previewReactiveProposalCommand } from './reactive-proposal-command';
 import type { ReactiveOutboxExecutionResult, ReactiveOutboxItem } from './reactive-outbox';
 
 export type ReactiveProposalExecutionReceipt = Readonly<{
@@ -17,6 +18,8 @@ export function executeReactiveProposal(
   input: { actor?: string } = {},
 ): ReactiveProposalExecutionResult {
   const envelope = item.proposal.envelope;
+  const actor = input.actor?.trim() || 'reactive-runtime';
+  const actionId = `reactive-proposal:${item.proposalId.replace(/[^A-Za-z0-9_.:-]/g, '_')}`;
   if (envelope.schemaVersion !== 'wonder.operation-proposal.v1') {
     return { ok: false, error: 'proposal_envelope_invalid' };
   }
@@ -26,6 +29,13 @@ export function executeReactiveProposal(
   if (!envelope.authorization.allowed || !envelope.dryRun.ok) {
     return { ok: false, error: 'proposal_policy_blocked' };
   }
+  const commandPreview = previewReactiveProposalCommand({
+    operationTemplate: envelope.operationTemplate,
+    domain: item.domain,
+    idempotencyKey: envelope.idempotencyKey,
+    actionId,
+    actor,
+  });
 
   const existing = findActionByIdempotencyKey(envelope.idempotencyKey);
   if (existing) {
@@ -41,8 +51,8 @@ export function executeReactiveProposal(
   }
 
   const action = createActionEvent({
-    id: `reactive-proposal:${item.proposalId.replace(/[^A-Za-z0-9_.:-]/g, '_')}`,
-    actor: input.actor?.trim() || 'reactive-runtime',
+    id: actionId,
+    actor,
     domain: item.domain,
     tool: envelope.operation,
     risk: envelope.authorization.risk === 'restricted' ? 'sensitive' : envelope.authorization.risk,
@@ -58,9 +68,10 @@ export function executeReactiveProposal(
       review: envelope.review,
       authorization: envelope.authorization,
       dryRun: envelope.dryRun,
+      commandPreview,
     }),
     before: null,
-    after: { proposal: envelope, policy: envelope.authorization, dryRun: envelope.dryRun },
+    after: { proposal: envelope, policy: envelope.authorization, dryRun: envelope.dryRun, commandPreview },
     undoPayload: null,
     status: 'queued',
     operationId: `proposal:${item.proposalId}:operation`,
