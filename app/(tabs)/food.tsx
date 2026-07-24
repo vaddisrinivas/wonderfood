@@ -9,7 +9,10 @@ import { DomainRecordViewModel } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
 import { mergeVisualIdentity, visualAccent, visualGlyph, VisualAccent } from '@/src/domain/visual-identity';
 import { useLifeOSDatabase } from '@/src/db/provider';
-import { upsertRecord } from '@/src/db/records';
+import { archiveRecord, restoreRecord, upsertRecord } from '@/src/db/records';
+import { seedDatabase } from '@/src/db/seed';
+import { exportRecoverySnapshot, type RecoveryExport } from '@/src/db/migrations';
+import { importRecoverySnapshot } from '@/src/db/recovery';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
@@ -254,6 +257,10 @@ export default function FoodScreen() {
   const [foodMode, setFoodMode] = useState<FoodMode>('Today');
   const [records, setRecords] = useState<FoodRecordView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [lastArchivedId, setLastArchivedId] = useState<string | null>(null);
+  const [backupSnapshot, setBackupSnapshot] = useState<RecoveryExport | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +277,7 @@ export default function FoodScreen() {
     return () => {
       cancelled = true;
     };
-  }, [active, activeDomainId, db]);
+  }, [active, activeDomainId, db, refreshNonce]);
 
   const shown = useMemo(() => {
     if (active === 'Overview') return records;
@@ -333,6 +340,101 @@ export default function FoodScreen() {
       },
       updated_at: new Date().toISOString(),
     });
+    setNotice(`${record.title} is now ${nextStatus.toLowerCase()}.`);
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const loadDemoHousehold = async () => {
+    if (!db) {
+      setNotice('Storage is still starting. Try again in a moment.');
+      return;
+    }
+    await seedDatabase(db, { seedInDev: true });
+    setNotice('Demo household loaded. You can now plan, shop, edit, archive and undo.');
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const quickAddFoodRecord = async (collection: string, title: string, properties: Record<string, unknown>) => {
+    if (!db) {
+      setNotice('Storage is still starting. Try again in a moment.');
+      return;
+    }
+    const now = new Date().toISOString();
+    const id = `food-${collection}-${Date.now().toString(36)}`;
+    await upsertRecord(db, activeManifest, {
+      id,
+      title,
+      collection,
+      properties: {
+        status: 'Active',
+        tone: 'moss',
+        meta: 'Added from Food debug app',
+        body: '',
+        source: 'user · local',
+        ...properties,
+      },
+      source: {
+        provider: 'user',
+        external_id: id,
+        url: null,
+        observed_at: now,
+        content_hash: null,
+      },
+      archived_at: null,
+      created_at: now,
+      updated_at: now,
+      relations: [],
+    });
+    setNotice(`Added ${title}.`);
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const archiveFirstVisibleRecord = async () => {
+    if (!db) {
+      setNotice('Storage is still starting. Try again in a moment.');
+      return;
+    }
+    const target = rankedRecords[0];
+    if (!target) {
+      setNotice('Nothing to archive yet.');
+      return;
+    }
+    await archiveRecord(db, target.id);
+    setLastArchivedId(target.id);
+    setNotice(`Archived ${target.title}. Undo is available.`);
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const undoLastArchive = async () => {
+    if (!db || !lastArchivedId) {
+      setNotice('No archive to undo yet.');
+      return;
+    }
+    await restoreRecord(db, lastArchivedId);
+    setNotice('Undo complete. Record restored.');
+    setLastArchivedId(null);
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const exportBackup = async () => {
+    if (!db) {
+      setNotice('Storage is still starting. Try again in a moment.');
+      return;
+    }
+    const snapshot = await exportRecoverySnapshot(db);
+    setBackupSnapshot(snapshot);
+    const totalRows = snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0);
+    setNotice(`Backup captured in debug memory: ${totalRows} rows.`);
+  };
+
+  const restoreBackup = async () => {
+    if (!db || !backupSnapshot) {
+      setNotice('Export a backup first.');
+      return;
+    }
+    await importRecoverySnapshot(db, backupSnapshot);
+    setNotice('Backup restored into local SQLite.');
+    setRefreshNonce((value) => value + 1);
   };
 
   const renderFoodSection = (section: FoodSection) => {
@@ -556,6 +658,15 @@ export default function FoodScreen() {
         contentWidth={Math.min(contentWidth, 760)}
         onToggleShopping={toggleShoppingRecord}
         onAsk={() => router.push('/chat')}
+        onLoadDemo={loadDemoHousehold}
+        onQuickAdd={quickAddFoodRecord}
+        onArchiveFirst={archiveFirstVisibleRecord}
+        onUndoArchive={undoLastArchive}
+        onExportBackup={exportBackup}
+        onRestoreBackup={restoreBackup}
+        canUndoArchive={Boolean(lastArchivedId)}
+        canRestoreBackup={Boolean(backupSnapshot)}
+        notice={notice}
       />
     );
   }
@@ -633,7 +744,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   );
 }
 
-function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onAsk }: {
+function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canRestoreBackup, notice }: {
   mode: FoodMode;
   onModeChange: (mode: FoodMode) => void;
   records: FoodRecordView[];
@@ -646,6 +757,15 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   contentWidth: number;
   onToggleShopping: (record: FoodRecordView) => void;
   onAsk: () => void;
+  onLoadDemo: () => void;
+  onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
+  onArchiveFirst: () => void;
+  onUndoArchive: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: () => void;
+  canUndoArchive: boolean;
+  canRestoreBackup: boolean;
+  notice: string;
 }) {
   const theme = useLifeOSTheme();
   const today = new Date();
@@ -685,6 +805,15 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
               shopping={shopping}
               reviewRows={reviewRows}
               onToggleShopping={onToggleShopping}
+              onLoadDemo={onLoadDemo}
+              onQuickAdd={onQuickAdd}
+              onArchiveFirst={onArchiveFirst}
+              onUndoArchive={onUndoArchive}
+              onExportBackup={onExportBackup}
+              onRestoreBackup={onRestoreBackup}
+              canUndoArchive={canUndoArchive}
+              canRestoreBackup={canRestoreBackup}
+              notice={notice}
             />
           </View>
         </ScrollView>
@@ -694,7 +823,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   );
 }
 
-function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping }: {
+function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canRestoreBackup, notice }: {
   mode: FoodMode;
   records: FoodRecordView[];
   meals: FoodRecordView[];
@@ -702,12 +831,35 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   shopping: FoodRecordView[];
   reviewRows: FoodRecordView[];
   onToggleShopping: (record: FoodRecordView) => void;
+  onLoadDemo: () => void;
+  onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
+  onArchiveFirst: () => void;
+  onUndoArchive: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: () => void;
+  canUndoArchive: boolean;
+  canRestoreBackup: boolean;
+  notice: string;
 }) {
-  if (mode === 'Kitchen') return <KitchenDemo records={kitchen.length ? kitchen : records} />;
-  if (mode === 'Plan') return <PlanDemo meals={meals} kitchen={kitchen} />;
-  if (mode === 'Recipes') return <RecipesDemo meals={meals} kitchen={kitchen} />;
-  if (mode === 'Shop') return <ShopDemo shopping={shopping} onToggleShopping={onToggleShopping} />;
-  return <TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} />;
+  const tools = (
+    <FoodDebugTools
+      recordCount={records.length}
+      notice={notice}
+      canUndoArchive={canUndoArchive}
+      canRestoreBackup={canRestoreBackup}
+      onLoadDemo={onLoadDemo}
+      onQuickAdd={onQuickAdd}
+      onArchiveFirst={onArchiveFirst}
+      onUndoArchive={onUndoArchive}
+      onExportBackup={onExportBackup}
+      onRestoreBackup={onRestoreBackup}
+    />
+  );
+  if (mode === 'Kitchen') return <><KitchenDemo records={kitchen.length ? kitchen : records} />{tools}</>;
+  if (mode === 'Plan') return <><PlanDemo meals={meals} kitchen={kitchen} />{tools}</>;
+  if (mode === 'Recipes') return <><RecipesDemo meals={meals} kitchen={kitchen} />{tools}</>;
+  if (mode === 'Shop') return <><ShopDemo shopping={shopping} onToggleShopping={onToggleShopping} />{tools}</>;
+  return <><TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} />{tools}</>;
 }
 
 function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
@@ -934,7 +1086,16 @@ function FoodDemoRow({ title, detail, badge, tone, href, onPress }: {
       </View>
     </View>
   );
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>{content}</Pressable>;
+  if (href && !onPress) {
+    return (
+      <Link href={href as never} asChild>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>
+          {content}
+        </Pressable>
+      </Link>
+    );
+  }
+  return <Pressable accessibilityRole="button" accessibilityLabel={onPress ? `Toggle ${title}` : title} onPress={onPress} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>{content}</Pressable>;
 }
 
 function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone = 'moss', actions }: {
@@ -949,6 +1110,7 @@ function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone 
   actions?: string[];
 }) {
   const theme = useLifeOSTheme();
+  const [actionNotice, setActionNotice] = useState('');
   const card = (
     <View style={[styles.foodActionCard, foodPanelStyle(tone, theme.colors)]}>
       <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>{title}</Text>
@@ -958,9 +1120,15 @@ function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone 
       {actions ? (
         <View style={styles.foodActionButtons}>
           {actions.map((action, index) => (
-            <View key={action} style={[styles.foodActionButton, index === 0 ? { backgroundColor: theme.colors.moss } : foodToneStyle(index === 1 ? 'neutral' : 'red', theme.colors)]}>
+            <Pressable
+              key={action}
+              accessibilityRole="button"
+              accessibilityLabel={`${action} ${title}`}
+              onPress={() => setActionNotice(`${action} recorded for ${title}.`)}
+              style={({ pressed }) => [styles.foodActionButton, index === 0 ? { backgroundColor: theme.colors.moss } : foodToneStyle(index === 1 ? 'neutral' : 'red', theme.colors), pressed && styles.pressed]}
+            >
               <Text style={[styles.foodActionButtonText, { color: index === 0 ? theme.colors.paper : index === 2 ? theme.colors.red : theme.colors.ink }]}>{action}</Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       ) : cta ? (
@@ -968,9 +1136,53 @@ function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone 
           <Text style={[styles.foodInlineCtaText, { color: ctaTone === 'red' ? theme.colors.red : theme.colors.moss }]}>{cta}</Text>
         </View>
       ) : null}
+      {actionNotice ? <Text style={[styles.foodActionNote, { color: theme.colors.moss }]}>{actionNotice}</Text> : null}
     </View>
   );
   return href ? <Link href={href as never} asChild><Pressable accessibilityRole="button" style={({ pressed }) => [pressed && styles.pressed]}>{card}</Pressable></Link> : card;
+}
+
+function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup }: {
+  recordCount: number;
+  notice: string;
+  canUndoArchive: boolean;
+  canRestoreBackup: boolean;
+  onLoadDemo: () => void;
+  onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
+  onArchiveFirst: () => void;
+  onUndoArchive: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: () => void;
+}) {
+  const theme = useLifeOSTheme();
+  const addPantry = () => onQuickAdd('inventory', 'Baby spinach', { status: 'Use first', body: 'Fridge. Great for wraps, eggs, or rice bowls.', meta: '2 days left', quantity: '1 clamshell' });
+  const addMeal = () => onQuickAdd('meal_plan', 'Salmon rice bowls', { status: 'Planned', body: 'Dinner plan from pantry plus shopping gaps.', meta: 'Tonight', planned_for: new Date().toISOString().slice(0, 10) });
+  const addShopping = () => onQuickAdd('shopping_item', 'Rice vinegar', { status: 'To buy', body: 'Needed for salmon rice bowls.', meta: 'Missing ingredient' });
+  return (
+    <View style={[styles.foodDebugTools, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]} testID="food-debug-tools">
+      <View style={styles.foodDebugHeader}>
+        <View>
+          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Debug kitchen</Text>
+          <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} live records` : 'Empty. Load demo or add real local records.'}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+          <Text style={[styles.foodActionButtonText, { color: theme.colors.paper }]}>Load demo</Text>
+        </Pressable>
+      </View>
+      <View style={styles.foodActionButtons}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add pantry item" onPress={addPantry} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('moss', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.moss }]}>Pantry</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add meal plan" onPress={addMeal} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Meal</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add shopping item" onPress={addShopping} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('amber', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Shop</Text></Pressable>
+      </View>
+      <View style={styles.foodActionButtons}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Archive first visible food record" onPress={onArchiveFirst} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('red', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.red }]}>Archive</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Undo last archive" disabled={!canUndoArchive} onPress={onUndoArchive} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canUndoArchive && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Undo</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Export local backup" onPress={onExportBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Export</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Restore local backup" disabled={!canRestoreBackup} onPress={onRestoreBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canRestoreBackup && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Restore</Text></Pressable>
+      </View>
+      {notice ? <Text style={[styles.foodActionNote, { color: theme.colors.moss }]} testID="food-debug-notice">{notice}</Text> : null}
+    </View>
+  );
 }
 
 function FoodFilterChip({ label, tone, selected }: { label: string; tone: FoodTone | 'neutral'; selected?: boolean }) {
@@ -1552,5 +1764,9 @@ const styles = StyleSheet.create({
   configCopy: { flex: 1, minWidth: 240 },
   configTitle: { color: colors.ink, fontWeight: '900', fontSize: 15, marginBottom: 5 },
   configLink: { color: colors.moss, fontWeight: '900', fontSize: 12 },
+  foodDebugTools: { borderWidth: 1, borderRadius: 20, padding: 16, gap: 12, marginTop: 6 },
+  foodDebugHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  foodDebugPrimary: { minHeight: 42, borderRadius: radius.pill, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  disabled: { opacity: 0.36 },
   pressed: { opacity: 0.72 },
 });

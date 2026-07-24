@@ -182,6 +182,29 @@ export async function archiveRecord(db: SQLiteDatabase, id: string): Promise<voi
   }
 }
 
+export async function restoreRecord(db: SQLiteDatabase, id: string): Promise<void> {
+  const current = await getRecord(db, id);
+  if (!current) return;
+  const catalog = loadCatalog();
+  const manifest = current.domain === catalog.activeManifest.id
+    ? catalog.activeManifest
+    : getDomainManifest(catalog.catalog.domains, current.domain) ?? catalog.activeManifest;
+  const result = await applyOperation(db, manifest, {
+    op_id: operationId([id, 'restore']),
+    kind: 'restore',
+    domain: manifest.id,
+    collection: current.collection,
+    record_id: id,
+    expected_revision: current.revision,
+    actor: 'user',
+    origin: 'manual',
+    reason: `Restore ${current.title}`,
+  });
+  if (result.status === 'rejected') {
+    throw new Error(`Restore operation rejected: ${result.reject_reason}`);
+  }
+}
+
 async function inflateRecord(row: SqlRecordRow): Promise<CanonicalRecord> {
   let properties: Record<string, unknown> = {};
   try {

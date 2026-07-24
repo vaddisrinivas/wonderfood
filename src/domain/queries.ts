@@ -1,12 +1,11 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import { CanonicalRecord, validateCanonicalRecord } from '@/src/domain/runtime';
+import { CanonicalRecord } from '@/src/domain/runtime';
 import { getRecord, listRecordsByCollections, listRecordsForDomain } from '@/src/db/records';
 import { getAllProviderLinks } from '@/src/db/sources';
 import { toRecordView, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';
 import { buildSurfaceCatalog } from '@/src/domain/surface';
-import { sampleRecordsAsCanonical } from '@/src/data/sample';
 
 export type DomainRecordFeed = {
   domainId: string;
@@ -38,31 +37,18 @@ export function getActiveDomainFeed() {
   };
 }
 
-function sampleRecordsForActiveDomain(): CanonicalRecord[] {
-  const { domainId, manifest } = getActiveDomainFeed();
-  return domainId === 'food'
-    ? sampleRecordsAsCanonical(domainId).map((record) => validateCanonicalRecord(record, domainId, manifest, 'sample'))
-    : [];
-}
-
 export async function queryDomainCollections(
   db: SQLiteDatabase | null,
   collections: string[]
 ): Promise<DomainRecordViewModel[]> {
   if (!db) {
-    const fallback = sampleRecordsForActiveDomain();
-    return recordsToViews(collections.length ? fallback.filter((record) => collections.includes(record.collection)) : fallback);
+    return [];
   }
 
   const { domainId, manifest } = getActiveDomainFeed();
   const records: CanonicalRecord[] = collections.length
     ? await listRecordsByCollections(db, domainId, collections)
     : await listRecordsForDomain(db, domainId);
-  if (!records.length) {
-    const fallback = sampleRecordsForActiveDomain();
-    return recordsToViews(collections.length ? fallback.filter((record) => collections.includes(record.collection)) : fallback);
-  }
-
   return recordsToViews(records)
     .filter((item) => !item.collection || manifest.collections.includes(item.collection) || collections.includes(item.collection));
 }
@@ -72,11 +58,11 @@ export async function queryDomainRecords(
 ): Promise<DomainRecordViewModel[]> {
   const { domainId } = getActiveDomainFeed();
   if (!db) {
-    return recordsToViews(sampleRecordsForActiveDomain());
+    return [];
   }
 
   const records = await listRecordsForDomain(db, domainId);
-  return recordsToViews(records.length ? records : sampleRecordsForActiveDomain());
+  return recordsToViews(records);
 }
 
 export async function searchDomainRecords(db: SQLiteDatabase | null, query: string): Promise<DomainRecordViewModel[]> {
@@ -98,15 +84,13 @@ export function getSurfaceCollectionsForLabel(label: string): string[] {
 
 export async function getDomainRecord(db: SQLiteDatabase | null, id: string): Promise<DomainRecordViewModel | null> {
   if (!db) {
-    const fallback = sampleRecordsForActiveDomain().find((record) => record.id === id);
-    return fallback ? toRecordView(fallback) : null;
+    return null;
   }
 
   const { domainId } = getActiveDomainFeed();
   const record = await getRecord(db, id);
   if (!record || record.domain !== domainId) {
-    const fallback = sampleRecordsForActiveDomain().find((item) => item.id === id);
-    return fallback ? toRecordView(fallback) : null;
+    return null;
   }
   return toRecordView(record);
 }
@@ -116,13 +100,13 @@ export async function getDomainRecordCanonical(
   id: string
 ): Promise<CanonicalRecord | null> {
   if (!db) {
-    return sampleRecordsForActiveDomain().find((record) => record.id === id) ?? null;
+    return null;
   }
 
   const { domainId } = getActiveDomainFeed();
   const record = await getRecord(db, id);
   if (!record || record.domain !== domainId) {
-    return sampleRecordsForActiveDomain().find((item) => item.id === id) ?? null;
+    return null;
   }
 
   return record;
@@ -130,15 +114,7 @@ export async function getDomainRecordCanonical(
 
 export async function listSourceRows(db: SQLiteDatabase | null): Promise<SourceRow[]> {
   if (!db) {
-    const fallback = sampleRecordsForActiveDomain();
-    return fallback.length
-      ? [{
-          name: 'sqlite',
-          status: 'Local ready',
-          freshness: 'Bundled Food records',
-          workspace: `${fallback.length} local records`,
-        }]
-      : [];
+    return [];
   }
 
   const links = await getAllProviderLinks(db);

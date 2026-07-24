@@ -12,7 +12,7 @@ export function useLifeOSDatabase(): LifeOSDatabase {
   return useContext(DatabaseContext);
 }
 
-export function LifeOSDatabaseProvider({ children, seedInDev = true }: { children: ReactNode; seedInDev?: boolean }) {
+export function LifeOSDatabaseProvider({ children, seedInDev = false }: { children: ReactNode; seedInDev?: boolean }) {
   const [db, setDb] = useState<LifeOSDatabase>(null);
 
   useEffect(() => {

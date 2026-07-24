@@ -60,6 +60,7 @@
     "check:direct-source-merge": "vitest run tests/providers/direct-source-sync.test.ts",
     "check:reactive-provider-writeback": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-reactive-provider-writeback.ts",
     "check:provider-writeback": "vitest run tests/providers/writeback.test.ts && npm run check:reactive-provider-writeback",
+    "check:utopia-debug": "npm run typecheck && npm run config:validate && npm run test && npm run test:server:direct && npm run check:provider-writeback && npm run check:ai-runtime && npm run check:workflow-runtime && npm run phase7:check:workflow-resume-cancel && npm run check:writer-boundary && npm run check:migrations && npm run check:roundtrip && npm run check:sync-merge && npm run export:web && npm run export:android",
     "check:ai-runtime": "vitest run tests/ai/runtime.test.ts",
     "check:workflow-runtime": "vitest run tests/workflows/runtime.test.ts",
     "phase7:check:workflow-resume-cancel": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-workflow-resume-cancel.ts",

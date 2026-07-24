@@ -10,7 +10,7 @@ export function useLifeOSDatabase() {
   return useSQLiteContext();
 }
 
-export function LifeOSDatabaseProvider({ children, seedInDev = true }: PropsWithChildren<{ seedInDev?: boolean }>) {
+export function LifeOSDatabaseProvider({ children, seedInDev = false }: PropsWithChildren<{ seedInDev?: boolean }>) {
   return (
     <SQLiteProvider
       databaseName={DATABASE_NAME}
