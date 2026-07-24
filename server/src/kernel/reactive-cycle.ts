@@ -1,7 +1,7 @@
 import type { AppPackageV2 } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
-import { evaluateRules, type OperationProposal } from './rules';
+import { evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
 import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 
 export type ReactiveCycleInput = {
@@ -23,6 +23,7 @@ export type ReactiveCycleInput = {
 export type ReactiveCycleProposal = OperationProposal & {
   id: string;
   eventId: string;
+  envelope: OperationProposalEnvelope;
 };
 
 export type ReactiveCycleResult = {
@@ -131,17 +132,27 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
   }
 
   const proposals = dedupeProposals(rawProposals)
-    .map((proposal) => ({
-      ...proposal,
-      id: stableId({
+    .map((proposal) => {
+      const id = stableId({
         packageId: input.package.id,
         packageVersion: input.package.version,
         causeId: input.causeId,
         eventId: proposal.eventId,
         ruleId: proposal.ruleId,
         operation: proposal.operation,
-      }),
-    }))
+      });
+      return {
+        ...proposal,
+        id,
+        envelope: createProposalEnvelope({
+          proposalId: id,
+          proposal,
+          packageId: input.package.id,
+          eventId: proposal.eventId,
+          queryHashes,
+        }),
+      };
+    })
     .sort((left, right) => left.id.localeCompare(right.id));
 
   const cycleId = stableId({
@@ -154,6 +165,46 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
   });
 
   return { cycleId, transitions, proposals, queryHashes };
+}
+
+function createProposalEnvelope(input: {
+  proposalId: string;
+  proposal: OperationProposal & { eventId: string };
+  packageId: string;
+  eventId: string;
+  queryHashes: ReactiveCycleResult['queryHashes'];
+}): OperationProposalEnvelope {
+  const [queryId, transition] = input.eventId.includes(':')
+    ? input.eventId.split(':', 2)
+    : ['', ''];
+  const queryEvidence = queryId ? input.queryHashes[queryId] : undefined;
+  return {
+    schemaVersion: 'wonder.operation-proposal.v1',
+    proposalId: input.proposalId,
+    operation: input.proposal.operation,
+    mode: input.proposal.mode,
+    ruleId: input.proposal.ruleId,
+    packageId: input.packageId,
+    packageVersion: input.proposal.packageVersion,
+    eventId: input.eventId,
+    causeId: input.proposal.causeId,
+    depth: input.proposal.depth,
+    idempotencyKey: stableId({
+      schemaVersion: 'wonder.operation-proposal.v1',
+      proposalId: input.proposalId,
+      operation: input.proposal.operation,
+      causeId: input.proposal.causeId,
+    }),
+    review: {
+      required: input.proposal.mode !== 'automatic',
+      reason: input.proposal.mode === 'automatic' ? 'automatic_mode' : 'suggest_mode',
+    },
+    evidence: {
+      ...(queryId ? { queryId } : {}),
+      ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
+      ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
+    },
+  };
 }
 
 function executePackageQuery(

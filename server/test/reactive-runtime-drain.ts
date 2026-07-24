@@ -32,6 +32,21 @@ const cycle: ReactiveCycleResult = {
     causeId: 'runtime-cause',
     packageVersion: '1.0.0',
     depth: 0,
+    envelope: {
+      schemaVersion: 'wonder.operation-proposal.v1',
+      proposalId: 'runtime-proposal',
+      operation: 'request_review',
+      mode: 'suggest',
+      ruleId: 'runtime-rule',
+      packageId: 'runtime-package',
+      packageVersion: '1.0.0',
+      eventId: 'runtime-query:enter',
+      causeId: 'runtime-cause',
+      depth: 0,
+      idempotencyKey: 'runtime-proposal:idempotency',
+      review: { required: true, reason: 'suggest_mode' },
+      evidence: { queryId: 'runtime-query', transition: 'enter' },
+    },
   }],
 };
 const outbox = enqueueReactiveProposals(createReactiveOutboxStore(), {

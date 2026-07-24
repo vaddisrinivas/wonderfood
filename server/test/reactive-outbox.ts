@@ -27,7 +27,7 @@ const event: OperationCommitEvent = {
 const cycle: ReactiveCycleResult = {
   cycleId: 'cycle-a',
   transitions: [],
-  queryHashes: {},
+  queryHashes: { open: { before: 'before-hash', after: 'after-hash' } },
   proposals: [{
     id: 'proposal-a',
     eventId: 'open:enter',
@@ -37,6 +37,21 @@ const cycle: ReactiveCycleResult = {
     causeId: 'cause-a',
     packageVersion: '1.0.0',
     depth: 0,
+    envelope: {
+      schemaVersion: 'wonder.operation-proposal.v1',
+      proposalId: 'proposal-a',
+      operation: 'request_review',
+      mode: 'suggest',
+      ruleId: 'rule-a',
+      packageId: 'package-a',
+      packageVersion: '1.0.0',
+      eventId: 'open:enter',
+      causeId: 'cause-a',
+      depth: 0,
+      idempotencyKey: 'proposal-a:idempotency',
+      review: { required: true, reason: 'suggest_mode' },
+      evidence: { queryId: 'open', transition: 'enter', beforeHash: 'before-hash', afterHash: 'after-hash' },
+    },
   }],
 };
 
@@ -45,6 +60,8 @@ const queued = enqueueReactiveProposals(empty, { cycle, event, proposalIds: ['pr
 assert.equal(Object.keys(queued.items).length, 1);
 assert.equal(queued.items['proposal-a'].status, 'pending');
 assert.equal(queued.items['proposal-a'].attempts, 0);
+assert.equal(queued.items['proposal-a'].proposal.envelope.schemaVersion, 'wonder.operation-proposal.v1');
+assert.equal(queued.items['proposal-a'].proposal.envelope.idempotencyKey, 'proposal-a:idempotency');
 assert.deepEqual(listRunnableReactiveOutboxItems(queued, now).map((item) => item.proposalId), ['proposal-a']);
 
 const replay = enqueueReactiveProposals(queued, { cycle, event, proposalIds: ['proposal-a'], now });
@@ -70,6 +87,19 @@ assert.deepEqual(listRunnableReactiveOutboxItems(acked, '2026-07-23T00:00:05.000
 
 const restored = parseReactiveOutboxStore(serializeReactiveOutboxStore(failed));
 assert.deepEqual(restored, failed, 'outbox must survive JSON persistence');
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: {
+      ...failed.items,
+      'proposal-a': {
+        ...failed.items['proposal-a'],
+        proposal: { ...failed.items['proposal-a'].proposal, envelope: undefined },
+      },
+    },
+  })),
+  /missing its proposal envelope/,
+);
 assert.throws(
   () => enqueueReactiveProposals(empty, { cycle, event, proposalIds: ['missing-proposal'], now }),
   /missing from cycle/,

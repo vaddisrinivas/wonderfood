@@ -204,6 +204,21 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
     if (!isObject(item.proposal) || item.proposal.id !== proposalId) {
       throw new Error(`Reactive outbox item ${proposalId} is missing its proposal.`);
     }
+    const envelope = item.proposal.envelope;
+    if (!isObject(envelope) || envelope.schemaVersion !== 'wonder.operation-proposal.v1' || envelope.proposalId !== proposalId) {
+      throw new Error(`Reactive outbox item ${proposalId} is missing its proposal envelope.`);
+    }
+    if (
+      envelope.operation !== item.proposal.operation
+      || envelope.ruleId !== item.proposal.ruleId
+      || envelope.causeId !== item.proposal.causeId
+      || envelope.packageVersion !== item.proposal.packageVersion
+      || envelope.mode !== item.proposal.mode
+      || typeof envelope.idempotencyKey !== 'string'
+      || !envelope.idempotencyKey.trim()
+    ) {
+      throw new Error(`Reactive outbox item ${proposalId} has an inconsistent proposal envelope.`);
+    }
     items[proposalId] = immutable({ ...item });
   }
   return immutable({

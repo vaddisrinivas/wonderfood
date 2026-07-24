@@ -18,6 +18,30 @@ export type OperationProposal = {
   depth: number;
 };
 
+export type OperationProposalEnvelope = Readonly<{
+  schemaVersion: 'wonder.operation-proposal.v1';
+  proposalId: string;
+  operation: string;
+  mode: RuleSpec['mode'];
+  ruleId: string;
+  packageId: string;
+  packageVersion: string;
+  eventId: string;
+  causeId: string;
+  depth: number;
+  idempotencyKey: string;
+  review: {
+    required: boolean;
+    reason: 'suggest_mode' | 'automatic_mode';
+  };
+  evidence: {
+    queryId?: string;
+    transition?: 'enter' | 'leave' | 'change';
+    beforeHash?: string;
+    afterHash?: string;
+  };
+}>;
+
 export function evaluateRules(rules: readonly RuleSpec[], context: RuleContext): OperationProposal[] {
   if (context.depth > 32) throw new Error('rule_depth_exceeded');
   const proposals: OperationProposal[] = [];

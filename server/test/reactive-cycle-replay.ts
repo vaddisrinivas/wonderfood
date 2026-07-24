@@ -78,6 +78,14 @@ assert.deepEqual(first.transitions[0], {
 assert.equal(first.proposals.length, 1, 'identical maxRuns proposals must dedupe');
 assert.equal(first.proposals[0].operation, 'request_review');
 assert.equal(first.proposals[0].causeId, 'action-open-decision-a');
+assert.equal(first.proposals[0].envelope.schemaVersion, 'wonder.operation-proposal.v1');
+assert.equal(first.proposals[0].envelope.proposalId, first.proposals[0].id);
+assert.equal(first.proposals[0].envelope.operation, 'request_review');
+assert.equal(first.proposals[0].envelope.review.required, true);
+assert.equal(first.proposals[0].envelope.evidence.queryId, 'high-risk-open');
+assert.equal(first.proposals[0].envelope.evidence.transition, 'enter');
+assert.equal(first.proposals[0].envelope.evidence.beforeHash, first.queryHashes['high-risk-open'].before);
+assert.equal(first.proposals[0].envelope.evidence.afterHash, first.queryHashes['high-risk-open'].after);
 
 const noChange = runReactiveCycle({
   ...input,
