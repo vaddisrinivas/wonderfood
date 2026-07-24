@@ -23,15 +23,12 @@ function readJson(relativePath) {
 const requiredScreens = [
   'home',
   'food',
-  'record-green-dal',
-  'collection-recipe',
+  'search',
+  'capture',
   'chat',
   'sources',
-  'settings',
   'config',
-  'capture',
-  'search',
-  'health-diagnostics',
+  'settings',
 ];
 const viewports = ['desktop', 'mobile'];
 const screenshots = [];
