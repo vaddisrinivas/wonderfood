@@ -58,7 +58,7 @@ export const appPackageSchema = {
           mode: { enum: ['list', 'board', 'table', 'calendar', 'timeline', 'chart'] },
           fields: { type: 'array', items: { type: 'string', minLength: 1 } },
           groupBy: { type: 'string', minLength: 1 },
-          layout: { type: 'object' },
+          layout: { $ref: '#/$defs/viewLayout' },
         },
       },
     },
@@ -80,11 +80,72 @@ export const appPackageSchema = {
         },
       },
     },
-    rules: { type: 'array', items: { type: 'object' } },
-    capabilities: { type: 'array', items: { type: 'string' } },
-    acceptanceTests: { type: 'array', items: { type: 'string' } },
+    rules: {
+      type: 'array',
+      items: { $ref: '#/$defs/rule' },
+    },
+    capabilities: {
+      type: 'array',
+      uniqueItems: true,
+      items: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+    },
+    acceptanceTests: {
+      type: 'array',
+      uniqueItems: true,
+      items: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+    },
   },
   $defs: {
+    viewLayout: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        size: { enum: ['compact', 'standard', 'wide', 'feature'] },
+        tone: { enum: ['neutral', 'moss', 'amber', 'plum', 'blue'] },
+        href: { type: 'string', minLength: 1 },
+      },
+    },
+    rule: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id', 'trigger', 'effect', 'mode', 'maxRunsPerEvent'],
+      properties: {
+        id: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+        trigger: { $ref: '#/$defs/ruleTrigger' },
+        when: {},
+        effect: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'operation'],
+          properties: {
+            kind: { const: 'propose_operation' },
+            operation: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+          },
+        },
+        mode: { enum: ['suggest', 'automatic'] },
+        maxRunsPerEvent: { type: 'integer', minimum: 1, maximum: 64 },
+      },
+    },
+    ruleTrigger: {
+      oneOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind'],
+          properties: { kind: { enum: ['operation', 'schedule'] } },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['kind', 'query'],
+          properties: {
+            kind: { const: 'query_transition' },
+            query: { type: 'string', minLength: 1 },
+            transition: { enum: ['enter', 'leave', 'change'] },
+          },
+        },
+      ],
+    },
     predicate: {
       oneOf: [
         { type: 'object', required: ['op', 'args'], additionalProperties: false, properties: { op: { enum: ['and', 'or'] }, args: { type: 'array', minItems: 1, items: { $ref: '#/$defs/predicate' } } } },
