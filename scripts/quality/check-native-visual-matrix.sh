@@ -71,7 +71,10 @@ for entry in "${routes[@]}"; do
   "$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
   "$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d "$uri" -n "$activity" >/dev/null
   if [[ "$name" == "chat" ]]; then
-    "$adb_bin" -s "$serial" shell input swipe 540 1750 540 350 500 >/dev/null 2>&1 || true
+    sleep 2
+    for _ in 1 2 3 4; do
+      "$adb_bin" -s "$serial" shell input swipe 540 1750 540 350 500 >/dev/null 2>&1 || true
+    done
   fi
   dump=""
   for _ in $(seq 1 25); do
