@@ -35,7 +35,7 @@ if [[ -n "$requested_serial" ]]; then
   [[ "$state" == "device" ]] || fail "requested Android device is not connected and ready: $requested_serial"
   serial="$requested_serial"
 else
-  serial="$("$adb_bin" devices | awk '$2 == "device" { print $1; exit }')"
+  serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
 fi
 if [[ -z "$serial" && -z "$requested_serial" ]]; then
   log_file="$(mktemp -t lifeos-native-visual.XXXXXX)"
