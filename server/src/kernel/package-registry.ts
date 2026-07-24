@@ -1,7 +1,8 @@
 import { validateComputedFieldGraph } from './computed-fields';
-import { AppPackageV2, type PackageValidation, validateAppPackage } from './package';
+import { type AppPackageV2, type PackageValidation, validateAppPackage } from './package';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { z } from 'zod';
 
 const PACKAGE_REGISTRY_SCHEMA_VERSION = 'wonder.package-registry.v1' as const;
 
@@ -25,6 +26,22 @@ type PackageRegistryOptions = {
   path?: string;
   now?: () => string;
 };
+
+const packageRegistryReceiptSchema = z.object({
+  id: z.string().min(1),
+  action: z.enum(['activate', 'rollback']),
+  packageKey: z.string().min(1).nullable(),
+  previousPackageKey: z.string().min(1).nullable(),
+  createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+}).strict();
+
+const packageRegistryStoreSchema = z.object({
+  schemaVersion: z.literal(PACKAGE_REGISTRY_SCHEMA_VERSION),
+  activeKey: z.string().min(1).nullable(),
+  previousKey: z.string().min(1).nullable(),
+  packages: z.record(z.string(), z.unknown()),
+  receipts: z.array(packageRegistryReceiptSchema),
+}).strict();
 
 export class PackageRegistry {
   private active: AppPackageV2 | null = null;
@@ -134,45 +151,24 @@ function parsePackageRegistryStore(serialized: string): PackageRegistryStore {
     throw new Error('package_registry_invalid_json');
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('package_registry_invalid');
-  const row = value as Partial<PackageRegistryStore>;
-  if (row.schemaVersion !== PACKAGE_REGISTRY_SCHEMA_VERSION) throw new Error('package_registry_schema_invalid');
-  if (!row.packages || typeof row.packages !== 'object') throw new Error('package_registry_packages_invalid');
+  const row = packageRegistryStoreSchema.safeParse(value);
+  if (!row.success) throw new Error('package_registry_schema_invalid');
   const packages: Record<string, AppPackageV2> = {};
-  for (const [key, pkg] of Object.entries(row.packages)) {
+  for (const [key, pkg] of Object.entries(row.data.packages)) {
     const validation = validateAppPackage(pkg);
     if (!validation.valid) throw new Error(`package_registry_package_invalid:${key}:${validation.errors.join('|')}`);
     if (packageKey(validation.package) !== key) throw new Error(`package_registry_package_key_mismatch:${key}`);
     packages[key] = validation.package;
   }
-  const activeKey = typeof row.activeKey === 'string' ? row.activeKey : null;
-  const previousKey = typeof row.previousKey === 'string' ? row.previousKey : null;
+  const activeKey = row.data.activeKey;
+  const previousKey = row.data.previousKey;
   if (activeKey && !packages[activeKey]) throw new Error(`package_registry_active_missing:${activeKey}`);
   if (previousKey && !packages[previousKey]) throw new Error(`package_registry_previous_missing:${previousKey}`);
-  const receipts = Array.isArray(row.receipts)
-    ? row.receipts.map((receipt) => parseReceipt(receipt))
-    : [];
   return {
     schemaVersion: PACKAGE_REGISTRY_SCHEMA_VERSION,
     activeKey,
     previousKey,
     packages,
-    receipts,
-  };
-}
-
-function parseReceipt(value: unknown): PackageRegistryReceipt {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('package_registry_receipt_invalid');
-  const row = value as Partial<PackageRegistryReceipt>;
-  if (typeof row.id !== 'string' || !row.id.trim()) throw new Error('package_registry_receipt_id_invalid');
-  if (row.action !== 'activate' && row.action !== 'rollback') throw new Error('package_registry_receipt_action_invalid');
-  if (row.packageKey !== null && typeof row.packageKey !== 'string') throw new Error('package_registry_receipt_package_invalid');
-  if (row.previousPackageKey !== null && typeof row.previousPackageKey !== 'string') throw new Error('package_registry_receipt_previous_invalid');
-  if (typeof row.createdAt !== 'string' || Number.isNaN(Date.parse(row.createdAt))) throw new Error('package_registry_receipt_time_invalid');
-  return {
-    id: row.id,
-    action: row.action,
-    packageKey: row.packageKey ?? null,
-    previousPackageKey: row.previousPackageKey ?? null,
-    createdAt: row.createdAt,
+    receipts: row.data.receipts,
   };
 }

@@ -49,5 +49,9 @@ assert.equal(persisted.receipts.length, 3);
 
 writeFileSync(path, JSON.stringify({ ...persisted, activeKey: 'missing@1.0.0' }), 'utf8');
 assert.throws(() => new PackageRegistry({ path }), /package_registry_active_missing/);
+writeFileSync(path, JSON.stringify({ ...persisted, extra: true }), 'utf8');
+assert.throws(() => new PackageRegistry({ path }), /package_registry_schema_invalid/);
+writeFileSync(path, JSON.stringify({ ...persisted, receipts: [{ ...persisted.receipts[0], createdAt: 'not-a-date' }] }), 'utf8');
+assert.throws(() => new PackageRegistry({ path }), /package_registry_schema_invalid/);
 
 console.log('package-registry-persistence: passed');
