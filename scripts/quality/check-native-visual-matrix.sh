@@ -70,6 +70,9 @@ for entry in "${routes[@]}"; do
   IFS='|' read -r name uri label_one label_two <<<"$entry"
   "$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
   "$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d "$uri" -n "$activity" >/dev/null
+  if [[ "$name" == "chat" ]]; then
+    "$adb_bin" -s "$serial" shell input swipe 540 1750 540 350 500 >/dev/null 2>&1 || true
+  fi
   dump=""
   for _ in $(seq 1 25); do
     timeout 8 "$adb_bin" -s "$serial" shell uiautomator dump --compressed "$ui_dump_path" >/dev/null 2>&1 || true
