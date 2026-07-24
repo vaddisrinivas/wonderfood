@@ -231,10 +231,22 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
       || !envelope.packageId.trim()
       || envelope.mode !== item.proposal.mode
       || envelope.depth !== item.proposal.depth
-      || envelope.review?.required !== true
-      || (envelope.review.reason !== 'suggest_mode' && envelope.review.reason !== 'policy_required')
+      || !isReview(envelope.review)
+      || !isAuthorization(envelope.authorization)
+      || !isDryRun(envelope.dryRun)
     ) {
       throw new Error(`Reactive outbox item ${proposalId} has an inconsistent proposal envelope.`);
+    }
+    if (
+      envelope.review.required !== envelope.authorization.reviewRequired
+      || envelope.review.policyId !== envelope.authorization.policyId
+      || envelope.review.policyVersion !== envelope.authorization.policyVersion
+      || (envelope.mode === 'suggest' && envelope.review.reason !== 'suggest_mode')
+      || (envelope.mode === 'automatic' && envelope.review.required && envelope.review.reason !== 'policy_required')
+      || (envelope.mode === 'automatic' && !envelope.review.required && envelope.review.reason !== 'policy_authorized')
+      || envelope.dryRun.ok !== envelope.authorization.allowed
+    ) {
+      throw new Error(`Reactive outbox item ${proposalId} has an inconsistent policy receipt.`);
     }
     validateEnvelopeEvidence(proposalId, envelope);
     const expectedKey = createOperationProposalIdempotencyKey({
@@ -321,6 +333,39 @@ function isOperationTemplate(value: unknown): value is ReactiveCycleProposal['op
       && (value.expectedRevision === undefined || (typeof value.expectedRevision === 'number' && Number.isInteger(value.expectedRevision) && value.expectedRevision >= 0));
   }
   return false;
+}
+
+function isReview(value: unknown): value is ReactiveCycleProposal['envelope']['review'] {
+  return isObject(value)
+    && typeof value.required === 'boolean'
+    && (value.reason === 'suggest_mode' || value.reason === 'policy_required' || value.reason === 'policy_authorized')
+    && typeof value.policyId === 'string'
+    && Boolean(value.policyId.trim())
+    && typeof value.policyVersion === 'string'
+    && Boolean(value.policyVersion.trim());
+}
+
+function isAuthorization(value: unknown): value is ReactiveCycleProposal['envelope']['authorization'] {
+  return isObject(value)
+    && value.policyId === 'wonder.reactive-proposal-policy'
+    && value.policyVersion === 'v1'
+    && typeof value.allowed === 'boolean'
+    && (value.risk === 'low' || value.risk === 'standard' || value.risk === 'sensitive' || value.risk === 'restricted')
+    && typeof value.reviewRequired === 'boolean'
+    && typeof value.requiredCapability === 'string'
+    && Boolean(value.requiredCapability.trim())
+    && typeof value.capabilityPresent === 'boolean'
+    && typeof value.reason === 'string'
+    && Boolean(value.reason.trim());
+}
+
+function isDryRun(value: unknown): value is ReactiveCycleProposal['envelope']['dryRun'] {
+  return isObject(value)
+    && typeof value.ok === 'boolean'
+    && value.effect === 'queue_review_action'
+    && typeof value.executable === 'boolean'
+    && typeof value.reason === 'string'
+    && Boolean(value.reason.trim());
 }
 
 function validateEnvelopeEvidence(proposalId: string, envelope: ReactiveCycleProposal['envelope']): void {

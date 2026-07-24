@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { evaluateExpression } from './expression';
 import { normalizeOperationTemplate, operationTemplateName, type OperationTemplate, type RuleSpec } from './package';
+import type { ReactiveProposalDryRun, ReactiveProposalPolicyResult } from './reactive-proposal-policy';
 
 export type RuleContext = {
   event: ProposalEvent;
@@ -44,8 +45,12 @@ export type OperationProposalEnvelope = Readonly<{
   idempotencyKey: string;
   review: {
     required: boolean;
-    reason: 'suggest_mode' | 'policy_required';
+    reason: 'suggest_mode' | 'policy_required' | 'policy_authorized';
+    policyId: string;
+    policyVersion: string;
   };
+  authorization: ReactiveProposalPolicyResult;
+  dryRun: ReactiveProposalDryRun;
   evidence: {
     queryId?: string;
     transition?: 'enter' | 'leave' | 'change';

@@ -4,6 +4,7 @@ import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
 import { createOperationProposalIdempotencyKey, evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
 import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
+import { dryRunReactiveProposal, evaluateReactiveProposalPolicy } from './reactive-proposal-policy';
 
 export type ReactiveCycleInput = {
   package: AppPackageV2;
@@ -187,6 +188,15 @@ function createProposalEnvelope(input: {
   const queryEvidence = queryId ? input.queryHashes[queryId] : undefined;
   const packageHash = stableSha256(input.package);
   const querySpecHash = queryId && input.package.queries[queryId] ? stableSha256(input.package.queries[queryId]) : undefined;
+  const authorization = evaluateReactiveProposalPolicy({
+    operationTemplate: input.proposal.operationTemplate,
+    requestedMode: input.proposal.mode,
+    capabilities: input.package.capabilities,
+  });
+  const dryRun = dryRunReactiveProposal({
+    operationTemplate: input.proposal.operationTemplate,
+    policy: authorization,
+  });
   const evidence = {
     ...(queryId ? { queryId } : {}),
     ...(transition === 'enter' || transition === 'leave' || transition === 'change' ? { transition } : {}),
@@ -216,9 +226,15 @@ function createProposalEnvelope(input: {
       evidence: queryEvidence ? evidence : undefined,
     }),
     review: {
-      required: true,
-      reason: input.proposal.mode === 'automatic' ? 'policy_required' : 'suggest_mode',
+      required: authorization.reviewRequired,
+      reason: authorization.reviewRequired
+        ? input.proposal.mode === 'automatic' ? 'policy_required' : 'suggest_mode'
+        : 'policy_authorized',
+      policyId: authorization.policyId,
+      policyVersion: authorization.policyVersion,
     },
+    authorization,
+    dryRun,
     evidence,
   };
 }

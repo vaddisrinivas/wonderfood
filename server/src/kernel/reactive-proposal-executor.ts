@@ -23,8 +23,8 @@ export function executeReactiveProposal(
   if (envelope.proposalId !== item.proposalId || envelope.operation !== item.proposal.operation) {
     return { ok: false, error: 'proposal_envelope_mismatch' };
   }
-  if (envelope.review.required && item.proposal.mode === 'automatic') {
-    return { ok: false, error: 'proposal_review_policy_conflict' };
+  if (!envelope.authorization.allowed || !envelope.dryRun.ok) {
+    return { ok: false, error: 'proposal_policy_blocked' };
   }
 
   const existing = findActionByIdempotencyKey(envelope.idempotencyKey);
@@ -45,18 +45,22 @@ export function executeReactiveProposal(
     actor: input.actor?.trim() || 'reactive-runtime',
     domain: item.domain,
     tool: envelope.operation,
-    risk: envelope.review.required ? 'standard' : 'low',
+    risk: envelope.authorization.risk === 'restricted' ? 'sensitive' : envelope.authorization.risk,
     recordIds: [],
     idempotencyKey: envelope.idempotencyKey,
     command: JSON.stringify({
       kind: 'reactive_proposal',
       proposalId: item.proposalId,
       operation: envelope.operation,
+      operationTemplate: envelope.operationTemplate,
       ruleId: envelope.ruleId,
       eventId: envelope.eventId,
+      review: envelope.review,
+      authorization: envelope.authorization,
+      dryRun: envelope.dryRun,
     }),
     before: null,
-    after: { proposal: envelope },
+    after: { proposal: envelope, policy: envelope.authorization, dryRun: envelope.dryRun },
     undoPayload: null,
     status: 'queued',
     operationId: `proposal:${item.proposalId}:operation`,

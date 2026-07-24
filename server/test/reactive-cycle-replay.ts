@@ -126,7 +126,32 @@ assert.match(colonCycle.proposals[0].envelope.evidence.packageHash ?? '', /^sha2
 assert.equal(colonCycle.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
 assert.equal(colonCycle.proposals[0].envelope.review.required, true);
 assert.equal(colonCycle.proposals[0].envelope.review.reason, 'policy_required');
+assert.equal(colonCycle.proposals[0].envelope.authorization.requiredCapability, 'reactive:auto:update_record');
+assert.equal(colonCycle.proposals[0].envelope.authorization.capabilityPresent, false);
+assert.equal(colonCycle.proposals[0].envelope.authorization.reviewRequired, true);
+assert.equal(colonCycle.proposals[0].envelope.dryRun.executable, true);
 assert.match(colonCycle.proposals[0].envelope.idempotencyKey, /^reactive:[a-f0-9]{64}$/);
+
+const authorizedAutoCycle = runReactiveCycle({
+  ...input,
+  package: {
+    ...colonQueryPackage,
+    capabilities: ['reactive:auto:create_record'],
+    rules: [{
+      id: 'auto-create-low-risk',
+      trigger: { kind: 'query_transition', query: 'surface:home', transition: 'enter' },
+      effect: { kind: 'propose_operation', operation: { kind: 'create_record', collection: 'decisions', properties: { status: 'queued', risk: 1 } } },
+      mode: 'automatic',
+      maxRunsPerEvent: 1,
+    }],
+  },
+});
+assert.equal(authorizedAutoCycle.proposals[0].envelope.authorization.allowed, true);
+assert.equal(authorizedAutoCycle.proposals[0].envelope.authorization.capabilityPresent, true);
+assert.equal(authorizedAutoCycle.proposals[0].envelope.review.required, false);
+assert.equal(authorizedAutoCycle.proposals[0].envelope.review.reason, 'policy_authorized');
+assert.equal(authorizedAutoCycle.proposals[0].envelope.dryRun.ok, true);
+assert.equal(authorizedAutoCycle.proposals[0].envelope.dryRun.executable, true);
 
 const noChange = runReactiveCycle({
   ...input,

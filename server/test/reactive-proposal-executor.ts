@@ -15,6 +15,22 @@ const { executeReactiveProposal } = await import('../src/kernel/reactive-proposa
 const { findActionByIdempotencyKey, getActionEvent } = await import('../src/mcp/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const authorization = {
+  policyId: 'wonder.reactive-proposal-policy' as const,
+  policyVersion: 'v1' as const,
+  allowed: true,
+  risk: 'standard' as const,
+  reviewRequired: true,
+  requiredCapability: 'reactive:propose:custom',
+  capabilityPresent: false,
+  reason: 'suggest_mode_requires_review',
+};
+const dryRun = {
+  ok: true,
+  effect: 'queue_review_action' as const,
+  executable: false,
+  reason: 'proposal_can_be_queued',
+};
 const proposalEvidence = {
   queryId: 'review',
   transition: 'enter' as const,
@@ -72,7 +88,9 @@ const cycle: ReactiveCycleResult = {
       causeId: 'source-cause',
       depth: 0,
       idempotencyKey: proposalIdempotencyKey,
-      review: { required: true, reason: 'suggest_mode' },
+      review: { required: true, reason: 'suggest_mode', policyId: authorization.policyId, policyVersion: authorization.policyVersion },
+      authorization,
+      dryRun,
       evidence: proposalEvidence,
     },
   }],
@@ -103,7 +121,23 @@ assert.equal(action.status, 'queued');
 assert.equal(action.cause_id, 'source-cause');
 assert.deepEqual(action.record_ids, []);
 assert.equal((action.after_json as { proposal?: { proposalId?: string } }).proposal?.proposalId, 'proposal-ledger');
+assert.equal((action.after_json as { policy?: { policyId?: string } }).policy?.policyId, authorization.policyId);
+assert.equal((action.after_json as { dryRun?: { ok?: boolean } }).dryRun?.ok, true);
 assert.equal(getActionEvent(action.id)?.id, action.id);
+
+const blocked = executeReactiveProposal({
+  ...queued.items['proposal-ledger'],
+  proposal: {
+    ...queued.items['proposal-ledger'].proposal,
+    envelope: {
+      ...queued.items['proposal-ledger'].proposal.envelope,
+      authorization: { ...authorization, allowed: false, reason: 'operation_template_restricted' },
+      dryRun: { ...dryRun, ok: false, reason: 'operation_template_restricted' },
+    },
+  },
+});
+assert.equal(blocked.ok, false);
+assert.equal(blocked.error, 'proposal_policy_blocked');
 
 const replay = executeReactiveProposal(queued.items['proposal-ledger'], { actor: 'ignored' });
 assert.equal(replay.ok, true);

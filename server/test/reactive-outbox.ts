@@ -18,6 +18,22 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 const now = '2026-07-23T00:00:00.000Z';
 const proposalEvent = { kind: 'query_transition' as const, id: 'open:enter', queryId: 'open', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const authorization = {
+  policyId: 'wonder.reactive-proposal-policy' as const,
+  policyVersion: 'v1' as const,
+  allowed: true,
+  risk: 'standard' as const,
+  reviewRequired: true,
+  requiredCapability: 'reactive:propose:custom',
+  capabilityPresent: false,
+  reason: 'suggest_mode_requires_review',
+};
+const dryRun = {
+  ok: true,
+  effect: 'queue_review_action' as const,
+  executable: false,
+  reason: 'proposal_can_be_queued',
+};
 const proposalEvidence = {
   queryId: 'open',
   transition: 'enter' as const,
@@ -74,7 +90,9 @@ const cycle: ReactiveCycleResult = {
       causeId: 'cause-a',
       depth: 0,
       idempotencyKey: proposalIdempotencyKey,
-      review: { required: true, reason: 'suggest_mode' },
+      review: { required: true, reason: 'suggest_mode', policyId: authorization.policyId, policyVersion: authorization.policyVersion },
+      authorization,
+      dryRun,
       evidence: proposalEvidence,
     },
   }],
@@ -145,6 +163,27 @@ assert.throws(
     items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, review: { required: false, reason: 'policy_required' } } } } },
   })),
   /inconsistent proposal envelope/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, review: { required: false, reason: 'policy_authorized', policyId: authorization.policyId, policyVersion: authorization.policyVersion } } } } },
+  })),
+  /inconsistent policy receipt/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, authorization: { ...authorization, allowed: false } } } } },
+  })),
+  /inconsistent policy receipt/,
+);
+assert.throws(
+  () => parseReactiveOutboxStore(JSON.stringify({
+    ...failed,
+    items: { ...failed.items, 'proposal-a': { ...failed.items['proposal-a'], proposal: { ...failed.items['proposal-a'].proposal, envelope: { ...failed.items['proposal-a'].proposal.envelope, dryRun: { ...dryRun, ok: false } } } } },
+  })),
+  /inconsistent policy receipt/,
 );
 assert.throws(
   () => parseReactiveOutboxStore(JSON.stringify({
