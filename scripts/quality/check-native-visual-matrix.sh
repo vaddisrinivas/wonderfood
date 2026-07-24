@@ -57,7 +57,7 @@ routes=(
   "home|wonderfood:///|LIFEOS / HOME|Green dal + rice"
   "food|wonderfood:///food|LIFEOS / FOOD|Green dal + rice"
   "record-green-dal|wonderfood:///record/meal-green-dal|Record|Green dal + rice"
-  "chat|wonderfood:///chat|Chat message|Send"
+  "chat|wonderfood:///chat|LIFEOS / CHAT|Food context · local source mode"
   "sources|wonderfood:///sources|LIFEOS / SOURCES|Food authority"
   "settings|wonderfood:///settings|LIFEOS / CONNECTIONS|Control center"
   "capture|wonderfood:///capture|LIFEOS / CAPTURE|Save capture"
