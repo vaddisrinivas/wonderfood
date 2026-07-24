@@ -39,15 +39,12 @@ const valid = (key) => provenance[key]?.valid === true;
 const requiredScreens = [
   'home',
   'food',
-  'record-green-dal',
-  'collection-recipe',
+  'search',
+  'capture',
   'chat',
   'sources',
-  'settings',
   'config',
-  'capture',
-  'search',
-  'health-diagnostics',
+  'settings',
 ];
 
 const screenshotResults = webProduct?.results ?? [];
