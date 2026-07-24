@@ -38,6 +38,7 @@ else
   serial="$("$adb_bin" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
 fi
 if [[ -z "$serial" && -z "$requested_serial" ]]; then
+  echo "Native visual matrix: starting emulator $avd_name"
   log_file="$(mktemp -t lifeos-native-visual.XXXXXX)"
   "$emulator_bin" -avd "$avd_name" -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect >"$log_file" 2>&1 &
   for _ in $(seq 1 120); do
@@ -47,6 +48,7 @@ if [[ -z "$serial" && -z "$requested_serial" ]]; then
   done
 fi
 [[ -n "$serial" ]] || fail "no emulator became ready"
+echo "Native visual matrix: using device $serial"
 
 boot=""
 for _ in $(seq 1 120); do
@@ -55,11 +57,17 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 [[ "$boot" == "1" ]] || fail "emulator boot did not complete"
+echo "Native visual matrix: device booted"
 
 if [[ "$serial" == emulator-* ]]; then
   "$adb_bin" -s "$serial" uninstall "$package_name" >/dev/null 2>&1 || true
 fi
-"$adb_bin" -s "$serial" install -r "$apk" >/dev/null
+echo "Native visual matrix: installing $(basename "$apk")"
+install_log="$(mktemp -t lifeos-native-install.XXXXXX)"
+if ! timeout 180 "$adb_bin" -s "$serial" install --no-incremental -r "$apk" >"$install_log" 2>&1; then
+  fail "APK install timed out or failed on $serial: $(tail -n 8 "$install_log" | tr '\n' ' ')"
+fi
+echo "Native visual matrix: install complete"
 
 routes=(
   "home|wonderfood:///|LIFEOS / HOME|Green dal + rice"
@@ -76,6 +84,7 @@ passed=0
 route_json=""
 for entry in "${routes[@]}"; do
   IFS='|' read -r name uri label_one label_two <<<"$entry"
+  echo "Native visual matrix: checking $name"
   "$adb_bin" -s "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
   "$adb_bin" -s "$serial" shell am start -a android.intent.action.VIEW -d "$uri" -n "$activity" >/dev/null
   if [[ "$name" == "chat" ]]; then
@@ -85,12 +94,13 @@ for entry in "${routes[@]}"; do
     done
   fi
   dump=""
-  for _ in $(seq 1 25); do
+  for attempt in $(seq 1 10); do
     timeout 8 "$adb_bin" -s "$serial" shell uiautomator dump --compressed "$ui_dump_path" >/dev/null 2>&1 || true
     dump="$(timeout 8 "$adb_bin" -s "$serial" shell cat "$ui_dump_path" 2>/dev/null | tr -d '\r' || true)"
     if grep -q "$label_one" <<<"$dump" && grep -q "$label_two" <<<"$dump"; then
       break
     fi
+    echo "Native visual matrix: waiting for $name labels ($attempt/10)"
     sleep 1
   done
   if grep -Eq "isn.t responding|Application Not Responding|aerr_close|aerr_wait" <<<"$dump"; then
@@ -98,7 +108,7 @@ for entry in "${routes[@]}"; do
   fi
   screenshot="$evidence_dir/$name.png"
   dump_file="$evidence_dir/$name.xml"
-  "$adb_bin" -s "$serial" exec-out screencap -p >"$screenshot"
+  timeout 20 "$adb_bin" -s "$serial" exec-out screencap -p >"$screenshot" || fail "$name screenshot timed out"
   printf '%s\n' "$dump" >"$dump_file"
   grep -q "$label_one" <<<"$dump" || fail "$name missing label: $label_one"
   grep -q "$label_two" <<<"$dump" || fail "$name missing label: $label_two"
