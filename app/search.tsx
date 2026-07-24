@@ -98,7 +98,7 @@ export default function SearchScreen() {
                     const tone = record.tone ?? 'neutral';
                     const status = record.status ?? 'Active';
                     return <Link href={{ pathname: '/record/[id]', params: { id: record.id } }} asChild key={record.id}>
-                      <Pressable style={styles.result}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`Open search result ${record.title}`} testID={`food-search-result-${slugId(record.title)}`} style={styles.result}>
                         <VisualMark token={visualIdentity.collections?.[record.collection]} fallback="◉" size={38} backgroundColor={theme.colors.canvas} label={`${record.collection} visual`} style={styles.resultIcon} />
                         <View style={{ flex: 1 }}><Text style={[styles.resultTitle, { color: theme.colors.ink }]}>{record.title}</Text><Text style={[styles.resultDetail, { color: theme.colors.muted }]}>{record.meta ?? ''}</Text></View>
                         <Pill tone={tone}>{status}</Pill>
@@ -117,10 +117,10 @@ export default function SearchScreen() {
     }
   };
 
-  return <Page><View style={sharedStyles.content}>
+  return <Page><View style={sharedStyles.content} testID="food-search-screen" accessibilityLabel="Food search screen">
     <ScrollView keyboardShouldPersistTaps="handled">
       {sections.includes('hero') ? renderSection('hero') : null}
-      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text><TextInput autoFocus value={query} onChangeText={setQuery} placeholder={`Search meals, pantry, recipes, shopping…`} placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}><Text style={[styles.glass, { color: theme.colors.ink }]}>{visualGlyph(visualIdentity.actions?.search, '⌕')}</Text><TextInput autoFocus testID="food-search-input" accessibilityLabel="Food search input" value={query} onChangeText={setQuery} placeholder={`Search meals, pantry, recipes, shopping…`} placeholderTextColor={theme.colors.muted} style={[styles.input, { color: theme.colors.ink }]} /></View>
       {sections.filter((section) => section !== 'hero').map(renderSection)}
     </ScrollView>
   </View></Page>;
@@ -129,6 +129,10 @@ export default function SearchScreen() {
 function countSetting(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function slugId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'item';
 }
 
 const SEARCH_SECTIONS = ['hero', 'quickActions', 'results'] as const;

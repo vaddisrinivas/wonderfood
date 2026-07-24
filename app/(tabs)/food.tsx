@@ -237,6 +237,10 @@ function humanizeCollection(collection: string) {
     .join(' ');
 }
 
+function slugId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'item';
+}
+
 export default function FoodScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -781,8 +785,8 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   }[mode];
   return (
     <Page>
-      <View style={styles.foodDemoRoot}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
+      <View style={styles.foodDemoRoot} testID="food-screen" accessibilityLabel="Food screen">
+        <ScrollView testID="food-golden-scroll" contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
           <View style={[styles.foodDemoContent, !compact && { width: contentWidth }, compact && styles.foodDemoContentCompact]}>
             <View style={styles.foodDemoTopbar}>
               <View style={styles.foodDemoHeadline}>
@@ -790,9 +794,17 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
                 <Text style={[styles.foodDemoSubtitle, { color: theme.colors.muted }]}>{loading ? 'Loading your kitchen…' : subtitle}</Text>
               </View>
               <View style={styles.foodDemoTopActions}>
-                <Link href="/search" style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>⌕</Link>
-                <Link href="/capture" style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>＋</Link>
-                <Pressable accessibilityRole="button" onPress={onAsk} style={({ pressed }) => [styles.foodAskPill, compact && styles.foodAskPillCompact, { backgroundColor: theme.dark ? theme.colors.plumSoft : '#FFD5C8' }, pressed && styles.pressed]}>
+                <Link href="/search" asChild>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Open food search" testID="food-open-search" style={({ pressed }) => [styles.foodDemoIconButton, pressed && styles.pressed]}>
+                    <Text style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>⌕</Text>
+                  </Pressable>
+                </Link>
+                <Link href="/capture" asChild>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Open food capture" testID="food-open-capture" style={({ pressed }) => [styles.foodDemoIconButton, pressed && styles.pressed]}>
+                    <Text style={[styles.foodDemoIcon, { color: theme.colors.ink }]}>＋</Text>
+                  </Pressable>
+                </Link>
+                <Pressable accessibilityRole="button" accessibilityLabel="Ask Food AI" testID="food-ask-ai" onPress={onAsk} style={({ pressed }) => [styles.foodAskPill, compact && styles.foodAskPillCompact, { backgroundColor: theme.dark ? theme.colors.plumSoft : '#FFD5C8' }, pressed && styles.pressed]}>
                   <Text style={[styles.foodAskText, { color: theme.dark ? theme.colors.ink : '#4B241D' }]}>Ask</Text>
                 </Pressable>
               </View>
@@ -1089,13 +1101,13 @@ function FoodDemoRow({ title, detail, badge, tone, href, onPress }: {
   if (href && !onPress) {
     return (
       <Link href={href as never} asChild>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} testID={`food-row-${slugId(title)}`} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>
           {content}
         </Pressable>
       </Link>
     );
   }
-  return <Pressable accessibilityRole="button" accessibilityLabel={onPress ? `Toggle ${title}` : title} onPress={onPress} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>{content}</Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={onPress ? `Toggle ${title}` : title} testID={`food-row-${slugId(title)}`} onPress={onPress} style={({ pressed }) => [styles.foodRowPress, pressed && styles.pressed]}>{content}</Pressable>;
 }
 
 function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone = 'moss', actions }: {
@@ -1124,6 +1136,7 @@ function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone 
               key={action}
               accessibilityRole="button"
               accessibilityLabel={`${action} ${title}`}
+              testID={`food-action-${slugId(action)}-${slugId(title)}`}
               onPress={() => setActionNotice(`${action} recorded for ${title}.`)}
               style={({ pressed }) => [styles.foodActionButton, index === 0 ? { backgroundColor: theme.colors.moss } : foodToneStyle(index === 1 ? 'neutral' : 'red', theme.colors), pressed && styles.pressed]}
             >
@@ -1165,20 +1178,20 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
           <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Debug kitchen</Text>
           <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} live records` : 'Empty. Load demo or add real local records.'}</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" testID="food-load-demo" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
           <Text style={[styles.foodActionButtonText, { color: theme.colors.paper }]}>Load demo</Text>
         </Pressable>
       </View>
       <View style={styles.foodActionButtons}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add pantry item" onPress={addPantry} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('moss', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.moss }]}>Pantry</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add meal plan" onPress={addMeal} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Meal</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add shopping item" onPress={addShopping} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('amber', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Shop</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add pantry item" testID="food-add-pantry" onPress={addPantry} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('moss', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.moss }]}>Pantry</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add meal plan" testID="food-add-meal" onPress={addMeal} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Meal</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Add shopping item" testID="food-add-shopping" onPress={addShopping} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('amber', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Shop</Text></Pressable>
       </View>
       <View style={styles.foodActionButtons}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Archive first visible food record" onPress={onArchiveFirst} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('red', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.red }]}>Archive</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Undo last archive" disabled={!canUndoArchive} onPress={onUndoArchive} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canUndoArchive && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Undo</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Export local backup" onPress={onExportBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Export</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Restore local backup" disabled={!canRestoreBackup} onPress={onRestoreBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canRestoreBackup && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Restore</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Archive first visible food record" testID="food-archive-first" onPress={onArchiveFirst} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('red', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.red }]}>Archive</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Undo last archive" testID="food-undo-archive" disabled={!canUndoArchive} onPress={onUndoArchive} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canUndoArchive && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Undo</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Export local backup" testID="food-export-backup" onPress={onExportBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Export</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Restore local backup" testID="food-restore-backup" disabled={!canRestoreBackup} onPress={onRestoreBackup} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('neutral', theme.colors), !canRestoreBackup && styles.disabled, pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Restore</Text></Pressable>
       </View>
       {notice ? <Text style={[styles.foodActionNote, { color: theme.colors.moss }]} testID="food-debug-notice">{notice}</Text> : null}
     </View>
@@ -1201,7 +1214,7 @@ function FoodDemoNav({ active, onChange }: { active: FoodMode; onChange: (mode: 
       {FOOD_MODES.map((mode) => {
         const selected = active === mode.id;
         return (
-          <Pressable key={mode.id} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onChange(mode.id)} style={styles.foodNavItem}>
+          <Pressable key={mode.id} accessibilityRole="tab" accessibilityLabel={`Food ${mode.label} tab`} testID={`food-tab-${mode.id.toLowerCase()}`} accessibilityState={{ selected }} onPress={() => onChange(mode.id)} style={styles.foodNavItem}>
             <View style={[styles.foodNavGlyph, selected && { backgroundColor: theme.colors.amberSoft }]}>
               <Text style={[styles.foodNavGlyphText, { color: selected ? theme.colors.moss : theme.colors.muted }]}>{mode.glyph}</Text>
             </View>
@@ -1453,7 +1466,7 @@ function ShoppingChecklist({ records, onToggle }: { records: FoodRecordView[]; o
       <View style={styles.checkRows}>
         {records.length ? records.map((record) => (
           <View key={record.id} style={[styles.checkRow, { borderTopColor: theme.colors.line }]}>
-            <Pressable accessibilityRole="checkbox" accessibilityLabel={`Mark ${record.title} as in cart`} accessibilityState={{ checked: /in cart|bought/i.test(record.status) }} onPress={() => onToggle(record)} style={({ pressed }) => [styles.checkTap, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="checkbox" accessibilityLabel={`Mark ${record.title} as in cart`} testID={`food-check-${slugId(record.title)}`} accessibilityState={{ checked: /in cart|bought/i.test(record.status) }} onPress={() => onToggle(record)} style={({ pressed }) => [styles.checkTap, pressed && styles.pressed]}>
               <View style={[styles.checkBox, /in cart|bought/i.test(record.status) && styles.checkBoxDone, { borderColor: theme.colors.moss, backgroundColor: /in cart|bought/i.test(record.status) ? theme.colors.mossSoft : theme.colors.paper }]}>
                 {/in cart|bought/i.test(record.status) ? <Text style={[styles.checkMark, { color: theme.colors.moss }]}>✓</Text> : null}
               </View>
@@ -1571,6 +1584,7 @@ const styles = StyleSheet.create({
   foodDemoTitle: { color: colors.ink, fontSize: 32, lineHeight: 36, fontWeight: '900', letterSpacing: -1.4 },
   foodDemoSubtitle: { color: colors.muted, fontSize: 16, lineHeight: 22, marginTop: 5, fontWeight: '600' },
   foodDemoTopActions: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 1, flexShrink: 0 },
+  foodDemoIconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   foodDemoIcon: { minWidth: 40, minHeight: 40, color: colors.ink, fontSize: 24, lineHeight: 40, textAlign: 'center', fontWeight: '900', borderRadius: 20 },
   foodAskPill: { minWidth: 84, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   foodAskPillCompact: { minWidth: 58, paddingHorizontal: 10 },

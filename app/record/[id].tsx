@@ -627,7 +627,7 @@ export default function RecordScreen() {
           <Pill tone={tone}>{status}</Pill>
           <Text style={[styles.sync, { color: theme.colors.muted }]}>Updated {updatedAt}</Text>
         </View>
-        <TextInput accessibilityLabel="Record title" value={title} onChangeText={setTitle} style={[styles.title, { color: theme.colors.ink }]} multiline />
+        <TextInput accessibilityLabel="Record title" testID="record-title-input" value={title} onChangeText={setTitle} style={[styles.title, { color: theme.colors.ink }]} multiline />
         <Text style={[styles.meta, { color: theme.colors.muted }]}>{pageLabel} · {meta}</Text>
         <Text style={[styles.heroBody, { color: theme.colors.ink }]}>{body || 'No note yet.'}</Text>
         {foodDetail ? (
@@ -816,6 +816,7 @@ export default function RecordScreen() {
             <SectionTitle title="Editable note" />
             <TextInput
               accessibilityLabel="Record details"
+              testID="record-details-input"
               value={body}
               onChangeText={setBody}
               style={[styles.editor, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line, color: theme.colors.ink }]}
@@ -851,6 +852,7 @@ export default function RecordScreen() {
               <Text style={[styles.propertyHelp, { color: theme.colors.muted }]}>Edit the canonical properties for this collection. Notion, Sheets, SQLite and Chat preserve this object.</Text>
               <TextInput
                 accessibilityLabel="Record properties JSON"
+                testID="record-properties-json"
                 value={propertiesDraft}
                 onChangeText={setPropertiesDraft}
                 multiline

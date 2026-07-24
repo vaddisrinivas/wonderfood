@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { currentGit } from './evidence-provenance.mjs';
 import { loadCatalog, setActivePackageOverride } from '../../src/domain/catalog';
 import { bootstrapAppPackageRegistry } from '../../src/db/app-package-registry';
 import { exportRecoverySnapshot } from '../../src/db/migrations';
@@ -317,6 +318,8 @@ function checksum(db: FoodGoldenDb) {
   const outPath = join(outDir, 'food-golden-path-proof.json');
   writeFileSync(outPath, JSON.stringify({
     proof: 'food_golden_path',
+    checked_at: new Date().toISOString(),
+    git: currentGit(process.cwd()),
     package: appPackage.id,
     records: restoredProof.tables.get('records')!.length,
     operations: restoredProof.tables.get('operations')!.length,
