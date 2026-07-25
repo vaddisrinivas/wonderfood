@@ -19,13 +19,82 @@ export const actionEnvelopeSchema = z.object({
   cause_id: z.string().min(1),
 });
 
-const ajv = new Ajv2020({ allErrors: true, strict: false });
+const DRAFT_07_SCHEMA = 'http://json-schema.org/draft-07/schema#';
+const DRAFT_2020_12_SCHEMA = 'https://json-schema.org/draft/2020-12/schema';
+const AJV_OPTIONS = { allErrors: true, strict: false, validateFormats: true };
+
+const ajv2020 = new Ajv2020(AJV_OPTIONS);
+const ajvDraft07 = loadDraft07Validator();
+
+type AjvLike = {
+  compile<T>(schema: object): ValidateFunction<T>;
+};
+
+type AjvConstructor = new (options: {
+  allErrors: boolean;
+  strict: boolean;
+  validateFormats: boolean;
+}) => AjvLike;
+
+function detectSchemaDialect(schema: object): AjvLike {
+  
+  if (!isObject(schema) || typeof schema.$schema !== 'string' || !schema.$schema.trim()) {
+    throw new Error('schema validation requires explicit $schema; missing or empty $schema');
+  }
+  const schemaId = schema.$schema;
+  if (schemaId === DRAFT_07_SCHEMA) return ajvDraft07;
+  if (schemaId === DRAFT_2020_12_SCHEMA) return ajv2020;
+  throw new Error(`unsupported schema dialect: ${schemaId}`);
+}
+
+function loadDraft07Validator(): AjvLike {
+  const direct = safeRequire<unknown>('ajv/dist/draft-07');
+  if (direct) {
+    const ctor = isFunction(direct) ? direct : isFunction((direct as { default?: unknown }).default)
+      ? (direct as { default?: unknown }).default
+      : null;
+    if (isFunction(ctor)) {
+      if (isConstructable(ctor)) {
+        return new (ctor as unknown as AjvConstructor)(AJV_OPTIONS);
+      }
+    }
+  }
+
+  const ajv = new Ajv2020(AJV_OPTIONS);
+  const meta07 = safeRequire<Record<string, unknown>>('ajv/dist/refs/json-schema-draft-07.json');
+  if (!meta07 || !meta07.$id) {
+    throw new Error(`draft-07 validator unavailable (${DRAFT_07_SCHEMA} support requires Ajv draft-07 module or ref schema)`);
+  }
+  ajv.addMetaSchema(meta07);
+  return ajv;
+}
+
+function safeRequire<T>(moduleId: string): T | null {
+  try {
+    return require(moduleId) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isFunction(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === 'function';
+}
+
+function isConstructable(value: unknown): value is new (...args: unknown[]) => object {
+  return typeof value === 'function';
+}
+
+function isObject(value: unknown): value is Record<string, unknown> & { $schema?: unknown } {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 export function parseWithSchema<T>(schema: ZodType<T>, input: unknown): T {
   return schema.parse(input);
 }
 
 export function compileJsonSchema<T>(schema: object): ValidateFunction<T> {
+  const ajv = detectSchemaDialect(schema);
   return ajv.compile(schema) as ValidateFunction<T>;
 }
 

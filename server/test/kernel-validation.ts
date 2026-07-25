@@ -19,6 +19,7 @@ const patch = diffJson({ state: 'open', count: 1 }, { state: 'approved', count: 
 assert.deepEqual(applyJsonDiff({ state: 'open', count: 1 }, patch), { state: 'approved', count: 2 });
 
 const schema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
   required: ['id'],
   properties: { id: { type: 'string' } },
