@@ -61,6 +61,7 @@
     "check:provider-clear-restore": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-provider-clear-restore.ts",
     "check:operation-boundary": "./scripts/quality/check-operation-boundary-grep.sh && npm run check:provider-clear-restore",
     "check:kernel-boundaries": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-kernel-boundaries.ts",
+    "check:local-query-contract": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-local-query-contract.ts",
     "check:roundtrip": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-roundtrip.ts",
     "check:food-golden-path": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-food-golden-path.ts",
     "check:sync-merge": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-sync-merge.ts",
