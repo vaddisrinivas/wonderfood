@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { DomainManifest } from '@/src/domain/catalog';
 import type { CanonicalProvenance, CanonicalRecord, RecordProvider } from '@/src/domain/runtime';
 import type { ApplyOperationOptions, Operation, OperationResult } from '@/src/ops/operation';
+import { enqueueOutboxEvent } from '@/src/db/outbox';
 import { planOperation } from '@/src/ops/plan';
 
 type SqlRecordRow = {
@@ -37,6 +38,19 @@ type SqlRelationRow = {
   target_id: string;
 };
 
+type CommittedOperationOutboxPayload = {
+  schema_version: 'wonder.committed-operation.v1';
+  operation_id: string;
+  cause_id: string;
+  domain: string;
+  collection: string;
+  record_id: string;
+  before_revision: number;
+  after_revision: number;
+  changed_fields: string[];
+  committed_at: string;
+};
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -62,6 +76,43 @@ function parseProvenance(value: string | null): CanonicalProvenance | null {
   } catch {
     return null;
   }
+}
+
+function safeId(value: string) {
+  return value.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 180);
+}
+
+function normalizeCauseId(op: Operation) {
+  const candidate = op.idempotency_key?.trim();
+  return candidate && candidate.length > 0 ? candidate : op.op_id;
+}
+
+async function persistCommittedOperationOutboxEvent(
+  db: SQLiteDatabase,
+  op: Operation,
+  before: CanonicalRecord | null,
+  after: CanonicalRecord,
+  changedFields: string[],
+) {
+  const payload: CommittedOperationOutboxPayload = {
+    schema_version: 'wonder.committed-operation.v1',
+    operation_id: op.op_id,
+    cause_id: normalizeCauseId(op),
+    domain: op.domain,
+    collection: op.collection,
+    record_id: op.record_id,
+    before_revision: before?.revision ?? 0,
+    after_revision: after.revision,
+    changed_fields: changedFields,
+    committed_at: after.updated_at,
+  };
+
+  await enqueueOutboxEvent(db, {
+    id: `committed-operation-${safeId(op.op_id)}`,
+    action_key: `committed-operation:${op.domain}:${op.op_id}`,
+    domain: op.domain,
+    payload_json: safeJson(payload),
+  });
 }
 
 async function readRecord(db: SQLiteDatabase, id: string): Promise<CanonicalRecord | null> {
@@ -225,6 +276,7 @@ export async function applyOperation(db: SQLiteDatabase, manifest: DomainManifes
       );
     }
     await insertOperation(db, op, current, next, 'applied');
+    await persistCommittedOperationOutboxEvent(db, op, current, next, plan.diff.changed_fields);
   });
 
   return { status: 'applied', op_id: op.op_id, record: next, inverse: plan.inverse, diff: plan.diff };

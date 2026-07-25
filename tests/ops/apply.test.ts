@@ -5,6 +5,18 @@ import { applyOperation } from '@/src/ops/apply';
 import { MemoryDb } from '../helpers/memory-db';
 
 const manifest = loadCatalog().activeManifest;
+type CommittedOperationOutboxPayload = {
+  schema_version: 'wonder.committed-operation.v1';
+  operation_id: string;
+  cause_id: string;
+  domain: string;
+  collection: string;
+  record_id: string;
+  before_revision: number;
+  after_revision: number;
+  changed_fields: string[];
+  committed_at: string;
+};
 
 describe('applyOperation', () => {
   it('applies creates, records one ledger row, and deduplicates idempotency keys', async () => {
@@ -252,5 +264,176 @@ describe('applyOperation', () => {
     expect(rejected.reject_reason).toBe('domain_scope_rejected:health');
     expect(db.records.has('cross-domain-record')).toBe(false);
     expect(db.operations.get('cross-domain-create')?.status).toBe('rejected');
+  });
+
+  it('emits committed-operation outbox payload with operation/cause/version context after successful commit', async () => {
+    const db = new MemoryDb() as any;
+    type OutboxRow = {
+      id: string;
+      action_key: string;
+      domain: string;
+      payload_json: string;
+      status: string;
+      attempts: number;
+      last_error: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    const committed = await applyOperation(db, manifest, {
+      op_id: 'outbox-committed-create',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-committed-record',
+      idempotency_key: 'outbox-cause-001',
+      record: {
+        title: 'Outbox committed yogurt',
+        properties: { body: 'Greek yogurt', quantity: 1 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-committed-record', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    expect(committed.status).toBe('applied');
+    const rows = Array.from(db.outbox.values()) as OutboxRow[];
+    const [outboxRow] = rows;
+    expect(outboxRow).toBeTruthy();
+    const payload = JSON.parse(String(outboxRow.payload_json)) as CommittedOperationOutboxPayload;
+    expect(outboxRow.action_key).toBe('committed-operation:food:outbox-committed-create');
+    expect(outboxRow.domain).toBe(manifest.id);
+    expect(payload).toEqual({
+      schema_version: 'wonder.committed-operation.v1',
+      operation_id: 'outbox-committed-create',
+      cause_id: 'outbox-cause-001',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-committed-record',
+      before_revision: 0,
+      after_revision: 1,
+      changed_fields: ['record'],
+      committed_at: committed.record!.updated_at,
+    });
+  });
+
+  it('does not emit committed-operation events for duplicate, rejected, or dry-run operations', async () => {
+    const db = new MemoryDb() as any;
+    const first = await applyOperation(db, manifest, {
+      op_id: 'outbox-filter-first',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-filter-record',
+      idempotency_key: 'outbox-filter-id',
+      record: {
+        title: 'Outbox filter yogurt',
+        properties: { body: 'Greek yogurt', quantity: 2 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-filter-record', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+    expect(first.status).toBe('applied');
+    const afterFirstOutboxCount = db.outbox.size;
+
+    const duplicate = await applyOperation(db, manifest, {
+      op_id: 'outbox-filter-first-replay',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-filter-record',
+      idempotency_key: 'outbox-filter-id',
+      record: {
+        title: 'Outbox should not overwrite',
+        properties: { body: 'No-op body', quantity: 9 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-filter-record', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    const rejected = await applyOperation(db, manifest, {
+      op_id: 'outbox-filter-cross-domain',
+      kind: 'create',
+      domain: 'health',
+      collection: 'inventory',
+      record_id: 'outbox-filter-rejected',
+      record: {
+        title: 'Rejected domain write',
+        properties: { body: 'Should not write' },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-filter-rejected', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    const dryRun = await applyOperation(db, manifest, {
+      op_id: 'outbox-filter-dry-run',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-filter-dry',
+      record: {
+        title: 'Dry run yogurt',
+        properties: { body: 'Dry body', quantity: 1 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-filter-dry', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    }, { dryRun: true });
+
+    expect(duplicate.status).toBe('duplicate');
+    expect(rejected.status).toBe('rejected');
+    expect(dryRun.status).toBe('dry_run');
+    expect(db.outbox.size).toBe(afterFirstOutboxCount);
+    expect(db.records.has('outbox-filter-record')).toBe(true);
+    expect(db.records.has('outbox-filter-dry')).toBe(false);
+    expect(db.operations.has('outbox-filter-cross-domain')).toBe(true);
+    expect(db.operations.get('outbox-filter-cross-domain')?.status).toBe('rejected');
+  });
+
+  it('keeps event and operation mutation atomic: failed outbox enqueue rolls back canonical mutation', async () => {
+    class OutboxWriteFailureDb extends MemoryDb {
+      override async runAsync(sql: string, params: any[] = []) {
+        const compact = sql.replace(/\s+/g, ' ').trim();
+        if (compact.startsWith('INSERT INTO outbox_events')) {
+          throw new Error('outbox write failure');
+        }
+        return super.runAsync(sql, params);
+      }
+    }
+
+    const db = new OutboxWriteFailureDb() as any;
+    const attempt = applyOperation(db, manifest, {
+      op_id: 'outbox-failed-commit',
+      kind: 'create',
+      domain: manifest.id,
+      collection: 'inventory',
+      record_id: 'outbox-failed-record',
+      record: {
+        title: 'Outbox rollback yogurt',
+        properties: { body: 'Rollback body', quantity: 2 },
+        relations: [],
+        source: { provider: 'sqlite', external_id: 'outbox-failed-record', url: null, observed_at: '2026-07-23T00:00:00.000Z', content_hash: null },
+        archived_at: null,
+      },
+      actor: 'user',
+      origin: 'manual',
+    });
+
+    await expect(attempt).rejects.toThrow('outbox write failure');
+    expect(db.records.size).toBe(0);
+    expect(db.operations.size).toBe(0);
+    expect(db.outbox.size).toBe(0);
   });
 });
