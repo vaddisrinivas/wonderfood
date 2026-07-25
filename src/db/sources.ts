@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { RecordProvider } from '@/src/domain/runtime';
+import { RecordProvider } from '@/packages/shared/contracts/records';
 
 export type ProviderLink = {
   id: string;

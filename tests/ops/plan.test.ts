@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 import type { Operation } from '@/src/ops/operation';
 import { planOperation } from '@/src/ops/plan';
 

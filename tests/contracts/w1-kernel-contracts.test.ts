@@ -4,7 +4,8 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { executeQuery, type QuerySpec } from '@/server/src/kernel/query';
+import { executeQuery } from '@/server/src/kernel/query';
+import type { QuerySpec } from '@/packages/shared/contracts/query';
 import { loadCatalog } from '@/src/domain/catalog';
 import { planOperation } from '@/src/ops/plan';
 import { applyOperation } from '@/src/ops/apply';

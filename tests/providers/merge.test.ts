@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 import { upsertRecord, getRecord } from '@/src/db/records';
 import { listSyncConflicts, mergeRemoteRecord, resolveSyncConflict } from '@/src/providers/merge';
 import { MemoryDb } from '../helpers/memory-db';

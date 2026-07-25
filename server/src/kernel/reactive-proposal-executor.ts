@@ -15,35 +15,17 @@ import { pullNotionRecordsLive } from '../providers/notion/pull';
 import { writeSheetsRecord } from '../providers/sheets/push';
 import { pullSheetsRecordsLive } from '../providers/sheets/pull';
 import { previewReactiveProposalCommand } from './reactive-proposal-command';
-import { verifyReactiveProposalPostcondition, type ReactiveProposalVerificationReceipt, type ReactiveProviderWritebackReceipt } from './reactive-proposal-verification';
+import type {
+  ReactiveProposalApprovalReceipt,
+  ReactiveProposalExecutionReceipt,
+  ReactiveProviderWritebackReceipt,
+  ReactiveProposalVerificationReceipt,
+} from '@/packages/shared/contracts/receipts';
+import { verifyReactiveProposalPostcondition } from './reactive-proposal-verification';
 import type { ReactiveOutboxExecutionResult, ReactiveOutboxItem } from './reactive-outbox';
-
-export type ReactiveProposalExecutionReceipt = Readonly<{
-  actionId: string;
-  idempotencyKey: string;
-  replayed: boolean;
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  verification?: ReactiveProposalVerificationReceipt;
-}>;
 
 export type ReactiveProposalExecutionResult = ReactiveOutboxExecutionResult & Readonly<{
   receipt?: ReactiveProposalExecutionReceipt;
-}>;
-
-export type ReactiveProposalApprovalReceipt = Readonly<{
-  schemaVersion: 'wonder.reactive-proposal-approval.v1';
-  approver: string;
-  authority: string;
-  proposalId: string;
-  idempotencyKey: string;
-  operationId: string;
-  operationHash: string;
-  proposalHash: string;
-  operationTemplateHash: string;
-  localActor: string;
-  approvedAt: string;
-  expiresAt?: string;
-  revoked?: boolean;
 }>;
 
 export function executeReactiveProposal(

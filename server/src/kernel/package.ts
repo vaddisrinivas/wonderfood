@@ -1,82 +1,18 @@
-import { QueryPredicate, QuerySort } from './query';
-import { Expression } from './expression';
 import { validateJsonSchema } from './validation';
 import { appPackageSchema } from './package-schema';
-import type { ComputedFieldSpec } from './computed-fields';
-
-export type FieldType = 'text' | 'number' | 'boolean' | 'timestamp' | 'json';
-
-export type CollectionSpec = {
-  id: string;
-  fields: Record<string, { type: FieldType; required?: boolean; indexed?: boolean }>;
-};
-
-export type ViewSpec = {
-  id: string;
-  query: string;
-  mode: 'list' | 'board' | 'table' | 'calendar' | 'timeline' | 'chart';
-  fields: string[];
-  groupBy?: string;
-  layout?: Record<string, unknown>;
-};
-
-export type PackageSurfaceSpec = {
-  id: string;
-  label: string;
-  icon?: string;
-  imageUrl?: string;
-  views?: string[];
-  collections: string[];
-};
-
-export type PackagePresentationSpec = {
-  label: string;
-  homeSurface?: string;
-  surfaces: PackageSurfaceSpec[];
-  visualIdentity?: Record<string, unknown>;
-  dashboardBlocks?: Record<string, unknown>[];
-  render?: Record<string, unknown>;
-  richDetailSchema?: string;
-  providerTemplateFields?: Record<string, unknown>;
-  sourceSchemaVersion?: string;
-};
-
-export type RuleSpec = {
-  id: string;
-  trigger: {
-    kind: 'operation' | 'schedule' | 'query_transition';
-    query?: string;
-    transition?: 'enter' | 'leave' | 'change';
-  };
-  when?: Expression;
-  effect: { kind: 'propose_operation'; operation: string | OperationTemplate };
-  mode: 'suggest' | 'automatic';
-  maxRunsPerEvent: number;
-};
-
-export type OperationTemplate = Readonly<
-  | { kind: 'custom'; tool: string }
-  | { kind: 'create_record'; domain?: string; collection: string; recordId?: string; properties?: Record<string, unknown> }
-  | { kind: 'update_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number; changes: Record<string, unknown> }
-  | { kind: 'archive_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number }
-  | { kind: 'restore_record'; domain?: string; collection?: string; recordId: string; expectedRevision?: number }
->;
-
-export type AppPackageV2 = {
-  schemaVersion: 'wonder.app-package.v2';
-  id: string;
-  version: string;
-  collections: Record<string, CollectionSpec>;
-  queries: Record<string, { from: string; where?: QueryPredicate; orderBy?: QuerySort[]; limit?: number }>;
-  views: Record<string, ViewSpec>;
-  presentation?: PackagePresentationSpec;
-  computedFields?: ComputedFieldSpec[];
-  rules: RuleSpec[];
-  capabilities: string[];
-  acceptanceTests: string[];
-};
-
-export type PackageValidation = { valid: true; package: AppPackageV2 } | { valid: false; errors: string[] };
+import type { 
+  AppPackageV2,
+  CollectionSpec,
+  ComputedFieldSpec,
+  FieldType,
+  OperationTemplate,
+  PackagePresentationSpec,
+  PackageSurfaceSpec,
+  PackageValidation,
+  RuleSpec,
+  ViewSpec,
+} from '@/packages/shared/contracts/package';
+import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -99,6 +35,9 @@ function hasExecutableCode(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   return Object.entries(value as Record<string, unknown>).some(([key, child]) => key === 'code' || key === 'javascript' || key === 'script' || hasExecutableCode(child));
 }
+
+export { AppPackageV2, CollectionSpec, ComputedFieldSpec, FieldType, OperationTemplate, PackagePresentationSpec, PackageSurfaceSpec, PackageValidation, RuleSpec, ViewSpec };
+export type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 
 export function validateAppPackage(input: unknown): PackageValidation {
   const errors: string[] = [];
@@ -134,14 +73,20 @@ export function validateAppPackage(input: unknown): PackageValidation {
     if (!text(view?.query)) errors.push(`view ${id} must reference a query`);
     else if (!value.queries?.[view.query]) errors.push(`view ${id} references missing query ${view.query}`);
   }
+
   const presentation = value.presentation as Partial<PackagePresentationSpec> | undefined;
   if (presentation) {
     if (!text(presentation.label)) errors.push('presentation label is required');
     if (!Array.isArray(presentation.surfaces)) errors.push('presentation surfaces must be an array');
     for (const surface of presentation.surfaces ?? []) {
-      if (!text(surface?.id)) errors.push('presentation surface id is required');
-      if (!text(surface?.label)) errors.push(`presentation surface ${surface?.id ?? '<unknown>'} label is required`);
-      if (!Array.isArray(surface?.collections)) errors.push(`presentation surface ${surface?.id ?? '<unknown>'} collections must be an array`);
+      const item = surface as unknown as {
+        id?: unknown;
+        label?: unknown;
+        collections?: unknown;
+      };
+      if (!text(item?.id)) errors.push('presentation surface id is required');
+      if (!text(item?.label)) errors.push(`presentation surface ${item?.id ?? '<unknown>'} label is required`);
+      if (!Array.isArray(item?.collections)) errors.push(`presentation surface ${item?.id ?? '<unknown>'} collections must be an array`);
     }
   }
   for (const rule of value.rules ?? []) {
@@ -157,10 +102,11 @@ export function validateAppPackage(input: unknown): PackageValidation {
     else if ((rule.maxRunsPerEvent ?? 0) > 64) errors.push(`rule ${rule?.id ?? '<unknown>'} maxRunsPerEvent must be <= 64`);
   }
   for (const field of value.computedFields ?? []) {
-    if (!text(field?.id)) errors.push('computed field id is required');
-    if (!text(field?.collection)) errors.push(`computed field ${field?.id ?? '<unknown>'} collection is required`);
-    if (!Array.isArray(field?.dependsOn)) errors.push(`computed field ${field?.id ?? '<unknown>'} dependsOn must be an array`);
-    if (field?.expression === undefined) errors.push(`computed field ${field?.id ?? '<unknown>'} expression is required`);
+    const item = field as unknown as ComputedFieldSpec & { id?: unknown; collection?: unknown };
+    if (!text(item?.id)) errors.push('computed field id is required');
+    if (!text(item?.collection)) errors.push(`computed field ${item?.id ?? '<unknown>'} collection is required`);
+    if (!Array.isArray(item?.dependsOn)) errors.push(`computed field ${item?.id ?? '<unknown>'} dependsOn must be an array`);
+    if (item?.expression === undefined) errors.push(`computed field ${item?.id ?? '<unknown>'} expression is required`);
   }
   for (const capability of value.capabilities ?? []) {
     if (!name(capability)) errors.push(`capability invalid:${String(capability)}`);
@@ -176,7 +122,7 @@ export function normalizeOperationTemplate(input: string | OperationTemplate): O
   return typeof input === 'string' ? { kind: 'custom', tool: input } : input;
 }
 
-export function operationTemplateName(input: string | OperationTemplate): string {
+export function operationTemplateName(input: OperationTemplate): string {
   const template = normalizeOperationTemplate(input);
   return template.kind === 'custom' ? template.tool : template.kind;
 }

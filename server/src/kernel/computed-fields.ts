@@ -1,13 +1,9 @@
 import { evaluateExpression, validateExpressionBudget, type Expression } from './expression';
-import type { AppPackageV2 } from './package';
 import { executeQuery } from './query';
+import type { AppPackageV2 } from '@/packages/shared/contracts/package';
+import type { ComputedFieldSpec } from '@/packages/shared/contracts/package';
 
-export type ComputedFieldSpec = {
-  id: string;
-  collection: string | '*';
-  dependsOn: string[];
-  expression: Expression;
-};
+export type { ComputedFieldSpec };
 
 export type ComputedFieldInput = {
   specs: readonly ComputedFieldSpec[];
@@ -77,7 +73,7 @@ export function validateComputedFieldGraph(input: ComputedFieldGraphInput): void
       throw new Error(`computed_field_dependencies_invalid:${spec.id}`);
     }
     dependencyEdges += spec.dependsOn.length;
-    validateExpressionBudget(spec.expression, {
+    validateExpressionBudget(spec.expression as Expression, {
       maxNodes: budget.maxExpressionNodes,
       maxDepth: budget.maxExpressionDepth,
     });
@@ -142,7 +138,7 @@ export function evaluateComputedFields(input: ComputedFieldInput): ComputedField
         computed: { ...values },
         queries,
       },
-      spec.expression,
+      spec.expression as Expression,
       {
         maxNodes: budget.maxExpressionNodes,
         maxDepth: budget.maxExpressionDepth,

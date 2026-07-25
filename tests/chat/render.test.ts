@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeWelcomeAnswer } from '@/src/chat/client';
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 
 describe('domain chat render contracts', () => {
   it('renders Health records without Food-specific columns or source quotes', () => {
