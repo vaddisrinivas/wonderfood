@@ -1,4 +1,4 @@
-import Ajv, { ValidateFunction } from 'ajv';
+import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020';
 import { createRequire } from 'node:module';
 import type { Operation } from 'fast-json-patch';
 import { z, ZodType } from 'zod';
@@ -19,7 +19,7 @@ export const actionEnvelopeSchema = z.object({
   cause_id: z.string().min(1),
 });
 
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv2020({ allErrors: true, strict: false });
 
 export function parseWithSchema<T>(schema: ZodType<T>, input: unknown): T {
   return schema.parse(input);

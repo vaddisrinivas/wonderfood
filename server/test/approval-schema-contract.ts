@@ -30,6 +30,13 @@ type Approval = {
   source: { actor: string; workspace_id: string };
 };
 
+type FailureMode = 'schema' | 'binding';
+
+type ThreatFixture = {
+  file: string;
+  expectedFailure: FailureMode;
+};
+
 function readJson(fileName: string) {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'packages/domain-config/schemas/approval', fileName), 'utf8'));
 }
@@ -42,25 +49,8 @@ const schema = JSON.parse(
 );
 const validateSchema = compileJsonSchema<Approval>(schema as object);
 
-const validateAsAccepted = (fixtureName: string, input: unknown) => {
-  const valid = validateSchema(input);
-  if (!valid) {
-    const detail = (validateSchema.errors ?? []).map((error) => `${error.instancePath} ${error.message}`).join('; ');
-    throw new Error(`${fixtureName}: schema invalid: ${detail}`);
-  }
-};
-
-const nowMs = Date.now();
-
-const ensureRejectedBySchemaOrBinding = (fixtureName: string, input: unknown) => {
-  const valid = validateSchema(input);
-  if (valid && checkBinding(input as Approval)) {
-    throw new Error(`${fixtureName}: expected threat fixture to fail schema or binding checks`);
-  }
-};
-
 function checkBinding(approval: Approval): boolean {
-  const proposalAnchor = approveAnchor();
+  const proposalAnchor = proposalTemplate();
   if (seenApprovalIds.has(approval.id)) return false;
   if (approval.id !== approval.id.trim()) return false;
   if (approval.actor !== approval.local_actor) return false;
@@ -88,10 +78,7 @@ function checkBinding(approval: Approval): boolean {
   return true;
 }
 
-const seenApprovalIds = new Set<string>();
-const proposalAnchor = readJson('fixtures/accept.json') as Approval;
-
-function approveAnchor(): Pick<Approval, 'proposal_id' | 'action_id' | 'id' | 'idempotency_key' | 'proposal_hash' | 'operation_hash' | 'operation_template_hash'> {
+function proposalTemplate() {
   return {
     proposal_id: proposalAnchor.proposal_id,
     action_id: proposalAnchor.action_id,
@@ -103,27 +90,54 @@ function approveAnchor(): Pick<Approval, 'proposal_id' | 'action_id' | 'id' | 'i
   };
 }
 
-const threatFixtures = [
-  'tampered-idempotency-key.json',
-  'tampered-operation-hash.json',
-  'tampered-proposal-hash.json',
-  'wrong-actor.json',
-  'wrong-workspace.json',
-  'revision-drift.json',
-  'expired.json',
-  'capability-escalation.json',
-  'action-binding.json',
-  'replay.json',
-  'ai-sdk-approval.json',
+function validateAcceptance(fixtureName: string, input: unknown) {
+  const valid = validateSchema(input);
+  if (!valid) {
+    const detail = (validateSchema.errors ?? []).map((error) => `${error.instancePath} ${error.message}`).join('; ');
+    throw new Error(`${fixtureName}: schema invalid: ${detail}`);
+  }
+}
+
+function validateFailureMode(input: unknown): FailureMode | 'pass' {
+  const schemaValid = validateSchema(input);
+  if (!schemaValid) return 'schema';
+  return checkBinding(input as Approval) ? 'pass' : 'binding';
+}
+
+function assertThreatFixtureFailsByChannel(fixtureName: string, input: unknown, expected: FailureMode) {
+  const actual = validateFailureMode(input);
+  if (actual === 'pass') {
+    throw new Error(`${fixtureName}: expected to fail via ${expected}, but passed`);
+  }
+  if (actual !== expected) {
+    throw new Error(`${fixtureName}: expected ${expected} failure, got ${actual}`);
+  }
+}
+
+const nowMs = Date.now();
+const seenApprovalIds = new Set<string>();
+const proposalAnchor = readJson('fixtures/accept.json') as Approval;
+
+const threatFixtures: ThreatFixture[] = [
+  { file: 'tampered-idempotency-key.json', expectedFailure: 'schema' },
+  { file: 'tampered-operation-hash.json', expectedFailure: 'schema' },
+  { file: 'tampered-proposal-hash.json', expectedFailure: 'schema' },
+  { file: 'wrong-actor.json', expectedFailure: 'binding' },
+  { file: 'wrong-workspace.json', expectedFailure: 'binding' },
+  { file: 'revision-drift.json', expectedFailure: 'binding' },
+  { file: 'expired.json', expectedFailure: 'binding' },
+  { file: 'capability-escalation.json', expectedFailure: 'schema' },
+  { file: 'action-binding.json', expectedFailure: 'binding' },
+  { file: 'replay.json', expectedFailure: 'binding' },
+  { file: 'ai-sdk-approval.json', expectedFailure: 'schema' },
 ];
 
-validateAsAccepted('accept.json', proposalAnchor);
-seenApprovalIds.add(proposalAnchor.id);
+validateAcceptance('accept.json', proposalAnchor);
 if (!checkBinding(proposalAnchor)) throw new Error('accept fixture failed binding checks');
+seenApprovalIds.add(proposalAnchor.id);
 
-for (const fixtureName of threatFixtures) {
-  const fixture = readJson(`fixtures/${fixtureName}`);
-  ensureRejectedBySchemaOrBinding(fixtureName, fixture);
+for (const fixture of threatFixtures) {
+  assertThreatFixtureFailsByChannel(fixture.file, readJson(`fixtures/${fixture.file}`), fixture.expectedFailure);
 }
 
 console.log('approval-schema-contract: passed');
