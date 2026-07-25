@@ -101,6 +101,10 @@ export class MemoryDb {
       }
       return;
     }
+    if (compact === 'DELETE FROM outbox_events WHERE id = ?') {
+      this.outbox.delete(params[0]);
+      return;
+    }
     if (compact === 'UPDATE outbox_events SET attempts = attempts + ?, status = ?, last_error = ?, updated_at = ? WHERE id = ?') {
       const [attemptsDelta, status, last_error, updated_at, id] = params;
       const row = this.outbox.get(id);
@@ -227,6 +231,28 @@ export class MemoryDb {
       return Array.from(this.workflowRuns.values())
         .filter((row) => row.domain === params[0])
         .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at))) as T[];
+    }
+    if (compact === 'SELECT * FROM outbox_events ORDER BY updated_at ASC') {
+      return Array.from(this.outbox.values()).sort((left, right) => String(left.updated_at).localeCompare(String(right.updated_at))) as T[];
+    }
+    if (compact === 'SELECT * FROM outbox_events WHERE status = ? ORDER BY updated_at ASC') {
+      return Array.from(this.outbox.values())
+        .filter((row) => row.status === params[0])
+        .sort((left, right) => String(left.updated_at).localeCompare(String(right.updated_at))) as T[];
+    }
+    if (compact === 'SELECT * FROM outbox_events WHERE status = ? AND action_key LIKE ? ORDER BY updated_at ASC') {
+      const [status, actionKeyLike] = params;
+      const prefix = String(actionKeyLike ?? '').replace(/%$/, '');
+      return Array.from(this.outbox.values())
+        .filter((row) => row.status === status && row.action_key.startsWith(prefix))
+        .sort((left, right) => String(left.updated_at).localeCompare(String(right.updated_at))) as T[];
+    }
+    if (compact === 'SELECT * FROM outbox_events WHERE action_key LIKE ? ORDER BY updated_at ASC') {
+      const [actionKeyLike] = params;
+      const prefix = String(actionKeyLike ?? '').replace(/%$/, '');
+      return Array.from(this.outbox.values())
+        .filter((row) => row.action_key.startsWith(prefix))
+        .sort((left, right) => String(left.updated_at).localeCompare(String(right.updated_at))) as T[];
     }
     throw new Error(`Unsupported getAllAsync SQL: ${compact}`);
   }

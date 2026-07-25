@@ -14,6 +14,30 @@ export type OutboxEvent = {
   updated_at: string;
 };
 
+export const OUTBOX_ACTION_PREFIXES = {
+  provider_write: 'provider-write:',
+  committed_operation: 'committed-operation:',
+} as const;
+
+export const OUTBOX_PAYLOAD_VERSIONS = {
+  provider_write: 'lifeos.provider-write.v1',
+  committed_operation: 'wonder.committed-operation.v1',
+} as const;
+
+export function getOutboxSchemaVersion(event: OutboxEvent): string | null {
+  try {
+    const parsed = JSON.parse(event.payload_json) as { schema_version?: unknown };
+    return typeof parsed?.schema_version === 'string' ? parsed.schema_version : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isProviderWriteOutboxEvent(event: OutboxEvent): boolean {
+  return event.action_key.startsWith(OUTBOX_ACTION_PREFIXES.provider_write)
+    || getOutboxSchemaVersion(event) === OUTBOX_PAYLOAD_VERSIONS.provider_write;
+}
+
 export async function enqueueOutboxEvent(
   db: SQLiteDatabase,
   event: Omit<OutboxEvent, 'status' | 'attempts' | 'last_error' | 'created_at' | 'updated_at'>
@@ -43,6 +67,32 @@ export async function listOutboxEvents(db: SQLiteDatabase, status?: OutboxStatus
     return db.getAllAsync<OutboxEvent>('SELECT * FROM outbox_events WHERE status = ? ORDER BY updated_at ASC', [status]);
   }
   return db.getAllAsync<OutboxEvent>('SELECT * FROM outbox_events ORDER BY updated_at ASC');
+}
+
+export async function listOutboxEventsByActionKeyPrefix(
+  db: SQLiteDatabase,
+  actionKeyPrefix: string,
+  status?: OutboxStatus,
+): Promise<OutboxEvent[]> {
+  if (status) {
+    const rows = await db.getAllAsync<OutboxEvent>(
+      'SELECT * FROM outbox_events WHERE status = ? AND action_key LIKE ? ORDER BY updated_at ASC',
+      [status, `${actionKeyPrefix}%`],
+    );
+    return rows.filter((row) => row.action_key.startsWith(actionKeyPrefix));
+  }
+  const rows = await db.getAllAsync<OutboxEvent>(
+    'SELECT * FROM outbox_events WHERE action_key LIKE ? ORDER BY updated_at ASC',
+    [`${actionKeyPrefix}%`],
+  );
+  return rows.filter((row) => row.action_key.startsWith(actionKeyPrefix));
+}
+
+export async function listProviderWritebackOutboxEvents(
+  db: SQLiteDatabase,
+  status?: OutboxStatus,
+): Promise<OutboxEvent[]> {
+  return listOutboxEventsByActionKeyPrefix(db, OUTBOX_ACTION_PREFIXES.provider_write, status);
 }
 
 export async function getOutboxEventByActionKey(db: SQLiteDatabase, actionKey: string): Promise<OutboxEvent | null> {

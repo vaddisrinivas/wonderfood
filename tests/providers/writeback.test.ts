@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { listProviderWritebackOutboxEvents } from '@/src/db/outbox';
 import { loadCatalog } from '@/src/domain/catalog';
 import { applyOperation } from '@/src/ops/apply';
 import { undoOperation } from '@/src/ops/undo';
@@ -34,6 +35,10 @@ function payload(row: Record<string, unknown> | undefined) {
   return JSON.parse(String(row!.payload_json)) as ProviderWritePayload;
 }
 
+async function providerOutboxRows(db: MemoryDb) {
+  return listProviderWritebackOutboxEvents(db as any);
+}
+
 describe('enqueueProviderWriteForOperation', () => {
   it('queues duplicate-safe Notion create payloads from applied operations', async () => {
     const db = new MemoryDb();
@@ -41,12 +46,12 @@ describe('enqueueProviderWriteForOperation', () => {
 
     const first = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-create' });
     const duplicate = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-create' });
-    const outboxRow = Array.from(db.outbox.values())[0];
-    const body = payload(outboxRow);
+    const rows = await providerOutboxRows(db);
+    const body = payload(rows[0]);
 
     expect(first.status).toBe('queued');
     expect(duplicate.status).toBe('duplicate');
-    expect(db.outbox.size).toBe(1);
+    expect(rows).toHaveLength(1);
     expect(body.schema_version).toBe('lifeos.provider-write.v1');
     expect(body.provider).toBe('notion');
     expect(body.operation).toBe('create_record');
@@ -71,7 +76,7 @@ describe('enqueueProviderWriteForOperation', () => {
     const updateQueued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: 'writeback-update' });
     const undone = await undoOperation(db as any, manifest, 'writeback-update');
     const undoQueued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: undone.op_id });
-    const rows = Array.from(db.outbox.values()).map(payload);
+    const rows = (await providerOutboxRows(db)).map((row) => payload(row));
 
     expect(updated.status).toBe('applied');
     expect(updateQueued.status).toBe('queued');
@@ -100,7 +105,7 @@ describe('enqueueProviderWriteForOperation', () => {
     });
 
     const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-archive' });
-    const body = payload(Array.from(db.outbox.values())[0]);
+    const body = payload((await providerOutboxRows(db))[0]);
 
     expect(queued.status).toBe('queued');
     expect(body.operation).toBe('archive_record');
@@ -127,7 +132,7 @@ describe('enqueueProviderWriteForOperation', () => {
     const sheetsQueued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: undone.op_id });
     expect(notionQueued.status).toBe('queued');
     expect(sheetsQueued.status).toBe('queued');
-    const rows = Array.from(db.outbox.values()).map(payload);
+    const rows = (await providerOutboxRows(db)).map((row) => payload(row));
     expect(rows.map((row) => row.operation)).toEqual(['restore_record', 'restore_record']);
     expect(rows.map((row) => row.endpoint)).toEqual(['/providers/notion/push', '/providers/sheets/push']);
     expect(rows.every((row) => row.record?.archived_at == null && row.record?.deleted === false)).toBe(true);

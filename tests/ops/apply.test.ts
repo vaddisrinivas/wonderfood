@@ -18,6 +18,10 @@ type CommittedOperationOutboxPayload = {
   committed_at: string;
 };
 
+function committedOutboxRows(db: MemoryDb) {
+  return Array.from(db.outbox.values()).filter((row) => row.action_key.startsWith('committed-operation:'));
+}
+
 describe('applyOperation', () => {
   it('applies creates, records one ledger row, and deduplicates idempotency keys', async () => {
     const db = new MemoryDb() as any;
@@ -298,8 +302,9 @@ describe('applyOperation', () => {
     });
 
     expect(committed.status).toBe('applied');
-    const rows = Array.from(db.outbox.values()) as OutboxRow[];
+    const rows = committedOutboxRows(db) as OutboxRow[];
     const [outboxRow] = rows;
+    expect(rows).toHaveLength(1);
     expect(outboxRow).toBeTruthy();
     const payload = JSON.parse(String(outboxRow.payload_json)) as CommittedOperationOutboxPayload;
     expect(outboxRow.action_key).toBe('committed-operation:food:outbox-committed-create');
@@ -338,7 +343,7 @@ describe('applyOperation', () => {
       origin: 'manual',
     });
     expect(first.status).toBe('applied');
-    const afterFirstOutboxCount = db.outbox.size;
+    const afterFirstOutboxCount = committedOutboxRows(db).length;
 
     const duplicate = await applyOperation(db, manifest, {
       op_id: 'outbox-filter-first-replay',
@@ -395,7 +400,7 @@ describe('applyOperation', () => {
     expect(duplicate.status).toBe('duplicate');
     expect(rejected.status).toBe('rejected');
     expect(dryRun.status).toBe('dry_run');
-    expect(db.outbox.size).toBe(afterFirstOutboxCount);
+    expect(committedOutboxRows(db)).toHaveLength(afterFirstOutboxCount);
     expect(db.records.has('outbox-filter-record')).toBe(true);
     expect(db.records.has('outbox-filter-dry')).toBe(false);
     expect(db.operations.has('outbox-filter-cross-domain')).toBe(true);
