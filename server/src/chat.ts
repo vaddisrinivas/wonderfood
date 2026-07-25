@@ -444,8 +444,8 @@ export async function handleServerChat(input: {
     preview: input.preview,
   });
 
-  const needsRetry = orchestrated.ai.status !== 'ok' && orchestrated.ai.source !== 'openai-fetch-aborted';
-  const isCanceled = orchestrated.ai.source === 'openai-fetch-aborted';
+  const needsRetry = orchestrated.ai.status !== 'ok' && orchestrated.ai.status !== 'disabled' && orchestrated.ai.status !== 'aborted';
+  const isCanceled = orchestrated.ai.status === 'aborted';
   const status = isCanceled ? 'canceled' : orchestrated.ai.status === 'ok' ? 'completed' : 'failed';
   const inputText = threadContext ? `${input.message}\n${threadContext}` : input.message;
   const sourceSnapshots = orchestrated.retrieval.snapshots;

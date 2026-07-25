@@ -103,7 +103,6 @@
     "test:contract:notion": "./server/node_modules/.bin/tsx server/test/notion/contract-notion-webhook.ts",
     "test:server:webhook-ingress": "./server/node_modules/.bin/tsx server/test/provider-webhook-ingress.ts",
     "test:server:webhook-retry": "./server/node_modules/.bin/tsx server/test/provider-webhook-retry.ts",
-    "test:server:openai-web-search": "./server/node_modules/.bin/tsx server/test/openai-web-search.ts",
     "test:server:multiturn": "./server/node_modules/.bin/tsx server/test/multiturn-conversation-contract.ts",
     "test:server:mcp-resources": "./server/node_modules/.bin/tsx server/test/mcp-resource-contract.ts",
     "test:server:health-snapshot": "./server/node_modules/.bin/tsx server/test/health-snapshot-sync.ts",
