@@ -39,6 +39,10 @@ export function matches<T extends Record<string, unknown>>(
     case 'lte': return compare(getField(row, predicate.field), predicate.value) <= 0;
     case 'contains': return String(getField(row, predicate.field) ?? '').toLocaleLowerCase().includes(predicate.value.toLocaleLowerCase());
     case 'starts_with': return String(getField(row, predicate.field) ?? '').toLocaleLowerCase().startsWith(predicate.value.toLocaleLowerCase());
+    default: {
+      const op = (predicate as { op: string }).op;
+      throw new Error(`unsupported_query_predicate:${op}`);
+    }
   }
 }
 

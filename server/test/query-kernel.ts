@@ -47,6 +47,19 @@ assert.deepEqual(executeQuery(conformanceRows, {
 }).rows.map((row) => row.id), ['b', 'a'], 'exists false must include null and missing fields');
 assert.deepEqual(executeQuery(conformanceRows, {
   from: 'records',
+  where: { op: 'not', arg: { op: 'eq', field: 'value', value: 'present' } },
+}).rows.map((row) => row.id), ['b', 'a'], 'not must invert predicate');
+assert.throws(() => executeQuery(rows, {
+  from: 'records',
+  where: {
+    // @ts-expect-error exercise unsupported operator failure
+    op: 'contains_any',
+    field: 'state',
+    value: 'open',
+  },
+}), /unsupported_query_predicate/);
+assert.deepEqual(executeQuery(conformanceRows, {
+  from: 'records',
   where: { op: 'eq', field: 'value', value: null },
 }).rows.map((row) => row.id), ['b']);
 assert.deepEqual(executeQuery(conformanceRows, {

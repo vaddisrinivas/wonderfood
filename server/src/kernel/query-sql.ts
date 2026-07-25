@@ -17,6 +17,13 @@ function fieldSql(field: string): string {
   throw new Error('unsupported_query_field');
 }
 
+function propertyPath(field: string): string | null {
+  if (!field.startsWith('properties.')) return null;
+  const path = field.slice('properties.'.length);
+  if (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(path)) throw new Error('invalid_property_path');
+  return `$.${path}`;
+}
+
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
@@ -26,20 +33,43 @@ function predicateSql(predicate: QueryPredicate, params: unknown[]): string {
   switch (predicate.op) {
     case 'and': return `(${predicate.args.map((arg) => predicateSql(arg, params)).join(' AND ') || '1=1'})`;
     case 'or': return `(${predicate.args.map((arg) => predicateSql(arg, params)).join(' OR ') || '0=1'})`;
-    case 'not': return `(NOT ${predicateSql(predicate.arg, params)})`;
+    case 'not':
+      if (predicate.arg.op === 'eq') {
+        return `(${predicateSql(
+          { op: 'neq', field: predicate.arg.field, value: predicate.arg.value },
+          params,
+        )})`;
+      }
+      if (predicate.arg.op === 'neq') {
+        return `(${predicateSql({ op: 'eq', field: predicate.arg.field, value: predicate.arg.value }, params)})`;
+      }
+      return `(NOT ${predicateSql(predicate.arg, params)})`;
     case 'exists': return `${field} IS ${predicate.value === false ? 'NULL' : 'NOT NULL'}`;
     case 'eq':
-      if (predicate.value === null) return `${field} IS NULL`;
+      if (predicate.value === null) {
+        const path = propertyPath(predicate.field);
+        if (path === null) return `${field} IS NULL`;
+        return `${field} IS NULL AND json_type("properties", '${path}') = 'null'`;
+      }
       params.push(predicate.value); return `${field} = ?`;
     case 'neq':
-      if (predicate.value === null) return `${field} IS NOT NULL`;
-      params.push(predicate.value); return `${field} <> ?`;
+      if (predicate.value === null) {
+        const path = propertyPath(predicate.field);
+        if (path === null) return `${field} IS NOT NULL`;
+        return `(json_type("properties", '${path}') IS NULL OR json_type("properties", '${path}') != 'null')`;
+      }
+      params.push(predicate.value);
+      return `(${field} IS NULL OR ${field} <> ?)`;
     case 'gt': params.push(predicate.value); return `${field} > ?`;
     case 'gte': params.push(predicate.value); return `${field} >= ?`;
     case 'lt': params.push(predicate.value); return `${field} < ?`;
     case 'lte': params.push(predicate.value); return `${field} <= ?`;
     case 'contains': params.push(`%${escapeLike(predicate.value)}%`); return `${field} LIKE ? ESCAPE '\\' COLLATE NOCASE`;
     case 'starts_with': params.push(`${escapeLike(predicate.value)}%`); return `${field} LIKE ? ESCAPE '\\' COLLATE NOCASE`;
+    default: {
+      const op = (predicate as { op: string }).op;
+      throw new Error(`unsupported_query_predicate:${op}`);
+    }
   }
 }
 
