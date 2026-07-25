@@ -7,72 +7,18 @@ import {
   WorkflowRunRow,
   WorkflowRunStatus,
 } from '@/src/db/workflows';
-
-export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'compensated';
-
-export type WorkflowStepDefinition = {
-  id: string;
-  title: string;
-  tool?: string;
-  cancellable?: boolean;
-  compensation_tool?: string;
-};
-
-export type WorkflowStepReceipt = {
-  operation_ids?: string[];
-  action_ids?: string[];
-  source_ids?: string[];
-  record_ids?: string[];
-  message?: string;
-  payload?: Record<string, unknown>;
-};
-
-export type WorkflowCheckpointStep = WorkflowStepDefinition & {
-  status: WorkflowStepStatus;
-  receipts: WorkflowStepReceipt[];
-  started_at?: string;
-  completed_at?: string;
-  cancelled_at?: string;
-  failed_at?: string;
-  error?: string;
-};
-
-export type WorkflowCheckpointPayload = {
-  schema_version: 'lifeos.workflow-run.v1';
-  run_id: string;
-  domain: string;
-  workflow_id: string;
-  cursor: number;
-  resume_count: number;
-  steps: WorkflowCheckpointStep[];
-  completed_operation_ids: string[];
-  completed_action_ids: string[];
-  source_ids: string[];
-  created_at: string;
-  updated_at: string;
-  cancelled_at?: string;
-  cancel_reason?: string;
-  resumed_at?: string;
-  failure_reason?: string;
-};
+import type {
+  WorkflowCheckpointPayload,
+  WorkflowCheckpointStep,
+  WorkflowReceiptSummary,
+  WorkflowStepDefinition,
+  WorkflowStepReceipt,
+  WorkflowStepStatus,
+} from '@/packages/shared/contracts/workflow';
 
 export type WorkflowRunSnapshot = {
   row: WorkflowRunRow;
   checkpoint: WorkflowCheckpointPayload;
-};
-
-export type WorkflowReceiptSummary = {
-  run_id: string;
-  workflow_id: string;
-  status: WorkflowRunStatus;
-  completed_steps: number;
-  cancelled_steps: number;
-  failed_steps: number;
-  operation_ids: string[];
-  action_ids: string[];
-  source_ids: string[];
-  record_ids: string[];
-  receipts: WorkflowStepReceipt[];
 };
 
 const VERSION = 'lifeos.workflow-run.v1' as const;

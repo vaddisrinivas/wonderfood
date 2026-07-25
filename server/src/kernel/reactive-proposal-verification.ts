@@ -1,32 +1,6 @@
-import type { OperationTemplate } from './package';
+import type { OperationTemplate } from '@/packages/shared/contracts/package';
 import type { McpRecord } from '../mcp/state';
-
-export type ReactiveProposalVerificationReceipt = Readonly<{
-  ok: boolean;
-  verifierVersion: 'wonder.reactive-proposal-verifier.v1';
-  actionId: string;
-  operationId: string;
-  proposalId: string;
-  operationTemplateHash: string;
-  recordId: string | null;
-  expected: Record<string, unknown>;
-  observed: Record<string, unknown> | null;
-  resultingRevision: number | null;
-  providerWriteback?: ReactiveProviderWritebackReceipt;
-  reason: string;
-}>;
-
-export type ReactiveProviderWritebackReceipt = Readonly<{
-  ok: boolean;
-  provider: 'notion' | 'google_sheets';
-  operation: 'create_record' | 'update_record' | 'archive_record';
-  providerRecordId: string | null;
-  sourceSnapshotHash: string;
-  sourceSnapshot: Record<string, unknown>;
-  readbackSnapshotHash: string;
-  readbackSnapshot: Record<string, unknown>;
-  reason: string;
-}>;
+import type { ReactiveProposalVerificationReceipt, ReactiveProviderWritebackReceipt } from '@/packages/shared/contracts/receipts';
 
 export function verifyReactiveProposalPostcondition(input: {
   operationTemplate: OperationTemplate;
@@ -52,16 +26,18 @@ export function verifyReactiveProposalPostcondition(input: {
     return receipt(identity, false, template.recordId, {}, observedRecord(input.record), 'restore_postcondition_requires_undo_context', input.providerWriteback);
   }
   if (template.kind === 'create_record') {
+    const record = input.record;
     const recordId = template.recordId ?? input.record?.id ?? null;
     const expected = {
       exists: true,
       collection: template.collection,
       properties: template.properties ?? {},
     };
-    const observed = observedRecord(input.record);
-    const ok = Boolean(input.record)
-      && input.record?.collection === template.collection
-      && hasProperties(input.record.properties, template.properties ?? {});
+    const observed = observedRecord(record);
+    if (!record) {
+      return receipt(identity, false, recordId, expected, observed, 'canonical_create_mismatch', input.providerWriteback);
+    }
+    const ok = record.collection === template.collection && hasProperties(record.properties, template.properties ?? {});
     return receipt(identity, ok && providerOk(input.providerWriteback), recordId, expected, observed, ok ? providerReason(input.providerWriteback, 'canonical_create_verified') : 'canonical_create_mismatch', input.providerWriteback);
   }
   if (template.kind === 'update_record') {

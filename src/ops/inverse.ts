@@ -1,4 +1,4 @@
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 import type { Operation } from '@/src/ops/operation';
 
 export function computeInverse(before: CanonicalRecord | null, op: Operation, after: CanonicalRecord): Operation {

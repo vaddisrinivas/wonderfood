@@ -1,4 +1,4 @@
-import { CanonicalRecord } from '@/src/domain/runtime';
+import { CanonicalRecord } from '@/packages/shared/contracts/records';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export type CanonicalTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';

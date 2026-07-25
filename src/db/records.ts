@@ -1,13 +1,13 @@
 import {
-  CanonicalRecord,
   CanonicalProvenance,
+  CanonicalRecord,
   RecordProvider,
-  validateCanonicalRecord,
-} from '@/src/domain/runtime';
+} from '@/packages/shared/contracts/records';
+import { validateCanonicalRecord } from '@/src/domain/runtime';
 import { getDomainManifest, loadCatalog, DomainManifest, DomainId } from '@/src/domain/catalog';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { applyOperation } from '@/src/ops/apply';
-import type { OperationActor, OperationOrigin } from '@/src/ops/operation';
+import type { OperationActor, OperationOrigin } from '@/packages/shared/contracts/operation';
 
 type SqlRecordRow = {
   id: string;

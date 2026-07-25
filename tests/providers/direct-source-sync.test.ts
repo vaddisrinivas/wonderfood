@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
 import { loadCatalog } from '@/src/domain/catalog';
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 import { getRecord, upsertRecord } from '@/src/db/records';
 import { upsertSourceSnapshot } from '@/src/db/sources';
 import { applyDirectSourceRecords } from '@/src/providers/direct-source-sync';

@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { DomainManifest } from '@/src/domain/catalog';
-import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 import { applyOperation } from '@/src/ops/apply';
 import { computeInverse } from '@/src/ops/inverse';
 import type { Operation, OperationResult } from '@/src/ops/operation';

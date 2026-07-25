@@ -1,72 +1,21 @@
 import { createHash } from 'node:crypto';
+
 import { evaluateExpression } from './expression';
-import { normalizeOperationTemplate, operationTemplateName, type OperationTemplate, type RuleSpec } from './package';
+import type { Expression } from './expression';
 import type { ReactiveProposalDryRun, ReactiveProposalPolicyResult } from './reactive-proposal-policy';
+import { normalizeOperationTemplate, operationTemplateName } from './package';
+import {
+  type OperationProposal,
+  type OperationProposalEnvelope,
+  type ProposalEvent,
+  type RuleContext,
+} from '@/packages/shared/contracts/rules';
+import {
+  type OperationTemplate,
+  type RuleSpec,
+} from '@/packages/shared/contracts/package';
 
-export type RuleContext = {
-  event: ProposalEvent;
-  data: unknown;
-  packageVersion: string;
-  causeId: string;
-  depth: number;
-};
-
-export type ProposalEvent = Readonly<{
-  kind: 'operation' | 'schedule' | 'query_transition';
-  id: string;
-  queryId?: string;
-  transition?: 'enter' | 'leave' | 'change';
-}>;
-
-export type OperationProposal = {
-  ruleId: string;
-  operation: string;
-  operationTemplate: OperationTemplate;
-  mode: RuleSpec['mode'];
-  causeId: string;
-  packageVersion: string;
-  depth: number;
-  event: ProposalEvent;
-};
-
-export type OperationProposalEnvelope = Readonly<{
-  schemaVersion: 'wonder.operation-proposal.v1';
-  proposalId: string;
-  operation: string;
-  operationTemplate: OperationTemplate;
-  mode: RuleSpec['mode'];
-  ruleId: string;
-  packageId: string;
-  packageVersion: string;
-  eventId: string;
-  event: ProposalEvent;
-  causeId: string;
-  depth: number;
-  idempotencyKey: string;
-  review: {
-    required: boolean;
-    reason: 'suggest_mode' | 'policy_required' | 'policy_authorized';
-    policyId: string;
-    policyVersion: string;
-  };
-  authorization: ReactiveProposalPolicyResult;
-  dryRun: ReactiveProposalDryRun;
-  evidence: {
-    queryId?: string;
-    transition?: 'enter' | 'leave' | 'change';
-    beforeHash?: string;
-    afterHash?: string;
-    querySpecHash?: string;
-    packageHash?: string;
-    evaluatorVersion?: string;
-    targetRecordId?: string;
-    targetBeforeRevision?: number;
-    targetAfterRevision?: number;
-    beforeVersionVectorHash?: string;
-    afterVersionVectorHash?: string;
-    sourceEventId?: string;
-  };
-}>;
+export type { OperationProposal, OperationProposalEnvelope, OperationTemplate, ProposalEvent, RuleContext, RuleSpec };
 
 export function createOperationProposalIdempotencyKey(input: {
   packageId: string;
@@ -90,7 +39,7 @@ export function evaluateRules(rules: readonly RuleSpec[], context: RuleContext):
     if (rule.trigger.kind !== context.event.kind) continue;
     if (rule.trigger.kind === 'query_transition' && rule.trigger.query !== (context.event.queryId ?? context.event.id)) continue;
     if (rule.trigger.kind === 'query_transition' && rule.trigger.transition && rule.trigger.transition !== context.event.transition) continue;
-    if (rule.when && !Boolean(evaluateExpression(context.data, rule.when))) continue;
+    if (rule.when && !Boolean(evaluateExpression(context.data, rule.when as Expression))) continue;
     const operationTemplate = normalizeOperationTemplate(rule.effect.operation);
     const max = Math.min(rule.maxRunsPerEvent, 64);
     for (let count = 0; count < max; count += 1) {

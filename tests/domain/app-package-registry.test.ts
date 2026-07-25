@@ -4,7 +4,7 @@ import { activateAppPackage, bootstrapAppPackageRegistry, getActiveAppPackage, r
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
 import { MemoryDb } from '@/tests/helpers/memory-db';
-import type { AppPackageV2 } from '@/server/src/kernel/package';
+import type { AppPackageV2 } from '@/packages/shared/contracts/package';
 
 describe('app package SQLite registry', () => {
   it('bootstraps once, persists activation across reopen, and rolls back', async () => {

@@ -1,7 +1,7 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import { CanonicalRecord } from '@/src/domain/runtime';
+import { CanonicalRecord } from '@/packages/shared/contracts/records';
 import { getRecord, listRecordsByCollections, listRecordsForDomain } from '@/src/db/records';
 import { getAllProviderLinks } from '@/src/db/sources';
 import { toRecordView, DomainRecordViewModel, recordsToViews } from '@/src/domain/renderer';

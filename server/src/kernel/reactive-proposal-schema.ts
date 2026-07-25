@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { OperationTemplate } from './package';
+import type { OperationTemplate } from '@/packages/shared/contracts/package';
 import type { OperationProposalEnvelope, ProposalEvent } from './rules';
 
 const nonEmpty = z.string().min(1);

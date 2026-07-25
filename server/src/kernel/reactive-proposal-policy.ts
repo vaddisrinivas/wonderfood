@@ -1,4 +1,4 @@
-import type { OperationTemplate } from './package';
+import type { OperationTemplate } from '@/packages/shared/contracts/package';
 
 export const REACTIVE_PROPOSAL_POLICY_ID = 'wonder.reactive-proposal-policy' as const;
 export const REACTIVE_PROPOSAL_POLICY_VERSION = 'v1' as const;

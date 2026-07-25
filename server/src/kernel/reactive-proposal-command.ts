@@ -1,4 +1,4 @@
-import type { OperationTemplate } from './package';
+import type { OperationTemplate } from '@/packages/shared/contracts/package';
 
 export type ReactiveProposalCommandPreview = Readonly<
   | {

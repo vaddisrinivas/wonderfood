@@ -1,5 +1,5 @@
-import type { AppPackageV2, CollectionSpec } from '@/server/src/kernel/package';
-import type { QueryPredicate } from '@/server/src/kernel/query';
+import type { AppPackageV2, CollectionSpec } from '@/packages/shared/contracts/package';
+import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import type { DashboardBlock, DomainManifest } from '@/src/domain/catalog';
 
 const CORE_FIELDS: CollectionSpec['fields'] = {

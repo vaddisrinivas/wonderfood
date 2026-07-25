@@ -1,5 +1,5 @@
 import type { DomainManifest } from '@/src/domain/catalog';
-import type { CanonicalProvenance, CanonicalRecord, CanonicalRelation } from '@/src/domain/runtime';
+import type { CanonicalProvenance, CanonicalRecord, CanonicalRelation } from '@/packages/shared/contracts/records';
 import { validateCanonicalRecord } from '@/src/domain/runtime';
 import { computeInverse } from '@/src/ops/inverse';
 import type { Operation, OperationDiff } from '@/src/ops/operation';
