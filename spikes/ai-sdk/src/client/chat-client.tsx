@@ -2,7 +2,8 @@ import { DefaultChatTransport, type UIMessage } from 'ai';
 import { useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { createRequire } from 'node:module';
-import type { fetch as ExpoFetch } from 'expo/fetch';
+
+type FetchLike = typeof globalThis.fetch;
 
 export type ToolContinuation = {
   toolCallId: string;
@@ -15,7 +16,7 @@ const resolveFetch = () => {
   try {
     const expoFetchModule = require('expo/fetch');
     if (typeof expoFetchModule.fetch === 'function') {
-      return expoFetchModule.fetch as ExpoFetch;
+      return expoFetchModule.fetch as FetchLike;
     }
   } catch {
     // In Node test/runtime where expo/fetch entrypoint is unavailable, fall back to global fetch.
