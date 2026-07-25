@@ -46,7 +46,7 @@ export function matches<T extends Record<string, unknown>>(
   }
 }
 
-function stableJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
@@ -54,13 +54,17 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-function hash(value: string): string {
+function hashValue(value: string): string {
   let result = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     result ^= value.charCodeAt(index);
     result = Math.imul(result, 16777619);
   }
   return `fnv1a:${(result >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+export function stableHash(value: unknown): string {
+  return hashValue(stableJson(value));
 }
 
 export function executeQuery<T extends Record<string, unknown>>(rows: readonly T[], spec: QuerySpec<T>): QueryResult<T> {
@@ -86,7 +90,7 @@ export function executeQuery<T extends Record<string, unknown>>(rows: readonly T
     total,
     offset,
     limit: spec.limit ?? null,
-    resultHash: hash(stableJson(projected)),
+    resultHash: stableHash(projected),
     provenance: spec.provenance,
   };
 }
