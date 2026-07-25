@@ -12,59 +12,55 @@
       {
         "id": "dinner-1",
         "collection": "notes",
-        "status": "open",
-        "score": 2
+        "properties": { "status": "open", "score": 2 }
       },
       {
         "id": "meal-2",
         "collection": "inventory",
-        "status": "open",
-        "score": 4
+        "properties": { "status": "open", "score": 4 }
       },
       {
         "id": "meal-1",
         "collection": "inventory",
-        "status": "closed",
-        "score": 9
+        "properties": { "status": "closed", "score": 9 }
       },
       {
         "id": "meal-3",
         "collection": "inventory",
-        "status": "open",
-        "score": 4
+        "properties": { "status": "open", "score": 4 }
       }
     ],
     "reorderedRows": [
-      { "id": "meal-3", "collection": "inventory", "status": "open", "score": 4 },
-      { "id": "meal-1", "collection": "inventory", "status": "closed", "score": 9 },
-      { "id": "dinner-1", "collection": "notes", "status": "open", "score": 2 },
-      { "id": "meal-2", "collection": "inventory", "status": "open", "score": 4 }
+      { "id": "meal-3", "collection": "inventory", "properties": { "status": "open", "score": 4 } },
+      { "id": "meal-1", "collection": "inventory", "properties": { "status": "closed", "score": 9 } },
+      { "id": "dinner-1", "collection": "notes", "properties": { "status": "open", "score": 2 } },
+      { "id": "meal-2", "collection": "inventory", "properties": { "status": "open", "score": 4 } }
     ],
     "spec": {
       "from": "records",
       "where": {
         "op": "and",
         "args": [
-          { "op": "eq", "field": "status", "value": "open" }
+          { "op": "eq", "field": "properties.status", "value": "open" }
         ]
       },
       "orderBy": [
-        { "field": "score", "direction": "desc" },
+        { "field": "properties.score", "direction": "desc" },
         { "field": "id", "direction": "asc" }
       ],
       "limit": 3,
       "offset": 0,
-      "project": ["id", "collection", "status", "score"],
+      "project": ["id", "collection", "properties.status", "properties.score"],
       "provenance": "kernel.contracts.query.v1"
     },
     "compiled": {
       "from": "records",
       "where": {
         "op": "eq",
-        "field": "status",
+        "field": "properties.status",
         "value": "open"
       },
-      "orderBy": [{ "field": "score", "direction": "desc" }],
+      "orderBy": [{ "field": "properties.score", "direction": "desc" }, { "field": "id", "direction": "asc" }],
       "limit": 2
     }
   },

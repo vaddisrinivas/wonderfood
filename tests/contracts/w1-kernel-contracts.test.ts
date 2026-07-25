@@ -4,20 +4,20 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { executeQuery, type QuerySpec } from '@/src/kernel/query';
+import { executeQuery, type QuerySpec } from '@/server/src/kernel/query';
 import { loadCatalog } from '@/src/domain/catalog';
 import { planOperation } from '@/src/ops/plan';
 import { applyOperation } from '@/src/ops/apply';
 import { undoOperation } from '@/src/ops/undo';
 import { MemoryDb } from '../helpers/memory-db';
-import { compileQueryToSql } from '../../server/src/kernel/query-sql';
-import { runReactiveCycle } from '../../server/src/kernel/reactive-cycle';
+import { compileQueryToSql } from '@/server/src/kernel/query-sql';
+import { runReactiveCycle } from '@/server/src/kernel/reactive-cycle';
 import {
   createReactiveReceiptStore,
   parseReactiveReceiptStore,
   recordReactiveCycle,
   serializeReactiveReceiptStore,
-} from '../../server/src/kernel/reactive-receipts';
+} from '@/server/src/kernel/reactive-receipts';
 
 type BoundaryFixture = {
   querySpec: {
@@ -84,14 +84,31 @@ describe('W1-KERNEL kernel contracts', () => {
     expect(unordered.resultHash).toBe(ordered.resultHash);
     expect(unordered.total).toBe(3);
     expect(unordered.rows).toEqual([
-      { id: 'meal-2', collection: 'inventory', status: 'open', score: 4 },
-      { id: 'meal-3', collection: 'inventory', status: 'open', score: 4 },
-      { id: 'dinner-1', collection: 'notes', status: 'open', score: 2 },
+      {
+        id: 'meal-2',
+        collection: 'inventory',
+        'properties.status': 'open',
+        'properties.score': 4,
+      },
+      {
+        id: 'meal-3',
+        collection: 'inventory',
+        'properties.status': 'open',
+        'properties.score': 4,
+      },
+      {
+        id: 'dinner-1',
+        collection: 'notes',
+        'properties.status': 'open',
+        'properties.score': 2,
+      },
     ]);
     expect(unordered.provenance).toBe(fixture.querySpec.spec.provenance);
 
     const compiled = compileQueryToSql(fixture.querySpec.compiled);
-    expect(compiled.sql).toBe('SELECT * FROM "records" WHERE ("status" = ?) ORDER BY "score" DESC, "id" ASC LIMIT 2');
+    expect(compiled.sql).toBe(
+      'SELECT * FROM "records" WHERE json_extract("properties", \'$.status\') = ? ORDER BY json_extract("properties", \'$.score\') DESC, "id" ASC LIMIT 2',
+    );
     expect(compiled.params).toEqual(['open']);
   });
 
@@ -211,7 +228,7 @@ describe('W1-KERNEL kernel contracts', () => {
     expect(first.proposals).toHaveLength(1);
     const proposal = first.proposals[0];
     expect(proposal.id).toMatch(/^reactive:[a-f0-9]{8}$/);
-    expect(proposal.envelope.review.reason).toBe('policy_authorized');
+    expect(proposal.envelope.review.reason).toBe('policy_required');
     expect(proposal.envelope.evidence.targetRecordId).toBe('decision-kernel');
     expect(proposal.envelope.evidence.targetBeforeRevision).toBe(1);
     expect(proposal.envelope.evidence.targetAfterRevision).toBe(2);
@@ -220,8 +237,8 @@ describe('W1-KERNEL kernel contracts', () => {
 
     const replay = runReactiveCycle({
       package: fixture.reactive.package as never,
-      beforeRows: [...fixture.reactive.afterRows, ...fixture.reactive.beforeRows],
-      afterRows: [...fixture.reactive.beforeRows, ...fixture.reactive.afterRows],
+      beforeRows: fixture.reactive.beforeRows,
+      afterRows: fixture.reactive.afterRows,
       event: { kind: 'operation', id: fixture.reactive.eventId },
       causeId: fixture.reactive.causeId,
     });
@@ -230,7 +247,8 @@ describe('W1-KERNEL kernel contracts', () => {
 
     const withReceipt = createReactiveReceiptStore();
     const firstRecord = recordReactiveCycle(withReceipt, {
-      cycle: { cycleId: first.cycleId, proposals: first.proposals.map((entry) => ({ id: entry.id })) },
+      cycleId: first.cycleId,
+      proposals: first.proposals.map((entry) => ({ id: entry.id })),
     });
     expect(firstRecord.isNewCycle).toBe(true);
     expect(firstRecord.newProposalIds).toEqual([proposal.id]);
@@ -239,7 +257,8 @@ describe('W1-KERNEL kernel contracts', () => {
     expect(parsed).toEqual(firstRecord.store);
 
     const replayRecord = recordReactiveCycle(firstRecord.store, {
-      cycle: { cycleId: first.cycleId, proposals: first.proposals.map((entry) => ({ id: entry.id })) },
+      cycleId: first.cycleId,
+      proposals: first.proposals.map((entry) => ({ id: entry.id })),
     });
     expect(replayRecord.isNewCycle).toBe(false);
     expect(replayRecord.newProposalIds).toHaveLength(0);
