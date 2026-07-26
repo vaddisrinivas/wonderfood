@@ -106,21 +106,36 @@ assert.equal(secretField.ok === false && secretField.errors.some((entry) => entr
 
 const truncatedPayload = buildLocalQueryResult(
   validRequest.value,
-  [
-    { id: 'i-1', collection: 'records', fields: { title: 'A' } },
-    { id: 'i-2', collection: 'records', fields: { title: 'B' } },
-  ],
+  Array.from({ length: validRequest.value.maxRows + 1 }, (_, index) => ({
+    id: `i-${index + 1}`,
+    collection: 'records',
+    fields: { title: `Item ${index + 1}` },
+  })),
   { id: 'food', version: '1.0.0' },
   8,
 );
+assert.equal(truncatedPayload.rows.length, validRequest.value.maxRows);
+assert.equal(truncatedPayload.metadata.returnedRows, validRequest.value.maxRows);
+assert.equal(truncatedPayload.truncated, true);
+
 const invalidResult = {
   ...truncatedPayload,
-  truncated: false,
-  metadata: { ...truncatedPayload.metadata, returnedRows: 2, requestedRows: 1 },
+  rows: [
+    ...truncatedPayload.rows,
+    { id: 'overflow', collection: 'records', fields: { title: 'Overflow' } },
+  ],
+  metadata: {
+    ...truncatedPayload.metadata,
+    returnedRows: truncatedPayload.rows.length + 1,
+    outputBytes: Buffer.byteLength(JSON.stringify([
+      ...truncatedPayload.rows,
+      { id: 'overflow', collection: 'records', fields: { title: 'Overflow' } },
+    ]), 'utf8'),
+  },
 };
 const truncatedError = parseLocalQueryResult(invalidResult);
 assert.equal(truncatedError.ok, false);
-assert.equal(truncatedError.ok === false && truncatedError.errors.some((entry) => entry.includes('truncated must be true')), true);
+assert.equal(truncatedError.ok === false && truncatedError.errors.some((entry) => entry.includes('result rows cannot exceed requested/max rows')), true);
 
 const malformedResult = parseLocalQueryResult({
   ...truncatedPayload,

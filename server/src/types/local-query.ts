@@ -266,8 +266,8 @@ export function parseLocalQueryResult(input: unknown): ValidationResult<LocalQue
     errors.push(`metadata.outputBytes must match payload size (${payloadBytes})`);
   }
 
-  if (result.rows.length > result.metadata.requestedRows && !result.truncated) {
-    errors.push('result.truncated must be true when rows exceed requestedRows');
+  if (result.rows.length > result.metadata.maxRows || result.rows.length > result.metadata.requestedRows) {
+    errors.push('result rows cannot exceed requested/max rows');
   }
 
   if (result.rows.length !== result.metadata.returnedRows) {
@@ -305,12 +305,12 @@ export function buildLocalQueryResult(
   packageIdentity: { id: string; version: string },
   executionMs: number,
 ): LocalQueryResult {
-  const resultRows = rows.map((row) => ({
+  const requestedRows = request.maxRows;
+  const resultRows = rows.slice(0, requestedRows).map((row) => ({
     id: row.id,
     collection: row.collection,
     fields: row.fields,
   }));
-  const requestedRows = request.maxRows;
   const returnedRows = resultRows.length;
   const metadata = {
     requestedRows,
@@ -329,7 +329,7 @@ export function buildLocalQueryResult(
     activePackageId: packageIdentity.id,
     activePackageVersion: packageIdentity.version,
     rows: resultRows,
-    truncated: returnedRows > requestedRows,
+    truncated: rows.length > requestedRows,
     executedAt: new Date().toISOString(),
     metadata,
   };

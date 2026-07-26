@@ -1,5 +1,7 @@
 import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020';
+import addFormats from 'ajv-formats';
 import { createRequire } from 'node:module';
+import type Ajv from 'ajv';
 import type { Operation } from 'fast-json-patch';
 import { z, ZodType } from 'zod';
 
@@ -23,7 +25,7 @@ const DRAFT_07_SCHEMA = 'http://json-schema.org/draft-07/schema#';
 const DRAFT_2020_12_SCHEMA = 'https://json-schema.org/draft/2020-12/schema';
 const AJV_OPTIONS = { allErrors: true, strict: false, validateFormats: true };
 
-const ajv2020 = new Ajv2020(AJV_OPTIONS);
+const ajv2020 = withFormats(new Ajv2020(AJV_OPTIONS));
 const ajvDraft07 = loadDraft07Validator();
 
 type AjvLike = {
@@ -55,17 +57,22 @@ function loadDraft07Validator(): AjvLike {
       : null;
     if (isFunction(ctor)) {
       if (isConstructable(ctor)) {
-        return new (ctor as unknown as AjvConstructor)(AJV_OPTIONS);
+        return withFormats(new (ctor as unknown as AjvConstructor)(AJV_OPTIONS));
       }
     }
   }
 
-  const ajv = new Ajv2020(AJV_OPTIONS);
+  const ajv = withFormats(new Ajv2020(AJV_OPTIONS));
   const meta07 = safeRequire<Record<string, unknown>>('ajv/dist/refs/json-schema-draft-07.json');
   if (!meta07 || !meta07.$id) {
     throw new Error(`draft-07 validator unavailable (${DRAFT_07_SCHEMA} support requires Ajv draft-07 module or ref schema)`);
   }
   ajv.addMetaSchema(meta07);
+  return ajv;
+}
+
+function withFormats<T extends AjvLike>(ajv: T): T {
+  addFormats(ajv as unknown as Ajv);
   return ajv;
 }
 
