@@ -68,4 +68,25 @@ describe('domain config validator', () => {
       expect(() => validateDomainConfig(root)).toThrow(/Missing workflow for food: missing_workflow_ref/);
     });
   });
+
+  it('fails closed on duplicate agent ids', () => {
+    withTempRoot((root) => {
+      applyFixture(root, 'agents/registry.v1.json', 'duplicate-agent-id/agents-registry.patch.json');
+      expect(() => validateDomainConfig(root)).toThrow(/Duplicate agent id: orchestrator/);
+    });
+  });
+
+  it('fails closed on invalid agent registry capability ops', () => {
+    withTempRoot((root) => {
+      applyFixture(root, 'agents/registry.v1.json', 'invalid-capability-op/agents-registry.patch.json');
+      expect(() => validateDomainConfig(root)).toThrow(/additional property|must be equal to one of the allowed values|invalid/i);
+    });
+  });
+
+  it('fails closed on unknown agent registry fields', () => {
+    withTempRoot((root) => {
+      applyFixture(root, 'agents/registry.v1.json', 'unknown-field/agents-registry.patch.json');
+      expect(() => validateDomainConfig(root)).toThrow(/additional properties|unexpected/i);
+    });
+  });
 });

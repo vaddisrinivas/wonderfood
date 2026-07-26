@@ -166,7 +166,7 @@ function assertValid(validate, document, path) {
 }
 
 function createAjv() {
-  const ajv = new Ajv2020({ allErrors: true, strict: false, validateFormats: true });
+  const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false, validateFormats: true });
   ajv.addFormat('date-time', {
     type: 'string',
     validate: (value) => isDateTime(value),

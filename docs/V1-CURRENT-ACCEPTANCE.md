@@ -8,6 +8,7 @@ Branch basis: `codex/lifeos-e2e-implementation`
 ## Audit basis
 
 - Read: `docs/V1-PLATFORM-AUDIT-AND-REMEDIATION-PLAN.md`, `docs/REPOSITORY-AUDIT.md`, and the changed/runtime risk-bearing files around auth, chat, MCP, providers, reactive runtime, release proof, tests, and docs.
+- Machine-readable acceptance registry: `docs/V1-ACCEPTANCE-REGISTRY.json`.
 - Mutation policy for this audit: **no live provider mutation**, **no product edits**, **docs only**.
 - Repository truth check: `docs/REPOSITORY-AUDIT.md` is itself stale at `8b2cb9a`, so it cannot be treated as current acceptance proof.
 
@@ -49,7 +50,7 @@ Branch basis: `codex/lifeos-e2e-implementation`
   Root app: `13` production vulnerabilities (`12 moderate`, `1 high`), including `brace-expansion`.
   Server package: `2` moderate vulnerabilities through `@modelcontextprotocol/sdk` / `@hono/node-server`.
 
-## Finding registry
+## Historical finding registry at `61cb98b`
 
 ### P0
 
@@ -195,7 +196,7 @@ Branch basis: `codex/lifeos-e2e-implementation`
 
 - `P2-12` `OPEN`
   Summary: repo docs and generated authority still disagree with current code state.
-  Source: `README.md:5,49-59`; `FEATURES.md:7-12`; `docs/REPOSITORY-AUDIT.md:3,349,354`; `scripts/quality/check-lifeos-completion-audit.mjs:83-106,168-193`
+  Source: `README.md:5,49-59`; `FEATURES.md:7-12`; `docs/REPOSITORY-AUDIT.md:3,349,354`; `docs/V1-ACCEPTANCE-REGISTRY.json`; `scripts/quality/check-lifeos-completion-audit.mjs:83-106,168-193`
   Commit/test evidence: `docs/REPOSITORY-AUDIT.md` still snapshots `8b2cb9a`; completion audit can still say `COMPLETE` from evidence inventory without consulting current open P0/P1 rows
   Residual gap: docs are not generated from the current acceptance registry, and stale snapshot references remain user-visible.
   Acceptance impact: evidence authority is stale, so completion claims are not trustworthy.
@@ -219,15 +220,26 @@ Branch basis: `codex/lifeos-e2e-implementation`
 
 ## Acceptance verdict
 
-Do **not** call V1 complete at `61cb98b`.
+Do **not** call V1 complete from historical evidence or the debug-app registry alone.
 
 Reasons:
 
-- `P1-03` is still `OPEN`.
-- `P1-02`, `P1-04`, `P1-06`, `P1-07`, and `P1-08` are still `PARTIAL`.
+- Debug-app acceptance and signed-release acceptance are separate lanes now, so release blockers do not count as debug-app truth.
 - `npm run phase8:check:release-readiness` is `BLOCKED`.
-- repo-wide `npm run typecheck` is `FAIL`.
-- current proof docs are stale relative to `61cb98b`.
+- The deterministic gate record above belongs to `61cb98b`; current-tree completion still requires fresh full acceptance evidence.
+
+## Wave 3 transition record
+
+The historical statuses above remain the audit trail. The machine-readable registry records these current-tree transitions:
+
+- `P0-01`, `P1-01` -> `RESOLVED`: trusted MCP scope and fail-closed hosted startup, proven by `server/test/mcp-official-security.ts` and `server/test/startup-security.ts`.
+- `P1-02`, `P1-03`, `P1-04` -> `RESOLVED`: exhaustive policy decisions, canonical chat writer parity, and explicit undo lifecycle, proven by `server/test/ingress-parity-boundary.ts` and `server/test/undo-lifecycle-contract.ts`.
+- `P1-06`, `P1-07`, `P1-08` -> `RESOLVED`: shared atomic/quarantine persistence, bounded slow-body ingress, and restart-safe chat replay, proven by `server/test/state-persistence-contract.ts`, `server/test/json-state-concurrency.ts`, `server/test/ingress-security.ts`, and `server/test/chat-restart-replay.ts`.
+- `P2-03`, `P2-05` -> `RESOLVED`: retrieval runtime controls and supervised reactive worker lifecycle, proven by `server/test/retrieval-runtime-controls.ts` and `server/test/reactive-runtime-worker.ts`.
+- `P2-09` -> `RESOLVED`: strict Ajv config validation and expanded mutation coverage.
+- `P2-10` -> `PARTIAL`: real SQLite now proves migrations, JSON queries, rollback, and foreign keys; the broader writer-boundary suite still uses `MemoryDb`.
+- `P2-11` -> `RESOLVED`: shared confidence contract and convergence test.
+- `P2-12` -> `PARTIAL`: completion audit now consumes the machine registry and primary docs were refreshed, but this document intentionally retains historical evidence and whole-V1 acceptance still needs current full gates.
 
 ## Next-wave task queue
 

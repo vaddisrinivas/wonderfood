@@ -1,0 +1,153 @@
+{
+  "schema_version": "wonderfood.v1.acceptance-registry",
+  "generated_at": "2026-07-26",
+  "source": "docs/V1-CURRENT-ACCEPTANCE.md",
+  "acceptance_modes": [
+    {
+      "id": "debug_app",
+      "label": "Debug app acceptance",
+      "status": "not_accepted",
+      "summary": "P0/P1 open or partial items remain; signed release stays separate."
+    },
+    {
+      "id": "signed_release",
+      "label": "Signed release acceptance",
+      "status": "blocked",
+      "summary": "Android and iOS signing and release-env blockers remain separate from debug app acceptance."
+    }
+  ],
+  "issues": [
+    {
+      "id": "P0-01",
+      "priority": "P0",
+      "status": "RESOLVED",
+      "summary": "Trusted bearer configuration binds MCP principal and domain scope; forged caller scope is denied."
+    },
+    {
+      "id": "P1-01",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Hosted startup fails closed without bearer auth and local-dev bypass is loopback-only."
+    },
+    {
+      "id": "P1-02",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Policy returns one exhaustive deny, clarify, review, or execute decision."
+    },
+    {
+      "id": "P1-03",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Chat mutations use the canonical tool writer path, including local authority."
+    },
+    {
+      "id": "P1-04",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Undo uses explicit undone and undo_failed lifecycle semantics with canonical receipts."
+    },
+    {
+      "id": "P1-05",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Verifier false-green hole is closed."
+    },
+    {
+      "id": "P1-06",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Server JSON state uses shared locked atomic writes and corrupt-file quarantine."
+    },
+    {
+      "id": "P1-07",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Ingress enforces body limits, total deadlines, idle progress deadlines, and header bounds."
+    },
+    {
+      "id": "P1-08",
+      "priority": "P1",
+      "status": "RESOLVED",
+      "summary": "Chat idempotency and run state persist across restart with principal and conversation scoping."
+    },
+    {
+      "id": "P2-01",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Hidden plan hint no longer drives intent."
+    },
+    {
+      "id": "P2-02",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Chat send routes ignore client-supplied previous_response_id."
+    },
+    {
+      "id": "P2-03",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Retrieval has cache, timeout, circuit-breaker, source-budget, and freshness controls."
+    },
+    {
+      "id": "P2-04",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Notion pull paginates until target or limit."
+    },
+    {
+      "id": "P2-05",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "A supervised startup worker recovers and drains the outbox with lease, retry, wake, and shutdown behavior."
+    },
+    {
+      "id": "P2-06",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Review-required proposals persist as awaiting_review."
+    },
+    {
+      "id": "P2-07",
+      "priority": "P2",
+      "status": "PARTIAL",
+      "summary": "Observer failures are durable, but delivery remains advisory."
+    },
+    {
+      "id": "P2-08",
+      "priority": "P2",
+      "status": "PARTIAL",
+      "summary": "Release readiness proof exists, but artifact terminology remains risky."
+    },
+    {
+      "id": "P2-09",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Ajv strict mode and expanded duplicate, invalid-op, and unknown-field mutants fail closed."
+    },
+    {
+      "id": "P2-10",
+      "priority": "P2",
+      "status": "PARTIAL",
+      "summary": "Real SQLite covers migrations, JSON, rollback, and foreign keys; broader writer-boundary coverage still uses MemoryDb."
+    },
+    {
+      "id": "P2-11",
+      "priority": "P2",
+      "status": "RESOLVED",
+      "summary": "Shared confidence contracts converge numeric provenance and qualitative policy semantics."
+    },
+    {
+      "id": "P2-12",
+      "priority": "P2",
+      "status": "PARTIAL",
+      "summary": "Completion consumes the registry and primary docs are refreshed; whole-V1 still needs current full-gate evidence."
+    },
+    {
+      "id": "P2-13",
+      "priority": "P2",
+      "status": "PARTIAL",
+      "summary": "Default repo gates avoid live mutation, but lane isolation is still soft."
+    }
+  ]
+}

@@ -8,6 +8,8 @@ capability.
 
 Source basis: `fd8e2e6`. Treat older convergence notes and ledger entries as historical evidence only.
 
+Machine-readable acceptance lives in `docs/V1-ACCEPTANCE-REGISTRY.json`. Debug-app acceptance is tracked separately from signed-release acceptance.
+
 WonderFood 1.0.5 is being verified against the acceptance matrix. This file
 describes claimed behavior only when it has matching implementation evidence.
 
@@ -24,7 +26,7 @@ describes claimed behavior only when it has matching implementation evidence.
 | External food providers | Added provider contracts and mappings for TheMealDB recipe lookup and Open Food Facts package lookup. | Provider responses map into WonderFood proposals with attribution, warnings, cache policy, and confidence instead of silent writes. |
 | Receipts/import | Improved deterministic receipt parsing, draft normalization, canonical export/import, and snapshot merging. | Receipt and import paths now produce more consistent editable drafts across AI and non-AI flows. |
 | Manual workflows | Manual food entry, cart item creation, recipe creation, and meal logging remain available without AI. | Use the visible create actions in each destination when you do not want AI involved. |
-| Quality/release | Added release evidence scripts, Google Sheets proof helper, serial connected harness, and CI green lanes for local quality plus API 26/API 35 device quality. | A release should now prove local unit/build checks, connected device checks, and signed APK publication. |
+| Quality/release | Added release evidence scripts, Google Sheets proof helper, serial connected harness, and CI green lanes for local quality plus API 26/API 35 device quality. Debug-app acceptance is separate from signed-release acceptance. | A release should now prove local unit/build checks, connected device checks, and signed APK publication. |
 
 Status meanings:
 

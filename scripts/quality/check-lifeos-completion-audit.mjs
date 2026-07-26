@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentGit, readEvidence, validateEvidenceEnvelope } from './evidence-provenance.mjs';
+import { getDebugAppAcceptance, getSignedReleaseAcceptance, readAcceptanceRegistry } from './lifeos-acceptance-registry.mjs';
 
 const root = process.cwd();
 const evidenceDir = join(root, 'app', 'build', 'evidence');
@@ -64,6 +65,9 @@ const nativeVisualMatrix = readJson('app/build/evidence/native-visual-matrix/nat
 const responsiveVisualMatrix = readJson('app/build/evidence/responsive-visual-matrix/responsive-visual-matrix.json');
 const performanceBudget = readJson('app/build/evidence/performance/performance-budget.json');
 const productPolish = readJson('app/build/evidence/product-polish/product-polish-review.json');
+const acceptanceRegistry = readAcceptanceRegistry(root);
+const debugAppAcceptance = getDebugAppAcceptance(acceptanceRegistry);
+const signedReleaseAcceptance = getSignedReleaseAcceptance(acceptanceRegistry);
 
 const evidencePaths = {
   foodGoldenPath: 'app/build/evidence/food/food-golden-path-proof.json',
@@ -89,6 +93,8 @@ const nativeVisualMatrixPassed = valid('nativeVisualMatrix') && nativeVisualMatr
 const responsiveVisualMatrixPassed = valid('responsiveVisualMatrix') && responsiveVisualMatrix?.status === 'passed';
 const performanceBudgetPassed = valid('performanceBudget') && performanceBudget?.status === 'passed';
 const productPolishPassed = valid('productPolish') && productPolish?.status === 'passed';
+const debugAppRegistryPassed = debugAppAcceptance.status === 'passed';
+const debugAppRegistryBlockers = debugAppAcceptance.blockers.map((issue) => `${issue.id}:${issue.status}`);
 
 const items = [
   item(
@@ -157,11 +163,20 @@ const items = [
       ? []
       : productPolish?.issues?.length
         ? productPolish.issues
-        : visualSmokePassed
+      : visualSmokePassed
       ? [
         'Run phase9:check:product-polish-review and clear its issues.',
       ]
       : ['Run/fix check:web-product and check:accessibility-smoke.'],
+  ),
+  item(
+    'debug_app_acceptance_registry',
+    'Debug app acceptance registry',
+    debugAppRegistryPassed ? 'passed' : 'missing',
+    'docs/V1-ACCEPTANCE-REGISTRY.json',
+    debugAppRegistryPassed
+      ? []
+      : debugAppRegistryBlockers.concat(['Resolve open or partial P0/P1 items before calling the debug app complete.']),
   ),
 ];
 
@@ -169,6 +184,13 @@ const complete = items.every((entry) => entry.status === 'passed');
 const blocked = items.filter((entry) => entry.status === 'blocked');
 const partial = items.filter((entry) => entry.status === 'partial');
 const missing = items.filter((entry) => entry.status === 'missing');
+const signedReleaseItem = item(
+  'signed_release_acceptance',
+  signedReleaseAcceptance.label,
+  signedReleaseAcceptance.status === 'accepted' ? 'passed' : 'blocked',
+  'docs/V1-ACCEPTANCE-REGISTRY.json',
+  signedReleaseAcceptance.status === 'accepted' ? [] : [signedReleaseAcceptance.summary],
+);
 const payload = {
   proof: 'lifeos_completion_audit',
   checked_at: new Date().toISOString(),
@@ -181,6 +203,8 @@ const payload = {
     missing: missing.length,
   },
   items,
+  release_acceptance: signedReleaseItem,
+  acceptance_registry: acceptanceRegistry,
   no_secret_values_written: true,
   evidence_provenance: provenance,
 };
@@ -190,7 +214,7 @@ mkdirSync(evidenceDir, { recursive: true });
 writeFileSync(outPath, JSON.stringify(payload, null, 2));
 
 const blockers = [...blocked, ...partial, ...missing].map((entry) => `${entry.id}:${entry.status}`);
-console.log(`LifeOS completion audit: ${complete ? 'COMPLETE' : 'NOT_COMPLETE'} (${blockers.join(', ') || 'none'}; evidence: ${outPath})`);
+console.log(`LifeOS completion audit: ${complete ? 'COMPLETE' : 'NOT_COMPLETE'} (${blockers.join(', ') || 'none'}; signed_release=${signedReleaseItem.status}; evidence: ${outPath})`);
 
 if (process.env.REQUIRE_LIFEOS_COMPLETE === '1' && !complete) {
   process.exit(1);

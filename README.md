@@ -2,7 +2,7 @@
 
 WonderFood is being reimagined as a local-first LifeOS built with Expo and React Native: a quiet workspace for food, planning, personal context, and reviewable AI actions.
 
-Current release state: `1.0.5`, verified against source snapshot `fd8e2e6`. Historical evidence stays in `docs/lifeos/implementation-ledger.md` and `docs/lifeos/convergence/*.md`.
+Current release state: `1.0.5`, verified against source snapshot `fd8e2e6`. Machine-readable acceptance lives in `docs/V1-ACCEPTANCE-REGISTRY.json`. Historical evidence stays in `docs/lifeos/implementation-ledger.md` and `docs/lifeos/convergence/*.md`.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Expo SDK 57](https://img.shields.io/badge/Expo-SDK%2057-000020.svg)](https://expo.dev/)
@@ -65,6 +65,13 @@ npm run quality
 ```
 
 Exports are written to `dist/web` and `dist/android`. The web export is static. Android remains the primary native package; iOS export/build automation will follow after those gates stabilize.
+
+Root `typecheck` covers the production tree only. Experimental spikes live under `spikes/` and have their own checks:
+
+```bash
+npm run typecheck:spikes
+npm run audit:production
+```
 
 ## EAS packaging
 
