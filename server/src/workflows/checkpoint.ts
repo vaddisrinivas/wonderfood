@@ -40,6 +40,8 @@ type StorePayload = {
 const WORKFLOW_CHECKPOINT_PATH = process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH
   ?? join(process.cwd(), 'server-data', 'workflow-runs.json');
 const STORE_VERSION = 1;
+const MAX_WORKFLOW_STEP_RESULT_BYTES = 32 * 1024;
+const WORKFLOW_RESULT_PREVIEW_BYTES = 4 * 1024;
 
 let loaded = false;
 let store: StorePayload = {
@@ -76,6 +78,38 @@ function stableStringify(value: unknown): string {
 
 function hashValue(value: unknown): string {
   return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function deepClone<T>(value: T): T {
+  return value === undefined ? value : JSON.parse(JSON.stringify(value)) as T;
+}
+
+function boundStepResult(result: unknown): unknown {
+  if (result === undefined) {
+    return undefined;
+  }
+  const cloned = deepClone(result);
+  const serialized = JSON.stringify(cloned);
+  if (serialized === undefined) {
+    return undefined;
+  }
+  const byteLength = Buffer.byteLength(serialized, 'utf-8');
+  if (byteLength <= MAX_WORKFLOW_STEP_RESULT_BYTES) {
+    return cloned;
+  }
+  return {
+    truncated: true,
+    original_bytes: byteLength,
+    preview_json: serialized.slice(0, WORKFLOW_RESULT_PREVIEW_BYTES),
+  };
+}
+
+function cloneCheckpoint(run: WorkflowRunCheckpoint): WorkflowRunCheckpoint {
+  return {
+    ...run,
+    steps: deepClone(run.steps),
+    changed_records: [...run.changed_records],
+  };
 }
 
 function persist() {
@@ -178,7 +212,7 @@ export function markWorkflowStep(input: {
     tool: input.tool,
     status: input.status,
     changed_records: input.changedRecords ?? [],
-    result: input.result,
+    result: boundStepResult(input.result),
     error: input.error,
     started_at: input.startedAt,
     finished_at: input.finishedAt,
@@ -270,10 +304,10 @@ export function finalizeWorkflowCompensated(runId: string, message?: string) {
 export function getWorkflowCheckpoint(runId: string): WorkflowRunCheckpoint | null {
   load();
   const run = store.runs[runId];
-  return run ? { ...run, steps: [...run.steps], changed_records: [...run.changed_records] } : null;
+  return run ? cloneCheckpoint(run) : null;
 }
 
 export function listWorkflowCheckpoints() {
   load();
-  return Object.values(store.runs).map((entry) => ({ ...entry, steps: [...entry.steps], changed_records: [...entry.changed_records] }));
+  return Object.values(store.runs).map((entry) => cloneCheckpoint(entry));
 }

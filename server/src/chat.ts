@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { toCitationsFromSnapshots } from './provenance';
 import { runChatRuntime } from './chat-runtime';
 import { ensureCitations } from '@/src/chat/citations';
@@ -60,6 +61,61 @@ export type NormalizedChatSend = {
   preview: boolean;
   userMessageId: string;
 };
+
+export type ChatOperationFingerprintInput = {
+  operation: 'send' | 'stream' | 'retry';
+  message: string;
+  domainId: string;
+  retryOfMessageId?: string;
+  preview: boolean;
+};
+
+export function buildChatOperationFingerprint(input: ChatOperationFingerprintInput): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      operation: input.operation,
+      message: input.message.trim(),
+      domainId: input.domainId.trim(),
+      retryOfMessageId: input.retryOfMessageId?.trim() || null,
+      preview: input.preview === true,
+    }))
+    .digest('hex');
+}
+
+export function scopeChatIdempotencyNamespace(input: {
+  principalId: string;
+  conversationId: string;
+  idempotencyKey: string;
+}): string {
+  return createHash('sha256')
+    .update(`${input.principalId}\u0000${input.conversationId}\u0000${input.idempotencyKey}`)
+    .digest('hex');
+}
+
+export function scopeChatOperationIdempotencyKey(input: {
+  principalId: string;
+  conversationId: string;
+  idempotencyKey: string;
+  operationFingerprint: string;
+}): string {
+  return `${scopeChatIdempotencyNamespace(input)}:${input.operationFingerprint.slice(0, 24)}`;
+}
+
+export function resolveStoredPreviousResponseId(input: {
+  storedConversationResponseId?: string;
+  cachedConversationResponseId?: string;
+}): string | undefined {
+  const cached =
+    typeof input.cachedConversationResponseId === 'string' && input.cachedConversationResponseId.trim().length > 0
+      ? input.cachedConversationResponseId.trim()
+      : undefined;
+  if (cached) {
+    return cached;
+  }
+  return typeof input.storedConversationResponseId === 'string' && input.storedConversationResponseId.trim().length > 0
+    ? input.storedConversationResponseId.trim()
+    : undefined;
+}
 
 function normalizeMessage(input: unknown): string {
   if (typeof input === 'string') {
@@ -409,6 +465,7 @@ function dedupeRepeatedText(value: string): string {
 
 export async function handleServerChat(input: {
   conversationId: string;
+  principalId?: string;
   message: string;
   threadTitle?: string;
   idempotencyKey?: string;
@@ -423,11 +480,12 @@ export async function handleServerChat(input: {
   preview?: boolean;
 }): Promise<ServerChatResponse> {
   const domain = input.domainId || 'food';
-  const conversation = getConversation(input.conversationId);
+  const conversation = getConversation(input.conversationId, input.principalId);
   const threadContext = buildConversationContext(conversation);
 
   const orchestrated = await runChatRuntime({
     conversationId: input.conversationId,
+    principalId: input.principalId,
     domain,
     message: input.message,
     actor: 'hearth',

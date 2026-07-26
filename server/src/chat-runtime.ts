@@ -34,6 +34,7 @@ function deterministicHash(input: unknown): string {
 
 function deterministicRunId(input: {
   actor: string;
+  principalId?: string;
   conversationId: string;
   domain: string;
   tool: string;
@@ -44,6 +45,7 @@ function deterministicRunId(input: {
 
 function deterministicActionId(input: {
   actor: string;
+  principalId?: string;
   conversationId: string;
   domain: string;
   tool: string;
@@ -54,6 +56,7 @@ function deterministicActionId(input: {
 
 export async function runChatRuntime(input: {
   conversationId: string;
+  principalId?: string;
   domain: string;
   message: string;
   actor: string;
@@ -127,6 +130,7 @@ ${contextSourceText}`;
     ? await executeCommand({
         actionId: deterministicActionId({
           actor: input.actor,
+          principalId: input.principalId,
           conversationId: input.conversationId,
           domain: input.domain,
           tool: executionTool,
@@ -178,6 +182,7 @@ ${contextSourceText}`;
       input.runId ??
       deterministicRunId({
         actor: input.actor,
+        principalId: input.principalId,
         conversationId: input.conversationId,
         domain: input.domain,
         tool: executionTool,

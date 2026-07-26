@@ -1,8 +1,16 @@
 import { createServer } from 'http';
 import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
-import { handleServerChat, normalizeChatSendRequest, type ChatSendRequest } from './chat';
+import {
+  buildChatOperationFingerprint,
+  handleServerChat,
+  normalizeChatSendRequest,
+  resolveStoredPreviousResponseId,
+  scopeChatIdempotencyNamespace,
+  scopeChatOperationIdempotencyKey,
+  type ChatSendRequest,
+} from './chat';
 import { type NormalizedChatSend } from './chat';
-import { authorizeServerRequest, canExposeProviderStatusIds } from './mcp/auth';
+import { authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './mcp/auth';
 import { handleMcpRequest } from './mcp/official-server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
@@ -53,12 +61,66 @@ const CHAT_CONTROL_BODY_LIMIT_BYTES = 64 * 1024;
 const PROVIDER_BODY_LIMIT_BYTES = 1024 * 1024;
 const PACKAGE_BODY_LIMIT_BYTES = 512 * 1024;
 const HEALTH_BODY_LIMIT_BYTES = 512 * 1024;
-const idempotencyCache = new Map<string, { messageId: string; runId: string; conversationId: string }>();
-const runStatus = new Map<string, { status: 'running' | 'completed' | 'cancelled' | 'failed'; controller: AbortController; conversationId: string }>();
-const runByConversation = new Map<string, string>();
-const previousResponseByConversation = new Map<string, string>();
+const DEFAULT_AUTHENTICATED_PRINCIPAL = 'server';
+const DEFAULT_LOCAL_DEVELOPMENT_PRINCIPAL = 'local-development';
+const CHAT_IDEMPOTENCY_CACHE_LIMIT = 512;
+const CHAT_RUN_STATUS_LIMIT = 256;
+const CHAT_CONVERSATION_RUN_LIMIT = 256;
 const packageRegistryPath = process.env.LIFEOS_PACKAGE_REGISTRY_PATH?.trim()
   || `${process.cwd()}/server-data/package-registry.json`;
+
+type ScopedIdempotencyRecord = {
+  messageId: string;
+  runId: string;
+  conversationId: string;
+  principalId: string;
+  operationFingerprint: string;
+};
+
+type RunState = {
+  status: 'running' | 'completed' | 'cancelled' | 'failed';
+  controller: AbortController;
+  conversationId: string;
+  principalId: string;
+};
+
+class BoundedMap<K, V> {
+  readonly #map = new Map<K, V>();
+
+  constructor(private readonly limit: number) {}
+
+  get(key: K): V | undefined {
+    const value = this.#map.get(key);
+    if (value === undefined) {
+      return undefined;
+    }
+    this.#map.delete(key);
+    this.#map.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V) {
+    if (this.#map.has(key)) {
+      this.#map.delete(key);
+    }
+    this.#map.set(key, value);
+    while (this.#map.size > this.limit) {
+      const oldest = this.#map.keys().next();
+      if (oldest.done) {
+        break;
+      }
+      this.#map.delete(oldest.value);
+    }
+  }
+
+  delete(key: K) {
+    return this.#map.delete(key);
+  }
+}
+
+const idempotencyCache = new BoundedMap<string, ScopedIdempotencyRecord>(CHAT_IDEMPOTENCY_CACHE_LIMIT);
+const runStatus = new BoundedMap<string, RunState>(CHAT_RUN_STATUS_LIMIT);
+const runByConversation = new BoundedMap<string, string>(CHAT_CONVERSATION_RUN_LIMIT);
 
 installReactiveRuntime();
 const CORS_ORIGINS = new Set(
@@ -94,6 +156,10 @@ function unauthorized(res: any, message: string) {
 
 function badRequest(res: any, message: string) {
   setJson(res, 400, { status: 'error', message });
+}
+
+function conflict(res: any, message: string) {
+  setJson(res, 409, { status: 'error', message });
 }
 
 function notFound(res: any, message: string) {
@@ -203,13 +269,80 @@ function getPath(rawUrl: string | undefined) {
   return rawUrl.split('?')[0];
 }
 
-function assertAuth(req: any, res: any) {
+function assertAuth(req: any, res: any): RequestAuthorizationResult | null {
   const auth = authorizeServerRequest(req.headers ?? {});
   if (auth.ok) {
-    return true;
+    return auth;
   }
   setJson(res, auth.statusCode, { status: 'error', message: auth.message });
-  return false;
+  return null;
+}
+
+function readHeaderValue(headers: Record<string, unknown> | undefined, name: string): string | undefined {
+  const raw = headers?.[name];
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  if (Array.isArray(raw)) {
+    const value = raw.find((entry) => typeof entry === 'string' && entry.trim().length > 0);
+    return typeof value === 'string' ? value.trim() : undefined;
+  }
+  return undefined;
+}
+
+function normalizePrincipalId(value: string | undefined, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+  return value.trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
+}
+
+function getAuthenticatedPrincipalId(headers: Record<string, unknown> | undefined, auth: RequestAuthorizationResult) {
+  const headerPrincipal =
+    readHeaderValue(headers, 'x-lifeos-principal')
+    ?? readHeaderValue(headers, 'x-lifeos-principal-scope');
+  return normalizePrincipalId(
+    headerPrincipal,
+    auth.localDevelopment ? DEFAULT_LOCAL_DEVELOPMENT_PRINCIPAL : DEFAULT_AUTHENTICATED_PRINCIPAL,
+  );
+}
+
+function conversationScopeKey(principalId: string, conversationId: string) {
+  return `${principalId}\u0000${conversationId}`;
+}
+
+function buildScopedChatRequest(input: {
+  principalId: string;
+  conversationId: string;
+  idempotencyKey: string;
+  message: string;
+  domainId: string;
+  operation: 'send' | 'stream' | 'retry';
+  retryOfMessageId?: string;
+  preview: boolean;
+}) {
+  const operationFingerprint = buildChatOperationFingerprint({
+    operation: input.operation,
+    message: input.message,
+    domainId: input.domainId,
+    retryOfMessageId: input.retryOfMessageId,
+    preview: input.preview,
+  });
+  return {
+    conversationRunKey: conversationScopeKey(input.principalId, input.conversationId),
+    idempotencyNamespace: scopeChatIdempotencyNamespace({
+      principalId: input.principalId,
+      conversationId: input.conversationId,
+      idempotencyKey: input.idempotencyKey,
+    }),
+    scopedIdempotencyKey: scopeChatOperationIdempotencyKey({
+      principalId: input.principalId,
+      conversationId: input.conversationId,
+      idempotencyKey: input.idempotencyKey,
+      operationFingerprint,
+    }),
+    operationFingerprint,
+  };
 }
 
 function notionWebhooksEnabled() {
@@ -299,11 +432,14 @@ function getRunMessageText(
 }
 
 async function runServerChat(params: {
+  principalId: string;
   conversationId: string;
   message: string;
   threadTitle: string;
   detail: string;
   idempotencyKey: string;
+  idempotencyNamespace: string;
+  operationFingerprint: string;
   domainId: string;
   runId: string;
   previousResponseId?: string;
@@ -316,14 +452,16 @@ async function runServerChat(params: {
   preview?: boolean;
 }): Promise<ChatRunResponse> {
   const controller = new AbortController();
-  const { conversationId, runId } = params;
+  const { conversationId, principalId, runId } = params;
+  const scopedConversationKey = conversationScopeKey(principalId, conversationId);
 
   runStatus.set(runId, {
     status: 'running',
     controller,
     conversationId,
+    principalId,
   });
-  runByConversation.set(conversationId, runId);
+  runByConversation.set(scopedConversationKey, runId);
 
   const shouldAppendUser = params.appendUserMessage !== false;
   if (shouldAppendUser) {
@@ -331,7 +469,7 @@ async function runServerChat(params: {
       id: params.userMessageId,
       role: 'user',
       text: params.message,
-    });
+    }, principalId);
   }
 
   let response: ChatRunResponse | null = null;
@@ -339,6 +477,7 @@ async function runServerChat(params: {
   try {
     response = await handleServerChat({
       conversationId,
+      principalId,
       message: params.message,
       threadTitle: params.threadTitle,
       idempotencyKey: params.idempotencyKey,
@@ -401,23 +540,25 @@ async function runServerChat(params: {
     status: terminalRunStatus,
     controller,
     conversationId,
+    principalId,
   });
 
   for (const message of response.messages) {
-    appendServerMessage(conversationId, message);
-    idempotencyCache.set(params.idempotencyKey, {
+    appendServerMessage(conversationId, message, principalId);
+    idempotencyCache.set(params.idempotencyNamespace, {
       messageId: message.id,
       runId,
       conversationId,
+      principalId,
+      operationFingerprint: params.operationFingerprint,
     });
   }
 
   if (response.run?.previous_response_id) {
-    previousResponseByConversation.set(conversationId, response.run.previous_response_id);
-    setConversationResponseId(conversationId, response.run.previous_response_id);
+    setConversationResponseId(conversationId, response.run.previous_response_id, principalId);
   }
 
-  runByConversation.delete(conversationId);
+  runByConversation.delete(scopedConversationKey);
 
   response.thread = {
     id: conversationId,
@@ -927,12 +1068,14 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path === '/chat/threads' && req.method === 'GET') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
     const query = new URL(`http://127.0.0.1:${port}${req.url}`);
     const domain = query.searchParams.get('domain');
-    const rows = listConversations();
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const rows = listConversations(principalId);
     const filtered = domain ? rows.filter((row) => row.domain === domain) : rows;
     ok(res, {
       threads: filtered.map((thread) => ({
@@ -947,7 +1090,8 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path === '/chat/run' && req.method === 'GET') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
     const query = new URL(`http://127.0.0.1:${port}${req.url}`);
@@ -956,7 +1100,8 @@ const server = createServer(async (req: any, res: any) => {
       badRequest(res, 'conversation_id required');
       return;
     }
-    const runId = runByConversation.get(conversationId);
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const runId = runByConversation.get(conversationScopeKey(principalId, conversationId));
     if (!runId) {
       ok(res, {
         conversation_id: conversationId,
@@ -977,12 +1122,14 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path.startsWith('/chat/threads/') && req.method === 'GET') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
     const parts = path.split('/');
     const threadId = parts[parts.length - 1];
-    const thread = getConversation(threadId);
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const thread = getConversation(threadId, principalId);
     if (!thread) {
       badRequest(res, 'thread not found');
       return;
@@ -1099,33 +1246,49 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/send/stream') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
     try {
+      const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
       const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
         parsed.domainId,
         parsed.message.text.slice(0, 80),
+        principalId,
       );
       upsertConversation({
         id: conversation.id,
         domain: conversation.domain,
         title: conversation.title,
         detail: conversation.detail,
-      });
+      }, principalId);
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const idempotencyKey = parsed.idempotencyKey;
-      const previousResponseId = parsed.previousResponseId
-        ?? previousResponseByConversation.get(conversation.id)
-        ?? conversation.last_response_id;
-      const existing = idempotencyCache.get(idempotencyKey);
+      const scopedRequest = buildScopedChatRequest({
+        principalId,
+        conversationId: conversation.id,
+        idempotencyKey: parsed.idempotencyKey,
+        message: parsed.message.text,
+        domainId: conversation.domain,
+        operation: 'stream',
+        retryOfMessageId: parsed.retryOfMessageId,
+        preview: parsed.preview,
+      });
+      const previousResponseId = resolveStoredPreviousResponseId({
+        storedConversationResponseId: conversation.last_response_id,
+      });
+      const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
       if (existing) {
-        const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
+        if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+          conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
+          return;
+        }
+        const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
         if (prior) {
-          const thread = getConversation(conversation.id);
+          const thread = getConversation(conversation.id, principalId);
           const cachedResponse: ChatRunResponse = {
             conversation_id: conversation.id,
             messages: [prior],
@@ -1158,10 +1321,10 @@ const server = createServer(async (req: any, res: any) => {
         }
       }
 
-      const runByMessage = runByConversation.get(conversation.id);
+      const runByMessage = runByConversation.get(scopedRequest.conversationRunKey);
       if (runByMessage) {
         const existingRun = runStatus.get(runByMessage);
-        if (existingRun?.status === 'running') {
+        if (existingRun?.status === 'running' && existingRun.principalId === principalId) {
           res.writeHead(200, {
             'content-type': 'text/event-stream',
             'cache-control': 'no-cache',
@@ -1178,7 +1341,7 @@ const server = createServer(async (req: any, res: any) => {
       }
 
       const runMessageText = getRunMessageText(
-        getConversation(conversation.id),
+        getConversation(conversation.id, principalId),
         parsed.retryOfMessageId,
         parsed.message.text,
       );
@@ -1196,11 +1359,14 @@ const server = createServer(async (req: any, res: any) => {
       });
 
       const finalResponse = await runServerChat({
+        principalId,
         conversationId: conversation.id,
         message: runMessageText,
         threadTitle: conversation.title,
         detail: conversation.detail,
-        idempotencyKey,
+        idempotencyKey: scopedRequest.scopedIdempotencyKey,
+        idempotencyNamespace: scopedRequest.idempotencyNamespace,
+        operationFingerprint: scopedRequest.operationFingerprint,
         domainId: conversation.domain,
         runId,
         previousResponseId,
@@ -1289,7 +1455,7 @@ const server = createServer(async (req: any, res: any) => {
       options: {
         enableLocalQuery: true,
         enableWebSearch: shouldUseWebSearch(latestText),
-        previousResponseId: payload.previousResponseId,
+        previousResponseId: undefined,
       },
       headers: {
         'cache-control': 'no-cache',
@@ -1299,33 +1465,49 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/send') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
     try {
+      const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
       const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
         parsed.domainId,
         parsed.message.text.slice(0, 80),
+        principalId,
       );
       upsertConversation({
         id: conversation.id,
         domain: conversation.domain,
         title: conversation.title,
         detail: conversation.detail,
-      });
+      }, principalId);
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const idempotencyKey = parsed.idempotencyKey;
-      const previousResponseId = parsed.previousResponseId
-        ?? previousResponseByConversation.get(conversation.id)
-        ?? conversation.last_response_id;
-      const existing = idempotencyCache.get(idempotencyKey);
+      const scopedRequest = buildScopedChatRequest({
+        principalId,
+        conversationId: conversation.id,
+        idempotencyKey: parsed.idempotencyKey,
+        message: parsed.message.text,
+        domainId: conversation.domain,
+        operation: 'send',
+        retryOfMessageId: parsed.retryOfMessageId,
+        preview: parsed.preview,
+      });
+      const previousResponseId = resolveStoredPreviousResponseId({
+        storedConversationResponseId: conversation.last_response_id,
+      });
+      const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
       if (existing) {
-        const prior = getConversation(existing.conversationId)?.messages.find((item) => item.id === existing.messageId);
+        if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+          conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
+          return;
+        }
+        const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
         if (prior) {
-          const thread = getConversation(conversation.id);
+          const thread = getConversation(conversation.id, principalId);
           const cachedResponse: ChatRunResponse = {
             conversation_id: conversation.id,
             messages: [prior],
@@ -1354,17 +1536,20 @@ const server = createServer(async (req: any, res: any) => {
       }
 
       const runMessageText = getRunMessageText(
-        getConversation(conversation.id),
+        getConversation(conversation.id, principalId),
         parsed.retryOfMessageId,
         parsed.message.text,
       );
 
       const response = await runServerChat({
+        principalId,
         conversationId: conversation.id,
         message: runMessageText,
         threadTitle: conversation.title,
         detail: conversation.detail,
-        idempotencyKey,
+        idempotencyKey: scopedRequest.scopedIdempotencyKey,
+        idempotencyNamespace: scopedRequest.idempotencyNamespace,
+        operationFingerprint: scopedRequest.operationFingerprint,
         domainId: conversation.domain,
         runId,
         previousResponseId,
@@ -1391,7 +1576,8 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/stop') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
@@ -1414,6 +1600,11 @@ const server = createServer(async (req: any, res: any) => {
       badRequest(res, 'Unknown run');
       return;
     }
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    if (run.principalId !== principalId) {
+      badRequest(res, 'Unknown run');
+      return;
+    }
     if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
       ok(res, { run_id: payload.run_id, status: run.status });
       return;
@@ -1425,7 +1616,8 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/retry') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
@@ -1450,7 +1642,8 @@ const server = createServer(async (req: any, res: any) => {
 
     const conversationId = payload.conversation_id;
     const userMessageId = payload.user_message_id;
-    const thread = getConversation(payload.conversation_id);
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const thread = getConversation(payload.conversation_id, principalId);
     if (!thread) {
       badRequest(res, 'conversation not found');
       return;
@@ -1462,18 +1655,56 @@ const server = createServer(async (req: any, res: any) => {
       badRequest(res, 'target user message not found');
       return;
     }
-    const idempotencyKey = payload.idempotency_key ?? `${conversationId}:${userMessageId}:retry`;
-    const previousResponseId =
-      typeof payload.previous_response_id === 'string' && payload.previous_response_id.trim()
-        ? payload.previous_response_id
-        : previousResponseByConversation.get(conversationId);
+    const scopedRequest = buildScopedChatRequest({
+      principalId,
+      conversationId,
+      idempotencyKey: payload.idempotency_key ?? `${conversationId}:${userMessageId}:retry`,
+      message: target.text,
+      domainId: thread.domain,
+      operation: 'retry',
+      retryOfMessageId: userMessageId,
+      preview: false,
+    });
+    const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
+    if (existing) {
+      if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+        conflict(res, 'Idempotency key already used for a different retry operation in this conversation.');
+        return;
+      }
+      const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
+      if (prior) {
+        ok(res, {
+          conversation_id: conversationId,
+          messages: [prior],
+          thread: {
+            id: thread.id,
+            title: thread.title,
+            detail: thread.detail,
+          },
+          run: {
+            id: existing.runId,
+            status: 'completed' as const,
+            needs_retry: false,
+            aborted: false,
+          },
+          warnings: ['Idempotency key replayed; returned prior answer.'],
+        } satisfies ChatRunResponse);
+        return;
+      }
+    }
+    const previousResponseId = resolveStoredPreviousResponseId({
+      storedConversationResponseId: thread.last_response_id,
+    });
 
     const wrapped = await runServerChat({
+      principalId,
       conversationId,
       message: target.text,
       threadTitle: thread.title,
       detail: thread.detail,
-      idempotencyKey,
+      idempotencyKey: scopedRequest.scopedIdempotencyKey,
+      idempotencyNamespace: scopedRequest.idempotencyNamespace,
+      operationFingerprint: scopedRequest.operationFingerprint,
       domainId: thread.domain,
       runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       previousResponseId,
@@ -1487,7 +1718,8 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/action') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
@@ -1504,7 +1736,8 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
 
-    const thread = getConversation(payload.conversation_id);
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const thread = getConversation(payload.conversation_id, principalId);
     if (!thread) {
       badRequest(res, 'conversation not found');
       return;
@@ -1526,7 +1759,7 @@ const server = createServer(async (req: any, res: any) => {
       domain: payload.domain_id || thread.domain,
       title: nextTitle || thread.title,
       detail: nextDetail,
-    });
+    }, principalId);
 
     ok(res, {
       action: payload.action,
@@ -1537,7 +1770,8 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (req.method === 'POST' && path === '/chat/undo') {
-    if (!assertAuth(req, res)) {
+    const auth = assertAuth(req, res);
+    if (!auth) {
       return;
     }
 
@@ -1558,6 +1792,11 @@ const server = createServer(async (req: any, res: any) => {
 
     const action = getActionEvent(actionId);
     if (!action) {
+      badRequest(res, 'action not found');
+      return;
+    }
+    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    if (action.conversation_id && !getConversation(action.conversation_id, principalId)) {
       badRequest(res, 'action not found');
       return;
     }

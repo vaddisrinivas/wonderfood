@@ -2,8 +2,11 @@ import type { ServerChatMessage } from './chat';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+const DEFAULT_CONVERSATION_OWNER = 'server';
+
 type PersistedConversationEnvelope = {
   id: string;
+  owner?: string;
   domain: string;
   messages: ServerChatMessage[];
   title: string;
@@ -33,18 +36,36 @@ type ConversationEnvelope = {
   last_response_id?: string;
 };
 
-const conversations = new Map<string, ConversationEnvelope>();
+type StoredConversationEnvelope = ConversationEnvelope & {
+  owner: string;
+};
+
+const conversations = new Map<string, StoredConversationEnvelope>();
 let isLoaded = false;
 
 function ensureDir() {
   mkdirSync(dirname(STORAGE_PATH), { recursive: true });
 }
 
-function cloneConversation(conversation: ConversationEnvelope): ConversationEnvelope {
+function deepClone<T>(value: T): T {
+  return value === undefined ? value : JSON.parse(JSON.stringify(value)) as T;
+}
+
+function storageKey(id: string, owner: string) {
+  return `${owner}\u0000${id}`;
+}
+
+function normalizeOwner(owner?: string): string {
+  return typeof owner === 'string' && owner.trim().length > 0
+    ? owner.trim()
+    : DEFAULT_CONVERSATION_OWNER;
+}
+
+function cloneConversation(conversation: StoredConversationEnvelope): ConversationEnvelope {
   return {
     id: conversation.id,
     domain: conversation.domain,
-    messages: [...conversation.messages],
+    messages: deepClone(conversation.messages),
     title: conversation.title,
     detail: conversation.detail,
     ...(conversation.last_response_id ? { last_response_id: conversation.last_response_id } : {}),
@@ -56,7 +77,15 @@ function persist() {
   const payload: PersistedFile = {
     version: STORE_VERSION,
     updated_at: new Date().toISOString(),
-    conversations: [...conversations.values()],
+    conversations: [...conversations.values()].map((conversation) => ({
+      id: conversation.id,
+      owner: conversation.owner,
+      domain: conversation.domain,
+      messages: deepClone(conversation.messages),
+      title: conversation.title,
+      detail: conversation.detail,
+      ...(conversation.last_response_id ? { last_response_id: conversation.last_response_id } : {}),
+    })),
   };
   writeFileSync(STORAGE_PATH, JSON.stringify(payload), FILE_ENCODING);
 }
@@ -82,10 +111,12 @@ function load() {
       if (!isConversationRow(row)) {
         continue;
       }
-      conversations.set(row.id, {
+      const owner = normalizeOwner(row.owner);
+      conversations.set(storageKey(row.id, owner), {
         id: row.id,
+        owner,
         domain: row.domain,
-        messages: row.messages ?? [],
+        messages: deepClone(row.messages ?? []),
         title: row.title,
         detail: row.detail,
         ...(row.last_response_id ? { last_response_id: row.last_response_id } : {}),
@@ -123,61 +154,81 @@ function isValidPersistedFile(value: unknown): value is PersistedFile {
   );
 }
 
-export function getConversation(id: string): ConversationEnvelope | null {
+function getStoredConversation(id: string, owner?: string): StoredConversationEnvelope | null {
   load();
-  return conversations.get(id) ?? null;
+  return conversations.get(storageKey(id, normalizeOwner(owner))) ?? null;
 }
 
-export function upsertConversation(conversation: Omit<ConversationEnvelope, 'messages'>): ConversationEnvelope {
+export function getConversation(id: string, owner?: string): ConversationEnvelope | null {
   load();
-  const existing = conversations.get(conversation.id);
-  const next: ConversationEnvelope = existing
+  const conversation = getStoredConversation(id, owner);
+  return conversation ? cloneConversation(conversation) : null;
+}
+
+export function upsertConversation(
+  conversation: Omit<ConversationEnvelope, 'messages'>,
+  owner?: string,
+): ConversationEnvelope {
+  load();
+  const normalizedOwner = normalizeOwner(owner);
+  const key = storageKey(conversation.id, normalizedOwner);
+  const existing = conversations.get(key);
+  const next: StoredConversationEnvelope = existing
     ? {
       ...existing,
       ...conversation,
     }
     : {
       ...conversation,
+      owner: normalizedOwner,
       messages: [],
     };
-  conversations.set(conversation.id, next);
+  conversations.set(key, next);
   persist();
-  return next;
+  return cloneConversation(next);
 }
 
-export function appendServerMessage(id: string, message: ServerChatMessage): ConversationEnvelope {
+export function appendServerMessage(id: string, message: ServerChatMessage, owner?: string): ConversationEnvelope {
   load();
-  const conversation = getConversation(id);
+  const conversation = getStoredConversation(id, owner);
   if (!conversation) {
     throw new Error('Conversation not found');
   }
-  conversation.messages.push(message);
-  conversations.set(id, conversation);
+  conversation.messages.push(deepClone(message));
+  conversations.set(storageKey(id, conversation.owner), conversation);
   persist();
-  return conversation;
+  return cloneConversation(conversation);
 }
 
-export function setConversationResponseId(id: string, responseId: string) {
+export function setConversationResponseId(id: string, responseId: string, owner?: string) {
   load();
-  const conversation = conversations.get(id);
+  const conversation = getStoredConversation(id, owner);
   if (!conversation || !responseId.trim()) {
     return;
   }
   conversation.last_response_id = responseId.trim();
-  conversations.set(id, conversation);
+  conversations.set(storageKey(id, conversation.owner), conversation);
   persist();
 }
 
-export function listConversations() {
+export function listConversations(owner?: string) {
   load();
-  return [...conversations.values()].map(cloneConversation);
+  const normalizedOwner = normalizeOwner(owner);
+  return [...conversations.values()]
+    .filter((conversation) => conversation.owner === normalizedOwner)
+    .map(cloneConversation);
 }
 
-export function ensureConversation(id: string, domain: string, fallbackTitle: string): ConversationEnvelope {
+export function ensureConversation(
+  id: string,
+  domain: string,
+  fallbackTitle: string,
+  owner?: string,
+): ConversationEnvelope {
   load();
-  const existing = getConversation(id);
+  const existing = getConversation(id, owner);
   if (existing) {
-    return cloneConversation(existing);
+    return existing;
   }
 
   return upsertConversation({
@@ -185,5 +236,5 @@ export function ensureConversation(id: string, domain: string, fallbackTitle: st
     domain,
     title: fallbackTitle || 'New conversation',
     detail: `${domain} context`,
-  });
+  }, owner);
 }
