@@ -1,6 +1,7 @@
 import type { AppPackageV2 } from './package';
 import { recordReactiveCycle, type ReactiveReceiptStore, type RecordReactiveCycleResult } from './reactive-receipts';
-import { runReactiveCycle, type ReactiveCycleResult } from './reactive-cycle';
+import { runLivingRuleWorker } from './living-rule-worker';
+import type { ReactiveCycleResult } from './reactive-cycle';
 import type { OperationCommitEvent, OperationCommitObserver } from './operation-observer';
 
 export type ReactiveObserverConfig = {
@@ -24,7 +25,7 @@ export function createReactiveCycleObserver(config: ReactiveObserverConfig): Ope
     if (event.before && typeof event.before === 'object') {
       beforeRows.push(event.before as Record<string, unknown>);
     }
-    const cycle = runReactiveCycle({
+    const cycle = runLivingRuleWorker({
       package: config.package,
       beforeRows,
       afterRows,
