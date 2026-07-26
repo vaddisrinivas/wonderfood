@@ -48,7 +48,7 @@ async function stopChild(child: ReturnType<typeof spawn>): Promise<void> {
     const forceTimer = setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     }, 5_000);
-    forceTimer.unref();
+    (forceTimer as unknown as { unref?: () => void }).unref?.();
     child.once('exit', () => {
       clearTimeout(forceTimer);
       resolve();

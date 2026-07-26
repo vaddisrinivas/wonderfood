@@ -181,7 +181,7 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
         const forceTimer = setTimeout(() => {
           if (server.exitCode === null && server.signalCode === null) server.kill('SIGKILL');
         }, 5_000);
-        forceTimer.unref();
+        (forceTimer as unknown as { unref?: () => void }).unref?.();
         server.once('exit', () => {
           clearTimeout(forceTimer);
           resolve();
