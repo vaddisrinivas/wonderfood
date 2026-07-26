@@ -60,11 +60,13 @@ const mcpRuntimePath = join(stateDir, 'mcp-runtime.json');
 const checkpointPath = join(stateDir, 'workflow-runs.json');
 const port = 19123;
 const base = `http://127.0.0.1:${port}`;
+const token = 'phase4-http-proof-token';
 
 process.env = {
   ...process.env,
   LIFEOS_MCP_STATE_PATH: mcpRuntimePath,
   LIFEOS_WORKFLOW_CHECKPOINT_PATH: checkpointPath,
+  LIFEOS_SERVER_TOKEN: token,
 };
 
 const runId = `phase4-http-${Date.now()}`;
@@ -129,6 +131,14 @@ function logRequest(entries: HttpRequestLog[], method: string, requestId: string
   });
 }
 
+function authHeaders(accept: string) {
+  return {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+    accept,
+  };
+}
+
 async function postMcpResponse(params: {
   id: string | number;
   method: string;
@@ -137,10 +147,7 @@ async function postMcpResponse(params: {
 }): Promise<JsonRpcEnvelope> {
   const response = await fetch(`${base}/mcp`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: params.accept ?? 'application/json, text/event-stream',
-    },
+    headers: authHeaders(params.accept ?? 'application/json, text/event-stream'),
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: params.id,
@@ -188,10 +195,7 @@ async function postMcpSse(params: {
 }, requestLog: HttpRequestLog[]): Promise<McpToolResult[]> {
   const response = await fetch(`${base}/mcp`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-    },
+    headers: authHeaders('application/json, text/event-stream'),
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: params.id,
@@ -265,10 +269,7 @@ async function expectJsonRpcToolError(params: {
 }, requestLog: HttpRequestLog[]) {
   const response = await fetch(`${base}/mcp`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
+    headers: authHeaders('application/json'),
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: params.id,

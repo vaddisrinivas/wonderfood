@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
 import { handleServerChat, normalizeChatSendRequest, type ChatSendRequest } from './chat';
 import { type NormalizedChatSend } from './chat';
+import { authorizeServerRequest, canExposeProviderStatusIds } from './mcp/auth';
 import { handleMcpRequest } from './mcp/official-server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
@@ -46,6 +47,12 @@ import {
 
 const port = Number(process.env.PORT ?? '8787');
 const host = process.env.LIFEOS_SERVER_HOST?.trim() || '127.0.0.1';
+const CHAT_SEND_BODY_LIMIT_BYTES = 256 * 1024;
+const CHAT_AGENT_BODY_LIMIT_BYTES = 512 * 1024;
+const CHAT_CONTROL_BODY_LIMIT_BYTES = 64 * 1024;
+const PROVIDER_BODY_LIMIT_BYTES = 1024 * 1024;
+const PACKAGE_BODY_LIMIT_BYTES = 512 * 1024;
+const HEALTH_BODY_LIMIT_BYTES = 512 * 1024;
 const idempotencyCache = new Map<string, { messageId: string; runId: string; conversationId: string }>();
 const runStatus = new Map<string, { status: 'running' | 'completed' | 'cancelled' | 'failed'; controller: AbortController; conversationId: string }>();
 const runByConversation = new Map<string, string>();
@@ -54,8 +61,6 @@ const packageRegistryPath = process.env.LIFEOS_PACKAGE_REGISTRY_PATH?.trim()
   || `${process.cwd()}/server-data/package-registry.json`;
 
 installReactiveRuntime();
-
-const DEFAULT_AUTH_TOKEN = process.env.LIFEOS_SERVER_TOKEN;
 const CORS_ORIGINS = new Set(
   (process.env.LIFEOS_CORS_ORIGINS ?? 'http://localhost:8094,http://127.0.0.1:8094,http://localhost:8093,http://127.0.0.1:8093')
     .split(',')
@@ -95,16 +100,66 @@ function notFound(res: any, message: string) {
   setJson(res, 404, { status: 'error', message });
 }
 
+function payloadTooLarge(res: any, message: string) {
+  setJson(res, 413, { status: 'error', message });
+}
+
 function ok(res: any, body: unknown) {
   setJson(res, 200, body);
 }
 
-async function readJsonBody(req: any): Promise<Record<string, unknown>> {
-  const chunks: string[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+class PayloadTooLargeError extends Error {}
+
+function handleBodyReadError(res: any, error: unknown) {
+  if (error instanceof PayloadTooLargeError) {
+    payloadTooLarge(res, error.message);
+    return true;
   }
-  const raw = chunks.join('');
+  if (error instanceof Error && error.message === 'Invalid Content-Length header') {
+    badRequest(res, error.message);
+    return true;
+  }
+  return false;
+}
+
+function parseContentLength(req: any): number | null {
+  const raw = Array.isArray(req.headers?.['content-length'])
+    ? req.headers['content-length'][0]
+    : req.headers?.['content-length'];
+  if (raw === undefined) {
+    return null;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
+}
+
+async function readBoundedTextBody(req: any, maxBytes: number): Promise<string> {
+  const contentLength = parseContentLength(req);
+  if (contentLength !== null) {
+    if (!Number.isFinite(contentLength)) {
+      throw new Error('Invalid Content-Length header');
+    }
+    if (contentLength > maxBytes) {
+      throw new PayloadTooLargeError(`Request body too large. Limit is ${maxBytes} bytes.`);
+    }
+  }
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    totalBytes += buffer.byteLength;
+    if (totalBytes > maxBytes) {
+      req.destroy?.();
+      throw new PayloadTooLargeError(`Request body too large. Limit is ${maxBytes} bytes.`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+async function readJsonBody(req: any, maxBytes: number): Promise<Record<string, unknown>> {
+  const raw = await readBoundedTextBody(req, maxBytes);
   if (!raw.trim()) {
     return {};
   }
@@ -149,12 +204,11 @@ function getPath(rawUrl: string | undefined) {
 }
 
 function assertAuth(req: any, res: any) {
-  const auth = req.headers?.authorization;
-  const token = DEFAULT_AUTH_TOKEN;
-  if (!token || auth === `Bearer ${token}`) {
+  const auth = authorizeServerRequest(req.headers ?? {});
+  if (auth.ok) {
     return true;
   }
-  unauthorized(res, 'Invalid server token');
+  setJson(res, auth.statusCode, { status: 'error', message: auth.message });
   return false;
 }
 
@@ -194,12 +248,8 @@ function parseProviderOperation(raw: unknown): ProviderOperation | null {
   return null;
 }
 
-async function readRawBody(req: any): Promise<string> {
-  const chunks: string[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
-  }
-  return chunks.join('');
+async function readRawBody(req: any, maxBytes: number): Promise<string> {
+  return readBoundedTextBody(req, maxBytes);
 }
 
 function sendStopReply(res: any, id: string, status: 'running' | 'completed' | 'cancelled' | 'failed') {
@@ -218,11 +268,14 @@ function sendStreamEvent(res: any, event: ChatStreamEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-async function parseChatSend(req: any): Promise<NormalizedChatSend> {
+async function parseChatSend(req: any, maxBytes: number): Promise<NormalizedChatSend> {
   let payload: ChatSendRequest;
   try {
-    payload = (await readJsonBody(req)) as ChatSendRequest;
-  } catch {
+    payload = (await readJsonBody(req, maxBytes)) as ChatSendRequest;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError || (error instanceof Error && error.message === 'Invalid Content-Length header')) {
+      throw error;
+    }
     throw new Error('Invalid JSON');
   }
   return normalizeChatSendRequest(payload);
@@ -397,20 +450,21 @@ const server = createServer(async (req: any, res: any) => {
   if (req.method === 'GET' && path === '/providers/status') {
     const notion = readNotionConfig();
     const sheets = readSheetsConfig();
+    const exposeIds = canExposeProviderStatusIds(req.headers ?? {});
     ok(res, {
       status: 'ok',
       authority: process.env.LIFEOS_AUTHORITY_PROVIDER?.trim() || 'notion',
       providers: {
         notion: {
           configured: Boolean(notion),
-          data_source_id: notion?.dataSourceId || null,
+          data_source_id: exposeIds ? notion?.dataSourceId || null : null,
           api_version: notion?.apiVersion || null,
           webhook_configured: Boolean(notion?.webhookSigningSecret),
         },
         google_sheets: {
           configured: Boolean(sheets),
-          spreadsheet_id: sheets?.spreadsheetId || null,
-          data_source_id: sheets?.dataSourceId || null,
+          spreadsheet_id: exposeIds ? sheets?.spreadsheetId || null : null,
+          data_source_id: exposeIds ? sheets?.dataSourceId || null : null,
           workbook_name: sheets?.workbookName || null,
         },
         openai: {
@@ -442,8 +496,9 @@ const server = createServer(async (req: any, res: any) => {
     if (req.method === 'POST' && path === '/health/connect/snapshot') {
       let payload: Record<string, unknown>;
       try {
-        payload = await readJsonBody(req);
-      } catch {
+        payload = await readJsonBody(req, HEALTH_BODY_LIMIT_BYTES);
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -483,7 +538,14 @@ const server = createServer(async (req: any, res: any) => {
         badRequest(res, 'Unsupported method');
         return;
       }
-      const rawBody = await readRawBody(req);
+      let rawBody = '';
+      try {
+        rawBody = await readRawBody(req, PROVIDER_BODY_LIMIT_BYTES);
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
+        badRequest(res, 'Invalid webhook JSON');
+        return;
+      }
       const parsed = normalizeWebhookBody(rawBody);
       if (!parsed) {
         badRequest(res, 'Invalid webhook JSON');
@@ -592,8 +654,9 @@ const server = createServer(async (req: any, res: any) => {
     if (req.method === 'POST' && path === '/providers/notion/pull') {
       let payload: { domain?: string; collection?: string; limit?: number; live?: boolean };
       try {
-        payload = (await readJsonBody(req)) as typeof payload;
-      } catch {
+        payload = (await readJsonBody(req, PROVIDER_BODY_LIMIT_BYTES)) as typeof payload;
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -619,8 +682,9 @@ const server = createServer(async (req: any, res: any) => {
         externalId?: string;
       };
       try {
-        payload = (await readJsonBody(req)) as typeof payload;
-      } catch {
+        payload = (await readJsonBody(req, PROVIDER_BODY_LIMIT_BYTES)) as typeof payload;
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -668,7 +732,14 @@ const server = createServer(async (req: any, res: any) => {
       if (!assertAuth(req, res)) {
         return;
       }
-      const rawBody = await readRawBody(req);
+      let rawBody = '';
+      try {
+        rawBody = await readRawBody(req, PROVIDER_BODY_LIMIT_BYTES);
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
+        badRequest(res, 'Invalid JSON');
+        return;
+      }
       let webhookPayload: unknown;
       try {
         webhookPayload = JSON.parse(rawBody);
@@ -740,8 +811,9 @@ const server = createServer(async (req: any, res: any) => {
     if (req.method === 'POST' && path === '/providers/sheets/pull') {
       let payload: { domain?: string; collection?: string; live?: boolean };
       try {
-        payload = (await readJsonBody(req)) as typeof payload;
-      } catch {
+        payload = (await readJsonBody(req, PROVIDER_BODY_LIMIT_BYTES)) as typeof payload;
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -771,8 +843,9 @@ const server = createServer(async (req: any, res: any) => {
         expected_digest?: string;
       };
       try {
-        payload = (await readJsonBody(req)) as typeof payload;
-      } catch {
+        payload = (await readJsonBody(req, PROVIDER_BODY_LIMIT_BYTES)) as typeof payload;
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -832,8 +905,9 @@ const server = createServer(async (req: any, res: any) => {
         limit?: number;
       };
       try {
-        payload = (await readJsonBody(req)) as typeof payload;
-      } catch {
+        payload = (await readJsonBody(req, PROVIDER_BODY_LIMIT_BYTES)) as typeof payload;
+      } catch (error) {
+        if (handleBodyReadError(res, error)) return;
         badRequest(res, 'Invalid JSON');
         return;
       }
@@ -853,6 +927,9 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path === '/chat/threads' && req.method === 'GET') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
     const query = new URL(`http://127.0.0.1:${port}${req.url}`);
     const domain = query.searchParams.get('domain');
     const rows = listConversations();
@@ -870,6 +947,9 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path === '/chat/run' && req.method === 'GET') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
     const query = new URL(`http://127.0.0.1:${port}${req.url}`);
     const conversationId = query.searchParams.get('conversation_id');
     if (!conversationId) {
@@ -897,6 +977,9 @@ const server = createServer(async (req: any, res: any) => {
   }
 
   if (path.startsWith('/chat/threads/') && req.method === 'GET') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
     const parts = path.split('/');
     const threadId = parts[parts.length - 1];
     const thread = getConversation(threadId);
@@ -925,8 +1008,9 @@ const server = createServer(async (req: any, res: any) => {
     }
     let payload: { package?: unknown };
     try {
-      payload = await readJsonBody(req) as typeof payload;
-    } catch {
+      payload = await readJsonBody(req, PACKAGE_BODY_LIMIT_BYTES) as typeof payload;
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -944,8 +1028,9 @@ const server = createServer(async (req: any, res: any) => {
     }
     let payload: { request?: unknown };
     try {
-      payload = await readJsonBody(req) as typeof payload;
-    } catch {
+      payload = await readJsonBody(req, PACKAGE_BODY_LIMIT_BYTES) as typeof payload;
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -964,8 +1049,9 @@ const server = createServer(async (req: any, res: any) => {
     }
     let payload: { request?: unknown; approval?: unknown };
     try {
-      payload = await readJsonBody(req) as typeof payload;
-    } catch {
+      payload = await readJsonBody(req, PACKAGE_BODY_LIMIT_BYTES) as typeof payload;
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -1018,7 +1104,7 @@ const server = createServer(async (req: any, res: any) => {
     }
 
     try {
-      const parsed = await parseChatSend(req);
+      const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
         parsed.domainId,
@@ -1146,6 +1232,7 @@ const server = createServer(async (req: any, res: any) => {
         res.end();
       }
     } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(
         res,
         error instanceof Error && error.message === 'Invalid JSON'
@@ -1164,8 +1251,9 @@ const server = createServer(async (req: any, res: any) => {
     }
     let payload: { messages?: unknown[]; previousResponseId?: string };
     try {
-      payload = (await readJsonBody(req)) as typeof payload;
-    } catch {
+      payload = (await readJsonBody(req, CHAT_AGENT_BODY_LIMIT_BYTES)) as typeof payload;
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -1216,7 +1304,7 @@ const server = createServer(async (req: any, res: any) => {
     }
 
     try {
-      const parsed = await parseChatSend(req);
+      const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
         parsed.domainId,
@@ -1289,6 +1377,7 @@ const server = createServer(async (req: any, res: any) => {
 
       ok(res, response);
     } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(
         res,
         error instanceof Error && error.message === 'Invalid JSON'
@@ -1308,8 +1397,9 @@ const server = createServer(async (req: any, res: any) => {
 
     let payload: { run_id?: string };
     try {
-      payload = (await readJsonBody(req)) as typeof payload;
-    } catch {
+      payload = (await readJsonBody(req, CHAT_CONTROL_BODY_LIMIT_BYTES)) as typeof payload;
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -1346,8 +1436,9 @@ const server = createServer(async (req: any, res: any) => {
       previous_response_id?: string;
     };
     try {
-      payload = await readJsonBody(req);
-    } catch {
+      payload = await readJsonBody(req, CHAT_CONTROL_BODY_LIMIT_BYTES);
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -1402,8 +1493,9 @@ const server = createServer(async (req: any, res: any) => {
 
     let payload: { conversation_id?: string; action?: string; value?: string; domain_id?: string };
     try {
-      payload = await readJsonBody(req);
-    } catch {
+      payload = await readJsonBody(req, CHAT_CONTROL_BODY_LIMIT_BYTES);
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }
@@ -1451,8 +1543,9 @@ const server = createServer(async (req: any, res: any) => {
 
     let payload: { action_id?: string; idempotency_key?: string; actor?: string };
     try {
-      payload = await readJsonBody(req);
-    } catch {
+      payload = await readJsonBody(req, CHAT_CONTROL_BODY_LIMIT_BYTES);
+    } catch (error) {
+      if (handleBodyReadError(res, error)) return;
       badRequest(res, 'Invalid JSON');
       return;
     }

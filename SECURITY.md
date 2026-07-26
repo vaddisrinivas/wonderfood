@@ -23,12 +23,16 @@ Do not include real user food, receipt, account, health, or provider data.
 - Provider credentials are encrypted with Android Keystore and excluded from backup.
 - Android automatic backup is disabled. Explicit Google Drive archives are encrypted.
 - Cleartext networking is restricted to local-development loopback hosts.
+- Hosted server and official MCP ingress fail closed unless a bearer token is
+  configured, or authless access is explicitly enabled with `LIFEOS_LOCAL_DEV=true`.
 - Backend switching creates a local rollback snapshot before the new active backend
   is committed.
 - Google Sheets sync requires Google authorization; a public Sheet link alone is not
   treated as write permission.
 - Notion setup uses a page URL plus integration/personal token. WonderFood must never
   collect Notion usernames or passwords.
+- `/providers/status` may stay readable for diagnostics, but canonical provider IDs
+  are redacted unless the caller is authenticated or explicit local development is enabled.
 - Supabase/PostgREST/WonderFood server modes require HTTPS endpoints and API tokens.
   Direct PostgreSQL DSN mode is advanced/internal and must use TLS-capable restricted
   roles if enabled by a fork.
