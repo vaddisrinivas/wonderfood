@@ -377,7 +377,8 @@ export async function deliverProviderWriteEvent(input: {
       return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status, readback: verified.snapshot };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      const finalReason = reason.toLowerCase().includes('timeout')
+      const lowerReason = reason.toLowerCase();
+      const finalReason = lowerReason.includes('timeout') || lowerReason.includes('timed out') || lowerReason.includes('abort')
         ? 'provider_writeback_readback_timeout'
         : `provider_writeback_readback_unknown:${reason}`;
       await markOutboxEvent(input.db, input.event.id, { status: 'pending', last_error: finalReason, attemptsDelta: 1 });

@@ -49,7 +49,7 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'LIVING FOOD LOOP', 'Approve tonight', 'Approve', 'Advanced', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop'],
+    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'LIVING FOOD LOOP', 'Approve tonight', 'Approve', 'Advanced', 'Dinner', 'Pantry', 'Plan', 'Recipes', 'Shopping'],
     forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab'],
   },
   {
@@ -81,7 +81,7 @@ const routes = [
   {
     name: 'settings',
     path: '/settings',
-    must: ['LIFEOS / CONNECTIONS', 'Choose AI and data sources.', 'Local answers first', 'No external sources', 'APP BEHAVIOR'],
+    must: ['LIFEOS / CONNECTIONS', 'Food workspace settings', 'Configure food, sources, and app preferences.', 'Local answers first', 'No external sources', 'Advanced'],
   },
 ];
 
