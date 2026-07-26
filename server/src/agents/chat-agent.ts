@@ -11,7 +11,10 @@ import {
   parseLocalQueryResult,
 } from '../types/local-query';
 
-const DEFAULT_CHAT_MODEL = 'gpt-5.4-mini';
+export const DEFAULT_CHAT_MODEL = 'gpt-4.1-mini';
+const DEFAULT_MODEL_TIMEOUT_MS = 30000;
+const DEFAULT_WEB_SEARCH_TIMEOUT_MS = 60000;
+const DEFAULT_WEB_SEARCH_CONTEXT_SIZE = 'medium';
 
 const chatCallOptionsSchema = z.object({
   enableLocalQuery: z.boolean().default(false),
@@ -20,6 +23,22 @@ const chatCallOptionsSchema = z.object({
 });
 
 type ChatCallOptions = z.infer<typeof chatCallOptionsSchema>;
+type ChatTools = {
+  localQuery: typeof localQuery;
+  web_search: ReturnType<typeof openai.tools.webSearch>;
+};
+type ChatAgentRuntimeLike = {
+  stream: (input: any) => Promise<any>;
+  generate: (input: any) => Promise<any>;
+};
+
+export type ChatAgentConfig = {
+  model: string;
+  requestTimeoutMs: number;
+  webSearchTimeoutMs: number;
+  webSearchEnabled: boolean;
+  webSearchContextSize: 'low' | 'medium' | 'high';
+};
 
 const localQueryInputSchema = jsonSchema<BoundLocalQueryRequest>(
   localQueryRequestSchema as Parameters<typeof jsonSchema<BoundLocalQueryRequest>>[0],
@@ -52,33 +71,62 @@ export const localQuery = tool({
   outputSchema: localQueryOutputSchema,
 });
 
-const chatTools = {
-  localQuery,
-  web_search: openai.tools.webSearch({ searchContextSize: 'medium' }),
-};
+function parsePositiveIntegerEnv(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw?.trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
-export const chatAgent = new ToolLoopAgent<ChatCallOptions, typeof chatTools>({
-  model: openai.responses(process.env.OPENAI_MODEL?.trim() || DEFAULT_CHAT_MODEL),
-  tools: chatTools,
-  callOptionsSchema: zodSchema(chatCallOptionsSchema),
-  prepareCall: ({ options, ...rest }) => {
-    const providerOptions: { openai: OpenAIResponsesProviderOptions } = {
-      openai: {
-        previousResponseId: options.previousResponseId,
-        parallelToolCalls: false,
-        store: true,
-      },
-    };
-    return {
-      ...rest,
-      activeTools: [
-        ...(options.enableLocalQuery ? ['localQuery' as const] : []),
-        ...(options.enableWebSearch ? ['web_search' as const] : []),
-      ],
-      providerOptions,
-    };
-  },
-});
+function parseWebSearchContextSize(raw: string | undefined): ChatAgentConfig['webSearchContextSize'] {
+  const normalized = raw?.trim().toLowerCase();
+  return normalized === 'low' || normalized === 'high' || normalized === 'medium'
+    ? normalized
+    : DEFAULT_WEB_SEARCH_CONTEXT_SIZE;
+}
+
+export function readChatAgentConfig(): ChatAgentConfig {
+  return {
+    model: process.env.OPENAI_MODEL?.trim() || DEFAULT_CHAT_MODEL,
+    requestTimeoutMs: parsePositiveIntegerEnv(process.env.OPENAI_TIMEOUT_MS, DEFAULT_MODEL_TIMEOUT_MS),
+    webSearchTimeoutMs: parsePositiveIntegerEnv(process.env.OPENAI_WEB_SEARCH_TIMEOUT_MS, DEFAULT_WEB_SEARCH_TIMEOUT_MS),
+    webSearchEnabled: process.env.OPENAI_WEB_SEARCH_ENABLED?.trim().toLowerCase() !== 'false',
+    webSearchContextSize: parseWebSearchContextSize(process.env.OPENAI_WEB_SEARCH_CONTEXT_SIZE),
+  };
+}
+
+function createChatTools(config: ChatAgentConfig) {
+  return {
+    localQuery,
+    web_search: openai.tools.webSearch({ searchContextSize: config.webSearchContextSize }),
+  } satisfies ChatTools;
+}
+
+export function createChatAgentRuntime(config = readChatAgentConfig()) {
+  const chatTools = createChatTools(config);
+  return new ToolLoopAgent<ChatCallOptions, typeof chatTools>({
+    model: openai.responses(config.model),
+    tools: chatTools,
+    callOptionsSchema: zodSchema(chatCallOptionsSchema),
+    prepareCall: ({ options, ...rest }) => {
+      const providerOptions: { openai: OpenAIResponsesProviderOptions } = {
+        openai: {
+          previousResponseId: options.previousResponseId,
+          parallelToolCalls: false,
+          store: true,
+        },
+      };
+      return {
+        ...rest,
+        activeTools: [
+          ...(options.enableLocalQuery ? ['localQuery' as const] : []),
+          ...(options.enableWebSearch && config.webSearchEnabled ? ['web_search' as const] : []),
+        ],
+        providerOptions,
+      };
+    },
+  });
+}
+
+export const chatAgent = createChatAgentRuntime();
 
 export type ChatAgentSource = {
   url: string;
@@ -148,6 +196,67 @@ function normalizeText(text: unknown): string {
   return typeof text === 'string' && text.trim() ? text : '';
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+export function extractResponseId(value: unknown): string | undefined {
+  const record = asRecord(value);
+  const providerMetadata = asRecord(record?.providerMetadata);
+  const openaiMetadata = asRecord(providerMetadata?.openai);
+  const candidate = [
+    openaiMetadata?.responseId,
+    openaiMetadata?.id,
+    asRecord(openaiMetadata?.response)?.id,
+    record?.responseId,
+    record?.id,
+  ].find((entry) => typeof entry === 'string' && entry.trim().length > 0);
+  return typeof candidate === 'string' ? candidate.trim() : undefined;
+}
+
+function createRequestSignal(baseSignal: AbortSignal | undefined, timeoutMs: number) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromBase = () => controller.abort(baseSignal?.reason);
+
+  if (baseSignal?.aborted) {
+    controller.abort(baseSignal.reason);
+  } else if (baseSignal) {
+    baseSignal.addEventListener('abort', abortFromBase, { once: true });
+  }
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new DOMException('Request timed out.', 'AbortError'));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => timedOut,
+    clear() {
+      clearTimeout(timer);
+      if (baseSignal) {
+        baseSignal.removeEventListener('abort', abortFromBase);
+      }
+    },
+  };
+}
+
+function isAbortLikeError(error: unknown, signal: AbortSignal | undefined, timedOut: boolean): boolean {
+  if (timedOut || signal?.aborted) {
+    return true;
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.name === 'AbortError'
+    || error.name === 'TimeoutError'
+    || /abort|aborted|cancell?ed|timed out/i.test(error.message);
+}
+
 function buildModelResult(options: {
   status: ChatAgentResult['status'];
   source: ChatAgentResult['source'];
@@ -196,7 +305,7 @@ export async function runChatAgent(input: {
   previousResponseId?: string;
   enableLocalQuery?: boolean;
   webSearch?: boolean;
-}): Promise<ChatAgentResult> {
+}, runtime: ChatAgentRuntimeLike = chatAgent): Promise<ChatAgentResult> {
   if (!process.env.OPENAI_API_KEY?.trim()) {
     return {
       status: 'disabled',
@@ -209,15 +318,20 @@ export async function runChatAgent(input: {
   }
 
   assertServerExecuteGate(localQuery);
+  const config = readChatAgentConfig();
+  const timeout = createRequestSignal(
+    input.signal,
+    input.webSearch === true ? config.webSearchTimeoutMs : config.requestTimeoutMs,
+  );
 
   try {
     if (input.stream) {
-      const streamed = await chatAgent.stream({
+      const streamed = await runtime.stream({
         prompt: input.prompt,
-        abortSignal: input.signal,
+        abortSignal: timeout.signal,
         options: {
           enableLocalQuery: input.enableLocalQuery === true,
-          enableWebSearch: input.webSearch === true,
+          enableWebSearch: input.webSearch === true && config.webSearchEnabled,
           previousResponseId: input.previousResponseId,
         },
       });
@@ -232,7 +346,7 @@ export async function runChatAgent(input: {
       }
       const response = await streamed.response;
       const citations = summarizeSources(await streamed.sources);
-      const toolCalls = toolCallsFromSteps.flatMap((step) => toToolCallPayload(step));
+      const toolCalls = toolCallsFromSteps.flatMap((step: unknown) => toToolCallPayload(step as Parameters<typeof toToolCallPayload>[0]));
       const status =
         finalStep.finishReason === 'tool-calls'
           ? 'tool-calls'
@@ -245,7 +359,7 @@ export async function runChatAgent(input: {
       return buildModelResult({
         status,
         source: 'ai-sdk',
-        responseId: response.id,
+        responseId: extractResponseId(response),
         conversationId: undefined,
         text: normalizeText(output),
         sources: citations,
@@ -253,19 +367,19 @@ export async function runChatAgent(input: {
       });
     }
 
-    const generated = await chatAgent.generate({
+    const generated = await runtime.generate({
       prompt: input.prompt,
-      abortSignal: input.signal,
+      abortSignal: timeout.signal,
       options: {
         enableLocalQuery: input.enableLocalQuery === true,
-        enableWebSearch: input.webSearch === true,
+        enableWebSearch: input.webSearch === true && config.webSearchEnabled,
         previousResponseId: input.previousResponseId,
       },
     });
     const finalStep = generated.finalStep;
     const response = await generated.response;
     const citations = summarizeSources(await generated.sources);
-    const toolCalls = (await generated.steps).flatMap((step) => toToolCallPayload(step));
+    const toolCalls = (await generated.steps).flatMap((step: unknown) => toToolCallPayload(step as Parameters<typeof toToolCallPayload>[0]));
     const text = normalizeText(await generated.text);
     const status = finalStep.finishReason === 'tool-calls'
       ? 'tool-calls'
@@ -276,18 +390,18 @@ export async function runChatAgent(input: {
     return buildModelResult({
       status,
       source: 'ai-sdk',
-      responseId: response.id,
+      responseId: extractResponseId(response),
       conversationId: undefined,
       text,
       sources: citations,
       toolCalls,
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (isAbortLikeError(error, input.signal, timeout.didTimeout())) {
       const result: ChatAgentResult = {
         status: 'aborted',
         source: 'ai-sdk',
-        text: 'Request was cancelled.',
+        text: timeout.didTimeout() ? 'Request timed out.' : 'Request was cancelled.',
         toolCalls: [],
         webCitations: [],
         duplicateToolCallIds: [],
@@ -303,5 +417,7 @@ export async function runChatAgent(input: {
       webCitations: [],
       duplicateToolCallIds: [],
     };
+  } finally {
+    timeout.clear();
   }
 }

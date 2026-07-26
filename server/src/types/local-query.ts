@@ -265,6 +265,10 @@ export function parseLocalQueryResult(input: unknown): ValidationResult<LocalQue
   if (result.metadata.outputBytes !== payloadBytes) {
     errors.push(`metadata.outputBytes must match payload size (${payloadBytes})`);
   }
+  const expectedResultHash = computeResultHash(result.rows);
+  if (result.resultHash !== expectedResultHash) {
+    errors.push(`resultHash must match rows payload (${expectedResultHash})`);
+  }
 
   if (result.rows.length > result.metadata.maxRows || result.rows.length > result.metadata.requestedRows) {
     errors.push('result rows cannot exceed requested/max rows');
@@ -306,11 +310,12 @@ export function buildLocalQueryResult(
   executionMs: number,
 ): LocalQueryResult {
   const requestedRows = request.maxRows;
-  const resultRows = rows.slice(0, requestedRows).map((row) => ({
+  const boundedRows = rows.slice(0, requestedRows).map((row) => ({
     id: row.id,
     collection: row.collection,
     fields: row.fields,
   }));
+  const resultRows = trimRowsToOutputBudget(boundedRows);
   const returnedRows = resultRows.length;
   const metadata = {
     requestedRows,
@@ -329,7 +334,7 @@ export function buildLocalQueryResult(
     activePackageId: packageIdentity.id,
     activePackageVersion: packageIdentity.version,
     rows: resultRows,
-    truncated: rows.length > requestedRows,
+    truncated: rows.length > requestedRows || resultRows.length < boundedRows.length,
     executedAt: new Date().toISOString(),
     metadata,
   };
@@ -490,6 +495,22 @@ function normalizeFieldList(values: string[]): string[] {
       seen.add(value);
       return true;
     });
+}
+
+function trimRowsToOutputBudget(rows: LocalQueryResultRow[]): LocalQueryResultRow[] {
+  if (Buffer.byteLength(stableJson(rows), 'utf8') <= LOCAL_QUERY_MAX_OUTPUT_BYTES) {
+    return rows;
+  }
+
+  const out: LocalQueryResultRow[] = [];
+  for (const row of rows) {
+    const candidate = [...out, row];
+    if (Buffer.byteLength(stableJson(candidate), 'utf8') > LOCAL_QUERY_MAX_OUTPUT_BYTES) {
+      break;
+    }
+    out.push(row);
+  }
+  return out;
 }
 
 function computeStableHash(value: unknown): string {

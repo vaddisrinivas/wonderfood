@@ -187,6 +187,37 @@ const mismatchedOutputBytes = parseLocalQueryResult({
 assert.equal(mismatchedOutputBytes.ok, false);
 assert.equal(mismatchedOutputBytes.ok === false && mismatchedOutputBytes.errors.some((entry) => entry.includes('metadata.outputBytes must match payload size')), true);
 
+const tamperedHash = parseLocalQueryResult({
+  ...truncatedPayload,
+  resultHash: `sha256:${'f'.repeat(64)}`,
+});
+assert.equal(tamperedHash.ok, false);
+assert.equal(tamperedHash.ok === false && tamperedHash.errors.some((entry) => entry.includes('resultHash must match rows payload')), true);
+
+const oversizedTrimmed = buildLocalQueryResult(
+  {
+    ...validRequest.value,
+    maxRows: 4,
+    query: {
+      ...validRequest.value.query,
+      limit: 4,
+      project: ['title'],
+    },
+    requestedFields: ['title'],
+  },
+  Array.from({ length: 4 }, (_, index) => ({
+    id: `oversize-${index + 1}`,
+    collection: 'records',
+    fields: { title: 'x'.repeat(5000) },
+  })),
+  { id: 'food', version: '1.0.0' },
+  9,
+);
+assert.equal(oversizedTrimmed.metadata.outputBytes <= 1024 * 8, true);
+assert.equal(oversizedTrimmed.truncated, true);
+assert.equal(oversizedTrimmed.rows.length < 4, true);
+assert.equal(parseLocalQueryResult(oversizedTrimmed).ok, true);
+
 const deterministicErrors = parseLocalQueryRequest({
   ...localQueryRequest,
   requestedFields: ['provider_token'],

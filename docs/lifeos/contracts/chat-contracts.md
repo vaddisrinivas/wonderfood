@@ -58,6 +58,12 @@ Rules:
 - Web search is opt-in through `OPENAI_WEB_SEARCH_ENABLED=true`; when unset,
   explicit `online`, `latest`, `current`, `source`, and similar queries enable
   the tool. URL/title annotations are normalized into clickable source cards.
+- `OPENAI_MODEL` selects the Responses model. Default: `gpt-4.1-mini`.
+- `OPENAI_TIMEOUT_MS` bounds non-search model calls. Default: `30000`.
+- `OPENAI_WEB_SEARCH_CONTEXT_SIZE` configures hosted web-search context size:
+  `low`, `medium`, or `high`. Default: `medium`.
+- `OPENAI_WEB_SEARCH_TIMEOUT_MS` bounds model calls that enable hosted web
+  search. Default: `60000`.
 
 ## Retry
 

@@ -2,6 +2,9 @@ import { listRecords } from '../mcp/state';
 import { pullNotionRecordsLive } from '../providers/notion/pull';
 import { pullSheetsRecordsLive } from '../providers/sheets/pull';
 
+export type RetrievalProvider = 'notion' | 'google_sheets';
+export type RetrievalFactSensitivity = 'general' | 'personal';
+
 export type RetrievalSnapshot = {
   id: string;
   label: string;
@@ -17,6 +20,42 @@ export type RetrievalResult = {
   domain: string;
   snapshots: RetrievalSnapshot[];
 };
+
+export type RetrievalProjectedFact = {
+  field: string;
+  sensitivity: RetrievalFactSensitivity;
+  value: string;
+};
+
+const SECRET_FIELD_PATTERNS = [
+  /(^|[._-])(secret|token|api[_-]?key|auth|password|credential|cookie)($|[._-])/i,
+  /(^|[._-])(provider[_-]?snapshot|raw[_-]?snapshot|snapshot|json|payload|body|prompt|instruction)($|[._-])/i,
+];
+
+const PROMPT_INJECTION_PATTERNS = [
+  /\bignore\b.{0,32}\b(instruction|system|previous|developer|tool)\b/i,
+  /\b(disregard|override)\b.{0,32}\b(instruction|system|tool)\b/i,
+  /\btool[_ -]?call\b/i,
+  /<\|/,
+];
+
+const ALLOWLISTED_FACT_PATTERNS: Array<{
+  pattern: RegExp;
+  sensitivity: RetrievalFactSensitivity;
+}> = [
+  { pattern: /(^|[._-])(status|state|ready|availability)($|[._-])/i, sensitivity: 'general' },
+  { pattern: /(^|[._-])(quantity|count|amount|unit|servings)($|[._-])/i, sensitivity: 'general' },
+  { pattern: /(^|[._-])(aisle|location|category|type|kind|brand|meal)($|[._-])/i, sensitivity: 'general' },
+  { pattern: /(^|[._-])(expires|expires_at|use_by|best_by|updated_at|created_at|scheduled_for)($|[._-])/i, sensitivity: 'personal' },
+  { pattern: /(^|[._-])(calories|protein|fat|carbs|fiber|price|cost|currency|minutes|cook_time|prep_time)($|[._-])/i, sensitivity: 'personal' },
+];
+
+const PROVIDER_SELECTION_PATTERNS: Record<RetrievalProvider, RegExp[]> = {
+  notion: [/\bnotion\b/i, /\bpage\b/i, /\bdatabase\b/i],
+  google_sheets: [/\bgoogle\s*sheets\b/i, /\bsheets?\b/i, /\bspreadsheet\b/i, /\bworkbook\b/i],
+};
+
+const AUTHORITY_SELECTION_PATTERN = /\b(authority|authoritative|provider|source|live|sync|canonical)\b/i;
 
 function formatCitationDetail(input: {
   collection: string;
@@ -76,16 +115,123 @@ function compactValue(value: unknown): string {
   return '';
 }
 
-function compactFacts(properties: Record<string, unknown>): string {
-  return Object.entries(properties)
-    .filter(([key]) => !['notion', 'relations'].includes(key.toLowerCase()))
-    .map(([key, value]) => {
-      const text = compactValue(value);
-      return text ? `${key}: ${text}` : '';
+function normalizeFactField(field: string): string {
+  return field.trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_.-]/g, '').toLowerCase();
+}
+
+function isSecretField(field: string): boolean {
+  return SECRET_FIELD_PATTERNS.some((pattern) => pattern.test(field));
+}
+
+function looksLikePromptInjection(text: string): boolean {
+  return PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function classifyFactField(field: string): RetrievalFactSensitivity | null {
+  const normalized = normalizeFactField(field);
+  if (!normalized || isSecretField(normalized)) {
+    return null;
+  }
+  const match = ALLOWLISTED_FACT_PATTERNS.find(({ pattern }) => pattern.test(normalized));
+  return match?.sensitivity ?? null;
+}
+
+function sanitizeFactText(value: unknown): string {
+  const text = compactValue(value)
+    .replace(/\s+/g, ' ')
+    .replace(/[<>{}`]/g, '')
+    .trim();
+  if (!text || looksLikePromptInjection(text)) {
+    return '';
+  }
+  return text.slice(0, 120);
+}
+
+export function projectPromptFacts(properties: Record<string, unknown>): RetrievalProjectedFact[] {
+  const out: RetrievalProjectedFact[] = [];
+  const visit = (prefix: string, value: unknown, depth: number) => {
+    if (depth > 2 || value === null || value === undefined) {
+      return;
+    }
+    if (Array.isArray(value)) {
+      const text = sanitizeFactText(value);
+      const sensitivity = classifyFactField(prefix);
+      if (text && sensitivity) {
+        out.push({ field: normalizeFactField(prefix), sensitivity, value: text });
+      }
+      return;
+    }
+    if (typeof value === 'object') {
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        const nextPrefix = prefix ? `${prefix}.${key}` : key;
+        if (isSecretField(nextPrefix)) {
+          continue;
+        }
+        visit(nextPrefix, nested, depth + 1);
+      }
+      return;
+    }
+    const sensitivity = classifyFactField(prefix);
+    const text = sanitizeFactText(value);
+    if (!sensitivity || !text) {
+      return;
+    }
+    out.push({
+      field: normalizeFactField(prefix),
+      sensitivity,
+      value: text,
+    });
+  };
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (['notion', 'relations', 'unsupported', 'provider_snapshot'].includes(key.toLowerCase())) {
+      continue;
+    }
+    visit(key, value, 0);
+  }
+
+  const seen = new Set<string>();
+  return out
+    .filter((fact) => {
+      const key = `${fact.field}:${fact.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     })
-    .filter(Boolean)
-    .slice(0, 12)
-    .join('; ');
+    .slice(0, 8);
+}
+
+export function renderPromptFacts(properties: Record<string, unknown>): string {
+  return projectPromptFacts(properties)
+    .map((fact) => `[${fact.sensitivity}] ${fact.field} = ${fact.value}`)
+    .join('\n');
+}
+
+export function selectRetrievalProviders(query: string): RetrievalProvider[] {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const selected = (Object.entries(PROVIDER_SELECTION_PATTERNS) as Array<[RetrievalProvider, RegExp[]]>)
+    .filter(([, patterns]) => patterns.some((pattern) => pattern.test(trimmed)))
+    .map(([provider]) => provider);
+
+  if (selected.length > 0) {
+    return selected;
+  }
+
+  if (AUTHORITY_SELECTION_PATTERN.test(trimmed)) {
+    const authority = process.env.LIFEOS_AUTHORITY_PROVIDER?.trim().toLowerCase();
+    if (authority === 'google_sheets') {
+      return ['google_sheets'];
+    }
+    if (authority === 'notion') {
+      return ['notion'];
+    }
+  }
+
+  return [];
 }
 
 export async function runRetrieval(input: { query: string; domain: string }): Promise<RetrievalResult> {
@@ -118,14 +264,11 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
       url: record.source.url || fallbackRecordUrl(record),
       tone: toneForProvider(record.source.provider),
       score: Number((1 - index * 0.1).toFixed(1)),
-      excerpt: compactFacts(record.properties),
+      excerpt: renderPromptFacts(record.properties),
     }))
     .filter((snapshot) => snapshot.label.trim().length > 0 && snapshot.id.trim().length > 0);
 
-  // Webhook events remain change signals; retrieval always refetches provider
-  // authority so Chat can cite the surface the user actually asked about.
-  const liveNotion = await pullNotionRecordsLive({ domain: input.domain, limit: 50 });
-  const liveSheets = await pullSheetsRecordsLive({ domain: input.domain });
+  const selectedProviders = new Set(selectRetrievalProviders(trimmedQuery));
   const needle = trimmedQuery.toLowerCase();
   const stopWords = new Set(['what', 'which', 'where', 'when', 'does', 'about', 'the', 'this', 'that', 'item', 'canonical', 'please', 'tell', 'show', 'give', 'with', 'from', 'live', 'spreadsheet']);
   const queryTerms = needle.split(/[^a-z0-9_]+/).filter((term) => term.length > 2 && !stopWords.has(term));
@@ -137,7 +280,12 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
   ): RetrievalSnapshot[] {
     return records
       .map((record, index) => {
-        const searchable = `${record.title} ${record.collection} ${JSON.stringify(record.properties)}`.toLowerCase();
+        const projectedFacts = projectPromptFacts(record.properties);
+        const searchable = [
+          record.title,
+          record.collection,
+          ...projectedFacts.map((fact) => `${fact.field} ${fact.value}`),
+        ].join(' ').toLowerCase();
         const matchCount = queryTerms.filter((term) => searchable.includes(term)).length;
         const externalId = typeof record.source?.external_id === 'string' ? record.source.external_id : record.id;
         return {
@@ -152,7 +300,9 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
             ? Number((matchCount / queryTerms.length + (matchCount > 0 ? 0.1 : 0)).toFixed(2))
             : Number((0.6 - index * 0.05).toFixed(2)),
           matchCount,
-          excerpt: compactFacts(record.properties),
+          excerpt: projectedFacts
+            .map((fact) => `[${fact.sensitivity}] ${fact.field} = ${fact.value}`)
+            .join('\n'),
           searchable,
         };
       })
@@ -160,6 +310,15 @@ export async function runRetrieval(input: { query: string; domain: string }): Pr
       .sort((a, b) => b.score - a.score)
       .map(({ searchable: _searchable, matchCount: _matchCount, ...snapshot }) => snapshot);
   }
+
+  const [liveNotion, liveSheets] = await Promise.all([
+    selectedProviders.has('notion')
+      ? pullNotionRecordsLive({ domain: input.domain, limit: 50 })
+      : Promise.resolve({ status: 'disabled' as const, configured: false, records: [], source_snapshots: [], message: 'Not selected for retrieval.' }),
+    selectedProviders.has('google_sheets')
+      ? pullSheetsRecordsLive({ domain: input.domain })
+      : Promise.resolve({ status: 'disabled' as const, configured: false, records: [], source_snapshots: [], message: 'Not selected for retrieval.' }),
+  ]);
 
   const providerSources = [
     ...(liveNotion.status === 'ready' ? providerSnapshots(liveNotion.records, 'notion', 'notion') : []),

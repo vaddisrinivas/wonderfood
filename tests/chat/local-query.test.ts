@@ -110,4 +110,31 @@ describe('executeLocalQueryRows', () => {
       packageIdentity: { id: 'food', version: '1.0.0' },
     })).resolves.toMatchObject({ ok: false, error: 'local_query_offset_invalid' });
   });
+
+  it('rejects oversized projected payloads before returning tool output', async () => {
+    await expect(executeLocalQueryRows({
+      request: request({
+        requestedFields: ['title'],
+        query: {
+          ...request().query,
+          project: ['title'],
+          limit: 2,
+        },
+        maxRows: 2,
+      }),
+      records: [
+        {
+          ...records[0],
+          id: 'huge-1',
+          title: 'x'.repeat(5000),
+        },
+        {
+          ...records[1],
+          id: 'huge-2',
+          title: 'y'.repeat(5000),
+        },
+      ],
+      packageIdentity: { id: 'food', version: '1.0.0' },
+    })).resolves.toMatchObject({ ok: false, error: 'local_query_output_too_large' });
+  });
 });
