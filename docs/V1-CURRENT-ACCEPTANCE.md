@@ -1,8 +1,8 @@
 # WonderFood V1 Current Acceptance
 
-Status: **NOT ACCEPTED**  
+Status: **DEBUG APP ACCEPTED; LIVE NOTION PROOF BLOCKED**  
 Audit date: `2026-07-26`  
-Commit: `e684ec8`
+Audited product commit: `f3f2558c` + current acceptance-script/test updates
 Branch basis: `codex/lifeos-e2e-implementation`
 
 ## Audit basis
@@ -11,6 +11,111 @@ Branch basis: `codex/lifeos-e2e-implementation`
 - Machine-readable acceptance registry: `docs/V1-ACCEPTANCE-REGISTRY.json`.
 - Mutation policy for this audit: **no live provider mutation**, **no product edits**, **docs only**.
 - Repository truth check: `docs/REPOSITORY-AUDIT.md` is itself stale at `8b2cb9a`, so it cannot be treated as current acceptance proof.
+
+## Single-shot debug acceptance at current tree
+
+Evidence root: `app/build/evidence/utopia-single-shot/2026-07-26T13-02-28-116Z/summary.json`
+
+Passed in one conveyor:
+
+- `npm run config:validate`
+- `npm run typecheck`
+- `npm run doctor`
+- `npm run test`
+- `npm run test:server:direct`
+- `npm run check:package-builder-api`
+- `npm run check:food-golden-path`
+- `npm run check:provider-writeback`
+- `npm run check:ai-runtime`
+- `npm run check:workflow-runtime`
+- `npm run phase7:check:workflow-resume-cancel`
+- `npm run check:writer-boundary`
+- `npm run check:migrations`
+- `npm run check:roundtrip`
+- `npm run check:sync-merge`
+- `npm run export:web`
+- `npm run check:web-product`
+- `npm run check:accessibility-smoke`
+- `npm run phase9:check:responsive-visual-matrix`
+- `npm run phase9:check:visual-state-matrix`
+- `npm run phase9:check:performance-budget`
+- `npm run export:android`
+- `WONDERFOOD_DEVICE_MUTATION_ACK=DISPOSABLE_EMULATOR_ONLY LIFEOS_EMULATOR_AVD=Pixel_3a_API_34_extension_level_7_arm64-v8a npm run phase9:check:native-visual-matrix`
+- `npm run phase9:check:product-polish-review`
+- `npm run phase9:check:completion-audit` as informational audit
+
+Current results:
+
+- Web product smoke: `PASS` (`16/16` route/viewport checks).
+- Accessibility smoke: `PASS`.
+- Responsive visual matrix: `PASS` (`24/24`).
+- Visual state matrix: `PASS` (`16/16`).
+- Performance budget: `PASS`.
+- Android export: `PASS`.
+- Native visual matrix: `PASS` (`7/7` routes) on explicit disposable emulator.
+- Product polish review: `APPROVED`.
+- Completion audit: `7` passed, `2` missing.
+
+Remaining blocker:
+
+- Live provider authority proof is blocked before mutation because `NOTION_TEST_PAGE_ID` is missing. Command attempted: `/Users/srinivasvaddi/.codex/skills/agent-env/scripts/run-with-agent-env.sh npm run check:provider-standalone-authority`; result: `Disposable lane guard: BLOCKED (set NOTION_TEST_PAGE_ID). No mutation attempted.`
+
+Verdict:
+
+- Debug app acceptance: **ACCEPTED** for deterministic, web, Android-debug, Food UI, product-polish, kernel, package-builder, workflow, rule, and local provider-writeback gates.
+- Full live-provider acceptance: **BLOCKED** until a disposable Notion parent page is shared and exported as `NOTION_TEST_PAGE_ID`.
+- Signed release remains deliberately excluded.
+
+## Independent current-tree acceptance rerun at `0106c9a`
+
+Range inspected: `0c3439e..0106c9a` (`5` repair commits, `38` files). User-owned `.gitignore` and `AGENTS.md` changes were preserved.
+
+### Prior-blocker reproductions
+
+- MCP cross-domain tool/resource access, denied-target disclosure, and caller-forged MCP principal: `PASS` in `3/3` rounds.
+- Caller-forged server chat principal: `PASS` in `3/3` rounds.
+- Canonical MCP record/action/outbox retention under eight concurrent processes: `PASS` in `3/3` rounds.
+- Workflow child writes, compensation, and Undo through canonical actions/outbox: `PASS`.
+- Durable chat reservation across eight processes and concurrent send/stream transports: `PASS` in `3/3` rounds.
+- Reactive worker exclusive lease across eight processes: `PASS` in `3/3` rounds.
+- Notion/Sheets disposable authorization bound by HMAC to exact target and account: `PASS`; mismatched targets/accounts fail closed.
+- Package-builder cleanup stability: `10/10` consecutive runs passed.
+- Web SQLite/WASM first-load stability: `5/5` clean exports and first-load runs passed with required WASM, correct MIME, no request/runtime/console errors, and all `16/16` route/viewport results.
+
+### Full deterministic matrix
+
+Passed:
+
+- `npm run config:validate`
+- `npm run typecheck`
+- `npm run typecheck:spikes`
+- `npm run test` (`28` files, `115` tests)
+- `npm run test:server:direct` (`62` pass markers)
+- Kernel/operation/control-plane, package-builder, query/rule/domain runtime, roundtrip, MCP, chat send/Undo/idempotency/continuation/cross-surface, AI, workflow, Notion, Sheets, provider writeback/sync, Food, data-plane, real-SQLite writer, migration, and evidence-provenance gates
+- `npm run check:utopia-debug`
+- `NPM_CONFIG_CACHE=/tmp/wonderfood-npm-cache npm run doctor` (`19/19`)
+- `npm run export:web`
+- `npm run export:android`
+- Web product smoke (`16/16`), accessibility (`22` results; zero unlabeled controls/textboxes, severe target failures, target warnings, and console errors), visual state (`16/16`), responsive tablet/foldable matrix (`24/24`, zero overflow/errors), and performance budgets
+
+Failed or incomplete:
+
+- Native visual acceptance is invalid. A current `:app:assembleDebug` build succeeded and the guarded disposable `Pixel_3a_API_34_extension_level_7_arm64-v8a` emulator was the only device used.
+  - Without Metro, all routes showed React Native `Unable to load script`.
+  - With Metro and `adb reverse tcp:8081 tcp:8081`, routes showed black/loading/error screens. Metro repeatedly reported `Requiring unknown module "react-native"` at `src/settings/lifeos-settings.ts:164`, reached through `platformOS()` → `readRaw()` → `loadLifeOSSettings()`.
+  - `phase9:check:native-visual-matrix` falsely reported `PASS (7/7)` in both cases because it checks process liveness and PNG size, but does not assert `expected_visual_labels` or reject runtime error screens. Manual review changed the local generated evidence status to `failed`.
+- `npm run phase9:check:product-polish-review` -> `NEEDS_WORK`: `native_visual_matrix_failed`.
+- `npm run phase9:check:completion-audit` -> `NOT_COMPLETE` (`5` passed, `4` missing): current-head live Notion/Sheets authority, valid native matrix, final polish, and debug acceptance.
+- Live authority evidence remains at `61cb98b`; it was not refreshed because this audit explicitly prohibited live provider mutation.
+- Production dependency audit remains red: root `13` vulnerabilities (`12` moderate, `1` high); server `2` moderate.
+
+### Current transitions and verdict
+
+- `P0-01`, `P0-02`, `P1-03`, `P1-06`, `P1-08`, `P2-05`, and `P2-13` -> `RESOLVED` by source review plus the repeated exploit/concurrency proofs above.
+- `P1-09` -> `OPEN`: current Android debug runtime does not render, and its native gate is false-green.
+- `P2-12` remains `OPEN`: completion evidence is not complete.
+- Debug app: **NOT ACCEPTED**.
+- Signed release/P2-08: separately blocked and excluded from this debug acceptance rerun by product-owner decision.
 
 ## Independent current-tree acceptance at `e684ec8`
 

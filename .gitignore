@@ -85,3 +85,6 @@ replay_pid*.log
 
 expo-env.d.ts
 # @end expo-cli
+
+# Orchestry state
+.orchestry

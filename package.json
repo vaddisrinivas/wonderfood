@@ -85,6 +85,7 @@
     "check:provider-writeback": "vitest run tests/providers/writeback.test.ts && npm run check:reactive-provider-writeback",
     "check:live-lane-guards": "node scripts/quality/check-disposable-lane-guards.mjs",
     "check:utopia-debug": "npm run typecheck && npm run config:validate && npm run test && npm run test:server:direct && npm run check:provider-writeback && npm run check:ai-runtime && npm run check:workflow-runtime && npm run phase7:check:workflow-resume-cancel && npm run check:writer-boundary && npm run check:migrations && npm run check:roundtrip && npm run check:food-golden-path && npm run check:sync-merge && npm run export:web && npm run export:android",
+    "check:utopia-single-shot": "node scripts/quality/run-utopia-acceptance.mjs",
     "check:ai-runtime": "vitest run tests/ai/runtime.test.ts",
     "check:workflow-runtime": "vitest run tests/workflows/runtime.test.ts",
     "phase7:check:workflow-resume-cancel": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-workflow-resume-cancel.ts",

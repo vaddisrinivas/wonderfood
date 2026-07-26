@@ -46,7 +46,7 @@ function isExpectedSqliteWasmFallback(message) {
 
 const routes = [
   { name: 'home', path: '/', labels: ['LIFEOS / HOME', 'Review queue', 'Recent updates'] },
-  { name: 'food', path: '/food', labels: ['WonderFood', 'What should we cook next?', 'Today feels handled'] },
+  { name: 'food', path: '/food', labels: ['FOOD', 'Food, gently', 'Tonight', 'Expiring soon', 'Pantry gaps', 'Shopping next'] },
   { name: 'chat', path: '/chat', labels: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.'] },
   { name: 'sources', path: '/sources', labels: ['LIFEOS / SOURCES', 'Your food data homes.'] },
   { name: 'config', path: '/config', labels: ['Active package contract', 'Screen Builder'] },
