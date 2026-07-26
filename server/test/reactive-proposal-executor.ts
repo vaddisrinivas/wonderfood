@@ -239,7 +239,7 @@ updateRecord('auto-created-record', { properties: { title: 'Auto created', statu
 attachActionVerification(executed.receipt?.actionId ?? '', null, { persist: false });
 const failedVerificationReplay = executeReactiveProposal(autoItem, { actor: 'ignored' });
 assert.equal(failedVerificationReplay.ok, false);
-assert.equal(failedVerificationReplay.error, 'canonical_create_mismatch');
+assert.equal(failedVerificationReplay.error, 'proposal_verification_receipt_missing');
 
 const updateSeed = createRecord({
   id: 'auto-update-record',
@@ -298,7 +298,10 @@ const updateItem = {
     },
   },
 };
-assert.equal(executeReactiveProposal(updateItem).ok, true, 'review-required update should queue without approval');
+const queuedUpdate = executeReactiveProposal(updateItem);
+assert.equal(queuedUpdate.ok, true, 'review-required update should queue without approval');
+assert.equal(queuedUpdate.receipt?.status, 'queued');
+const queuedUpdateActionId = queuedUpdate.receipt?.actionId;
 assert.equal(findRecord('auto-update-record')?.properties.status, 'open');
 const tamperedIdempotencyApproval = executeReactiveProposal(updateItem, {
   actor: 'approver',
@@ -312,6 +315,18 @@ const tamperedOperationApproval = executeReactiveProposal(updateItem, {
 });
 assert.equal(tamperedOperationApproval.ok, false);
 assert.equal(tamperedOperationApproval.error, 'proposal_approval_mismatch');
+const tamperedProposalApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), proposalHash: hashValue('tampered-proposal-hash') },
+});
+assert.equal(tamperedProposalApproval.ok, false);
+assert.equal(tamperedProposalApproval.error, 'proposal_approval_mismatch');
+const tamperedTemplateApproval = executeReactiveProposal(updateItem, {
+  actor: 'approver',
+  approval: { ...approvalFor(updateItem), operationTemplateHash: hashValue('tampered-template') },
+});
+assert.equal(tamperedTemplateApproval.ok, false);
+assert.equal(tamperedTemplateApproval.error, 'proposal_approval_mismatch');
 const wrongActorApproval = executeReactiveProposal(updateItem, {
   actor: 'different-actor',
   approval: approvalFor(updateItem),
@@ -332,6 +347,9 @@ assert.equal(revokedApproval.ok, false);
 assert.equal(revokedApproval.error, 'proposal_approval_revoked');
 const approvedUpdate = executeReactiveProposal(updateItem, { actor: 'approver', approval: approvalFor(updateItem) });
 assert.equal(approvedUpdate.ok, true);
+assert.equal(approvedUpdate.receipt?.actionId, queuedUpdateActionId);
+assert.equal(approvedUpdate.receipt?.idempotencyKey, queuedUpdate.receipt?.idempotencyKey);
+assert.equal(approvedUpdate.receipt?.idempotencyKey, updateKey);
 assert.equal(approvedUpdate.receipt?.status, 'completed');
 assert.equal(approvedUpdate.receipt?.verification?.reason, 'canonical_update_verified');
 assert.equal((getActionEvent(approvedUpdate.receipt?.actionId ?? '')?.verification_json as { reason?: string }).reason, 'canonical_update_verified');
@@ -344,6 +362,14 @@ assert.equal(approvedUpdateReplay.receipt?.replayed, true);
 assert.equal(approvedUpdateReplay.receipt?.actionId, approvedUpdate.receipt?.actionId);
 assert.equal(approvedUpdateReplay.receipt?.verification?.operationId, approvedUpdate.receipt?.verification?.operationId);
 assert.equal(findRecord('auto-update-record')?.revision, updateRevision);
+const approvedUpdateReplayWithoutApproval = executeReactiveProposal(updateItem);
+assert.equal(approvedUpdateReplayWithoutApproval.ok, true);
+assert.equal(approvedUpdateReplayWithoutApproval.receipt?.replayed, true);
+assert.equal(approvedUpdateReplayWithoutApproval.receipt?.actionId, approvedUpdate.receipt?.actionId);
+attachActionVerification(approvedUpdate.receipt?.actionId ?? '', null, { persist: false });
+const replayWithoutVerification = executeReactiveProposal(updateItem, { actor: 'approver', approval: approvalFor(updateItem) });
+assert.equal(replayWithoutVerification.ok, false);
+assert.equal(replayWithoutVerification.error, 'proposal_verification_receipt_missing');
 
 const providerUpdateKey = createOperationProposalIdempotencyKey({
   packageId: 'food',

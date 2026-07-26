@@ -24,7 +24,7 @@ export function createOperationProposalIdempotencyKey(input: {
   event: ProposalEvent;
   causeId: string;
   operationTemplate: OperationTemplate;
-  evidence?: unknown;
+  evidence?: OperationProposalEnvelope['evidence'];
 }): string {
   return `reactive:${createHash('sha256').update(stableJson({
     schemaVersion: 'wonder.operation-proposal.v1',

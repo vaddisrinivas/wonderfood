@@ -119,6 +119,19 @@ assert.equal(queued.items['proposal-a'].status, 'pending');
 assert.equal(queued.items['proposal-a'].attempts, 0);
 assert.equal(queued.items['proposal-a'].proposal.envelope.schemaVersion, 'wonder.operation-proposal.v1');
 assert.equal(queued.items['proposal-a'].proposal.envelope.idempotencyKey, proposalIdempotencyKey);
+assert.notEqual(
+  createOperationProposalIdempotencyKey({
+    packageId: 'package-a',
+    packageVersion: '1.0.0',
+    ruleId: 'rule-a',
+    event: proposalEvent,
+    causeId: 'cause-a',
+    operationTemplate,
+    evidence: { ...proposalEvidence, targetAfterRevision: 3 },
+  }),
+  proposalIdempotencyKey,
+  'target revision change should change idempotency key',
+);
 assert.deepEqual(listRunnableReactiveOutboxItems(queued, now).map((item) => item.proposalId), ['proposal-a']);
 
 const replay = enqueueReactiveProposals(queued, { cycle, event, proposalIds: ['proposal-a'], now });

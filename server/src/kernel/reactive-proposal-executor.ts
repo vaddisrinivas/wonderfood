@@ -76,13 +76,13 @@ function executeReactiveProposalInternal(
   const existing = findActionByIdempotencyKey(envelope.idempotencyKey);
   if (existing?.status === 'completed') {
     const verification = isVerificationReceipt(existing.verification_json) ? existing.verification_json : undefined;
-    if (isVerificationBoundToProposal(verification, item, existing.operation_id)) {
-      return { ok: true, receipt: { actionId: existing.id, idempotencyKey: envelope.idempotencyKey, replayed: true, status: existing.status, verification } };
+    if (!verification) {
+      return { ok: false, error: 'proposal_verification_receipt_missing' };
     }
-    const refreshed = verifyForAction({ item, actionId: existing.id, operationId: existing.operation_id });
-    if (!refreshed.ok) return { ok: false, error: refreshed.reason };
-    const verifiedAction = attachActionVerification(existing.id, refreshed) ?? existing;
-    return { ok: true, receipt: { actionId: verifiedAction.id, idempotencyKey: envelope.idempotencyKey, replayed: true, status: verifiedAction.status, verification: refreshed } };
+    if (!isVerificationBoundToProposal(verification, item, existing.operation_id)) {
+      return { ok: false, error: 'proposal_verification_receipt_mismatch' };
+    }
+    return { ok: true, receipt: { actionId: existing.id, idempotencyKey: envelope.idempotencyKey, replayed: true, status: existing.status, verification } };
   }
 
   const approval = input.approval ? validateApproval(input.approval, item, actor) : { ok: false as const, error: 'proposal_approval_required' };

@@ -90,8 +90,8 @@ assert.match(first.proposals[0].envelope.evidence.querySpecHash ?? '', /^sha256:
 assert.match(first.proposals[0].envelope.evidence.packageHash ?? '', /^sha256:[a-f0-9]{64}$/);
 assert.equal(first.proposals[0].envelope.evidence.evaluatorVersion, 'wonder.query-evaluator.v1');
 assert.equal(first.proposals[0].envelope.evidence.sourceEventId, 'op-open-decision-a');
-assert.match(first.proposals[0].envelope.evidence.beforeVersionVectorHash ?? '', /^sha256:[a-f0-9]{64}$/);
-assert.match(first.proposals[0].envelope.evidence.afterVersionVectorHash ?? '', /^sha256:[a-f0-9]{64}$/);
+assert.equal(first.proposals[0].envelope.evidence.beforeVersionVectorHash, undefined);
+assert.equal(first.proposals[0].envelope.evidence.afterVersionVectorHash, undefined);
 
 const colonQueryPackage: AppPackageV2 = {
   ...pkg,

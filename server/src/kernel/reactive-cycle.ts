@@ -216,8 +216,10 @@ function createProposalEnvelope(input: {
     ...(queryEvidence ? { beforeHash: queryEvidence.before, afterHash: queryEvidence.after } : {}),
     ...(querySpecHash ? { querySpecHash, packageHash, evaluatorVersion: QUERY_EVALUATOR_VERSION } : {}),
     ...targetRevisionEvidence(input.proposal.operationTemplate, input.beforeRows, input.afterRows),
-    beforeVersionVectorHash: versionVectorHash(input.beforeRows),
-    afterVersionVectorHash: versionVectorHash(input.afterRows),
+    ...(input.proposal.operationTemplate.kind !== 'custom' && input.proposal.operationTemplate.recordId !== undefined ? {
+      beforeVersionVectorHash: versionVectorHash(input.beforeRows, input.proposal.operationTemplate.recordId),
+      afterVersionVectorHash: versionVectorHash(input.afterRows, input.proposal.operationTemplate.recordId),
+    } : {}),
     sourceEventId: input.sourceEventId,
   };
   return {
@@ -240,7 +242,7 @@ function createProposalEnvelope(input: {
       event: input.proposal.event,
       causeId: input.proposal.causeId,
       operationTemplate: input.proposal.operationTemplate,
-      evidence: queryEvidence ? evidence : undefined,
+      evidence,
     }),
     review: {
       required: authorization.reviewRequired,
@@ -308,8 +310,11 @@ function revisionOf(row: Record<string, unknown> | undefined): number | undefine
   return typeof row?.revision === 'number' && Number.isInteger(row.revision) && row.revision >= 0 ? row.revision : undefined;
 }
 
-function versionVectorHash(rows: readonly Record<string, unknown>[]): string {
-  return stableSha256(rows
+function versionVectorHash(rows: readonly Record<string, unknown>[], recordId?: string): string | undefined {
+  if (!recordId) return undefined;
+  const scoped = rows.filter((row) => row.id === recordId);
+  if (scoped.length === 0) return undefined;
+  return stableSha256(scoped
     .map((row) => ({
       id: typeof row.id === 'string' ? row.id : rowKey(row),
       revision: revisionOf(row),

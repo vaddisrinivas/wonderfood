@@ -269,7 +269,7 @@ export function parseReactiveOutboxStore(serialized: string): ReactiveOutboxStor
           afterVersionVectorHash: envelope.evidence.afterVersionVectorHash,
           sourceEventId: envelope.evidence.sourceEventId,
         }
-        : undefined,
+        : envelope.evidence,
     });
     if (envelope.idempotencyKey !== expectedKey) {
       throw new Error(`Reactive outbox item ${proposalId} has an invalid idempotency key.`);
