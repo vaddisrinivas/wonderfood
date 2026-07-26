@@ -110,14 +110,64 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
     assert(preview.response.ok, 'valid preview failed');
     assert(preview.parsed.status === 'valid', 'valid package should preview valid');
 
-    const activated = await request('/packages/activate', 'POST', { package: pkg });
+    const directActivation = await request('/packages/activate', 'POST', { package: pkg });
+    assert(directActivation.response.status === 400, 'direct raw package activation should be disabled');
+
+    const basePackageKey = `${activeBefore.parsed.active.id}@${activeBefore.parsed.active.version}`;
+    const changeRequest = {
+      basePackageKey,
+      requestedBy: 'package-builder-api-test',
+      patch: [
+        { op: 'replace', path: '/version', value: '1.0.1' },
+        { op: 'replace', path: '/presentation/label', value: 'WonderFood Demo Builder' },
+        { op: 'add', path: '/acceptanceTests/-', value: 'package-builder-api-approved-change' },
+      ],
+    };
+    const forbiddenChange = await request('/packages/change/preview', 'POST', {
+      request: { ...changeRequest, patch: [{ op: 'replace', path: '/schemaVersion', value: 'evil' }] },
+    });
+    assert(forbiddenChange.response.status === 400, 'forbidden package patch path should be rejected');
+
+    const changePreview = await request('/packages/change/preview', 'POST', { request: changeRequest });
+    assert(changePreview.response.ok, `change preview failed: ${JSON.stringify(changePreview.parsed)}`);
+    assert(changePreview.parsed.status === 'valid', 'change preview should be valid');
+    assert(typeof changePreview.parsed.requestHash === 'string' && changePreview.parsed.requestHash.startsWith('sha256:'), 'request hash missing');
+    assert(typeof changePreview.parsed.packageHash === 'string' && changePreview.parsed.packageHash.startsWith('sha256:'), 'package hash missing');
+
+    const badApproval = await request('/packages/change/activate', 'POST', {
+      request: changeRequest,
+      approval: {
+        schemaVersion: 'wonder.package-change-approval.v1',
+        approved: true,
+        requestHash: 'sha256:bad',
+        packageHash: changePreview.parsed.packageHash,
+        approvedBy: 'test',
+        approvedAt: '2026-07-25T00:00:00.000Z',
+      },
+    });
+    assert(badApproval.response.status === 400, 'hash-mismatched package approval should be rejected');
+
+    const activated = await request('/packages/change/activate', 'POST', {
+      request: changeRequest,
+      approval: {
+        schemaVersion: 'wonder.package-change-approval.v1',
+        approved: true,
+        requestHash: changePreview.parsed.requestHash,
+        packageHash: changePreview.parsed.packageHash,
+        approvedBy: 'test',
+        approvedAt: '2026-07-25T00:00:00.000Z',
+      },
+    });
     assert(activated.response.ok, `activation failed: ${JSON.stringify(activated.parsed)}`);
     assert(activated.parsed.status === 'activated', 'package should activate');
-    assert(activated.parsed.active?.id === 'demo-builder', 'activated package id mismatch');
+    assert(activated.parsed.active?.id === 'food', 'activated package id should preserve active package identity');
+    assert(activated.parsed.active?.presentation?.label === 'WonderFood Demo Builder', 'activated package label mismatch');
     assert(activated.parsed.receipt?.action === 'activate', 'activation receipt missing');
+    assert(activated.parsed.receipt?.requestHash === changePreview.parsed.requestHash, 'activation receipt request hash missing');
+    assert(activated.parsed.receipt?.approvalHash?.startsWith('sha256:'), 'activation approval hash missing');
 
     const activeAfter = await request('/packages/active', 'GET');
-    assert(activeAfter.parsed.active?.id === 'demo-builder', 'active package not persisted');
+    assert(activeAfter.parsed.active?.presentation?.label === 'WonderFood Demo Builder', 'active package not persisted');
 
     const rolledBack = await request('/packages/rollback', 'POST');
     assert(rolledBack.response.ok, 'rollback failed');
@@ -128,6 +178,9 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
       proof: 'package_builder_api',
       active_bootstrap: activeBefore.parsed.active?.id,
       invalid_preview_rejected: true,
+      direct_activation_rejected: true,
+      forbidden_patch_rejected: true,
+      approval_hash_bound: true,
       activation_receipt_action: activated.parsed.receipt?.action,
       rollback_active: rolledBack.parsed.active?.id,
       all_passed: true,

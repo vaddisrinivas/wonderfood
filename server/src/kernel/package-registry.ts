@@ -1,7 +1,10 @@
 import { validateComputedFieldGraph } from './computed-fields';
 import { type AppPackageV2, type PackageValidation, validateAppPackage } from './package';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import jsonPatch from 'fast-json-patch';
+import type { Operation } from 'fast-json-patch';
 import { z } from 'zod';
 
 const PACKAGE_REGISTRY_SCHEMA_VERSION = 'wonder.package-registry.v1' as const;
@@ -12,6 +15,34 @@ export type PackageRegistryReceipt = Readonly<{
   packageKey: string | null;
   previousPackageKey: string | null;
   createdAt: string;
+  requestHash?: string;
+  packageHash?: string;
+  approvalHash?: string;
+  approvedBy?: string;
+}>;
+
+export type PackageChangeRequest = Readonly<{
+  patch: readonly Operation[];
+  basePackageKey?: string | null;
+  requestedBy?: string;
+}>;
+
+export type PackageChangeApprovalReceipt = Readonly<{
+  schemaVersion: 'wonder.package-change-approval.v1';
+  approved: true;
+  requestHash: string;
+  packageHash: string;
+  approvedBy: string;
+  approvedAt: string;
+}>;
+
+export type PackageChangePreview = Readonly<{
+  status: 'valid' | 'invalid';
+  requestHash: string;
+  packageHash: string | null;
+  basePackageKey: string | null;
+  package: AppPackageV2 | null;
+  validation: PackageValidation;
 }>;
 
 type PackageRegistryStore = Readonly<{
@@ -33,6 +64,10 @@ const packageRegistryReceiptSchema = z.object({
   packageKey: z.string().min(1).nullable(),
   previousPackageKey: z.string().min(1).nullable(),
   createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+  requestHash: z.string().min(1).optional(),
+  packageHash: z.string().min(1).optional(),
+  approvalHash: z.string().min(1).optional(),
+  approvedBy: z.string().min(1).optional(),
 }).strict();
 
 const packageRegistryStoreSchema = z.object({
@@ -76,13 +111,58 @@ export class PackageRegistry {
     }
   }
 
+  previewChange(request: PackageChangeRequest): PackageChangePreview {
+    const base = this.active;
+    if (!base) throw new Error('package_change_no_active_package');
+    validatePackageChangeRequest(request, base);
+    const requestHash = hashValue(normalizePackageChangeRequest(request));
+    const next = applyPackagePatch(base, request.patch);
+    const validation = this.preview(next);
+    return {
+      status: validation.valid ? 'valid' : 'invalid',
+      requestHash,
+      packageHash: validation.valid ? hashValue(validation.package) : null,
+      basePackageKey: packageKey(base),
+      package: validation.valid ? validation.package : null,
+      validation,
+    };
+  }
+
+  activateApprovedChange(request: PackageChangeRequest, approval: PackageChangeApprovalReceipt): AppPackageV2 {
+    const preview = this.previewChange(request);
+    if (preview.status !== 'valid' || !preview.packageHash || !preview.package) {
+      const errors = preview.validation.valid ? ['package_change_invalid'] : preview.validation.errors;
+      throw new Error(`package_change_invalid:${errors.join('|')}`);
+    }
+    if (
+      approval.schemaVersion !== 'wonder.package-change-approval.v1'
+      || approval.approved !== true
+      || approval.requestHash !== preview.requestHash
+      || approval.packageHash !== preview.packageHash
+      || !approval.approvedBy?.trim()
+      || Number.isNaN(Date.parse(approval.approvedAt))
+    ) {
+      throw new Error('package_change_approval_mismatch');
+    }
+    return this.activateInternal(preview.package, {
+      requestHash: preview.requestHash,
+      packageHash: preview.packageHash,
+      approvalHash: hashValue(approval),
+      approvedBy: approval.approvedBy.trim(),
+    });
+  }
+
   activate(input: unknown): AppPackageV2 {
     const result = this.preview(input);
     if (!result.valid) throw new Error(`package_invalid:${result.errors.join('|')}`);
+    return this.activateInternal(result.package, {});
+  }
+
+  private activateInternal(pkg: AppPackageV2, evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>): AppPackageV2 {
     this.previous = this.active;
-    this.active = result.package;
-    this.packages.set(packageKey(result.package), result.package);
-    this.receipts.push(this.receipt('activate', packageKey(result.package), this.previous ? packageKey(this.previous) : null));
+    this.active = pkg;
+    this.packages.set(packageKey(pkg), pkg);
+    this.receipts.push(this.receipt('activate', packageKey(pkg), this.previous ? packageKey(this.previous) : null, evidence));
     this.persist();
     return this.active;
   }
@@ -91,7 +171,7 @@ export class PackageRegistry {
     const current = this.active;
     this.active = this.previous;
     this.previous = current;
-    this.receipts.push(this.receipt('rollback', this.active ? packageKey(this.active) : null, this.previous ? packageKey(this.previous) : null));
+    this.receipts.push(this.receipt('rollback', this.active ? packageKey(this.active) : null, this.previous ? packageKey(this.previous) : null, {}));
     this.persist();
     return this.active;
   }
@@ -128,19 +208,90 @@ export class PackageRegistry {
     renameSync(tempPath, this.path);
   }
 
-  private receipt(action: PackageRegistryReceipt['action'], key: string | null, previousKey: string | null): PackageRegistryReceipt {
+  private receipt(
+    action: PackageRegistryReceipt['action'],
+    key: string | null,
+    previousKey: string | null,
+    evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>,
+  ): PackageRegistryReceipt {
     return {
       id: `package:${action}:${key ?? 'none'}:${this.receipts.length + 1}`,
       action,
       packageKey: key,
       previousPackageKey: previousKey,
       createdAt: this.now(),
+      ...(evidence.requestHash ? { requestHash: evidence.requestHash } : {}),
+      ...(evidence.packageHash ? { packageHash: evidence.packageHash } : {}),
+      ...(evidence.approvalHash ? { approvalHash: evidence.approvalHash } : {}),
+      ...(evidence.approvedBy ? { approvedBy: evidence.approvedBy } : {}),
     };
   }
 }
 
 function packageKey(pkg: AppPackageV2): string {
   return `${pkg.id}@${pkg.version}`;
+}
+
+function normalizePackageChangeRequest(request: PackageChangeRequest): PackageChangeRequest {
+  return {
+    basePackageKey: request.basePackageKey ?? null,
+    requestedBy: request.requestedBy?.trim() || 'package-builder',
+    patch: request.patch,
+  };
+}
+
+function validatePackageChangeRequest(request: PackageChangeRequest, active: AppPackageV2): void {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('package_change_request_invalid');
+  if (request.basePackageKey && request.basePackageKey !== packageKey(active)) throw new Error('package_change_base_mismatch');
+  if (!Array.isArray(request.patch) || request.patch.length < 1 || request.patch.length > 64) throw new Error('package_change_patch_invalid');
+  for (const operation of request.patch) {
+    if (!operation || typeof operation !== 'object' || typeof operation.path !== 'string') throw new Error('package_change_patch_invalid');
+    if (!['add', 'replace', 'remove', 'move', 'copy', 'test'].includes(operation.op)) throw new Error('package_change_patch_op_invalid');
+    if (!isAllowedPackagePatchPath(operation.path)) throw new Error(`package_change_path_forbidden:${operation.path}`);
+    if ((operation.op === 'move' || operation.op === 'copy') && (!operation.from || !isAllowedPackagePatchPath(operation.from))) {
+      throw new Error(`package_change_path_forbidden:${operation.from ?? '<missing>'}`);
+    }
+  }
+}
+
+function isAllowedPackagePatchPath(path: string): boolean {
+  return path === '/version'
+    || path === '/presentation'
+    || path.startsWith('/presentation/')
+    || path === '/queries'
+    || path.startsWith('/queries/')
+    || path === '/views'
+    || path.startsWith('/views/')
+    || path === '/rules'
+    || path.startsWith('/rules/')
+    || path === '/computedFields'
+    || path.startsWith('/computedFields/')
+    || path === '/capabilities'
+    || path.startsWith('/capabilities/')
+    || path === '/acceptanceTests'
+    || path.startsWith('/acceptanceTests/');
+}
+
+function applyPackagePatch(base: AppPackageV2, patch: readonly Operation[]): AppPackageV2 {
+  const clone = JSON.parse(JSON.stringify(base)) as AppPackageV2;
+  const result = jsonPatch.applyPatch(clone, [...patch], true, false);
+  return result.newDocument as AppPackageV2;
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 function parsePackageRegistryStore(serialized: string): PackageRegistryStore {

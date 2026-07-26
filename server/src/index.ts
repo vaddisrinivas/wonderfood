@@ -938,11 +938,31 @@ const server = createServer(async (req: any, res: any) => {
     return;
   }
 
-  if (req.method === 'POST' && path === '/packages/activate') {
+  if (req.method === 'POST' && path === '/packages/change/preview') {
     if (!assertAuth(req, res)) {
       return;
     }
-    let payload: { package?: unknown };
+    let payload: { request?: unknown };
+    try {
+      payload = await readJsonBody(req) as typeof payload;
+    } catch {
+      badRequest(res, 'Invalid JSON');
+      return;
+    }
+    try {
+      const preview = packageRegistry().previewChange(payload.request as never);
+      ok(res, preview);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : 'package_change_invalid');
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/packages/change/activate') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    let payload: { request?: unknown; approval?: unknown };
     try {
       payload = await readJsonBody(req) as typeof payload;
     } catch {
@@ -951,7 +971,7 @@ const server = createServer(async (req: any, res: any) => {
     }
     try {
       const registry = packageRegistry();
-      const active = registry.activate(payload.package);
+      const active = registry.activateApprovedChange(payload.request as never, payload.approval as never);
       installReactiveRuntime();
       ok(res, {
         status: 'activated',
@@ -959,8 +979,16 @@ const server = createServer(async (req: any, res: any) => {
         receipt: registry.getReceipts().at(-1),
       });
     } catch (error) {
-      badRequest(res, error instanceof Error ? error.message : 'package_invalid');
+      badRequest(res, error instanceof Error ? error.message : 'package_change_approval_failed');
     }
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/packages/activate') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    badRequest(res, 'Direct package activation is disabled. Use /packages/change/preview then /packages/change/activate with a hash-bound approval receipt.');
     return;
   }
 
