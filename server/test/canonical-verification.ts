@@ -28,7 +28,7 @@ const canonicalFailed = await verifyResult({
   actualRecordIds: ['canonical-verification-record'],
 });
 assert.equal(canonicalFailed.status, 'denied');
-assert.match(canonicalFailed.reason ?? '', /Action status is failed/);
+assert.match(canonicalFailed.reason ?? '', /Caller reported completed; canonical action status is failed/);
 
 const noRecordSeed = createActionEvent({
   id: 'canonical-verification-no-record',
@@ -115,7 +115,9 @@ const validVerification = await verifyResult({
   sourceBound: true,
 });
 assert.equal(validVerification.status, 'verified');
-assert.ok(validVerification.checks.includes('idempotent'));
+assert.ok(validVerification.checks.includes('source_bound'));
+assert.ok(validVerification.checks.includes('undo_ready'));
+assert.equal(validVerification.checks.includes('idempotent'), false);
 
 deleteRecord('canonical-verification-record');
 const missingAfterCommit = await verifyResult({

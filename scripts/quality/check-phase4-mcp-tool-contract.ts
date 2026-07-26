@@ -38,6 +38,13 @@ type EnvelopeShape = {
   };
 };
 
+type ApprovalRequest = {
+  tool: string;
+  operationId: string;
+  idempotencyKey: string;
+  operationHash: string;
+};
+
 type WorkflowPayload = EnvelopeShape & {
   action?: {
     id?: string;
@@ -136,10 +143,61 @@ function assertWriteEnvelope(result: ToolResult, label: string) {
   }
 }
 
+function assertQueuedForReviewEnvelope(result: ToolResult, label: string): ApprovalRequest {
+  assert(result.reviewOnly === true, `${label} should queue for review`);
+  assert(asRecord(result.json).status === 'queued_for_review', `${label} should return queued_for_review`);
+  const action = actionId(result);
+  assert(typeof result.undo_token === 'string' && result.undo_token.length > 0, `${label} should expose undo_token`);
+  assert(result.undo_token === action, `${label} undo_token should equal action.id`);
+  assert(Array.isArray(result.receipts) && result.receipts.length > 0, `${label} should include receipts`);
+
+  const receipt = result.receipts![0];
+  assert(receipt.action_id === action, `${label} receipt.action_id should match action.id`);
+  assert(receipt.status === 'queued', `${label} receipt.status should stay queued until approval-bound execution`);
+  assert(receipt.undo_token === action, `${label} receipt.undo_token should match action.id`);
+
+  assert(result.review_flags?.policy_reviewed === false, `${label} should remain unreviewed`);
+  assert(result.review_flags?.replay_recoverable === false, `${label} should not claim replay recoverable before execution`);
+  assert(result.review_flags?.cancellation_safe === true, `${label} should be cancellation-safe`);
+
+  const approvalRequest = asRecord(asRecord(result.json).approval_request) as Partial<ApprovalRequest>;
+  assert(typeof approvalRequest.tool === 'string' && approvalRequest.tool.length > 0, `${label} should include approval_request.tool`);
+  assert(typeof approvalRequest.operationId === 'string' && approvalRequest.operationId.length > 0, `${label} should include approval_request.operationId`);
+  assert(typeof approvalRequest.idempotencyKey === 'string' && approvalRequest.idempotencyKey.length > 0, `${label} should include approval_request.idempotencyKey`);
+  assert(typeof approvalRequest.operationHash === 'string' && approvalRequest.operationHash.length > 0, `${label} should include approval_request.operationHash`);
+  return approvalRequest as ApprovalRequest;
+}
+
+function buildApprovalReceipt(request: ApprovalRequest, actor: string) {
+  return {
+    schemaVersion: 'wonder.mcp-review-approval.v1' as const,
+    approver: actor,
+    authority: 'phase4-contract',
+    tool: request.tool,
+    operationId: request.operationId,
+    idempotencyKey: request.idempotencyKey,
+    operationHash: request.operationHash,
+    localActor: actor,
+    approvedAt: '2026-07-26T00:00:00.000Z',
+    expiresAt: '2999-01-01T00:00:00.000Z',
+  };
+}
+
 function assertReplayEnvelope(base: ToolResult, replay: ToolResult, label: string) {
   assert(asRecord(replay.json).replayed === true, `${label} should set replayed=true`);
   assert(actionId(replay) === actionId(base), `${label} action.id should be stable`);
   assert(stableJson(sourceSnapshot(replay)) === stableJson(sourceSnapshot(base)), `${label} source_snapshot should be stable on replay`);
+}
+
+function assertQueuedForReviewStable(base: ToolResult, replay: ToolResult, label: string) {
+  assert(replay.reviewOnly === true, `${label} should remain queued for review`);
+  assert(actionId(replay) === actionId(base), `${label} action.id should stay stable while queued`);
+  assert(asRecord(replay.json).status === 'queued_for_review', `${label} should remain queued_for_review`);
+  assert(
+    stableJson(asRecord(replay.json).approval_request) === stableJson(asRecord(base.json).approval_request),
+    `${label} approval_request should stay stable while queued`,
+  );
+  assert(asRecord(replay.json).replayed !== true, `${label} should not claim replayed before execution`);
 }
 
 function assertPolicyBlocked(payload: EnvelopeShape, label: string) {
@@ -270,7 +328,10 @@ function expectFailure(action: () => Promise<unknown>, label: string) {
     idempotency_key: `${baseKey}-archive`,
     action_id: archiveActionId,
   });
-  assertWriteEnvelope(archive, 'archive_record');
+  const archiveApproval = assertQueuedForReviewEnvelope(archive, 'archive_record');
+  assert(archiveApproval.tool === 'wonderfood.archive_record', 'archive_record approval should bind tool name');
+  assert(archiveApproval.idempotencyKey === `${baseKey}-archive`, 'archive_record approval should bind idempotency key');
+  assert(archiveApproval.operationHash.startsWith('sha256:'), 'archive_record approval should include hash-bound operation');
 
   const archiveReplay = await callTool('wonderfood.archive_record', {
     actor: 'hearth',
@@ -279,7 +340,41 @@ function expectFailure(action: () => Promise<unknown>, label: string) {
     idempotency_key: `${baseKey}-archive`,
     action_id: archiveActionId,
   });
-  assertReplayEnvelope(archive, archiveReplay, 'archive_record replay');
+  assertQueuedForReviewStable(archive, archiveReplay, 'archive_record replay');
+
+  const archiveTampered = await callTool('wonderfood.archive_record', {
+    actor: 'hearth',
+    id: createRecordId,
+    data_home: 'local_sqlite',
+    idempotency_key: `${baseKey}-archive`,
+    action_id: archiveActionId,
+    approval_receipt: {
+      ...buildApprovalReceipt(archiveApproval, 'hearth'),
+      operationHash: 'sha256:tampered',
+    },
+  });
+  assertQueuedForReviewEnvelope(archiveTampered, 'archive_record tampered approval');
+  assert(asRecord(archiveTampered.json).approval_error === 'review_approval_hash_mismatch', 'archive_record tampered approval should be rejected');
+
+  const archiveApproved = await callTool('wonderfood.archive_record', {
+    actor: 'hearth',
+    id: createRecordId,
+    data_home: 'local_sqlite',
+    idempotency_key: `${baseKey}-archive`,
+    action_id: archiveActionId,
+    approval_receipt: buildApprovalReceipt(archiveApproval, 'hearth'),
+  });
+  assertWriteEnvelope(archiveApproved, 'archive_record approved');
+
+  const archiveApprovedReplay = await callTool('wonderfood.archive_record', {
+    actor: 'hearth',
+    id: createRecordId,
+    data_home: 'local_sqlite',
+    idempotency_key: `${baseKey}-archive`,
+    action_id: archiveActionId,
+    approval_receipt: buildApprovalReceipt(archiveApproval, 'hearth'),
+  });
+  assertReplayEnvelope(archiveApproved, archiveApprovedReplay, 'archive_record approved replay');
 
   const notionCreate = await callTool('wonderfood.create_record', {
     actor: 'hearth',
@@ -444,8 +539,11 @@ function expectFailure(action: () => Promise<unknown>, label: string) {
       create_id_stable: actionId(createReplay) === actionId(create),
       update_replayed: updateReplay.json.replayed === true,
       update_id_stable: actionId(updateReplay) === actionId(update),
-      archive_replayed: archiveReplay.json.replayed === true,
-      archive_id_stable: actionId(archiveReplay) === actionId(archive),
+      archive_queue_stable: actionId(archiveReplay) === actionId(archive),
+      archive_queued_for_review: asRecord(archive.json).status === 'queued_for_review',
+      archive_tampered_rejected: asRecord(archiveTampered.json).approval_error === 'review_approval_hash_mismatch',
+      archive_approval_hash_bound: asRecord(asRecord(archive.json).approval_request).operationHash === archiveApproval.operationHash,
+      archive_approved_replayed: asRecord(archiveApprovedReplay.json).replayed === true,
       workflow_replayed: asRecord(workflowReplay.json).replayed === true,
       workflow_id_stable: actionId(workflowReplay) === workflowActionId,
       undo_replayed: undoReplayPayload.replayed === true,
