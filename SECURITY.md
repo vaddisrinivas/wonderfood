@@ -4,6 +4,8 @@
 
 Security fixes target the current `main` branch until tagged releases begin.
 
+Current security claims below reflect source snapshot `fd8e2e6`; older device and release evidence stays historical unless repeated here.
+
 ## Reporting a vulnerability
 
 Use GitHub private vulnerability reporting when available. Do not open a public issue

@@ -2,6 +2,8 @@
 
 Status: buildable FOSS flavor ready for maintainer review; no publishing or directory submission approved yet.
 
+Source basis: `fd8e2e6`. Historical Android/FOSS proofs live in `docs/lifeos/implementation-ledger.md`; they do not mean submission is approved.
+
 ## What Is Ready
 
 - License: Apache-2.0 text normalized for GitHub detection.

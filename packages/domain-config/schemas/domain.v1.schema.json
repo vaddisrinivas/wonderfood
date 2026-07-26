@@ -5,6 +5,7 @@
   "type": "object",
   "required": ["schema_version", "id", "label", "surfaces", "collections", "relations", "skills", "workflows", "data_homes", "mcp"],
   "properties": {
+    "$schema": { "type": "string" },
     "schema_version": { "const": "lifeos.domain.v1" },
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "label": { "type": "string", "minLength": 1 },

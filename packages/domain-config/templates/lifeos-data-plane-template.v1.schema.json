@@ -4,6 +4,7 @@
   "type": "object",
   "required": ["schema_version", "id", "title", "notion", "sheets", "collection_coverage", "sync_contract"],
   "properties": {
+    "$schema": { "type": "string" },
     "schema_version": { "const": "lifeos.data_plane_template.v1" },
     "id": { "type": "string", "minLength": 1 },
     "title": { "type": "string", "minLength": 1 },

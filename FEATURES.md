@@ -6,6 +6,8 @@ capability.
 
 ## Current release work: 1.0.5
 
+Source basis: `fd8e2e6`. Treat older convergence notes and ledger entries as historical evidence only.
+
 WonderFood 1.0.5 is being verified against the acceptance matrix. This file
 describes claimed behavior only when it has matching implementation evidence.
 

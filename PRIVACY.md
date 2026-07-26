@@ -4,6 +4,8 @@ WonderFood is local-first. Core food records are stored in the app's private And
 database by default, and the app remains usable without an account or network. The
 repository contains generic test fixtures only and bundles no user data.
 
+Current policy mirrors source snapshot `fd8e2e6`. Older proof artifacts and release notes are historical evidence, not policy overrides.
+
 Users can choose a different data home during onboarding or later in Settings:
 
 - Local SQLite keeps the food workspace on this Android device.
