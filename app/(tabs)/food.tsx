@@ -927,6 +927,7 @@ export default function FoodScreen() {
         dinnerLoopPending={dinnerLoopPending}
         canRestoreBackup={Boolean(backupSnapshot)}
         notice={notice}
+        showAdvancedTools={foodConfig.showPackageCard}
       />
     );
   }
@@ -1004,7 +1005,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   );
 }
 
-function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice }: {
+function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice, showAdvancedTools }: {
   mode: FoodMode;
   onModeChange: (mode: FoodMode) => void;
   records: FoodRecordView[];
@@ -1030,6 +1031,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   dinnerLoopPending: boolean;
   canRestoreBackup: boolean;
   notice: string;
+  showAdvancedTools: boolean;
 }) {
   const theme = useLifeOSTheme();
   const today = new Date();
@@ -1091,6 +1093,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
               dinnerLoopPending={dinnerLoopPending}
               canRestoreBackup={canRestoreBackup}
               notice={notice}
+              showAdvancedTools={showAdvancedTools}
             />
           </View>
         </ScrollView>
@@ -1100,7 +1103,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   );
 }
 
-function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice }: {
+function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice, showAdvancedTools }: {
   mode: FoodMode;
   records: FoodRecordView[];
   meals: FoodRecordView[];
@@ -1121,8 +1124,9 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   dinnerLoopPending: boolean;
   canRestoreBackup: boolean;
   notice: string;
+  showAdvancedTools: boolean;
 }) {
-  const tools = (
+  const tools = showAdvancedTools ? (
     <FoodDebugTools
       recordCount={records.length}
       notice={notice}
@@ -1135,7 +1139,7 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
       onExportBackup={onExportBackup}
       onRestoreBackup={onRestoreBackup}
     />
-  );
+  ) : null;
   if (mode === 'Kitchen') return <><KitchenDemo records={kitchen.length ? kitchen : records} />{tools}</>;
   if (mode === 'Plan') return <><PlanDemo meals={meals} kitchen={kitchen} />{tools}</>;
   if (mode === 'Recipes') return <><RecipesDemo meals={meals} kitchen={kitchen} />{tools}</>;
@@ -1181,8 +1185,8 @@ function FoodHeroPlate({ records, meals, kitchen, shopping, onAsk, onLoadDemo }:
         <Pressable accessibilityRole="button" accessibilityLabel="Ask WonderFood" onPress={onAsk} style={({ pressed }) => [styles.foodHeroPrimary, { backgroundColor: theme.dark ? theme.colors.amber : '#251812' }, pressed && styles.pressed]}>
           <Text style={[styles.foodHeroPrimaryText, { color: theme.dark ? '#251812' : '#FFF8EA' }]}>Ask what to cook</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Load sample kitchen" testID="food-load-demo-hero" onPress={onLoadDemo} style={({ pressed }) => [styles.foodHeroSecondary, { borderColor: theme.dark ? '#4C4334' : '#E8C993' }, pressed && styles.pressed]}>
-          <Text style={[styles.foodHeroSecondaryText, { color: theme.colors.ink }]}>Try sample</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Set up kitchen" testID="food-load-demo-hero" onPress={onLoadDemo} style={({ pressed }) => [styles.foodHeroSecondary, { borderColor: theme.dark ? '#4C4334' : '#E8C993' }, pressed && styles.pressed]}>
+          <Text style={[styles.foodHeroSecondaryText, { color: theme.colors.ink }]}>{hasRecords ? 'Refresh ideas' : 'Set up kitchen'}</Text>
         </Pressable>
       </View>
     </View>
