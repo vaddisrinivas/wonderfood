@@ -7,7 +7,8 @@ import process from 'node:process';
 
 const root = process.cwd();
 const stateDir = mkdtempSync(join(tmpdir(), `lifeos-chat-isolation-${randomBytes(4).toString('hex')}-`));
-const token = 'chat-isolation-test-token';
+const alphaToken = 'chat-isolation-alpha-token';
+const betaToken = 'chat-isolation-beta-token';
 const port = 19144;
 const base = `http://127.0.0.1:${port}`;
 
@@ -33,6 +34,7 @@ async function waitForServerReady() {
 }
 
 async function postJson<T>(path: string, body: unknown, principal: string) {
+  const token = principal === 'tenant-alpha' ? alphaToken : betaToken;
   const response = await fetch(`${base}${path}`, {
     method: 'POST',
     headers: {
@@ -50,6 +52,7 @@ async function postJson<T>(path: string, body: unknown, principal: string) {
 }
 
 async function getJson<T>(path: string, principal: string) {
+  const token = principal === 'tenant-alpha' ? alphaToken : betaToken;
   const response = await fetch(`${base}${path}`, {
     headers: {
       authorization: `Bearer ${token}`,
@@ -75,11 +78,16 @@ type ChatRunResponse = {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(port),
-    LIFEOS_SERVER_TOKEN: token,
+    LIFEOS_SERVER_TRUSTED_TOKENS_JSON: JSON.stringify([
+      { token: alphaToken, principal: 'tenant-alpha' },
+      { token: betaToken, principal: 'tenant-beta' },
+    ]),
     LIFEOS_CHAT_CONVERSATIONS_PATH: join(stateDir, 'conversations.json'),
+    LIFEOS_CHAT_RUNTIME_STATE_PATH: join(stateDir, 'chat-runtime-state.json'),
     LIFEOS_MCP_STATE_PATH: join(stateDir, 'mcp-runtime.json'),
     LIFEOS_WORKFLOW_CHECKPOINT_PATH: join(stateDir, 'workflow-runs.json'),
   };
+  delete env.LIFEOS_SERVER_TOKEN;
   delete env.OPENAI_API_KEY;
 
   const server = spawn(tsxBinary, ['--tsconfig', join(root, 'tsconfig.json'), serverEntry], {
@@ -107,7 +115,7 @@ type ChatRunResponse = {
     };
 
     const alphaFirst = await postJson<ChatRunResponse>('/chat/send', alphaRequest, 'tenant-alpha');
-    assert(alphaFirst.status === 200, `tenant alpha send failed: ${alphaFirst.status}`);
+    assert(alphaFirst.status === 200, `tenant alpha send failed: ${alphaFirst.status} ${JSON.stringify(alphaFirst.body)}`);
     const alphaMessageId = alphaFirst.body?.messages?.at(-1)?.id;
     assert(alphaMessageId, 'tenant alpha send did not return assistant message id');
 
@@ -159,6 +167,15 @@ type ChatRunResponse = {
     const betaThread = await getJson<{ message?: string }>('/chat/threads/alpha-only-thread', 'tenant-beta');
     assert(betaThread.status === 400, `tenant beta should not read tenant alpha thread, got ${betaThread.status}`);
     assert(String(betaThread.body?.message).includes('thread not found'), 'expected owner-scoped thread miss');
+
+    const forgedAlphaThread = await fetch(`${base}/chat/threads/alpha-only-thread`, {
+      headers: {
+        authorization: `Bearer ${betaToken}`,
+        'x-lifeos-principal': 'tenant-alpha',
+        'x-lifeos-principal-scope': 'tenant-alpha',
+      },
+    });
+    assert(forgedAlphaThread.status === 400, `caller principal headers must not override beta token identity, got ${forgedAlphaThread.status}`);
 
     const alphaThreads = await getJson<{ threads?: Array<{ id?: string }> }>('/chat/threads', 'tenant-alpha');
     const betaThreads = await getJson<{ threads?: Array<{ id?: string }> }>('/chat/threads', 'tenant-beta');

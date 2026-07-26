@@ -168,9 +168,6 @@ const STATIC_RESOURCES: Record<string, McpResourceRecord> = {
 };
 
 const SAFE_GLOBAL_RESOURCE_URIS = new Set([
-  'wonderfood://agent-registry-v1',
-  'wonderfood://lifeos/domain-catalog-v1',
-  'wonderfood://domain-catalog',
   'wonderfood://schema/command.v1',
   'wonderfood://schema/action-event.v1',
   'wonderfood://schema/undo-v1',
@@ -183,6 +180,9 @@ const SAFE_GLOBAL_RESOURCE_URIS = new Set([
 ]);
 
 const GLOBAL_INDEX_RESOURCE_URIS = new Set([
+  'wonderfood://agent-registry-v1',
+  'wonderfood://lifeos/domain-catalog-v1',
+  'wonderfood://domain-catalog',
   'wonderfood://records',
   'wonderfood://actions',
   'wonderfood://workflows',

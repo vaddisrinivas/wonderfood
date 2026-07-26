@@ -305,18 +305,6 @@ function assertAuth(req: any, res: any): RequestAuthorizationResult | null {
   return null;
 }
 
-function readHeaderValue(headers: Record<string, unknown> | undefined, name: string): string | undefined {
-  const raw = headers?.[name];
-  if (typeof raw === 'string' && raw.trim().length > 0) {
-    return raw.trim();
-  }
-  if (Array.isArray(raw)) {
-    const value = raw.find((entry) => typeof entry === 'string' && entry.trim().length > 0);
-    return typeof value === 'string' ? value.trim() : undefined;
-  }
-  return undefined;
-}
-
 function normalizePrincipalId(value: string | undefined, fallback: string) {
   if (!value) {
     return fallback;
@@ -324,12 +312,9 @@ function normalizePrincipalId(value: string | undefined, fallback: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
 }
 
-function getAuthenticatedPrincipalId(headers: Record<string, unknown> | undefined, auth: RequestAuthorizationResult) {
-  const headerPrincipal =
-    readHeaderValue(headers, 'x-lifeos-principal')
-    ?? readHeaderValue(headers, 'x-lifeos-principal-scope');
+function getAuthenticatedPrincipalId(auth: RequestAuthorizationResult) {
   return normalizePrincipalId(
-    headerPrincipal,
+    auth.principalId ?? undefined,
     auth.localDevelopment ? DEFAULT_LOCAL_DEVELOPMENT_PRINCIPAL : DEFAULT_AUTHENTICATED_PRINCIPAL,
   );
 }
@@ -1108,7 +1093,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
     }
     const query = new URL(`http://127.0.0.1:${port}${req.url}`);
     const domain = query.searchParams.get('domain');
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     const rows = listConversations(principalId);
     const filtered = domain ? rows.filter((row) => row.domain === domain) : rows;
     ok(res, {
@@ -1134,7 +1119,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       badRequest(res, 'conversation_id required');
       return;
     }
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     const activeRun = findRunningConversationRun(principalId, conversationId);
     if (!activeRun) {
       ok(res, {
@@ -1161,7 +1146,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
     }
     const parts = path.split('/');
     const threadId = parts[parts.length - 1];
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     const thread = getConversation(threadId, principalId);
     if (!thread) {
       badRequest(res, 'thread not found');
@@ -1285,7 +1270,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
     }
 
     try {
-      const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+      const principalId = getAuthenticatedPrincipalId(auth);
       const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
@@ -1501,7 +1486,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
     }
 
     try {
-      const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+      const principalId = getAuthenticatedPrincipalId(auth);
       const parsed = await parseChatSend(req, CHAT_SEND_BODY_LIMIT_BYTES);
       const conversation = ensureConversation(
         parsed.threadId,
@@ -1630,7 +1615,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       badRequest(res, 'Unknown run');
       return;
     }
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     if (run.principalId !== principalId) {
       badRequest(res, 'Unknown run');
       return;
@@ -1677,7 +1662,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
 
     const conversationId = payload.conversation_id;
     const userMessageId = payload.user_message_id;
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     const thread = getConversation(payload.conversation_id, principalId);
     if (!thread) {
       badRequest(res, 'conversation not found');
@@ -1771,7 +1756,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       return;
     }
 
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     const thread = getConversation(payload.conversation_id, principalId);
     if (!thread) {
       badRequest(res, 'conversation not found');
@@ -1830,7 +1815,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       badRequest(res, 'action not found');
       return;
     }
-    const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
+    const principalId = getAuthenticatedPrincipalId(auth);
     if (action.conversation_id && !getConversation(action.conversation_id, principalId)) {
       badRequest(res, 'action not found');
       return;

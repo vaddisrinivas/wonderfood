@@ -19,6 +19,7 @@ delete process.env.LIFEOS_MCP_TRUSTED_PRINCIPAL;
 delete process.env.LIFEOS_MCP_TRUSTED_DOMAINS;
 
 const { handleMcpRequest } = await import('../src/mcp/official-server');
+const { createActionEvent, createRecord, findRecord } = await import('../src/mcp/state');
 
 function ensure(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -83,6 +84,50 @@ try {
     { token: unscopedToken, principal: 'observer' },
   ]);
 
+  createRecord({
+    id: 'food-scope-record',
+    domain: 'food',
+    collection: 'inventory',
+    title: 'Food scope marker',
+    properties: { marker: 'food-visible' },
+    relations: [],
+    source: {
+      provider: 'user',
+      external_id: 'food-scope-record',
+      url: null,
+      observed_at: new Date().toISOString(),
+      content_hash: null,
+    },
+    archived_at: null,
+  });
+  createRecord({
+    id: 'health-scope-record',
+    domain: 'health',
+    collection: 'health_note',
+    title: 'Secret health marker',
+    properties: { marker: 'health-hidden' },
+    relations: [],
+    source: {
+      provider: 'user',
+      external_id: 'health-scope-record',
+      url: null,
+      observed_at: new Date().toISOString(),
+      content_hash: null,
+    },
+    archived_at: null,
+  });
+  createActionEvent({
+    id: 'health-scope-action',
+    actor: 'health-principal',
+    domain: 'health',
+    tool: 'wonderfood.create_record',
+    risk: 'low',
+    recordIds: ['health-scope-record'],
+    command: 'create health note',
+    status: 'completed',
+    undoPayload: { operation: 'delete_record', record_id: 'health-scope-record' },
+  });
+
   const missingToken = await postMcp(initializeBody);
   const missingTokenBody = await readJson(missingToken);
   ensure(missingToken.status === 401, `official MCP should reject missing bearer token, got ${missingToken.status}`);
@@ -122,6 +167,102 @@ try {
   ensure(scopedUris.includes('wonderfood://actions'), 'trusted scoped token should retain filtered actions index');
   ensure(scopedUris.includes('wonderfood://workflows'), 'trusted scoped token should retain filtered workflows index');
   ensure(scopedUris.includes('wonderfood://conversations'), 'trusted scoped token should retain filtered conversations index');
+
+  const scopedTools = await postMcp(
+    { jsonrpc: '2.0', id: 21, method: 'tools/list', params: {} },
+    { authorization: `Bearer ${foodToken}` },
+  );
+  const scopedToolsBody = await readJson(scopedTools);
+  ensure(scopedTools.status === 200, `scoped tools/list should succeed, got ${scopedTools.status}`);
+  ensure(!JSON.stringify(scopedToolsBody).toLowerCase().includes('health'), 'food tools/list must not reveal health-specific capability');
+
+  const principalBoundCall = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/call',
+      params: {
+        name: 'wonderfood.propose_app_link',
+        arguments: {
+          requestId: 'trusted-principal-binding',
+          actor: 'caller-forged-principal',
+          actions: [{ type: 'inventory.add', name: 'Eggs' }],
+        },
+      },
+    },
+    { authorization: `Bearer ${foodToken}` },
+  );
+  const principalBoundBody = await readJson(principalBoundCall);
+  const principalBoundContent = Array.isArray(principalBoundBody.result?.content)
+    ? principalBoundBody.result?.content as Array<{ text?: unknown }>
+    : [];
+  const principalBoundPayload = JSON.parse(String(principalBoundContent[0]?.text || '{}')) as { actor?: unknown };
+  ensure(principalBoundPayload.actor === 'food-principal', 'MCP actor must be bound to trusted token principal');
+
+  async function expectFoodToolDenied(
+    id: number,
+    name: string,
+    args: Record<string, unknown>,
+  ) {
+    const response = await postMcp(
+      { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } },
+      { authorization: `Bearer ${foodToken}` },
+    );
+    const body = await readJson(response);
+    ensure(Boolean(body.error), `${name} should reject a health-scoped target`);
+    ensure(body.error?.code === -32001, `${name} should fail as an authorization denial`);
+    ensure(String(body.error?.message).includes('not authorized'), `${name} should explain scope denial`);
+  }
+
+  await expectFoodToolDenied(22, 'wonderfood.search_records', {
+    domain: 'health',
+    collection: 'health_note',
+    query: 'Secret health marker',
+  });
+  await expectFoodToolDenied(23, 'wonderfood.read_record', { id: 'health-scope-record' });
+  await expectFoodToolDenied(24, 'wonderfood.create_record', {
+    domain: 'health',
+    collection: 'health_note',
+    id: 'health-cross-create',
+    title: 'Cross-domain create',
+  });
+  await expectFoodToolDenied(25, 'wonderfood.update_record', {
+    id: 'health-scope-record',
+    domain: 'food',
+    data_home: 'local_sqlite',
+    patch: { title: 'Cross-domain update' },
+  });
+  await expectFoodToolDenied(26, 'wonderfood.archive_record', {
+    id: 'health-scope-record',
+    domain: 'food',
+    data_home: 'local_sqlite',
+  });
+  await expectFoodToolDenied(27, 'wonderfood.run_workflow', {
+    workflow: 'weekly_food_reset',
+    domain: 'health',
+  });
+  await expectFoodToolDenied(28, 'wonderfood.undo_action', { actionId: 'health-scope-action' });
+  await expectFoodToolDenied(29, 'wonderfood.get_resource', { uri: 'wonderfood://manifest/health' });
+
+  const protectedHealthRecord = findRecord('health-scope-record');
+  ensure(protectedHealthRecord?.title === 'Secret health marker', 'denied health update must not mutate target');
+  ensure(protectedHealthRecord?.archived_at === null, 'denied health archive/undo must not mutate target');
+
+  const scopedCatalog = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 30,
+      method: 'tools/call',
+      params: {
+        name: 'wonderfood.get_resource',
+        arguments: { uri: 'wonderfood://domain-catalog' },
+      },
+    },
+    { authorization: `Bearer ${foodToken}` },
+  );
+  const scopedCatalogBody = await readJson(scopedCatalog);
+  ensure(scopedCatalog.status === 200, `scoped domain catalog should be readable, got ${scopedCatalog.status}`);
+  ensure(!JSON.stringify(scopedCatalogBody).toLowerCase().includes('health'), 'food get_resource must filter health catalog metadata');
 
   const scopedRead = await postMcp(
     {
@@ -211,7 +352,9 @@ try {
     : [];
   const unscopedUris = unscopedResources.map((resource) => String(resource.uri));
   ensure(unscopedList.status === 200, `unscoped resources/list should succeed, got ${unscopedList.status}`);
-  ensure(unscopedUris.includes('wonderfood://agent-registry-v1'), 'unscoped token should retain safe global resources');
+  ensure(unscopedUris.includes('wonderfood://schema/command.v1'), 'unscoped token should retain domain-neutral schema resources');
+  ensure(!unscopedUris.includes('wonderfood://agent-registry-v1'), 'unscoped token should hide domain-bearing agent registry');
+  ensure(!unscopedUris.includes('wonderfood://domain-catalog'), 'unscoped token should hide domain catalog');
   ensure(!unscopedUris.includes('wonderfood://records'), 'unscoped token should hide records index');
   ensure(!unscopedUris.includes('wonderfood://actions'), 'unscoped token should hide actions index');
   ensure(!unscopedUris.includes('wonderfood://workflows'), 'unscoped token should hide workflows index');

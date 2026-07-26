@@ -15,7 +15,7 @@ export type McpScope = {
   allowAllDomains: boolean;
 };
 
-type TrustedMcpTokenConfig = {
+type TrustedTokenConfig = {
   token: string;
   principal: string;
   domains: Set<string>;
@@ -28,6 +28,7 @@ const PRINCIPAL_SCOPE_HEADER_CANDIDATES = ['x-lifeos-principal', 'x-lifeos-princ
 const DOMAIN_SCOPE_ENTRY_RE = /^[A-Za-z0-9_.:-]+$/;
 
 export const LOCAL_DEVELOPMENT_ENV = 'LIFEOS_LOCAL_DEV';
+export const SERVER_TRUSTED_TOKENS_ENV = 'LIFEOS_SERVER_TRUSTED_TOKENS_JSON';
 export const MCP_TRUSTED_TOKENS_ENV = 'LIFEOS_MCP_TRUSTED_TOKENS_JSON';
 export const MCP_TRUSTED_PRINCIPAL_ENV = 'LIFEOS_MCP_TRUSTED_PRINCIPAL';
 export const MCP_TRUSTED_DOMAINS_ENV = 'LIFEOS_MCP_TRUSTED_DOMAINS';
@@ -100,7 +101,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseTrustedMcpTokenConfig(raw: unknown): TrustedMcpTokenConfig | null {
+function parseTrustedTokenConfig(raw: unknown): TrustedTokenConfig | null {
   if (!isObject(raw)) {
     return null;
   }
@@ -129,24 +130,46 @@ function parseTrustedMcpTokenConfig(raw: unknown): TrustedMcpTokenConfig | null 
   };
 }
 
-function configuredMcpTokens(): TrustedMcpTokenConfig[] {
+function parseTrustedTokenConfigs(rawValue: string, envName: string): TrustedTokenConfig[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    throw new Error(`${envName} must be valid JSON`);
+  }
+
+  const rows = Array.isArray(parsed) ? parsed : [parsed];
+  const entries = rows
+    .map((entry) => parseTrustedTokenConfig(entry))
+    .filter((entry): entry is TrustedTokenConfig => entry !== null);
+  if (entries.length === 0) {
+    throw new Error(`${envName} must define at least one token`);
+  }
+  return entries;
+}
+
+function configuredServerTokens(): TrustedTokenConfig[] {
+  const rawTrustedTokens = process.env[SERVER_TRUSTED_TOKENS_ENV]?.trim();
+  if (rawTrustedTokens) {
+    return parseTrustedTokenConfigs(rawTrustedTokens, SERVER_TRUSTED_TOKENS_ENV);
+  }
+
+  const token = serverAuthToken();
+  if (!token) {
+    return [];
+  }
+  return [{
+    token,
+    principal: DEFAULT_SERVER_PRINCIPAL,
+    domains: new Set(),
+    allowAllDomains: true,
+  }];
+}
+
+function configuredMcpTokens(): TrustedTokenConfig[] {
   const rawTrustedTokens = process.env[MCP_TRUSTED_TOKENS_ENV]?.trim();
   if (rawTrustedTokens) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawTrustedTokens);
-    } catch (error) {
-      throw new Error(`${MCP_TRUSTED_TOKENS_ENV} must be valid JSON`);
-    }
-
-    const rows = Array.isArray(parsed) ? parsed : [parsed];
-    const entries = rows
-      .map((entry) => parseTrustedMcpTokenConfig(entry))
-      .filter((entry): entry is TrustedMcpTokenConfig => entry !== null);
-    if (entries.length === 0) {
-      throw new Error(`${MCP_TRUSTED_TOKENS_ENV} must define at least one token`);
-    }
-    return entries;
+    return parseTrustedTokenConfigs(rawTrustedTokens, MCP_TRUSTED_TOKENS_ENV);
   }
 
   const token = mcpAuthToken();
@@ -155,8 +178,16 @@ function configuredMcpTokens(): TrustedMcpTokenConfig[] {
   }
 
   const principal = normalizePrincipalId(process.env[MCP_TRUSTED_PRINCIPAL_ENV], DEFAULT_SERVER_PRINCIPAL);
-  const { domains, allowAllDomains } = normalizeScopeEntries(process.env[MCP_TRUSTED_DOMAINS_ENV]);
-  return [{ token, principal, domains, allowAllDomains }];
+  const configuredDomains = process.env[MCP_TRUSTED_DOMAINS_ENV];
+  const { domains, allowAllDomains } = normalizeScopeEntries(configuredDomains);
+  return [{
+    token,
+    principal,
+    domains,
+    // A legacy single MCP token is an explicitly global credential unless the
+    // operator narrows it with LIFEOS_MCP_TRUSTED_DOMAINS.
+    allowAllDomains: configuredDomains === undefined ? true : allowAllDomains,
+  }];
 }
 
 function parseRequestedScope(headers: HeaderMap): McpScope {
@@ -184,7 +215,7 @@ function isSubset(candidate: Set<string>, allowed: Set<string>): boolean {
   return true;
 }
 
-function validateRequestedMcpScope(headers: HeaderMap, trusted: TrustedMcpTokenConfig): RequestAuthorizationResult | null {
+function validateRequestedMcpScope(headers: HeaderMap, trusted: TrustedTokenConfig): RequestAuthorizationResult | null {
   const requested = parseRequestedScope(headers);
   if (requested.principal && requested.principal !== trusted.principal) {
     return {
@@ -235,7 +266,13 @@ export function assertServerStartupSecurity(host: string): void {
     throw new Error(`${LOCAL_DEVELOPMENT_ENV}=true is only allowed when LIFEOS_SERVER_HOST is loopback`);
   }
 
-  if (!loopback && !serverAuthToken() && !mcpAuthToken()) {
+  if (
+    !loopback
+    && !process.env[SERVER_TRUSTED_TOKENS_ENV]?.trim()
+    && !process.env[MCP_TRUSTED_TOKENS_ENV]?.trim()
+    && !serverAuthToken()
+    && !mcpAuthToken()
+  ) {
     throw new Error('Refusing non-loopback bind without configured auth. Set LIFEOS_SERVER_TOKEN or LIFEOS_MCP_TOKEN.');
   }
 }
@@ -311,7 +348,74 @@ export function authorizeBearerRequest(headers: HeaderMap, token: string, label:
 }
 
 export function authorizeServerRequest(headers: HeaderMap): RequestAuthorizationResult {
-  return authorizeBearerRequest(headers, serverAuthToken(), 'Server');
+  if (isExplicitLocalDevelopment()) {
+    return {
+      ok: true,
+      localDevelopment: true,
+      statusCode: 200,
+      message: 'Server auth bypassed in explicit local-development mode.',
+      principalId: DEFAULT_LOCAL_DEVELOPMENT_PRINCIPAL,
+      mcpScope: null,
+    };
+  }
+
+  let configuredTokens: TrustedTokenConfig[];
+  try {
+    configuredTokens = configuredServerTokens();
+  } catch (error) {
+    return {
+      ok: false,
+      localDevelopment: false,
+      statusCode: 503,
+      message: (error as Error).message,
+      principalId: null,
+      mcpScope: null,
+    };
+  }
+
+  if (configuredTokens.length === 0) {
+    return {
+      ok: false,
+      localDevelopment: false,
+      statusCode: 503,
+      message: `Server token not configured. Set ${SERVER_TRUSTED_TOKENS_ENV} or LIFEOS_SERVER_TOKEN, or explicitly enable ${LOCAL_DEVELOPMENT_ENV}=true for local development.`,
+      principalId: null,
+      mcpScope: null,
+    };
+  }
+
+  const bearer = getBearerToken(headers);
+  if (!bearer) {
+    return {
+      ok: false,
+      localDevelopment: false,
+      statusCode: 401,
+      message: 'Missing server bearer token',
+      principalId: null,
+      mcpScope: null,
+    };
+  }
+
+  const matched = configuredTokens.find((entry) => bearer === `Bearer ${entry.token}`);
+  if (!matched) {
+    return {
+      ok: false,
+      localDevelopment: false,
+      statusCode: 401,
+      message: 'Invalid server bearer token',
+      principalId: null,
+      mcpScope: null,
+    };
+  }
+
+  return {
+    ok: true,
+    localDevelopment: false,
+    statusCode: 200,
+    message: 'Server authorized',
+    principalId: matched.principal,
+    mcpScope: null,
+  };
 }
 
 export function authorizeMcpRequest(headers: HeaderMap): RequestAuthorizationResult {
@@ -326,7 +430,7 @@ export function authorizeMcpRequest(headers: HeaderMap): RequestAuthorizationRes
     };
   }
 
-  let configuredTokens: TrustedMcpTokenConfig[];
+  let configuredTokens: TrustedTokenConfig[];
   try {
     configuredTokens = configuredMcpTokens();
   } catch (error) {
