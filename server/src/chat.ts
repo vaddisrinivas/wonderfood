@@ -1,5 +1,5 @@
 import { toCitationsFromSnapshots } from './provenance';
-import { runChatOrchestrator } from './agents/orchestrator';
+import { runChatRuntime } from './chat-runtime';
 import { ensureCitations } from '@/src/chat/citations';
 import { getConversation } from './chat-storage';
 import { ActionEvent } from './mcp/state';
@@ -429,7 +429,7 @@ export async function handleServerChat(input: {
   const conversation = getConversation(input.conversationId);
   const threadContext = buildConversationContext(conversation);
 
-  const orchestrated = await runChatOrchestrator({
+  const orchestrated = await runChatRuntime({
     conversationId: input.conversationId,
     domain,
     message: input.message,
