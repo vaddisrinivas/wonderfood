@@ -26,7 +26,7 @@ export type ProviderWritebackResult =
   | { status: 'rejected'; op_id: string; reject_reason: string };
 
 export type ProviderWriteDeliveryResult =
-  | { status: 'delivered'; event_id: string; provider: DirectSyncProvider; statusCode: number }
+  | { status: 'delivered'; event_id: string; provider: DirectSyncProvider; statusCode: number; readback: Record<string, unknown> }
   | { status: 'blocked'; event_id: string; provider?: DirectSyncProvider; reason: string }
   | { status: 'failed'; event_id: string; provider: DirectSyncProvider; statusCode: number; reason: string };
 
@@ -223,6 +223,104 @@ function buildSheetsRequest(payload: ProviderWritePayload, settings: LifeOSSetti
   };
 }
 
+function parseJsonText(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function notionTitleFromPage(page: Record<string, unknown>) {
+  const properties = page.properties && typeof page.properties === 'object' ? page.properties as Record<string, unknown> : {};
+  const name = properties.Name && typeof properties.Name === 'object' ? properties.Name as Record<string, unknown> : {};
+  const title = Array.isArray(name.title) ? name.title : [];
+  return title.map((item) => {
+    const text = item && typeof item === 'object' ? (item as Record<string, unknown>).plain_text : '';
+    return typeof text === 'string' ? text : '';
+  }).join('').trim();
+}
+
+function archivedExpected(payload: ProviderWritePayload) {
+  if (payload.operation === 'archive_record') return true;
+  if (payload.operation === 'restore_record') return false;
+  return Boolean(payload.record?.archived_at || payload.record?.deleted);
+}
+
+async function verifyNotionWriteback(input: {
+  payload: ProviderWritePayload;
+  settings: LifeOSSettings;
+  writeBody: Record<string, unknown>;
+  fetcher: FetchLike;
+}): Promise<{ ok: true; snapshot: Record<string, unknown> } | { ok: false; statusCode: number; reason: string }> {
+  const pageId = String(input.writeBody.id || input.payload.external_id || '').trim();
+  if (!pageId) return { ok: false, statusCode: 0, reason: 'provider_writeback_readback_missing_page_id' };
+  const response = await input.fetcher(`https://api.notion.com/v1/pages/${encodeURIComponent(pageId)}`, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${input.settings.notion.token.trim()}`,
+      'notion-version': '2026-03-11',
+    },
+  });
+  const bodyText = await response.text().catch(() => '');
+  const page = parseJsonText(bodyText);
+  if (!response.ok) return { ok: false, statusCode: response.status, reason: bodyText.slice(0, 240) || `readback HTTP ${response.status}` };
+  const title = notionTitleFromPage(page);
+  const inTrash = Boolean(page.in_trash ?? page.archived);
+  const expectedArchived = archivedExpected(input.payload);
+  const expectedTitle = recordTitle(input.payload.record ?? input.payload.before);
+  if (inTrash !== expectedArchived) return { ok: false, statusCode: response.status, reason: 'provider_writeback_readback_archive_mismatch' };
+  if (!expectedArchived && title !== expectedTitle) return { ok: false, statusCode: response.status, reason: 'provider_writeback_readback_title_mismatch' };
+  return { ok: true, snapshot: { provider_page_id: pageId, title, in_trash: inTrash } };
+}
+
+function sheetRows(value: Record<string, unknown>): unknown[][] {
+  return Array.isArray(value.values) ? value.values.filter(Array.isArray) as unknown[][] : [];
+}
+
+async function verifySheetsWriteback(input: {
+  payload: ProviderWritePayload;
+  settings: LifeOSSettings;
+  writeBody: Record<string, unknown>;
+  fetcher: FetchLike;
+}): Promise<{ ok: true; snapshot: Record<string, unknown> } | { ok: false; statusCode: number; reason: string }> {
+  const sheetName = input.settings.sheets.sheetName.trim() || 'LifeOS Canonical';
+  const range = typeof (input.writeBody.updates as Record<string, unknown> | undefined)?.updatedRange === 'string'
+    ? String((input.writeBody.updates as Record<string, unknown>).updatedRange)
+    : `${sheetName}!A:I`;
+  const response = await input.fetcher(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.settings.sheets.workbookId.trim())}/values/${encodeURIComponent(range)}?majorDimension=ROWS`, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${input.settings.sheets.token.trim()}`,
+      'content-type': 'application/json',
+    },
+  });
+  const bodyText = await response.text().catch(() => '');
+  const body = parseJsonText(bodyText);
+  if (!response.ok) return { ok: false, statusCode: response.status, reason: bodyText.slice(0, 240) || `readback HTTP ${response.status}` };
+  const expected = sheetRow(input.payload).map((cell) => String(cell));
+  const row = sheetRows(body).find((candidate) =>
+    String(candidate[0] ?? '') === expected[0]
+    && String(candidate[1] ?? '') === expected[1]
+    && String(candidate[5] ?? '').toLowerCase() === expected[5].toLowerCase()
+    && String(candidate[8] ?? '') === expected[8]
+  );
+  if (!row) return { ok: false, statusCode: response.status, reason: 'provider_writeback_readback_row_mismatch' };
+  return { ok: true, snapshot: { range, record_id: row[0], title: row[1], archived: row[5], op_id: row[8] } };
+}
+
+async function verifyProviderWriteback(input: {
+  payload: ProviderWritePayload;
+  settings: LifeOSSettings;
+  writeBody: Record<string, unknown>;
+  fetcher: FetchLike;
+}): Promise<{ ok: true; snapshot: Record<string, unknown> } | { ok: false; statusCode: number; reason: string }> {
+  return input.payload.provider === 'notion'
+    ? verifyNotionWriteback(input)
+    : verifySheetsWriteback(input);
+}
+
 export async function deliverProviderWriteEvent(input: {
   db: SQLiteDatabase;
   event: OutboxEvent;
@@ -243,11 +341,22 @@ export async function deliverProviderWriteEvent(input: {
   }
   const fetcher = input.fetcher ?? fetch;
   const response = await fetcher(request.url, request.init);
+  const bodyText = await response.text().catch(() => '');
   if (response.ok) {
+    const verified = await verifyProviderWriteback({
+      payload,
+      settings: input.settings,
+      writeBody: parseJsonText(bodyText),
+      fetcher,
+    });
+    if (!verified.ok) {
+      await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: verified.reason, attemptsDelta: 1 });
+      return { status: 'failed', event_id: input.event.id, provider: payload.provider, statusCode: verified.statusCode || response.status, reason: verified.reason };
+    }
     await markOutboxEvent(input.db, input.event.id, { status: 'done', last_error: null });
-    return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status };
+    return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status, readback: verified.snapshot };
   }
-  const reason = (await response.text().catch(() => '')).slice(0, 240) || `HTTP ${response.status}`;
+  const reason = bodyText.slice(0, 240) || `HTTP ${response.status}`;
   await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: reason, attemptsDelta: 1 });
   return { status: 'failed', event_id: input.event.id, provider: payload.provider, statusCode: response.status, reason };
 }

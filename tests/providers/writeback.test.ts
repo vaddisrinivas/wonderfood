@@ -35,6 +35,45 @@ function payload(row: Record<string, unknown> | undefined) {
   return JSON.parse(String(row!.payload_json)) as ProviderWritePayload;
 }
 
+function jsonResponse(value: unknown, status = 200) {
+  return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(value) };
+}
+
+function notionPage(title: string, extra: Record<string, unknown> = {}) {
+  return {
+    id: extra.id ?? 'notion-page-1',
+    in_trash: extra.in_trash ?? false,
+    archived: extra.archived ?? false,
+    properties: {
+      Name: {
+        title: [{ type: 'text', plain_text: title, text: { content: title } }],
+      },
+    },
+    ...extra,
+  };
+}
+
+function sheetsAppendResponse(range = 'LifeOS Canonical!A2:I2') {
+  return { updates: { updatedRange: range } };
+}
+
+function sheetsReadbackRow(payload: ProviderWritePayload, overrides: Partial<Record<'recordId' | 'title' | 'archived' | 'opId', string>> = {}) {
+  return {
+    range: 'LifeOS Canonical!A2:I2',
+    values: [[
+      overrides.recordId ?? payload.record_id,
+      overrides.title ?? payload.record?.title ?? payload.before?.title ?? 'Writeback yogurt',
+      payload.record?.domain ?? payload.before?.domain ?? manifest.id,
+      payload.record?.collection ?? payload.before?.collection ?? 'inventory',
+      JSON.stringify(payload.record?.properties ?? payload.before?.properties ?? {}),
+      overrides.archived ?? (payload.operation === 'archive_record' ? 'true' : 'false'),
+      String(payload.record?.revision ?? payload.before?.revision ?? ''),
+      observedAt,
+      overrides.opId ?? payload.op_id,
+    ]],
+  };
+}
+
 async function providerOutboxRows(db: MemoryDb) {
   return listProviderWritebackOutboxEvents(db as any);
 }
@@ -154,7 +193,8 @@ describe('enqueueProviderWriteForOperation', () => {
       },
       fetcher: async (url, init) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, text: async () => '{}' };
+        if (init.method === 'GET') return jsonResponse(notionPage('Writeback yogurt'));
+        return jsonResponse({ id: 'notion-page-1' });
       },
       platform: 'native',
     });
@@ -162,7 +202,33 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(delivered.status).toBe('delivered');
     expect(db.outbox.get(queued.event.id)?.status).toBe('done');
     expect(calls[0].url).toBe('https://api.notion.com/v1/pages');
+    expect(calls[1].url).toBe('https://api.notion.com/v1/pages/notion-page-1');
     expect(calls[0].init.headers.authorization).toBe('Bearer test-token');
+  });
+
+  it('fails Notion delivery when provider readback does not match', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-notion-mismatch');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-deliver-notion-mismatch' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+
+    const failed = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async (_url, init) => init.method === 'GET'
+        ? jsonResponse(notionPage('Wrong title'))
+        : jsonResponse({ id: 'notion-page-1' }),
+      platform: 'native',
+    });
+
+    expect(failed.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_title_mismatch');
   });
 
   it('delivers Notion archive as a trash request against the provider page id', async () => {
@@ -198,7 +264,8 @@ describe('enqueueProviderWriteForOperation', () => {
       },
       fetcher: async (url, init) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, text: async () => '{}' };
+        if (init.method === 'GET') return jsonResponse(notionPage('Writeback yogurt', { in_trash: true }));
+        return jsonResponse({ id: 'notion-page-1' });
       },
       platform: 'native',
     });
@@ -239,7 +306,8 @@ describe('enqueueProviderWriteForOperation', () => {
       },
       fetcher: async (url, init) => {
         calls.push({ url, init });
-        return { ok: true, status: 200, text: async () => '{}' };
+        if (init.method === 'GET') return jsonResponse(notionPage('Writeback yogurt', { in_trash: false }));
+        return jsonResponse({ id: 'notion-page-1' });
       },
       platform: 'native',
     });
@@ -247,6 +315,60 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(delivered.status).toBe('delivered');
     expect(calls[0].url).toBe('https://api.notion.com/v1/pages/notion-page-1');
     expect(JSON.parse(calls[0].init.body || '{}')).toMatchObject({ in_trash: false });
+  });
+
+  it('delivers queued Sheets writes only after row readback verifies', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-sheets-ok');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: 'writeback-deliver-sheets-ok' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+    const calls: Array<{ url: string; init: { method: string; headers: Record<string, string>; body?: string } }> = [];
+
+    const delivered = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        sheets: { enabled: true, token: 'sheet-token', workbookId: 'book-1', sheetName: 'LifeOS Canonical' },
+      },
+      fetcher: async (url, init) => {
+        calls.push({ url, init });
+        if (init.method === 'GET') return jsonResponse(sheetsReadbackRow(queued.payload));
+        return jsonResponse(sheetsAppendResponse());
+      },
+      platform: 'native',
+    });
+
+    expect(delivered.status).toBe('delivered');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('done');
+    expect(calls[0].url).toContain(':append');
+    expect(calls[1].url).toContain('/values/LifeOS%20Canonical!A2%3AI2');
+  });
+
+  it('fails Sheets delivery when appended row readback does not match', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-sheets-mismatch');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: 'writeback-deliver-sheets-mismatch' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+
+    const failed = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        sheets: { enabled: true, token: 'sheet-token', workbookId: 'book-1', sheetName: 'LifeOS Canonical' },
+      },
+      fetcher: async (_url, init) => init.method === 'GET'
+        ? jsonResponse(sheetsReadbackRow(queued.payload, { opId: 'wrong-op' }))
+        : jsonResponse(sheetsAppendResponse()),
+      platform: 'native',
+    });
+
+    expect(failed.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('failed');
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_row_mismatch');
   });
 
   it('blocks browser delivery and marks failed provider responses', async () => {
