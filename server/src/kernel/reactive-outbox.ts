@@ -42,6 +42,9 @@ export type ReactiveOutboxDrainResult = Readonly<{
   failed: readonly { proposalId: string; error: string }[];
 }>;
 
+const DEFAULT_RETRY_BASE_DELAY_MS = 60_000;
+const DEFAULT_RETRY_MAX_DELAY_MS = 15 * 60_000;
+
 export function createReactiveOutboxStore(): ReactiveOutboxStore {
   return immutable({
     schemaVersion: REACTIVE_OUTBOX_SCHEMA_VERSION,
@@ -131,14 +134,32 @@ export function markReactiveOutboxAwaitingReview(
   });
 }
 
+export function markReactiveOutboxPending(
+  store: ReactiveOutboxStore,
+  proposalId: string,
+  input: { now?: string; retryDelayMs?: number; reason?: string; incrementAttempts?: boolean } = {},
+): ReactiveOutboxStore {
+  const now = input.now ?? new Date().toISOString();
+  const item = requiredItem(store, proposalId);
+  const retryDelayMs = Math.max(0, input.retryDelayMs ?? 0);
+  return updateItem(store, proposalId, {
+    ...item,
+    status: 'pending',
+    attempts: item.attempts + (input.incrementAttempts ? 1 : 0),
+    updatedAt: now,
+    nextAttemptAt: new Date(Date.parse(now) + retryDelayMs).toISOString(),
+    ...(input.reason ? { lastError: input.reason } : {}),
+  });
+}
+
 export function markReactiveOutboxFailed(
   store: ReactiveOutboxStore,
   proposalId: string,
   input: { error: string; now?: string; retryDelayMs?: number },
 ): ReactiveOutboxStore {
   const now = input.now ?? new Date().toISOString();
-  const retryDelayMs = input.retryDelayMs ?? 60_000;
   const item = requiredItem(store, proposalId);
+  const retryDelayMs = input.retryDelayMs ?? nextReactiveOutboxRetryDelayMs(item.attempts + 1);
   return updateItem(store, proposalId, {
     ...item,
     status: 'pending',
@@ -201,6 +222,54 @@ export async function drainReactiveOutbox(input: {
   }
 
   return immutable({ store, attempted, acked, queuedForReview, failed });
+}
+
+export function recoverReactiveOutboxStore(
+  store: ReactiveOutboxStore,
+  input: {
+    now?: string;
+    retryDelayMs?: number;
+    shouldResumeAwaitingReview?: (item: ReactiveOutboxItem) => boolean;
+    runningReason?: string;
+    awaitingReviewReason?: string;
+  } = {},
+): ReactiveOutboxStore {
+  const now = input.now ?? new Date().toISOString();
+  const shouldResumeAwaitingReview = input.shouldResumeAwaitingReview ?? (() => false);
+  let next = store;
+  for (const item of Object.values(next.items)) {
+    if (item.status === 'running') {
+      next = markReactiveOutboxPending(next, item.proposalId, {
+        now,
+        retryDelayMs: input.retryDelayMs ?? 0,
+        reason: input.runningReason ?? 'worker_recovery',
+      });
+      continue;
+    }
+    if (item.status === 'awaiting_review' && shouldResumeAwaitingReview(item)) {
+      next = markReactiveOutboxPending(next, item.proposalId, {
+        now,
+        retryDelayMs: 0,
+        reason: input.awaitingReviewReason ?? 'review_resumed',
+      });
+    }
+  }
+  return next;
+}
+
+export function mergeReactiveOutboxStores(
+  base: ReactiveOutboxStore,
+  patch: ReactiveOutboxStore,
+): ReactiveOutboxStore {
+  return immutable({
+    schemaVersion: REACTIVE_OUTBOX_SCHEMA_VERSION,
+    items: sortRecord({
+      ...base.items,
+      ...Object.fromEntries(
+        Object.entries(patch.items).map(([proposalId, item]) => [proposalId, immutable({ ...item })]),
+      ),
+    }),
+  });
 }
 
 export function serializeReactiveOutboxStore(store: ReactiveOutboxStore): string {
@@ -394,6 +463,11 @@ function executionResultReason(result: ReactiveOutboxExecutionResult): string {
   }
   const status = (result as { receipt?: { status?: unknown } }).receipt?.status;
   return typeof status === 'string' && status.trim() ? status : 'execution_result_unverified';
+}
+
+export function nextReactiveOutboxRetryDelayMs(attempts: number): number {
+  const normalizedAttempts = Math.max(1, Math.trunc(attempts));
+  return Math.min(DEFAULT_RETRY_BASE_DELAY_MS * 2 ** (normalizedAttempts - 1), DEFAULT_RETRY_MAX_DELAY_MS);
 }
 
 function sortRecord<T>(value: Record<string, T>): Record<string, T> {

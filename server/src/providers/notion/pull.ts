@@ -10,6 +10,7 @@ export type NotionPullInput = {
   limit?: number;
   pageId?: string;
   externalId?: string;
+  signal?: AbortSignal;
 };
 
 export type NotionPullResult = {
@@ -301,6 +302,7 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
         page_size: pageSize,
         ...(cursor ? { start_cursor: cursor } : {}),
       }),
+      signal: input.signal,
     });
 
     if (!response.ok) {

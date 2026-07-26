@@ -76,6 +76,7 @@ type LiveSheetsPullInput = {
   domain?: string;
   collection?: string;
   limit?: number;
+  signal?: AbortSignal;
 };
 
 function nowDigest(values: string[]) {
@@ -306,6 +307,7 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
 
   const metadataResponse = await sheetsFetch<SheetsMetadataResponse>('', {
     method: 'GET',
+    signal: input.signal,
   });
   if (!metadataResponse.ok) {
     return {
@@ -341,6 +343,7 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
     `/values:batchGet?majorDimension=ROWS&ranges=${encodeURIComponent(range)}`,
     {
       method: 'GET',
+      signal: input.signal,
     },
   );
   if (!valuesResponse.ok) {
