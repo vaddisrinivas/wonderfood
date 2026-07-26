@@ -268,7 +268,6 @@ export default function FoodScreen() {
   const [notice, setNotice] = useState('');
   const [lastArchivedId, setLastArchivedId] = useState<string | null>(null);
   const [lastDinnerLoopOpId, setLastDinnerLoopOpId] = useState<string | null>(null);
-  const [lastDinnerLoopRunId, setLastDinnerLoopRunId] = useState<string | null>(null);
   const [dinnerLoopPending, setDinnerLoopPending] = useState(false);
   const [backupSnapshot, setBackupSnapshot] = useState<RecoveryExport | null>(null);
 
@@ -387,7 +386,6 @@ export default function FoodScreen() {
           { id: 'suggest', title: 'Suggest dinner from pantry', tool: 'food.dinner.suggest' },
           { id: 'approve', title: 'Approve shopping change', tool: 'food.shopping.approve', cancellable: false },
           { id: 'shop', title: 'Update shopping list', tool: 'food.shopping.update', compensation_tool: 'food.shopping.undo' },
-          { id: 'undo-window', title: 'Undo available', tool: 'food.shopping.undo' },
         ],
       });
       await recordWorkflowStep({
@@ -469,7 +467,6 @@ export default function FoodScreen() {
             },
           });
           setLastDinnerLoopOpId(result.op_id);
-          setLastDinnerLoopRunId(runId);
           setNotice(`Dinner loop saved. ${target.title} moved to cart. Undo is ready.`);
           setRefreshNonce((value) => value + 1);
           return;
@@ -552,7 +549,6 @@ export default function FoodScreen() {
           },
         });
         setLastDinnerLoopOpId(result.op_id);
-        setLastDinnerLoopRunId(runId);
         setNotice('Dinner loop saved. Rice vinegar added to shopping. Undo is ready.');
         setRefreshNonce((value) => value + 1);
       } else {
@@ -581,22 +577,8 @@ export default function FoodScreen() {
     }
     const result = await undoOperation(db, activeManifest, lastDinnerLoopOpId);
     if (result.status === 'applied' || result.status === 'duplicate') {
-      if (lastDinnerLoopRunId) {
-        await recordWorkflowStep({
-          db,
-          runId: lastDinnerLoopRunId,
-          stepId: 'undo-window',
-          status: 'completed',
-          receipt: {
-            operation_ids: [result.op_id],
-            action_ids: ['undo_shopping_update'],
-            message: result.status === 'duplicate' ? 'Dinner loop undo replayed safely.' : 'Dinner loop undone.',
-          },
-        });
-      }
       setNotice(result.status === 'duplicate' ? 'Dinner loop was already undone.' : 'Dinner loop undone.');
       setLastDinnerLoopOpId(null);
-      setLastDinnerLoopRunId(null);
       setRefreshNonce((value) => value + 1);
     } else {
       setNotice(`Undo paused: ${result.reject_reason ?? 'operation rejected'}.`);

@@ -281,7 +281,6 @@ function checksum(db: FoodGoldenDb) {
       { id: 'suggest', title: 'Suggest dinner from pantry', tool: 'food.dinner.suggest' },
       { id: 'approve', title: 'Approve shopping change', tool: 'food.shopping.approve', cancellable: false },
       { id: 'shop', title: 'Update shopping list', tool: 'food.shopping.update', compensation_tool: 'food.shopping.undo' },
-      { id: 'undo-window', title: 'Undo available', tool: 'food.shopping.undo' },
     ],
   });
   await recordWorkflowStep({
@@ -335,7 +334,7 @@ function checksum(db: FoodGoldenDb) {
     },
   });
   const workflowSummary = await getWorkflowReceiptSummary(db, 'golden-dinner-loop-run');
-  assert(workflowSummary.status === 'running', 'dinner loop workflow should stay running while undo is available');
+  assert(workflowSummary.status === 'completed', 'dinner loop workflow should complete after approval');
   assert(workflowSummary.completed_steps === 3, 'dinner loop workflow did not record approval steps');
   assert(workflowSummary.operation_ids.includes('golden-shop-purchased'), 'dinner loop workflow missing shopping operation receipt');
   assert(workflowSummary.record_ids.includes('golden-shop-berries'), 'dinner loop workflow missing shopping record receipt');
@@ -350,22 +349,6 @@ function checksum(db: FoodGoldenDb) {
 
   const undoShopping = await undoOperation(db, manifest, 'golden-shop-purchased');
   assert(undoShopping.status === 'applied' || undoShopping.status === 'duplicate', `shopping undo failed: ${undoShopping.status}`);
-  await recordWorkflowStep({
-    db,
-    runId: 'golden-dinner-loop-run',
-    stepId: 'undo-window',
-    status: 'completed',
-    receipt: {
-      operation_ids: [undoShopping.op_id],
-      action_ids: ['undo_shopping_update'],
-      record_ids: ['golden-shop-berries'],
-      message: 'Dinner loop undone.',
-    },
-  });
-  const completedWorkflowSummary = await getWorkflowReceiptSummary(db, 'golden-dinner-loop-run');
-  assert(completedWorkflowSummary.status === 'completed', 'dinner loop workflow did not complete after undo');
-  assert(completedWorkflowSummary.completed_steps === 4, 'dinner loop workflow did not record undo step');
-  assert(completedWorkflowSummary.operation_ids.includes(undoShopping.op_id), 'dinner loop workflow missing undo operation receipt');
   const undoneShopping = await getRecord(db, 'golden-shop-berries');
   assert(undoneShopping?.properties.status === 'To buy', 'shopping undo did not restore prior status');
 
