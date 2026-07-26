@@ -237,7 +237,7 @@ The historical statuses above remain the audit trail. The machine-readable regis
 - `P1-06`, `P1-07`, `P1-08` -> `RESOLVED`: shared atomic/quarantine persistence, bounded slow-body ingress, and restart-safe chat replay, proven by `server/test/state-persistence-contract.ts`, `server/test/json-state-concurrency.ts`, `server/test/ingress-security.ts`, and `server/test/chat-restart-replay.ts`.
 - `P2-03`, `P2-05` -> `RESOLVED`: retrieval runtime controls and supervised reactive worker lifecycle, proven by `server/test/retrieval-runtime-controls.ts` and `server/test/reactive-runtime-worker.ts`.
 - `P2-09` -> `RESOLVED`: strict Ajv config validation and expanded mutation coverage.
-- `P2-10` -> `PARTIAL`: real SQLite now proves migrations, JSON queries, rollback, and foreign keys; the broader writer-boundary suite still uses `MemoryDb`.
+- `P2-10` -> `RESOLVED`: `tests/ops/writer-boundary-sqlite.test.ts` proves canonical user, sync, AI, undo, JSON persistence, idempotency, and transactional rollback on real SQLite.
 - `P2-11` -> `RESOLVED`: shared confidence contract and convergence test.
 - `P2-12` -> `PARTIAL`: completion audit now consumes the machine registry and primary docs were refreshed, but this document intentionally retains historical evidence and whole-V1 acceptance still needs current full gates.
 

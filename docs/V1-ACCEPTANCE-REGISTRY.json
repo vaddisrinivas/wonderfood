@@ -128,8 +128,8 @@
     {
       "id": "P2-10",
       "priority": "P2",
-      "status": "PARTIAL",
-      "summary": "Real SQLite covers migrations, JSON, rollback, and foreign keys; broader writer-boundary coverage still uses MemoryDb."
+      "status": "RESOLVED",
+      "summary": "Real SQLite writer-boundary coverage now proves canonical user, sync, AI, undo, JSON persistence, idempotency, and transactional rollback."
     },
     {
       "id": "P2-11",
