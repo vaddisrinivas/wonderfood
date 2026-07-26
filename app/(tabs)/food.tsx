@@ -877,8 +877,11 @@ export default function FoodScreen() {
               )) : (
                 <Card tone="moss" style={styles.emptyCard}>
                   <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>{activeCopy.empty}</Text>
-                  <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{`Add food, ask ${domainLabel} AI, or load a sample kitchen.`}</Text>
-                  <Link href="/capture" style={[styles.cardLink, { color: theme.colors.moss }]}>{`Capture ${domainLabel.toLowerCase()} →`}</Link>
+                  <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>{`Capture pantry, meal, or shopping data and ask Food AI to build a plan.`}</Text>
+                  <View style={styles.foodEmptyActions}>
+                    <Link href="/capture" style={[styles.foodEmptyButton, { borderColor: theme.colors.moss }]}>{`Capture ${domainLabel.toLowerCase()} →`}</Link>
+                    <Link href="/chat" style={[styles.foodEmptyButton, { borderColor: theme.colors.blue }]}>{`Ask ${domainLabel} AI →`}</Link>
+                  </View>
                 </Card>
               )}
             </View>
@@ -888,10 +891,10 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Want to tune the Food flow?</Text>
-              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Ask AI to reshape the screen, or open Settings for advanced controls.</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Want more Food controls?</Text>
+              <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Keep this off for the default experience. Use Settings → Advanced to unlock setup helpers and maintenance tools.</Text>
             </View>
-            <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Settings</Link>
+            <Link href="/settings" style={[styles.configLink, { color: theme.colors.moss }]}>Open settings</Link>
           </Card>
         ) : null;
       default:
@@ -1082,6 +1085,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
               onToggleShopping={onToggleShopping}
               onRunDinnerLoop={onRunDinnerLoop}
               onUndoDinnerLoop={onUndoDinnerLoop}
+              onAsk={onAsk}
               onLoadDemo={onLoadDemo}
               onQuickAdd={onQuickAdd}
               onArchiveFirst={onArchiveFirst}
@@ -1103,7 +1107,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   );
 }
 
-function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice, showAdvancedTools }: {
+function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, dinnerLoopPending, canRestoreBackup, notice, showAdvancedTools }: {
   mode: FoodMode;
   records: FoodRecordView[];
   meals: FoodRecordView[];
@@ -1113,6 +1117,7 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   onToggleShopping: (record: FoodRecordView) => void;
   onRunDinnerLoop: () => void;
   onUndoDinnerLoop: () => void;
+  onAsk: () => void;
   onLoadDemo: () => void;
   onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
   onArchiveFirst: () => void;
@@ -1130,6 +1135,7 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
     <FoodDebugTools
       recordCount={records.length}
       notice={notice}
+      onAsk={onAsk}
       canUndoArchive={canUndoArchive}
       canRestoreBackup={canRestoreBackup}
       onLoadDemo={onLoadDemo}
@@ -1553,11 +1559,12 @@ function FoodActionCard({ title, detail, strong, note, cta, href, tone, ctaTone 
   return href ? <Link href={href as never} asChild><Pressable accessibilityRole="button" style={({ pressed }) => [pressed && styles.pressed]}>{card}</Pressable></Link> : card;
 }
 
-function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup }: {
+function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup }: {
   recordCount: number;
   notice: string;
   canUndoArchive: boolean;
   canRestoreBackup: boolean;
+  onAsk: () => void;
   onLoadDemo: () => void;
   onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
   onArchiveFirst: () => void;
@@ -1574,8 +1581,8 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
     return (
       <View style={styles.foodLabCollapsed}>
         {notice ? <Text style={[styles.foodLabNotice, { color: theme.colors.moss }]} testID="food-debug-notice">{notice}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Add food" testID="food-show-kitchen-lab" onPress={() => setExpanded(true)} style={({ pressed }) => [styles.foodLabButton, { backgroundColor: theme.dark ? theme.colors.paper : '#FFF8EC', borderColor: theme.colors.line }, pressed && styles.pressed]}>
-          <Text style={[styles.foodLabButtonText, { color: theme.colors.muted }]}>Advanced</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open advanced food tools" testID="food-show-kitchen-lab" onPress={() => setExpanded(true)} style={({ pressed }) => [styles.foodLabButton, { backgroundColor: theme.dark ? theme.colors.paper : '#FFF8EC', borderColor: theme.colors.line }, pressed && styles.pressed]}>
+          <Text style={[styles.foodLabButtonText, { color: theme.colors.ink }]}>Advanced food tools</Text>
         </Pressable>
       </View>
     );
@@ -1584,8 +1591,10 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
     <View style={[styles.foodDebugTools, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]} testID="food-debug-tools">
       <View style={styles.foodDebugHeader}>
         <View>
-          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Advanced kitchen controls</Text>
-          <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} saved food items` : 'No meals yet. Add your first pantry item or load the demo household.'}</Text>
+          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Advanced food tools</Text>
+          <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>
+            {recordCount ? `${recordCount} food items available` : 'Start with pantry, meal, or shopping entries or load a sample household.'}
+          </Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" testID="food-load-demo" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
           <Text style={[styles.foodActionButtonText, { color: theme.colors.paper }]}>Sample</Text>
@@ -1595,6 +1604,7 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
         <Pressable accessibilityRole="button" accessibilityLabel="Add pantry item" testID="food-add-pantry" onPress={addPantry} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('moss', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.moss }]}>Pantry</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Add meal plan" testID="food-add-meal" onPress={addMeal} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('blue', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.blue }]}>Meal</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Add shopping item" testID="food-add-shopping" onPress={addShopping} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('amber', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Shop</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Ask Food AI" testID="food-debug-ask" onPress={onAsk} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('plum', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.ink }]}>Chat</Text></Pressable>
       </View>
       <View style={styles.foodActionButtons}>
         <Pressable accessibilityRole="button" accessibilityLabel="Archive first visible food record" testID="food-archive-first" onPress={onArchiveFirst} style={({ pressed }) => [styles.foodActionButton, foodToneStyle('red', theme.colors), pressed && styles.pressed]}><Text style={[styles.foodActionButtonText, { color: theme.colors.red }]}>Archive</Text></Pressable>
@@ -2040,7 +2050,7 @@ const styles = StyleSheet.create({
   foodActionNote: { color: colors.muted, fontSize: 15, lineHeight: 21, marginTop: 8 },
   foodInlineCta: { alignSelf: 'flex-end', marginTop: 8, minHeight: 38, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, justifyContent: 'center' },
   foodInlineCtaText: { color: colors.moss, fontSize: 14, fontWeight: '900' },
-  foodActionButtons: { flexDirection: 'row', gap: 18, marginTop: 28 },
+  foodActionButtons: { flexDirection: 'row', gap: 12, marginTop: 16 },
   foodActionButton: { flex: 1, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   foodActionButtonText: { color: colors.ink, fontSize: 17, fontWeight: '900' },
   foodTonightLoop: { borderWidth: 1, borderColor: colors.line, borderRadius: 28, padding: 18, gap: 14 },
@@ -2226,6 +2236,8 @@ const styles = StyleSheet.create({
   recordBody: { color: colors.ink, fontSize: 13, lineHeight: 18, marginTop: 7 },
   recordSource: { color: colors.moss, fontSize: 11, fontWeight: '800', marginTop: 8 },
   emptyCard: { paddingVertical: 20, alignItems: 'flex-start' },
+  foodEmptyActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 12 },
+  foodEmptyButton: { minHeight: 40, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', color: colors.moss, fontSize: 13, fontWeight: '900' },
   cardLink: { color: colors.moss, fontWeight: '900', fontSize: 13, marginTop: 14 },
   configCard: { marginTop: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 14, alignItems: 'center' },
   configCopy: { flex: 1, minWidth: 240 },

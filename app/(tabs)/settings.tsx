@@ -89,6 +89,21 @@ export default function SettingsScreen() {
   const enabledAiCount = [settings.ai.primary, settings.ai.fallback].filter((profile) => profile.enabled).length;
   const enabledSourceCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
   const healthReady = healthStatus?.availability === 'available';
+  const updateFoodSurface = (patch: Partial<typeof settings.runtime.surfaceConfig.food>) => {
+    setSettings((current) => ({
+      ...current,
+      runtime: {
+        ...current.runtime,
+        surfaceConfig: {
+          ...current.runtime.surfaceConfig,
+          food: {
+            ...current.runtime.surfaceConfig.food,
+            ...patch,
+          },
+        },
+      },
+    }));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -342,6 +357,23 @@ export default function SettingsScreen() {
                     <Field label="MCP token" value={settings.mcp.token} placeholder="Optional private token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, token } }))} />
                   </SourceCard>
                 </View>
+
+                <SectionTitle title="Food experience" />
+                <Card style={styles.connectorCard}>
+                  <View style={styles.switchRow}>
+                    <View style={styles.switchCopy}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Show Food advanced tools</Text>
+                      <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Reveal setup helpers, sample actions, and maintenance tools.</Text>
+                    </View>
+                    <Switch
+                      accessibilityLabel="Show Food advanced tools"
+                      value={settings.runtime.surfaceConfig.food.showPackageCard}
+                      onValueChange={(enabled) => updateFoodSurface({ showPackageCard: enabled })}
+                      trackColor={{ false: theme.colors.line, true: theme.colors.mossSoft }}
+                      thumbColor={settings.runtime.surfaceConfig.food.showPackageCard ? theme.colors.moss : theme.colors.muted}
+                    />
+                  </View>
+                </Card>
 
                 <SectionTitle title="LifeOS behavior" />
                 <Card style={styles.connectorCard}>
