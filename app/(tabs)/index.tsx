@@ -75,10 +75,13 @@ export default function TodayScreen() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const items = await queryDomainRecords(db);
-      if (!cancelled) {
-        setRecords(items);
-        setLoading(false);
+      try {
+        const items = await queryDomainRecords(db);
+        if (!cancelled) setRecords(items);
+      } catch {
+        if (!cancelled) setRecords([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     void load();

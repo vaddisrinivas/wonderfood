@@ -49,8 +49,19 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['FOOD', 'Food, gently', 'Five small clues. Open only what you need.', 'Tonight', 'Expiring soon', 'Pantry gaps', 'Shopping next', 'Sync health', 'Ask for a plan', 'Make list'],
-    forbidden: ['Record not found', 'WonderFood', 'What should we cook next?', 'LIVING FOOD LOOP', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab', 'Advanced', 'Source and provenance', 'Package controls'],
+    must: ['Today', 'Dinner first. Waste less. Buy only what you need.', 'Tonight', 'Use first', 'Still needed', 'Kitchen', 'Plan', 'Shop'],
+    forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab', 'Advanced', 'Source and provenance', 'Package controls', 'Sync health'],
+    inspect: async (page) => {
+      for (const [tab, text] of [
+        ['Kitchen', 'Pantry and fridge'],
+        ['Plan', 'Meals and recipes'],
+        ['Shop', 'To buy'],
+        ['Today', 'Tonight'],
+      ]) {
+        await page.getByRole('tab', { name: new RegExp(tab) }).click();
+        await page.waitForFunction((needle) => document.body?.innerText?.includes(needle), text);
+      }
+    },
   },
   {
     name: 'search',
@@ -71,7 +82,11 @@ const routes = [
   {
     name: 'chat',
     path: '/chat',
-    must: ['LIFEOS / CHAT', 'Ask, compare, plan, then act.', 'Sources in context', 'Assistant route', 'Undo', 'Sources'],
+    must: ['Ask Wonder'],
+    mustByViewport: {
+      desktop: ['Ask Wonder', 'Ask, compare, plan, then act.', 'Sources in context', 'Assistant route', 'Undo'],
+      mobile: ['Ask Wonder', 'New conversation', 'I’m ready. Ask what to cook, what to use first, or what to buy.'],
+    },
   },
   {
     name: 'config',
@@ -81,7 +96,11 @@ const routes = [
   {
     name: 'settings',
     path: '/settings',
-    must: ['LIFEOS / CONNECTIONS', 'Food workspace settings', 'Configure food, sources, and app preferences.', 'Local answers first', 'No external sources', 'Advanced'],
+    must: ['Advanced'],
+    mustByViewport: {
+      desktop: ['LIFEOS / CONNECTIONS', 'Food workspace settings', 'Configure food, sources, and app preferences.', 'Local answers first', 'No external sources', 'Advanced'],
+      mobile: ['Settings', 'Food · comfortable', 'Wonder AI', 'Food data', 'Health', 'Advanced'],
+    },
   },
 ];
 
@@ -146,13 +165,14 @@ for (const viewport of viewports) {
         if (settings) localStorage.setItem('lifeos.settings.v1', JSON.stringify(settings));
       }, route.localSettings ?? null);
       await page.goto(result.url, { waitUntil: 'networkidle', timeout: 20000 });
+      const required = route.mustByViewport?.[viewport.label] ?? route.must;
       await page.waitForFunction(
         (needles) => needles.every((needle) => document.body?.innerText?.includes(needle)),
-        route.must,
+        required,
         { timeout: 12000 },
       ).catch(() => undefined);
       const text = await page.locator('body').innerText({ timeout: 8000 });
-      result.missing = route.must.filter((needle) => !text.includes(needle));
+      result.missing = required.filter((needle) => !text.includes(needle));
       if (route.forbidden) {
         for (const needle of route.forbidden) {
           if (text.includes(needle)) result.missing.push(`forbidden:${needle}`);

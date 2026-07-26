@@ -52,7 +52,23 @@
           "backgroundColor": "#F7F6F2"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-sharing",
+        {
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/plain",
+              "text/uri-list",
+              "image/*"
+            ],
+            "multipleShareMimeTypes": [
+              "image/*"
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

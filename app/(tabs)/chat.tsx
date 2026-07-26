@@ -15,7 +15,7 @@ import { Link, useRouter } from 'expo-router';
 
 import { ActionButton, Card, Page, PageHeader, Pill, sharedStyles } from '@/src/components/ui';
 import { ChatMessage, ChatRole, ChatThread } from '@/src/chat/types';
-import { listChatThreads, makeWelcomeAnswer, resolveChatServerConfig, sendChatMessage, undoChatAction } from '@/src/chat/client';
+import { listChatThreads, resolveChatServerConfig, sendChatMessage, undoChatAction } from '@/src/chat/client';
 import { Citation } from '@/src/chat/citations';
 import { ensureCitations } from '@/src/chat/citations';
 import { useLifeOSDatabase } from '@/src/db/provider';
@@ -40,8 +40,8 @@ const seedThreads: ChatThread[] = [
 ];
 
 const seedModeNotice = {
-  title: 'Local answer mode',
-  detail: 'No model key yet. LifeOS still briefs from local records and shows citations.',
+  title: 'AI not connected',
+  detail: 'Connect an AI provider in Settings for live answers.',
 };
 
 function parsePromptPresets(value: string) {
@@ -110,37 +110,41 @@ export default function ChatScreen() {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const dbThreads = await listChatThreads(db);
-      if (cancelled) return;
+      try {
+        const dbThreads = await listChatThreads(db);
+        if (cancelled) return;
 
-      const settings = await loadLifeOSSettings();
-      const directReady = usableAiProfiles(settings).length > 0;
-      const nextMode: MessageSourceMode = directReady ? 'direct' : 'offline';
-      const localRecords = db ? await listRecordsForDomain(db, activeDomainId).catch(() => [] as CanonicalRecord[]) : [];
-      if (!cancelled) {
-        setSourceRecords(localRecords);
-      }
+        const settings = await loadLifeOSSettings();
+        const directReady = usableAiProfiles(settings).length > 0;
+        const nextMode: MessageSourceMode = directReady ? 'direct' : 'offline';
+        const localRecords = db ? await listRecordsForDomain(db, activeDomainId).catch(() => [] as CanonicalRecord[]) : [];
+        if (!cancelled) {
+          setSourceRecords(localRecords);
+        }
 
-      if (dbThreads.length) {
-        setThreads(dbThreads);
-        setActiveThreadId(dbThreads[0].id);
-        setMode(nextMode);
-      } else {
-        const welcomeAnswer = makeWelcomeAnswer(localRecords, domainLabel);
-        const baseThread: ChatThread = {
-          id: 'thread-empty',
-          title: `${domainLabel} context`,
-          detail: nextMode === 'direct' ? 'Direct model ready' : seedModeNotice.detail,
-          messages: [{
-            id: 'seed-a1',
-            role: 'assistant',
-            text: welcomeAnswer.intro,
-            answer: welcomeAnswer,
-          }],
-        };
-        setThreads([baseThread]);
-        setActiveThreadId(baseThread.id);
-        setMode(nextMode);
+        if (dbThreads.length) {
+          setThreads(dbThreads);
+          setActiveThreadId(dbThreads[0].id);
+          setMode(nextMode);
+        } else {
+          const baseThread: ChatThread = {
+            id: 'thread-empty',
+            title: 'New conversation',
+            detail: nextMode === 'direct' ? 'Wonder is ready' : seedModeNotice.detail,
+            messages: [{
+              id: 'seed-a1',
+              role: 'assistant',
+              text: 'I’m ready. Ask what to cook, what to use first, or what to buy.',
+            }],
+          };
+          setThreads([baseThread]);
+          setActiveThreadId(baseThread.id);
+          setMode(nextMode);
+        }
+      } catch {
+        if (!cancelled) {
+          setSourceRecords([]);
+        }
       }
     };
 
@@ -170,8 +174,8 @@ export default function ChatScreen() {
     const thread: ChatThread = {
       id,
       title: 'New conversation',
-      detail: mode === 'direct' ? 'AI ready' : 'Local answers',
-      messages: [{ id: `${id}-welcome`, role: 'assistant', text: `${domainLabel} context is on. I can help with records, sources, and next actions.` }],
+      detail: mode === 'direct' ? 'Wonder is ready' : 'Connect AI in Settings',
+      messages: [{ id: `${id}-welcome`, role: 'assistant', text: 'What would you like to cook, plan, or shop for?' }],
     };
 
     setThreads((current) => [thread, ...current]);
@@ -205,7 +209,7 @@ export default function ChatScreen() {
           id: messageId,
           role: 'assistant' as ChatRole,
           text: token,
-          answer: { title: 'LifeOS model response', intro: '', rows: [], citations: [] },
+          answer: { title: 'Wonder', intro: '', rows: [], citations: [] },
         }];
         copy[target] = { ...thread, messages: nextMessages };
         return copy;
@@ -221,7 +225,7 @@ export default function ChatScreen() {
                     intro: message.answer.intro ?? '',
                   }
                 : {
-                    title: 'LifeOS model response',
+                    title: 'Wonder',
                     intro: token,
                     rows: [],
                     citations: [],
@@ -334,7 +338,7 @@ export default function ChatScreen() {
 
   const saveAnswerToCapture = (message: MessageRow) => {
     const text = answerPlainText(message);
-    router.push({ pathname: '/capture', params: { type: 'Note', note: text ? `Saved from LifeOS Chat\n\n${text}` : 'Saved from LifeOS Chat' } });
+    router.push({ pathname: '/capture', params: { type: 'Note', note: text ? `Saved from Wonder\n\n${text}` : 'Saved from Wonder' } });
   };
 
   const draftFollowUp = (message: MessageRow) => {
@@ -418,7 +422,7 @@ export default function ChatScreen() {
   const renderChatPanelSection = (section: ChatSection) => {
     switch (section) {
       case 'sources':
-        return chatConfig.showSources ? (
+        return chatConfig.showSources && isWide ? (
           <View key={section} style={[styles.sourceStrip, { backgroundColor: theme.colors.canvas }]}>
             <Text style={[styles.sourceStripTitle, { color: theme.colors.muted }]}>{sourceRecords.length} sources ready</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourcePills}>
@@ -453,7 +457,7 @@ export default function ChatScreen() {
       case 'promptRail':
         return chatConfig.promptRail && promptBank.length ? (
           <View key={section} style={styles.promptRail}>
-            {promptBank.map((prompt) => (
+            {promptBank.slice(0, isWide ? 4 : 2).map((prompt) => (
               <Pressable key={prompt} accessibilityRole="button" onPress={() => setDraft(prompt)} style={({ pressed }) => [styles.promptChip, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}>
                 <Text style={[styles.promptText, { color: theme.colors.ink }]}>{prompt}</Text>
               </Pressable>
@@ -467,26 +471,92 @@ export default function ChatScreen() {
 
   const renderWorkspaceSection = (section: ChatSection) => {
     if (section === 'threads') {
-      return renderThreadRail();
+      return isWide ? renderThreadRail() : null;
     }
     return null;
   };
 
+  if (!isWide) {
+    return (
+      <Page>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fill}>
+          <View style={styles.mobileShell}>
+            <View style={styles.mobileFixedHeader}>
+              <View style={styles.mobileHeaderCopy}>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.mobileChatTitle, { color: theme.colors.ink }]}>Ask Wonder</Text>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.date, { color: theme.colors.muted }]}>{activeThread.title} · {mode === 'direct' ? 'AI ready' : 'setup needed'}</Text>
+              </View>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/settings')}>
+                <Pill tone={mode === 'direct' ? 'moss' : 'blue'}>{mode === 'direct' ? 'Ready' : 'Set up AI'}</Pill>
+              </Pressable>
+            </View>
+
+            {warnings.length ? (
+              <Text numberOfLines={2} style={[styles.mobileWarning, { color: theme.colors.muted }]}>{warnings[0]}</Text>
+            ) : null}
+
+            <View style={[styles.mobileConversation, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+              <ScrollView
+                ref={scrollRef}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={styles.mobileMessagesScroll}
+                contentContainerStyle={styles.mobileMessagesContent}>
+                {renderChatPanelSection('messages')}
+                {renderChatPanelSection('promptRail')}
+              </ScrollView>
+
+              <View style={[styles.mobileComposerWrap, { backgroundColor: theme.colors.paper, borderTopColor: theme.colors.line }]}>
+                <View style={[styles.composer, { borderColor: theme.colors.line }]}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New thread"
+                    onPress={createThread}
+                    style={({ pressed }) => [styles.mobileNew, { borderColor: theme.colors.line }, pressed && styles.pressed]}>
+                    <Text style={[styles.mobileNewText, { color: theme.colors.ink }]}>＋</Text>
+                  </Pressable>
+                  <TextInput
+                    accessibilityLabel="Chat message"
+                    value={draft}
+                    onChangeText={setDraft}
+                    placeholder="Ask about dinner, pantry, recipes…"
+                    placeholderTextColor={theme.colors.muted}
+                    multiline
+                    style={[styles.input, { color: theme.colors.ink }]}
+                    onSubmitEditing={sendMessage}
+                    blurOnSubmit={false}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!draft.trim() || sending}
+                    onPress={sendMessage}
+                    style={({ pressed }) => [styles.send, { backgroundColor: theme.colors.moss }, (!draft.trim() || sending) && styles.sendDisabled, pressed && styles.pressed]}>
+                    <Text style={[styles.sendText, { color: theme.colors.paper }]}>{sending ? '…' : '↑'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Page>
+    );
+  }
+
   return (
     <Page>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fill}>
         <ScrollView ref={scrollRef} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
             <View style={styles.topbar}>
               <View>
-                <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CHAT</Text>
-                <Text style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} context · {mode === 'direct' ? 'AI ready' : 'local answers'}</Text>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.mobileChatTitle, { color: theme.colors.ink }]}>Ask Wonder</Text>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.date, { color: theme.colors.muted }]}>{domainLabel} · {mode === 'direct' ? 'AI ready' : 'local'}</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={createThread} style={({ pressed }) => [styles.newThread, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
-                <Text style={[styles.newThreadText, { color: theme.colors.paper }]}>＋ New thread</Text>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.newThreadText, { color: theme.colors.paper }]}>＋ New</Text>
               </Pressable>
             </View>
-            <PageHeader eyebrow="Source-backed conversation" title="Ask, compare, plan, then act." subtitle={`LifeOS reasons over ${domainLabel} records and keeps citations beside the answer.`} />
+            {isWide ? <PageHeader eyebrow="Source-backed conversation" title="Ask, compare, plan, then act." subtitle={`LifeOS reasons over ${domainLabel} records and keeps citations beside the answer.`} /> : null}
             {isWide ? <View style={styles.capabilityGrid}>
               <Card tone="moss" style={styles.capabilityCard}>
                 <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{sourceRecords.length}</Text>
@@ -550,30 +620,13 @@ export default function ChatScreen() {
               </Card>
             </View>
 
-            {chatConfig.showContextCard ? (
+            {chatConfig.showContextCard && isWide ? (
               <Card tone="blue" style={styles.contextCard}>
                 <View style={[styles.contextIcon, { backgroundColor: theme.colors.blueSoft }]}><Text>⌁</Text></View>
                 <View style={styles.contextCopy}><Text style={[styles.contextTitle, { color: theme.colors.ink }]}>What LifeOS can see</Text><Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{activeThread.messages.length} messages loaded · source cards open records · Undo appears on reversible write receipts.</Text></View>
                 <ActionButton label={`Open ${domainLabel}`} quiet onPress={() => router.push('/food')} />
               </Card>
             ) : null}
-            {!isWide ? <View style={styles.capabilityGrid}>
-              <Card tone="moss" style={styles.capabilityCard}>
-                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{sourceRecords.length}</Text>
-                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Sources in context</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Answers can render tables, record cards and exact citations.</Text>
-              </Card>
-              <Card tone={mode === 'direct' ? 'plum' : 'blue'} style={styles.capabilityCard}>
-                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>{mode === 'direct' ? 'AI' : 'Local'}</Text>
-                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Assistant route</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>{mode === 'direct' ? 'Using your enabled provider keys from Settings.' : 'Works locally now; add a provider when you want live model answers.'}</Text>
-              </Card>
-              <Card tone="amber" style={styles.capabilityCard}>
-                <Text style={[styles.capabilityNumber, { color: theme.colors.ink }]}>Undo</Text>
-                <Text style={[styles.capabilityTitle, { color: theme.colors.ink }]}>Safe actions</Text>
-                <Text style={[styles.capabilityBody, { color: theme.colors.muted }]}>Writes return receipts, sources and Undo instead of hidden edits.</Text>
-              </Card>
-            </View> : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -611,28 +664,48 @@ function MessageBubble({ message, undoing, onUndo, onCopy, onSave, onFollowUp, o
   onOpenSources: () => void;
 }) {
   const theme = useLifeOSTheme();
+  const { width } = useWindowDimensions();
+  const compact = width < 620;
+  const [showDetails, setShowDetails] = useState(false);
   const assistant = message.role === 'assistant';
   const answerRows = message.answer;
   const citations = answerRows?.citations?.length ? ensureCitations(answerRows.citations) : [];
   const hasUndo = assistant && message.actionReceipt?.status === 'completed' && (message.actionReceipt.record_ids?.length ?? 0) > 0;
   const visibleText = answerRows?.intro || message.text;
+  const isWelcome = message.id === 'seed-a1' || message.id.endsWith('-welcome');
+  const hasCompactDetails = Boolean(answerRows && (
+    answerRows.rows.length > 0
+    || (answerRows.recordCards?.length ?? 0) > 0
+    || (answerRows.sourceCards?.length ?? 0) > 0
+  ));
 
   return (
     <View style={[styles.messageRow, !assistant && styles.userRow]}>
       {assistant ? <View style={[styles.smallMark, { backgroundColor: theme.colors.plumSoft }]}><Text style={[styles.smallMarkText, { color: theme.colors.plum }]}>✦</Text></View> : null}
       <View style={[styles.messageBlock, !assistant && styles.userMessageBlock]}>
-        <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'LifeOS' : 'You'}</Text>
+        <Text style={[styles.messageByline, { color: theme.colors.muted }]}>{assistant ? 'Wonder' : 'You'}</Text>
         <View style={[styles.bubble, { backgroundColor: theme.colors.canvas }, !assistant && styles.userBubble, !assistant && { backgroundColor: theme.colors.ink }]}><Text style={[styles.bubbleText, { color: theme.colors.ink }, !assistant && styles.userBubbleText, !assistant && { color: theme.colors.paper }]}>{visibleText}</Text></View>
-        {answerRows ? <StructuredAnswer answer={answerRows} /> : null}
+        {hasCompactDetails && answerRows && compact ? (
+          <View style={[styles.compactAnswer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+            <Text style={[styles.compactAnswerTitle, { color: theme.colors.ink }]} numberOfLines={1}>{answerRows.title}</Text>
+            {(answerRows.recordCards ?? []).slice(0, 2).map((record) => (
+              <Text key={record.id} style={[styles.compactAnswerRow, { color: theme.colors.muted }]} numberOfLines={1}>• {record.title}</Text>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => setShowDetails((visible) => !visible)} style={styles.compactAnswerButton}>
+              <Text style={[styles.compactAnswerButtonText, { color: theme.colors.moss }]}>{showDetails ? 'Hide details' : 'Show details'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {answerRows && (!compact || showDetails) ? <StructuredAnswer answer={answerRows} /> : null}
         {assistant && message.actionReceipt ? <ActionReceiptCard receipt={message.actionReceipt} /> : null}
-        {!assistant ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
-        {assistant ? (
+        {!assistant || (compact && !showDetails) ? null : citations.length ? <View style={styles.citationRow}>{citations.map((citation) => <CitationChip key={`${citation.label}-${citation.href}`} citation={citation} />)}</View> : null}
+        {assistant && !isWelcome ? (
           <View style={styles.messageTools}>
-            <ToolButton label="Copy" onPress={onCopy} />
+            {!compact ? <ToolButton label="Copy" onPress={onCopy} /> : null}
             <ToolButton label="Save" onPress={onSave} />
-            <ToolButton label="Follow-up" onPress={onFollowUp} />
-            <ToolButton label="Sources" onPress={onOpenSources} />
-            <ToolButton label="Regenerate" onPress={onRegenerate} />
+            <ToolButton label="Follow up" onPress={onFollowUp} />
+            {citations.length ? <ToolButton label={`Sources · ${citations.length}`} onPress={onOpenSources} /> : null}
+            {!compact ? <ToolButton label="Regenerate" onPress={onRegenerate} /> : null}
             {hasUndo ? <ToolButton label={undoing ? 'Undoing…' : 'Undo'} disabled={undoing} onPress={onUndo} /> : null}
           </View>
         ) : null}
@@ -664,7 +737,7 @@ function ActionReceiptCard({ receipt }: { receipt: NonNullable<MessageRow['actio
         <Pill tone={statusTone}>{receipt.status}</Pill>
       </View>
       <Text style={[styles.receiptMeta, { color: theme.colors.muted }]}>
-        {(receipt.tool || 'LifeOS action')} · {(receipt.domain || 'domain')} · {recordCount} record{recordCount === 1 ? '' : 's'} changed · {sourceCount} source{sourceCount === 1 ? '' : 's'}
+        {(receipt.tool || 'Wonder action')} · {(receipt.domain || 'domain')} · {recordCount} record{recordCount === 1 ? '' : 's'} changed · {sourceCount} source{sourceCount === 1 ? '' : 's'}
       </Text>
       <Text style={[styles.receiptId, { color: theme.colors.moss }]}>id {idLabel} · risk {receipt.risk || 'bounded'}</Text>
       {receipt.undo_deadline_at ? <Text style={[styles.receiptMeta, { color: theme.colors.muted }]}>Undo window until {receipt.undo_deadline_at}</Text> : null}
@@ -676,19 +749,13 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
   const theme = useLifeOSTheme();
   const { width } = useWindowDimensions();
   const compact = width < 620;
-  const hasRows = answer.rows.length > 0;
-  const columns = answer.columns?.length ? answer.columns : hasRows ? ['When', 'Use', 'Next'] : ['Source', 'Status', 'Next'];
-  const rows = hasRows
-    ? answer.rows.map((row) => row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? ''])
-    : [
-        ['Local app', 'Ready', 'Open Food or add a record'],
-        ['Notion / Sheets', 'Optional', 'Connect a data home in Sources'],
-      ];
+  const columns = answer.columns?.length ? answer.columns : ['When', 'Use', 'Next'];
+  const rows = answer.rows.map((row) => row.cells ?? [row.meal ?? '', row.use ?? '', row.next ?? '']);
   return (
     <View style={[styles.answer, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
       <Text style={[styles.answerTitle, { color: theme.colors.ink }]}>{answer.title}</Text>
-      <Text style={[styles.answerTableLabel, { color: theme.colors.muted }]}>Answer table</Text>
-      {compact ? (
+      {rows.length ? <Text style={[styles.answerTableLabel, { color: theme.colors.muted }]}>Details</Text> : null}
+      {!rows.length ? null : compact ? (
         <View style={styles.mobileAnswerRows} accessibilityLabel="Structured answer cards">
           {rows.map((cells, index) => (
             <View key={`${index}-${cells.join('|')}`} style={[styles.answerRowCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }]}>
@@ -734,19 +801,12 @@ function StructuredAnswer({ answer }: { answer: NonNullable<MessageRow['answer']
           ))}
         </View>
       ) : null}
-      <View style={styles.sourceEvidence}>
+      {answer.sourceCards?.length ? <View style={styles.sourceEvidence}>
         <Text style={[styles.sourceEvidenceTitle, { color: theme.colors.ink }]}>Source evidence</Text>
-        {answer.sourceCards?.length ? (
-          answer.sourceCards.map((source) => (
-            <CitationEvidenceCard key={`${source.id}-${source.href}`} source={source} />
-          ))
-        ) : (
-          <View style={[styles.emptyEvidenceCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.line }]}>
-            <Text style={[styles.emptyEvidenceTitle, { color: theme.colors.ink }]}>No source card yet</Text>
-            <Text style={[styles.emptyEvidenceBody, { color: theme.colors.muted }]}>Open Food, add records, or pull Notion / Sheets so future answers can cite exact pages, rows and device records.</Text>
-          </View>
-        )}
-      </View>
+        {answer.sourceCards.map((source) => (
+          <CitationEvidenceCard key={`${source.id}-${source.href}`} source={source} />
+        ))}
+      </View> : null}
     </View>
   );
 }
@@ -817,8 +877,18 @@ function citationToneStyle(tone: Citation['tone']) {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scrollContent: { flexGrow: 1 },
-  topbar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  mobileShell: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10 },
+  mobileFixedHeader: { minHeight: 66, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  mobileHeaderCopy: { flex: 1, minWidth: 0 },
+  mobileWarning: { fontSize: 11, lineHeight: 15, marginBottom: 8 },
+  mobileConversation: { flex: 1, minHeight: 0, borderWidth: 0, borderRadius: radius.md, overflow: 'hidden' },
+  mobileMessagesScroll: { flex: 1, minHeight: 0 },
+  mobileMessagesContent: { flexGrow: 1, paddingTop: 4 },
+  mobileComposerWrap: { borderTopWidth: StyleSheet.hairlineWidth, padding: 10 },
+  mobileNew: { width: 40, height: 40, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  mobileNewText: { fontSize: 22, lineHeight: 24, fontWeight: '600' },
+  topbar: { minHeight: 72, paddingTop: 10, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  mobileChatTitle: { color: colors.ink, fontSize: 28, lineHeight: 33, fontWeight: '900', letterSpacing: -0.7 },
   date: { color: colors.muted, fontSize: 12, marginTop: 3 },
   newThread: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
   newThreadText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
@@ -868,6 +938,11 @@ const styles = StyleSheet.create({
   bubbleText: { color: colors.ink, fontSize: 14, lineHeight: 21 },
   userBubbleText: { color: '#FFF' },
   answer: { minWidth: 0, marginTop: 9, borderWidth: 1, borderColor: '#CBD8D0', backgroundColor: '#F9FCF8', borderRadius: 14, padding: 12 },
+  compactAnswer: { marginTop: 9, borderWidth: 1, borderRadius: 14, padding: 12, gap: 6 },
+  compactAnswerTitle: { fontSize: 14, lineHeight: 19, fontWeight: '900' },
+  compactAnswerRow: { fontSize: 12, lineHeight: 17 },
+  compactAnswerButton: { minHeight: 38, alignSelf: 'flex-start', justifyContent: 'center', paddingRight: 12 },
+  compactAnswerButtonText: { fontSize: 12, lineHeight: 16, fontWeight: '900' },
   answerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   answerTableLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.9, textTransform: 'uppercase', marginTop: 10 },
   mobileAnswerRows: { marginTop: 10, gap: 8 },

@@ -10,6 +10,7 @@ import { DomainManifest } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
+import { useIncomingShareSafe } from '@/src/platform/incoming-share';
 
 type CaptureType = string;
 const CAPTURE_SECTIONS = ['hero', 'typePicker', 'editor', 'routeCard'] as const;
@@ -66,7 +67,7 @@ function orderedSections(value: string) {
 
 export default function CaptureScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string; targetRecordId?: string; note?: string }>();
+  const params = useLocalSearchParams<{ type?: string; targetRecordId?: string; note?: string; photoUri?: string | string[] }>();
   const db = useLifeOSDatabase();
   const theme = useLifeOSTheme();
   const settings = useLifeOSSettingsSnapshot();
@@ -82,6 +83,7 @@ export default function CaptureScreen() {
   const [notice, setNotice] = useState('');
   const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [savedPhotoCount, setSavedPhotoCount] = useState(0);
+  const incomingShare = useIncomingShareSafe();
   const captureConfig = settings.runtime.surfaceConfig.capture;
   const sections = orderedSections(captureConfig.sectionOrder);
 
@@ -105,6 +107,39 @@ export default function CaptureScreen() {
       setValue(note);
     }
   }, [params.note, value]);
+
+  useEffect(() => {
+    const sharedUris = Array.isArray(params.photoUri) ? params.photoUri : params.photoUri ? [params.photoUri] : [];
+    const unseen = sharedUris.filter((uri) => !photos.some((photo) => photo.uri === uri));
+    if (!unseen.length) return;
+    setType('Photo');
+    setPhotos((current) => [...current, ...unseen.map((uri) => ({ uri, width: 0, height: 0, type: 'image' as const }))]);
+  }, [params.photoUri, photos]);
+
+  useEffect(() => {
+    const payloads = incomingShare.sharedPayloads;
+    if (!payloads.length) return;
+
+    const images = payloads.filter((payload) => payload.shareType === 'image');
+    if (images.length) {
+      setType('Photo');
+      setPhotos((current) => {
+        const known = new Set(current.map((photo) => photo.uri));
+        return [
+          ...current,
+          ...images
+            .filter((image) => !known.has(image.value))
+            .map((image) => ({ uri: image.value, width: 0, height: 0, type: 'image' as const })),
+        ];
+      });
+    } else {
+      const first = payloads[0];
+      setType(first.shareType === 'url' || /^https?:\/\//i.test(first.value.trim()) ? 'Link' : 'Note');
+      setValue(first.value);
+    }
+    setSaved(false);
+    incomingShare.clearSharedPayloads();
+  }, [incomingShare.clearSharedPayloads, incomingShare.sharedPayloads]);
 
   const pickPhoto = async (source: 'camera' | 'library') => {
     setNotice('');

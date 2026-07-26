@@ -1,6 +1,7 @@
 import { PropsWithChildren, ReactNode } from 'react';
 import { Image, ImageStyle, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Link } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { VisualToken } from '@/src/domain/catalog';
 import { visualGlyph } from '@/src/domain/visual-identity';
@@ -8,7 +9,13 @@ import { colors, radius, shadow, useLifeOSTheme } from '@/src/theme';
 
 export function Page({ children }: PropsWithChildren) {
   const theme = useLifeOSTheme();
-  return <View style={[styles.page, theme.density === 'compact' && styles.pageCompact, { backgroundColor: theme.colors.canvas }]}>{children}</View>;
+  return (
+    <SafeAreaView
+      edges={['top', 'left', 'right']}
+      style={[styles.page, theme.density === 'compact' && styles.pageCompact, { backgroundColor: theme.colors.canvas }]}>
+      {children}
+    </SafeAreaView>
+  );
 }
 
 export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {

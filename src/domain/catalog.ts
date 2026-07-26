@@ -43,6 +43,7 @@ export type DashboardBlockTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
 export type DashboardBlockSize = 'compact' | 'standard' | 'wide' | 'feature';
 
 export type MobileSurfaceTone = DashboardBlockTone;
+export type MobileSurfaceCardKind = 'spotlight' | 'list' | 'assistant' | 'review';
 export type MobileSurfaceQuery = {
   collections: string[];
   match?: string;
@@ -57,6 +58,7 @@ export type MobileSurfaceNested = {
 };
 export type MobileSurfaceCard = {
   id: string;
+  kind: MobileSurfaceCardKind;
   label: string;
   icon: string;
   tone: MobileSurfaceTone;
@@ -65,6 +67,14 @@ export type MobileSurfaceCard = {
   nested: MobileSurfaceNested[];
   action?: MobileSurfaceAction;
 };
+export type MobileSurfaceView = {
+  id: string;
+  label: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  card_order: string[];
+};
 export type MobileSurface = {
   title: string;
   subtitle: string;
@@ -72,6 +82,8 @@ export type MobileSurface = {
   card_order: string[];
   cards: MobileSurfaceCard[];
   header_action?: MobileSurfaceAction;
+  default_view?: string;
+  views?: MobileSurfaceView[];
   advanced: { visible: boolean; cards: MobileSurfaceCard[] };
 };
 
@@ -339,7 +351,9 @@ function parseMobileSurfaceQuery(value: unknown, path: string): MobileSurfaceQue
 function parseMobileSurfaceCard(value: unknown, path: string): MobileSurfaceCard {
   assertCondition(isObject(value), `Expected object at ${path}`);
   const raw = value as Record<string, unknown>;
+  const kind = raw.kind ?? 'spotlight';
   const tone = raw.tone;
+  assertCondition(kind === 'spotlight' || kind === 'list' || kind === 'assistant' || kind === 'review', `Invalid kind at ${path}.kind`);
   assertCondition(tone === 'neutral' || tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue', `Invalid tone at ${path}.tone`);
   assertCondition(isObject(raw.empty), `Expected object at ${path}.empty`);
   const empty = raw.empty as Record<string, unknown>;
@@ -351,6 +365,7 @@ function parseMobileSurfaceCard(value: unknown, path: string): MobileSurfaceCard
   }));
   return {
     id: parseString(raw.id, `${path}.id`),
+    kind: kind as MobileSurfaceCardKind,
     label: parseString(raw.label, `${path}.label`),
     icon: parseString(raw.icon, `${path}.icon`),
     tone: tone as MobileSurfaceTone,
@@ -373,7 +388,29 @@ function parseMobileSurface(value: unknown, path: string): MobileSurface | undef
   const cards = parseObjectArray(raw.cards, `${path}.cards`).map((card, index) => parseMobileSurfaceCard(card, `${path}.cards[${index}]`));
   const order = parseStringArray(raw.card_order, `${path}.card_order`);
   assertCondition(new Set(order).size === order.length, `Duplicate card id at ${path}.card_order`);
-  assertCondition(order.length === cards.length && order.every((id) => cards.some((card) => card.id === id)), `card_order must contain every card exactly once at ${path}`);
+  assertCondition(order.every((id) => cards.some((card) => card.id === id)), `Unknown card id at ${path}.card_order`);
+  const views = raw.views === undefined ? undefined : parseObjectArray(raw.views, `${path}.views`).map((item, index) => ({
+    id: parseString(item.id, `${path}.views[${index}].id`),
+    label: parseString(item.label, `${path}.views[${index}].label`),
+    icon: parseString(item.icon, `${path}.views[${index}].icon`),
+    title: parseString(item.title, `${path}.views[${index}].title`),
+    subtitle: parseString(item.subtitle, `${path}.views[${index}].subtitle`),
+    card_order: parseStringArray(item.card_order, `${path}.views[${index}].card_order`),
+  }));
+  if (views) {
+    assertCondition(views.length > 0, `Expected at least one view at ${path}.views`);
+    assertCondition(new Set(views.map((view) => view.id)).size === views.length, `Duplicate view id at ${path}.views`);
+    for (const view of views) {
+      assertCondition(new Set(view.card_order).size === view.card_order.length, `Duplicate card id in ${path}.views.${view.id}.card_order`);
+      assertCondition(view.card_order.every((id) => cards.some((card) => card.id === id)), `Unknown card id in ${path}.views.${view.id}.card_order`);
+    }
+  } else {
+    assertCondition(order.length === cards.length, `card_order must contain every card exactly once at ${path}`);
+  }
+  const defaultView = raw.default_view === undefined ? undefined : parseString(raw.default_view, `${path}.default_view`);
+  if (defaultView !== undefined) {
+    assertCondition(Boolean(views?.some((view) => view.id === defaultView)), `Unknown default_view at ${path}.default_view`);
+  }
   assertCondition(isObject(raw.advanced), `Expected object at ${path}.advanced`);
   const advanced = raw.advanced as Record<string, unknown>;
   assertCondition(typeof advanced.visible === 'boolean', `Expected boolean at ${path}.advanced.visible`);
@@ -385,6 +422,8 @@ function parseMobileSurface(value: unknown, path: string): MobileSurface | undef
     card_order: order,
     cards,
     header_action: parseMobileSurfaceAction(raw.header_action, `${path}.header_action`),
+    default_view: defaultView,
+    views,
     advanced: { visible: advanced.visible as boolean, cards: advancedCards },
   };
 }
@@ -578,7 +617,10 @@ export function loadCatalog(): ParsedCatalog {
   const domainsById = Object.fromEntries(catalog.domains.map((domain) => [domain.id, domain])) as Record<string, DomainCatalogEntry>;
 
   if (activePackageOverride) {
-    const activeManifest = domainManifestFromPackage(activePackageOverride);
+    const activeManifest = domainManifestFromPackage(
+      activePackageOverride,
+      getDomainManifest(catalog.domains, activePackageOverride.id),
+    );
     const activeDomain: DomainCatalogEntry = domainsById[activeManifest.id] ?? {
       id: activeManifest.id,
       label: activeManifest.label,
@@ -621,7 +663,7 @@ export function loadCatalog(): ParsedCatalog {
   return parsedCatalogCache;
 }
 
-function domainManifestFromPackage(pkg: AppPackageV2): DomainManifest {
+function domainManifestFromPackage(pkg: AppPackageV2, bundledFallback?: DomainManifest): DomainManifest {
   const presentation = pkg.presentation;
   const collections = Object.keys(pkg.collections);
   const surfaces = presentation?.surfaces?.length
@@ -643,20 +685,23 @@ function domainManifestFromPackage(pkg: AppPackageV2): DomainManifest {
   return {
     schema_version: 'lifeos.domain.v1',
     id: pkg.id,
-    label: presentation?.label ?? pkg.id,
-    home_surface: presentation?.homeSurface,
+    label: presentation?.label ?? bundledFallback?.label ?? pkg.id,
+    home_surface: presentation?.homeSurface ?? bundledFallback?.home_surface,
     surfaces,
     collections,
-    visual_identity: presentation?.visualIdentity as DomainVisualIdentity | undefined,
-    relations: [],
-    skills: [],
-    workflows: [],
+    visual_identity: (presentation?.visualIdentity as DomainVisualIdentity | undefined) ?? bundledFallback?.visual_identity,
+    relations: bundledFallback?.relations ?? [],
+    skills: bundledFallback?.skills ?? [],
+    workflows: bundledFallback?.workflows ?? [],
     data_homes: pkg.capabilities.filter((capability) => capability.startsWith('data-home:')).map((capability) => capability.slice('data-home:'.length)),
-    dashboard_blocks: presentation?.dashboardBlocks as DashboardBlock[] | undefined,
-    mobile_surface: parseMobileSurface(presentation?.mobileSurface, `app-package:${pkg.id}.presentation.mobileSurface`),
-    render: presentation?.render as DomainRenderContract | undefined,
-    rich_detail_schema: presentation?.richDetailSchema,
-    provider_template_fields: presentation?.providerTemplateFields as DomainManifest['provider_template_fields'],
+    dashboard_blocks: (presentation?.dashboardBlocks as DashboardBlock[] | undefined) ?? bundledFallback?.dashboard_blocks,
+    mobile_surface: parseMobileSurface(
+      presentation?.mobileSurface ?? bundledFallback?.mobile_surface,
+      `app-package:${pkg.id}.presentation.mobileSurface`,
+    ),
+    render: (presentation?.render as DomainRenderContract | undefined) ?? bundledFallback?.render,
+    rich_detail_schema: presentation?.richDetailSchema ?? bundledFallback?.rich_detail_schema,
+    provider_template_fields: (presentation?.providerTemplateFields as DomainManifest['provider_template_fields']) ?? bundledFallback?.provider_template_fields,
     mcp: {
       resources: pkg.capabilities.filter((capability) => capability.startsWith('mcp-resource:')).map((capability) => capability.slice('mcp-resource:'.length)),
       tools: pkg.capabilities.filter((capability) => capability.startsWith('mcp-tool:')).map((capability) => capability.slice('mcp-tool:'.length)),

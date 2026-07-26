@@ -1,5 +1,5 @@
-import { Link, Stack } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Link, Stack, useRouter } from 'expo-router';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
@@ -7,7 +7,30 @@ import { colors, darkColors, LifeOSColors } from '@/src/theme';
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { mergeVisualIdentity, visualGlyph } from '@/src/domain/visual-identity';
+import { useIncomingShareSafe } from '@/src/platform/incoming-share';
 import { LifeOSSettings, defaultLifeOSSettings, loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
+
+function IncomingShareRouter() {
+  const router = useRouter();
+  const incomingShare = useIncomingShareSafe();
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      try {
+        if (new URL(url).hostname !== 'expo-sharing') return;
+        incomingShare.refreshSharePayloads();
+        setTimeout(() => {
+          router.push('/capture?incomingShare=1');
+        }, 0);
+      } catch {
+        // Ignore unrelated or malformed links.
+      }
+    });
+    return () => subscription.remove();
+  }, [incomingShare.refreshSharePayloads, router]);
+
+  return null;
+}
 
 function HeaderActions({ palette, settings }: { palette: LifeOSColors; settings: LifeOSSettings }) {
   setActiveDomainOverride(settings.runtime.activeDomain);
@@ -55,6 +78,7 @@ export default function RootLayout() {
     <LifeOSDatabaseProvider seedInDev={__DEV__}>
       <>
         <StatusBar style={activeDark ? 'light' : 'dark'} />
+        {Platform.OS === 'web' ? null : <IncomingShareRouter />}
         <Stack screenOptions={{
           headerStyle: { backgroundColor: activeColors.canvas },
           headerShadowVisible: false,

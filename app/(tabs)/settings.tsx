@@ -86,9 +86,11 @@ export default function SettingsScreen() {
   const [testing, setTesting] = useState<AiProviderProfile['id'] | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advancedPanel, setAdvancedPanel] = useState<'ai' | 'data' | 'health' | 'app' | 'privacy' | null>(null);
   const enabledAiCount = [settings.ai.primary, settings.ai.fallback].filter((profile) => profile.enabled).length;
   const enabledSourceCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
-  const healthReady = healthStatus?.availability === 'available';
+  const healthAvailable = healthStatus?.availability === 'available';
+  const healthConnected = (healthStatus?.granted.length ?? 0) > 0;
   const updateFoodSurface = (patch: Partial<typeof settings.runtime.surfaceConfig.food>) => {
     setSettings((current) => ({
       ...current,
@@ -185,77 +187,120 @@ export default function SettingsScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
           <View style={sharedStyles.content}>
-            <View style={styles.contextBar}>
-              <View>
-                <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONNECTIONS</Text>
-                <Text style={[styles.context, { color: theme.colors.muted }]}>Food workspace settings</Text>
-              </View>
-              <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
-                {settings.ai.primary.enabled ? 'AI READY' : 'LOCAL FIRST'}
-              </Pill>
-            </View>
+            {compact ? (
+              <>
+                <View style={styles.mobileHeader}>
+                  <View>
+                    <Text maxFontSizeMultiplier={1.2} style={[styles.mobileTitle, { color: theme.colors.ink }]}>Settings</Text>
+                    <Text maxFontSizeMultiplier={1.2} style={[styles.mobileSubtitle, { color: theme.colors.muted }]}>Food · {settings.runtime.density}</Text>
+                  </View>
+                  <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
+                    {settings.ai.primary.enabled ? 'AI ready' : 'Set up AI'}
+                  </Pill>
+                </View>
+                <Card style={styles.quickStatus}>
+                  <SettingsStatusRow
+                    label="Wonder AI"
+                    value={enabledAiCount ? (enabledAiCount === 1 ? 'Ready' : `${enabledAiCount} ready`) : 'Not connected'}
+                    ready={enabledAiCount > 0}
+                  />
+                  <SettingsStatusRow
+                    label="Food data"
+                    value={enabledSourceCount ? `${enabledSourceCount} connected` : 'On this phone'}
+                    ready={enabledSourceCount > 0}
+                  />
+                  <SettingsStatusRow
+                    label="Health"
+                    value={Platform.OS === 'android' ? (healthConnected ? 'Connected' : healthAvailable ? 'Available' : 'Unavailable') : 'Android only'}
+                    ready={healthConnected}
+                  />
+                </Card>
+              </>
+            ) : (
+              <>
+                <View style={styles.contextBar}>
+                  <View>
+                    <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONNECTIONS</Text>
+                    <Text style={[styles.context, { color: theme.colors.muted }]}>Food workspace settings</Text>
+                  </View>
+                  <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
+                    {settings.ai.primary.enabled ? 'AI READY' : 'LOCAL FIRST'}
+                  </Pill>
+                </View>
 
-            <PageHeader
-              eyebrow="Local first"
-              title="Configure food, sources, and app preferences."
-              subtitle="Keep local records on top, and open Advanced for external connectors."
-            />
+                <PageHeader
+                  eyebrow="Local first"
+                  title="Configure food, sources, and app preferences."
+                  subtitle="Keep local records on top, and open Advanced for external connectors."
+                />
 
-            <SectionTitle title="Status" />
-            <View style={[styles.statusGrid, compact && styles.stack]}>
-              <SettingsStatusCard
-                tone={enabledAiCount ? 'moss' : 'blue'}
-                label="AI"
-                title={enabledAiCount ? `${enabledAiCount} provider${enabledAiCount === 1 ? '' : 's'} enabled` : 'Local answers first'}
-                detail={enabledAiCount ? 'Primary/fallback model routing is ready for Chat.' : 'Paste a key when you want live model answers.'}
-              />
-              <SettingsStatusCard
-                tone={enabledSourceCount ? 'plum' : 'amber'}
-                label="Food data"
-                title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external sources'}
-                detail="External food connectors are optional and available in Advanced."
-              />
-              <SettingsStatusCard
-                tone="moss"
-                label="App behavior"
-                title={`${settings.runtime.activeDomain} · ${settings.runtime.density}`}
-                detail="Active domain, screen order, card counts and assistant behavior live in Customize."
-              />
-              <SettingsStatusCard
-                tone={healthReady ? 'moss' : 'blue'}
-                label="Health"
-                title={Platform.OS === 'android' ? (healthReady ? 'Health Connect ready' : 'Grant Health Connect') : 'Android-only check'}
-                detail={healthStatus?.message ?? 'Health Connect is checked locally on device.'}
-              />
-            </View>
+                <SectionTitle title="Status" />
+                <View style={styles.statusGrid}>
+                  <SettingsStatusCard
+                    tone={enabledAiCount ? 'moss' : 'blue'}
+                    label="AI"
+                    title={enabledAiCount ? `${enabledAiCount} provider${enabledAiCount === 1 ? '' : 's'} enabled` : 'Local answers first'}
+                    detail={enabledAiCount ? 'Primary/fallback model routing is ready for Chat.' : 'Paste a key when you want live model answers.'}
+                  />
+                  <SettingsStatusCard
+                    tone={enabledSourceCount ? 'plum' : 'amber'}
+                    label="Food data"
+                    title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external sources'}
+                    detail="External food connectors are optional and available in Advanced."
+                  />
+                  <SettingsStatusCard
+                    tone="moss"
+                    label="App behavior"
+                    title={`${settings.runtime.activeDomain} · ${settings.runtime.density}`}
+                    detail="Active domain, screen order, card counts and assistant behavior live in Customize."
+                  />
+                  <SettingsStatusCard
+                    tone={healthConnected ? 'moss' : 'blue'}
+                    label="Health"
+                    title={Platform.OS === 'android' ? (healthConnected ? 'Health Connect ready' : healthAvailable ? 'Health Connect available' : 'Health Connect unavailable') : 'Android-only check'}
+                    detail={healthStatus?.message ?? 'Health Connect is checked locally on device.'}
+                  />
+                </View>
 
-            <Card tone="moss" style={styles.principleCard}>
-              <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE</Text>
-              <Text style={[styles.principleTitle, { color: theme.colors.ink }]}>Direct on device. Fallback when needed.</Text>
-              <Text style={[styles.principleBody, { color: theme.colors.muted }]}>
-                The app tries Primary, then Fallback, then stays local. Direct tokens stay on this device; no shared public endpoint, Mac service, or hidden build-time config.
-              </Text>
-              <View style={styles.flow}>
-                <Pill tone="moss">Primary</Pill><Text style={[styles.arrow, { color: theme.colors.muted }]}>→</Text>
-                <Pill tone="plum">Fallback</Pill><Text style={[styles.arrow, { color: theme.colors.muted }]}>→</Text>
-                <Pill tone="blue">Local</Pill>
-              </View>
-            </Card>
+                <Card tone="moss" style={styles.principleCard}>
+                  <Text style={[styles.principleKicker, { color: theme.colors.moss }]}>PORTABLE</Text>
+                  <Text style={[styles.principleTitle, { color: theme.colors.ink }]}>Direct on device. Fallback when needed.</Text>
+                  <Text style={[styles.principleBody, { color: theme.colors.muted }]}>
+                    The app tries Primary, then Fallback, then stays local. Direct tokens stay on this device.
+                  </Text>
+                </Card>
+              </>
+            )}
 
             <Card tone="moss" style={styles.advancedCard}>
-              <Pressable accessibilityRole="button" onPress={() => setShowAdvanced((current) => !current)} style={({ pressed }) => [styles.configButton, pressed && styles.pressed, { backgroundColor: theme.colors.paper, borderWidth: 1, borderColor: theme.colors.line }]}>
+              <Pressable accessibilityRole="button" onPress={() => {
+                setShowAdvanced((current) => !current);
+                setAdvancedPanel(null);
+              }} style={({ pressed }) => [styles.configButton, pressed && styles.pressed, { backgroundColor: theme.colors.paper, borderWidth: 1, borderColor: theme.colors.line }]}>
                 <View style={styles.switchCopy}>
                   <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Advanced</Text>
-                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Show advanced providers, connectors, behavior, and credentials.</Text>
+                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>AI, data sources and app customization.</Text>
                 </View>
                 <Text style={[styles.configButtonArrow, { color: theme.colors.ink }]}>{showAdvanced ? '-' : '+'}</Text>
               </Pressable>
             </Card>
 
+            {showAdvanced && compact ? (
+              <Card style={styles.advancedMenu}>
+                <SettingsMenuRow label="AI provider" value={enabledAiCount ? 'Ready' : 'Set up'} active={advancedPanel === 'ai'} onPress={() => setAdvancedPanel('ai')} />
+                <SettingsMenuRow label="Data connections" value={enabledSourceCount ? `${enabledSourceCount} on` : 'Optional'} active={advancedPanel === 'data'} onPress={() => setAdvancedPanel('data')} />
+                <SettingsMenuRow label="Health Connect" value={healthConnected ? 'Connected' : healthAvailable ? 'Available' : 'Unavailable'} active={advancedPanel === 'health'} onPress={() => setAdvancedPanel('health')} />
+                <SettingsMenuRow label="Customize app" value="Open builder" active={advancedPanel === 'app'} onPress={() => setAdvancedPanel('app')} />
+                <SettingsMenuRow label="Privacy & storage" value="Device secured" active={advancedPanel === 'privacy'} onPress={() => setAdvancedPanel('privacy')} />
+              </Card>
+            ) : null}
+
             {showAdvanced ? (
               <>
-                <SectionTitle title="AI providers" />
-                <View style={[styles.providerGrid, compact && styles.stack]}>
+                {!compact || advancedPanel === 'ai' ? (
+                  <>
+                    <SectionTitle title="AI provider" />
+                    <View style={[styles.providerGrid, compact && styles.stack]}>
                   <ProviderCard
                     title="Primary"
                     subtitle="Used first for Chat and AI-assisted capture."
@@ -276,9 +321,13 @@ export default function SettingsScreen() {
                     onTest={() => void test('fallback')}
                     testing={testing === 'fallback'}
                   />
-                </View>
+                    </View>
+                  </>
+                ) : null}
 
-                <SectionTitle title="Data sources" />
+                {!compact || advancedPanel === 'health' ? (
+                  <>
+                <SectionTitle title="Health" />
                 <Card tone="plum" style={styles.healthCard}>
                   <View style={styles.switchRow}>
                     <View style={styles.switchCopy}>
@@ -314,7 +363,12 @@ export default function SettingsScreen() {
                     </Pressable>
                   </View>
                 </Card>
+                  </>
+                ) : null}
 
+                {!compact || advancedPanel === 'data' ? (
+                  <>
+                <SectionTitle title="Data connections" />
                 <View style={[styles.providerGrid, compact && styles.stack]}>
                   <SourceCard
                     title="Notion"
@@ -357,8 +411,12 @@ export default function SettingsScreen() {
                     <Field label="MCP token" value={settings.mcp.token} placeholder="Optional private token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, token } }))} />
                   </SourceCard>
                 </View>
+                  </>
+                ) : null}
 
-                <SectionTitle title="Food experience" />
+                {!compact || advancedPanel === 'app' ? (
+                  <>
+                <SectionTitle title="Customize app" />
                 <Card style={styles.connectorCard}>
                   <View style={styles.switchRow}>
                     <View style={styles.switchCopy}>
@@ -375,12 +433,11 @@ export default function SettingsScreen() {
                   </View>
                 </Card>
 
-                <SectionTitle title="LifeOS behavior" />
                 <Card style={styles.connectorCard}>
                   <View style={styles.switchRow}>
                     <View style={styles.switchCopy}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Packages, skills, agents and schemas</Text>
-                      <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Choose active domains, edit skill instructions, enable workflows and agents, and validate schema overrides.</Text>
+                      <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>App builder</Text>
+                      <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Change tables, screens, rules, workflows and visual style.</Text>
                     </View>
                     <Pill tone="plum">CONFIG STUDIO</Pill>
                   </View>
@@ -391,7 +448,10 @@ export default function SettingsScreen() {
                     </Pressable>
                   </Link>
                 </Card>
+                  </>
+                ) : null}
 
+                {!compact || advancedPanel === 'privacy' ? (
                 <Card tone="blue" style={styles.securityCard}>
                   <Text style={[styles.securityTitle, { color: theme.colors.blue }]}>{Platform.OS === 'web' ? 'Browser storage notice' : 'Device-secured credentials'}</Text>
                   <Text style={[styles.securityBody, { color: theme.colors.muted }]}>
@@ -400,18 +460,21 @@ export default function SettingsScreen() {
                       : 'Provider keys are stored with the operating system secure store and are not bundled into the app or committed to the repository.'}
                   </Text>
                 </Card>
+                ) : null}
               </>
             ) : null}
 
             {notice ? <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.colors.moss }]}>{notice}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={loading || saving}
-              onPress={() => void save()}
-              style={({ pressed }) => [styles.save, { backgroundColor: theme.colors.ink }, (loading || saving) && styles.disabled, pressed && styles.pressed]}
-            >
-              <Text style={[styles.saveText, { color: theme.colors.paper }]}>{saving ? 'Saving…' : loading ? 'Loading…' : 'Save connections'}</Text>
-            </Pressable>
+            {showAdvanced && (!compact || advancedPanel !== null) ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={loading || saving}
+                onPress={() => void save()}
+                style={({ pressed }) => [styles.save, { backgroundColor: theme.colors.ink }, (loading || saving) && styles.disabled, pressed && styles.pressed]}
+              >
+                <Text style={[styles.saveText, { color: theme.colors.paper }]}>{saving ? 'Saving…' : loading ? 'Loading…' : 'Save changes'}</Text>
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -525,6 +588,32 @@ function SettingsStatusCard(props: {
   );
 }
 
+function SettingsStatusRow({ label, value, ready }: { label: string; value: string; ready: boolean }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.quickStatusRow, { borderBottomColor: theme.colors.line }]}>
+      <View style={[styles.quickStatusDot, { backgroundColor: ready ? theme.colors.moss : theme.colors.line }]} />
+      <Text maxFontSizeMultiplier={1.2} style={[styles.quickStatusLabel, { color: theme.colors.ink }]}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.quickStatusValue, { color: theme.colors.muted }]}>{value}</Text>
+    </View>
+  );
+}
+
+function SettingsMenuRow({ label, value, active, onPress }: { label: string; value: string; active: boolean; onPress: () => void }) {
+  const theme = useLifeOSTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.advancedMenuRow, { borderBottomColor: theme.colors.line }, active && { backgroundColor: theme.colors.mossSoft }, pressed && styles.pressed]}>
+      <Text style={[styles.quickStatusLabel, { color: theme.colors.ink }]}>{label}</Text>
+      <Text style={[styles.quickStatusValue, { color: theme.colors.muted }]}>{value}</Text>
+      <Text style={[styles.advancedMenuArrow, { color: theme.colors.muted }]}>›</Text>
+    </Pressable>
+  );
+}
+
 function SourceCard(props: {
   title: string;
   detail: string;
@@ -583,6 +672,17 @@ function Field(props: {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  mobileHeader: { minHeight: 72, paddingTop: 10, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  mobileTitle: { fontSize: 28, lineHeight: 33, fontWeight: '900', letterSpacing: -0.7 },
+  mobileSubtitle: { fontSize: 12, lineHeight: 16, marginTop: 2 },
+  quickStatus: { paddingVertical: 0, marginBottom: 12 },
+  quickStatusRow: { minHeight: 52, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  quickStatusDot: { width: 8, height: 8, borderRadius: 4 },
+  quickStatusLabel: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  quickStatusValue: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
+  advancedMenu: { padding: 0, overflow: 'hidden' },
+  advancedMenuRow: { minHeight: 48, borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  advancedMenuArrow: { fontSize: 20, fontWeight: '400' },
   contextBar: { paddingTop: 16, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   brand: { color: colors.moss, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   context: { color: colors.muted, fontSize: 12, marginTop: 3 },

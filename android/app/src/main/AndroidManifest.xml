@@ -31,13 +31,25 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
       <intent-filter>
-        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-      </intent-filter>
-      <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="wonderfood"/>
+      </intent-filter>
+      <intent-filter android:autoVerify="false" expo-sharing-intent-filters="true">
+        <action android:name="android.intent.action.SEND"/>
+        <data android:mimeType="text/plain"/>
+        <data android:mimeType="text/uri-list"/>
+        <data android:mimeType="image/*"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
+      <intent-filter android:autoVerify="false" expo-sharing-intent-filters="true">
+        <action android:name="android.intent.action.SEND_MULTIPLE"/>
+        <data android:mimeType="image/*"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
+      <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
       </intent-filter>
     </activity>
     <activity-alias
