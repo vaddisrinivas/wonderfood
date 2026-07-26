@@ -209,7 +209,7 @@ function validateToolArguments(
   }
 }
 
-function validateArgsForTool(toolName: string, args: unknown): ToolCallErrors {
+export function validateArgsForTool(toolName: string, args: unknown): ToolCallErrors {
   const tools = normalizeToolDefinitionList();
   const tool = tools.get(toolName);
   if (!tool) {

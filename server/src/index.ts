@@ -2,7 +2,7 @@ import { createServer } from 'http';
 import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
 import { handleServerChat, normalizeChatSendRequest, type ChatSendRequest } from './chat';
 import { type NormalizedChatSend } from './chat';
-import { handleMcpRequest } from './mcp/server';
+import { handleMcpRequest } from './mcp/official-server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
 import { readNotionConfig } from './providers/notion/client';

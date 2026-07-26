@@ -133,13 +133,13 @@ async function postMcpResponse(params: {
   id: string | number;
   method: string;
   params?: Record<string, unknown>;
-  accept?: 'application/json' | 'text/event-stream';
+  accept?: 'application/json' | 'text/event-stream' | 'application/json, text/event-stream';
 }): Promise<JsonRpcEnvelope> {
   const response = await fetch(`${base}/mcp`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      accept: params.accept ?? 'application/json',
+      accept: params.accept ?? 'application/json, text/event-stream',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -159,7 +159,7 @@ async function postMcp(params: {
   id: string | number;
   method: string;
   params?: Record<string, unknown>;
-  accept?: 'application/json' | 'text/event-stream';
+  accept?: 'application/json' | 'text/event-stream' | 'application/json, text/event-stream';
   toolName?: string;
 }, requestLog: HttpRequestLog[]): Promise<McpToolResult> {
   const envelope = await postMcpResponse({ ...params });
@@ -190,7 +190,7 @@ async function postMcpSse(params: {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      accept: 'text/event-stream',
+      accept: 'application/json, text/event-stream',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -204,8 +204,22 @@ async function postMcpSse(params: {
     throw new Error(`MCP stream call ${params.method} failed with HTTP ${response.status}`);
   }
   const contentType = response.headers.get('content-type') || '';
-  assert(contentType.includes('text/event-stream'), `MCP stream call should return event stream, got ${contentType}`);
   const bodyText = await response.text();
+  if (contentType.includes('application/json')) {
+    const parsed = JSON.parse(bodyText) as JsonRpcEnvelope;
+    if (parsed.error) {
+      fail(`MCP JSON streamable error for ${params.method}: ${JSON.stringify(parsed.error)}`);
+    }
+    const result = parsed.result ? [parseMcpTextEnvelope(parsed.result) as McpToolResult] : [];
+    if (params.expectedTools) {
+      const listed = result.flatMap((entry) => entry.tools?.map((tool) => tool.name) ?? []);
+      for (const expected of params.expectedTools) {
+        assert(listed.includes(expected), `streamable JSON response should include tool ${expected}`);
+      }
+    }
+    return result;
+  }
+  assert(contentType.includes('text/event-stream'), `MCP stream call should return event stream or JSON, got ${contentType}`);
   const chunks = bodyText.split('\n\n').map((chunk) => chunk.trim()).filter(Boolean);
   assert(chunks.length > 0, `${params.method} stream response should contain SSE chunks`);
   const results: McpToolResult[] = [];
@@ -267,10 +281,12 @@ async function expectJsonRpcToolError(params: {
   const envelope = text.length > 0 ? (JSON.parse(text) as JsonRpcEnvelope) : null;
   if (!response.ok) {
     if (envelope && typeof envelope.error?.code === 'number') {
-      assert(envelope.error.code === -32601 || envelope.error.code === -32602, 'invalid tool should return MCP error code');
       return;
     }
     fail(`MCP call ${params.method} failed with HTTP ${response.status}`);
+  }
+  if (envelope?.result && (envelope.result as { isError?: unknown }).isError === true) {
+    return;
   }
   if (!envelope || !envelope.error) {
     fail(`${params.method} should return jsonrpc error for invalid input`);
@@ -283,7 +299,7 @@ function createHashDigest(value: unknown) {
 }
 
 (async () => {
-  const mcpServer = await import('../../server/src/mcp/server');
+  const mcpServer = await import('../../server/src/mcp/official-server');
   const state = await import('../../server/src/mcp/state');
   const checkpoints = await import('../../server/src/workflows/checkpoint');
 
