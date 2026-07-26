@@ -37,6 +37,31 @@ assert.equal(validateAppPackage({
 }).valid, false);
 assert.equal(validateAppPackage({
   ...pkg,
+  presentation: {
+    label: 'Bad',
+    homeSurface: 'missing',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['ghosts'] }],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [
+      { id: 'inbox', label: 'Inbox', collections: ['decisions'] },
+      { id: 'inbox', label: 'Inbox duplicate', collections: ['decisions'] },
+    ],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
   rules: [{
     id: 'typed-update',
     trigger: { kind: 'operation' },

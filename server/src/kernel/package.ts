@@ -78,6 +78,7 @@ export function validateAppPackage(input: unknown): PackageValidation {
   if (presentation) {
     if (!text(presentation.label)) errors.push('presentation label is required');
     if (!Array.isArray(presentation.surfaces)) errors.push('presentation surfaces must be an array');
+    const surfaceIds = new Set<string>();
     for (const surface of presentation.surfaces ?? []) {
       const item = surface as unknown as {
         id?: unknown;
@@ -85,8 +86,20 @@ export function validateAppPackage(input: unknown): PackageValidation {
         collections?: unknown;
       };
       if (!text(item?.id)) errors.push('presentation surface id is required');
+      else if (surfaceIds.has(item.id)) errors.push(`presentation surface ${item.id} is duplicated`);
+      else surfaceIds.add(item.id);
       if (!text(item?.label)) errors.push(`presentation surface ${item?.id ?? '<unknown>'} label is required`);
-      if (!Array.isArray(item?.collections)) errors.push(`presentation surface ${item?.id ?? '<unknown>'} collections must be an array`);
+      if (!Array.isArray(item?.collections)) {
+        errors.push(`presentation surface ${item?.id ?? '<unknown>'} collections must be an array`);
+      } else {
+        for (const collection of item.collections) {
+          if (!text(collection)) errors.push(`presentation surface ${item?.id ?? '<unknown>'} collection id is invalid`);
+          else if (!value.collections?.[collection]) errors.push(`presentation surface ${item?.id ?? '<unknown>'} references missing collection ${collection}`);
+        }
+      }
+    }
+    if (presentation.homeSurface !== undefined && (!text(presentation.homeSurface) || !surfaceIds.has(presentation.homeSurface))) {
+      errors.push(`presentation homeSurface references missing surface ${String(presentation.homeSurface)}`);
     }
   }
   for (const rule of value.rules ?? []) {
