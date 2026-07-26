@@ -1,8 +1,8 @@
 # Repository Audit
 
-- Snapshot: `fd8e2e6`
-- Inventory: 725 tracked files + 1 catalog = 726 rows
-- Review status: 606 verified text/source rows, 120 heuristic binary rows
+- Snapshot: `6b9c90b`
+- Inventory: 726 tracked files + 1 catalog = 727 rows
+- Review status: 607 verified text/source rows, 120 heuristic binary rows
 - Legend: `review=verified` means the generator read the file fully; `review=heuristic` means metadata-only for binary rows.
 - Lineage: `source`, `generated`, `binary`, or `historical`.
 
@@ -346,7 +346,7 @@
 | [docs/quality/wf-d05-command-safety-evidence.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/quality/wf-d05-command-safety-evidence.md) | doc | quality evidence | verified | stale guidance; scope drift | 1.3 KB | historical |
 | [docs/release/RELEASE_CHECKLIST.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/release/RELEASE_CHECKLIST.md) | doc | release doc | verified | stale guidance; scope drift | 2.6 KB | historical |
 | [docs/releasing.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/releasing.md) | doc | documentation | verified | stale guidance; scope drift | 4.2 KB | source |
-| [docs/REPOSITORY-AUDIT.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/REPOSITORY-AUDIT.md) | doc | repository audit | verified | regen drift; source mismatch | 175.9 KB | generated |
+| [docs/REPOSITORY-AUDIT.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/REPOSITORY-AUDIT.md) | doc | repository audit | verified | regen drift; source mismatch | 176.1 KB | generated |
 | [docs/sync/google-drive-sync.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/sync/google-drive-sync.md) | doc | documentation | verified | stale guidance; scope drift | 1.7 KB | source |
 | [docs/testing/external-automation-validation.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/testing/external-automation-validation.md) | doc | testing policy | verified | stale guidance; scope drift | 2.8 KB | source |
 | [docs/testing/README.md](/opt/codex-auth/worktrees/7821/wonderfood/docs/testing/README.md) | doc | testing policy | verified | stale guidance; scope drift | 4.0 KB | source |
@@ -488,6 +488,7 @@
 | [scripts/quality/collect-release-evidence.sh](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/collect-release-evidence.sh) | script | quality gate | verified | workflow drift; shell breakage | 5.6 KB | historical |
 | [scripts/quality/evidence-provenance.mjs](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/evidence-provenance.mjs) | script | quality gate | verified | workflow drift; shell breakage | 6.9 KB | historical |
 | [scripts/quality/generate-data-plane-artifacts.mjs](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/generate-data-plane-artifacts.mjs) | script | quality gate | verified | workflow drift; shell breakage | 8.2 KB | source |
+| [scripts/quality/generate-repository-audit.mjs](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/generate-repository-audit.mjs) | script | quality gate | verified | workflow drift; shell breakage | 12.8 KB | source |
 | [scripts/quality/refresh-assetlinks-fingerprint.sh](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/refresh-assetlinks-fingerprint.sh) | script | quality gate | verified | workflow drift; shell breakage | 1.3 KB | source |
 | [scripts/quality/run-android-lifeos-e2e-proof.sh](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/run-android-lifeos-e2e-proof.sh) | script | quality gate | verified | workflow drift; shell breakage | 7.0 KB | historical |
 | [scripts/quality/run-emulatorx-health-connect.sh](/opt/codex-auth/worktrees/7821/wonderfood/scripts/quality/run-emulatorx-health-connect.sh) | script | quality gate | verified | workflow drift; shell breakage | 5.0 KB | source |
