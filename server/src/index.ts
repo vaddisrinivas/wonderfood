@@ -1,4 +1,5 @@
 import { createServer } from 'http';
+import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
 import { handleServerChat, normalizeChatSendRequest, type ChatSendRequest } from './chat';
 import { type NormalizedChatSend } from './chat';
 import { handleMcpRequest } from './mcp/server';
@@ -34,6 +35,7 @@ import {
 import { ChatStreamEvent } from './responses';
 import { getActionEvent, runUndo } from './mcp/state';
 import { installReactiveRuntime } from './kernel/install-reactive-runtime';
+import { chatAgent, localQuery } from './agents/chat-agent';
 import {
   deleteHealthSnapshot,
   exportHealthSnapshots,
@@ -104,6 +106,27 @@ async function readJsonBody(req: any): Promise<Record<string, unknown>> {
     return {};
   }
   return JSON.parse(raw) as Record<string, unknown>;
+}
+
+function latestUiMessageText(messages: unknown[]): string {
+  const latest = [...messages].reverse().find((message) => {
+    return Boolean(message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
+  }) as { content?: unknown; parts?: unknown } | undefined;
+  if (!latest) return '';
+  if (typeof latest.content === 'string') return latest.content;
+  if (Array.isArray(latest.parts)) {
+    return latest.parts.map((part) => {
+      if (!part || typeof part !== 'object') return '';
+      const value = part as { type?: unknown; text?: unknown };
+      return value.type === 'text' && typeof value.text === 'string' ? value.text : '';
+    }).join('\n').trim();
+  }
+  return '';
+}
+
+function shouldUseWebSearch(text: string): boolean {
+  if (process.env.OPENAI_WEB_SEARCH_ENABLED?.trim().toLowerCase() === 'false') return false;
+  return /\b(today|latest|current|recent|web|internet|news|price|weather|search|look up)\b/i.test(text);
 }
 
 function getPath(rawUrl: string | undefined) {
@@ -1019,6 +1042,58 @@ const server = createServer(async (req: any, res: any) => {
             : 'Invalid chat request',
       );
     }
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/chat/agent') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    let payload: { messages?: unknown[]; previousResponseId?: string };
+    try {
+      payload = (await readJsonBody(req)) as typeof payload;
+    } catch {
+      badRequest(res, 'Invalid JSON');
+      return;
+    }
+
+    const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    if (messages.length === 0) {
+      badRequest(res, 'messages required');
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      setJson(res, 503, {
+        status: 'disabled',
+        message: 'Live model unavailable: OPENAI_API_KEY is not configured.',
+      });
+      return;
+    }
+
+    const validated = await safeValidateUIMessages<UIMessage>({
+      messages,
+      tools: { localQuery } as never,
+    });
+    if (!validated.success) {
+      badRequest(res, 'Invalid UI messages');
+      return;
+    }
+
+    const latestText = latestUiMessageText(messages);
+    await pipeAgentUIStreamToResponse({
+      response: res,
+      agent: chatAgent,
+      uiMessages: validated.data,
+      options: {
+        enableLocalQuery: true,
+        enableWebSearch: shouldUseWebSearch(latestText),
+        previousResponseId: payload.previousResponseId,
+      },
+      headers: {
+        'cache-control': 'no-cache',
+      },
+    });
     return;
   }
 
