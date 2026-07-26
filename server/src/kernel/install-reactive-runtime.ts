@@ -2,7 +2,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog } from '../../../src/domain/catalog';
 import { listRecords } from '../mcp/state';
 import { setOperationCommitObserver } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';

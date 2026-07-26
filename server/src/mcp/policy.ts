@@ -1,4 +1,4 @@
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog } from '../../../src/domain/catalog';
 
 export type McpToolKind = 'read' | 'write';
 

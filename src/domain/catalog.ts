@@ -1,8 +1,8 @@
-import catalogJson from '@/packages/domain-config/domain-catalog.v1.json';
-import foodManifestJson from '@/packages/domain-config/domains/food.v1.json';
-import healthManifestJson from '@/packages/domain-config/domains/health.v1.json';
-import plantsManifestJson from '@/packages/domain-config/domains/plants.v1.json';
-import type { AppPackageV2 } from '@/packages/shared/contracts/package';
+import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
+import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
+import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
+import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
+import type { AppPackageV2 } from '../../packages/shared/contracts/package';
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
 export type DomainSchemaVersion = 'lifeos.domain.v1';

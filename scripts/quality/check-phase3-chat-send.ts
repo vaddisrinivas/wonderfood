@@ -168,7 +168,7 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
     LIFEOS_CHAT_CONVERSATIONS_PATH: conversationPath,
   };
 
-  const server = spawn(tsxBinary, [serverEntry], {
+  const server = spawn(tsxBinary, ['--tsconfig', join(root, 'tsconfig.json'), serverEntry], {
     cwd: root,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

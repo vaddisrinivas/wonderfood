@@ -1,4 +1,4 @@
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog } from '../../../src/domain/catalog';
 import { ActionRisk, PolicyDecision, evaluateCommandPolicy } from '@/src/actions/policy';
 import {
   ActionEvent,

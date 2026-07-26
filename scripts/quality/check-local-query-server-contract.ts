@@ -15,6 +15,7 @@ async function run() {
 
     assert.equal('execute' in (localQuery as Record<string, unknown>), false, 'localQuery tool must not expose execute for server runs');
     assert.equal(typeof (localQuery as Record<string, unknown>).inputSchema, 'object', 'localQuery should expose schema input only');
+    assert.equal(typeof (localQuery as Record<string, unknown>).outputSchema, 'object', 'localQuery should expose schema output for client continuation');
     assertServerExecuteGate(localQuery);
 
     const disabled = await runChatAgent({ prompt: 'localQuery server contract probe', stream: false });
@@ -23,6 +24,7 @@ async function run() {
     assert.equal(disabled.webCitations.length, 0, 'disabled path should not emit citations');
     assert.equal(disabled.toolCalls.length, 0, 'disabled path should not emit tool calls');
     assert.equal(disabled.duplicateToolCallIds.length, 0, 'disabled path should not emit duplicates');
+    assert.equal(disabled.responseId?.startsWith('offline:'), undefined, 'disabled path must not create synthetic response ids');
 
     writeFileSync(
       join(evidencePath, 'local-query-server-contract-proof.json'),
@@ -31,6 +33,8 @@ async function run() {
           check: 'local-query-server-contract',
           disabled_path: disabled.status,
           tool_call_ids_gate: true,
+          output_schema_gate: true,
+          synthetic_response_id_gate: true,
           run_chat_agent_source: disabled.source,
         },
         null,

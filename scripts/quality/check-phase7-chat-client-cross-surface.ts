@@ -37,7 +37,7 @@ async function waitForServer() {
 }
 
 (async () => {
-  const server = spawn(tsxBinary, [serverEntry], {
+  const server = spawn(tsxBinary, ['--tsconfig', join(root, 'tsconfig.json'), serverEntry], {
     cwd: root,
     env: {
       ...process.env,

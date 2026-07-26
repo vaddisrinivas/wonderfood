@@ -111,7 +111,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = false): Pr
     LIFEOS_CHAT_CONVERSATIONS_PATH: conversationPath,
   };
 
-  const server = spawn(tsxBinary, [serverEntry], {
+  const server = spawn(tsxBinary, ['--tsconfig', join(root, 'tsconfig.json'), serverEntry], {
     cwd: root,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

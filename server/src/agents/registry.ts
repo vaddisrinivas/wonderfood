@@ -1,4 +1,4 @@
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog } from '../../../src/domain/catalog';
 
 export type AgentRoleId = 'orchestrator' | 'retrieval' | 'domain' | 'planner' | 'executor' | 'verifier';
 

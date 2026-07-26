@@ -1,4 +1,4 @@
-import { loadCatalog } from '@/src/domain/catalog';
+import { loadCatalog } from '../../../src/domain/catalog';
 import { ActionRisk, evaluateCommandPolicy, PolicyDecision } from '@/src/actions/policy';
 import { createHash } from 'node:crypto';
 import {

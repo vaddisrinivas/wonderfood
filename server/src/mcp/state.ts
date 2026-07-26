@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
+import { getDomainManifest, loadCatalog } from '../../../src/domain/catalog';
 import type { CanonicalRecord, CanonicalProvenance } from '@/src/domain/runtime';
 import type { Operation, OperationActor, OperationOrigin } from '@/src/ops/operation';
 import { planOperation } from '@/src/ops/plan';

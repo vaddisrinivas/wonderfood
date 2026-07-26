@@ -1,84 +1,83 @@
-import { createHash } from 'node:crypto';
-import { openai } from '@ai-sdk/openai';
-import { ToolLoopAgent, tool, zodSchema } from 'ai';
+import { openai, type OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
+import { ToolLoopAgent, jsonSchema, tool, zodSchema } from 'ai';
 import { z } from 'zod';
 
 import {
-  LOCAL_QUERY_HARD_MAX_ROWS,
-  LOCAL_QUERY_MAX_PROJECTED_FIELDS,
-  LOCAL_QUERY_SCHEMA_VERSION,
+  type BoundLocalQueryRequest,
+  type LocalQueryResult,
+  localQueryRequestSchema,
+  localQueryResultSchema,
+  parseLocalQueryRequest,
+  parseLocalQueryResult,
 } from '../types/local-query';
 
-const DEFAULT_CHAT_MODEL = 'gpt-4.1-mini';
+const DEFAULT_CHAT_MODEL = 'gpt-5.4-mini';
 
-const fieldName = z.string().min(1).regex(/^[A-Za-z_][A-Za-z0-9_.-]*$/);
-const toolQueryDirection = z.enum(['asc', 'desc']);
-
-type PredicateSchema = z.ZodTypeAny;
-const localQueryWhere: PredicateSchema = z.lazy(() => z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('and'),
-    args: z.array(localQueryWhere).min(1),
-  }),
-  z.object({
-    op: z.literal('or'),
-    args: z.array(localQueryWhere).min(1),
-  }),
-  z.object({
-    op: z.literal('not'),
-    arg: localQueryWhere,
-  }),
-  z.object({
-    op: z.literal('exists'),
-    field: fieldName,
-  }),
-  z.object({
-    op: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte']),
-    field: fieldName,
-    value: z.unknown(),
-  }),
-  z.object({
-    op: z.enum(['contains', 'starts_with']),
-    field: fieldName,
-    value: z.string(),
-  }),
-]));
-
-const localQueryInputSchema = z.object({
-  schemaVersion: z.literal(LOCAL_QUERY_SCHEMA_VERSION),
-  purpose: z.string().min(1).max(240),
-  requestedFields: z.array(fieldName).min(1).max(LOCAL_QUERY_MAX_PROJECTED_FIELDS).superRefine((values, context) => {
-    const unique = new Set(values);
-    if (unique.size !== values.length) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'requestedFields must be unique',
-      });
-    }
-  }),
-  maxRows: z.number().int().min(1).max(LOCAL_QUERY_HARD_MAX_ROWS).optional(),
-  query: z.object({
-    from: z.string().regex(/^[A-Za-z_][A-Za-z0-9_-]*$/),
-    where: localQueryWhere,
-    orderBy: z.array(z.object({
-      field: fieldName,
-      direction: toolQueryDirection.optional(),
-    })).optional(),
-    limit: z.number().int().min(1).max(LOCAL_QUERY_HARD_MAX_ROWS).optional(),
-    offset: z.number().int().min(0).optional(),
-    project: z.array(fieldName).min(1).max(LOCAL_QUERY_MAX_PROJECTED_FIELDS).optional(),
-  }),
+const chatCallOptionsSchema = z.object({
+  enableLocalQuery: z.boolean().default(false),
+  enableWebSearch: z.boolean().default(false),
+  previousResponseId: z.string().optional(),
 });
+
+type ChatCallOptions = z.infer<typeof chatCallOptionsSchema>;
+
+const localQueryInputSchema = jsonSchema<BoundLocalQueryRequest>(
+  localQueryRequestSchema as Parameters<typeof jsonSchema<BoundLocalQueryRequest>>[0],
+  {
+    validate(value) {
+      const parsed = parseLocalQueryRequest(value);
+      return parsed.ok
+        ? { success: true, value: parsed.value }
+        : { success: false, error: new Error(parsed.errors.join('; ')) };
+    },
+  },
+);
+
+const localQueryOutputSchema = jsonSchema<LocalQueryResult>(
+  localQueryResultSchema as Parameters<typeof jsonSchema<LocalQueryResult>>[0],
+  {
+    validate(value) {
+      const parsed = parseLocalQueryResult(value);
+      return parsed.ok
+        ? { success: true, value: parsed.value }
+        : { success: false, error: new Error(parsed.errors.join('; ')) };
+    },
+  },
+);
 
 export const localQuery = tool({
   description:
     'Request bounded rows from local rows only. Use only when the model needs concrete local record evidence.',
-  inputSchema: zodSchema(localQueryInputSchema),
+  inputSchema: localQueryInputSchema,
+  outputSchema: localQueryOutputSchema,
 });
 
-export const chatAgent = new ToolLoopAgent({
-  model: openai.chat(process.env.OPENAI_MODEL?.trim() || DEFAULT_CHAT_MODEL),
-  tools: { localQuery },
+const chatTools = {
+  localQuery,
+  web_search: openai.tools.webSearch({ searchContextSize: 'medium' }),
+};
+
+export const chatAgent = new ToolLoopAgent<ChatCallOptions, typeof chatTools>({
+  model: openai.responses(process.env.OPENAI_MODEL?.trim() || DEFAULT_CHAT_MODEL),
+  tools: chatTools,
+  callOptionsSchema: zodSchema(chatCallOptionsSchema),
+  prepareCall: ({ options, ...rest }) => {
+    const providerOptions: { openai: OpenAIResponsesProviderOptions } = {
+      openai: {
+        previousResponseId: options.previousResponseId,
+        parallelToolCalls: false,
+        store: true,
+      },
+    };
+    return {
+      ...rest,
+      activeTools: [
+        ...(options.enableLocalQuery ? ['localQuery' as const] : []),
+        ...(options.enableWebSearch ? ['web_search' as const] : []),
+      ],
+      providerOptions,
+    };
+  },
 });
 
 export type ChatAgentSource = {
@@ -171,11 +170,6 @@ function buildModelResult(options: {
     return true;
   });
 
-  if (!options.responseId && options.text) {
-    const hash = createHash('sha256').update(options.text).digest('hex');
-    options.responseId = `offline:${hash.slice(0, 24)}`;
-  }
-
   return {
     status: options.status,
     source: options.source,
@@ -200,6 +194,8 @@ export async function runChatAgent(input: {
   onModelToken?: (token: string) => void;
   signal?: AbortSignal;
   previousResponseId?: string;
+  enableLocalQuery?: boolean;
+  webSearch?: boolean;
 }): Promise<ChatAgentResult> {
   if (!process.env.OPENAI_API_KEY?.trim()) {
     return {
@@ -219,9 +215,11 @@ export async function runChatAgent(input: {
       const streamed = await chatAgent.stream({
         prompt: input.prompt,
         abortSignal: input.signal,
-        ...(input.previousResponseId
-          ? { providerOptions: { openai: { previousResponseId: input.previousResponseId } } }
-          : {}),
+        options: {
+          enableLocalQuery: input.enableLocalQuery === true,
+          enableWebSearch: input.webSearch === true,
+          previousResponseId: input.previousResponseId,
+        },
       });
       const toolCallsFromSteps = await streamed.steps;
       const finalStep = await streamed.finalStep;
@@ -258,9 +256,11 @@ export async function runChatAgent(input: {
     const generated = await chatAgent.generate({
       prompt: input.prompt,
       abortSignal: input.signal,
-      ...(input.previousResponseId
-        ? { providerOptions: { openai: { previousResponseId: input.previousResponseId } } }
-        : {}),
+      options: {
+        enableLocalQuery: input.enableLocalQuery === true,
+        enableWebSearch: input.webSearch === true,
+        previousResponseId: input.previousResponseId,
+      },
     });
     const finalStep = generated.finalStep;
     const response = await generated.response;
