@@ -12,7 +12,7 @@ import {
   notifyOperationCommit,
   type OperationCommitEvent,
 } from '../kernel/operation-observer';
-import { readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
+import { mutateJsonStateFile, readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
 import type { ProviderUndoInput, ProviderUndoResult } from '../providers/undo';
 
 type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
@@ -130,6 +130,9 @@ const PROVIDER_UNDO_TSX_PATH = join(process.cwd(), 'server', 'node_modules', '.b
 
 let store: PersistedStore = loadStore();
 let workflowCache: WorkflowDocument[] | null = null;
+let storeMutationDepth = 0;
+let unpersistedStore: PersistedStore | null = null;
+const deferredOperationCommitIds: string[] = [];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -236,21 +239,17 @@ function isOperationCommitOutboxItem(value: unknown): value is OperationCommitOu
   );
 }
 
-function loadStore(): PersistedStore {
-  if (!existsSync(MCP_STATE_PATH)) {
-    return {
-      version: 1,
-      updated_at: nowIso(),
-      records: {},
-      actions: {},
-      operation_commit_outbox: {},
-    };
-  }
+function createEmptyStore(): PersistedStore {
+  return {
+    version: 1,
+    updated_at: nowIso(),
+    records: {},
+    actions: {},
+    operation_commit_outbox: {},
+  };
+}
 
-  const parsed = readJsonStateFile(MCP_STATE_PATH, {
-    label: 'MCP runtime state',
-    validate: isValidStore,
-  });
+function normalizeStore(parsed: PersistedStore): PersistedStore {
   return {
     version: 1,
     updated_at: String(parsed.updated_at),
@@ -268,6 +267,16 @@ function loadStore(): PersistedStore {
   };
 }
 
+function loadStore(): PersistedStore {
+  if (!existsSync(MCP_STATE_PATH)) {
+    return createEmptyStore();
+  }
+  return normalizeStore(readJsonStateFile(MCP_STATE_PATH, {
+    label: 'MCP runtime state',
+    validate: isValidStore,
+  }));
+}
+
 function normalizeOperationCommitOutbox(value: unknown): Record<string, OperationCommitOutboxItem> {
   if (!isObject(value)) return {};
   return value as Record<string, OperationCommitOutboxItem>;
@@ -275,7 +284,71 @@ function normalizeOperationCommitOutbox(value: unknown): Record<string, Operatio
 
 function persistStore() {
   store.updated_at = nowIso();
+  if (storeMutationDepth > 0) {
+    return;
+  }
   writeJsonStateFileAtomic(MCP_STATE_PATH, store);
+}
+
+/**
+ * Single synchronous authority for canonical mutations. The filesystem lock
+ * covers refresh, validation, record/action/outbox mutation, and atomic commit.
+ * Nested writer calls share the outer transaction.
+ */
+function mutateCanonicalStore<T>(mutate: () => T): T {
+  if (storeMutationDepth > 0) {
+    return mutate();
+  }
+
+  let result: T | undefined;
+  const pending = unpersistedStore;
+  const deliveryStart = deferredOperationCommitIds.length;
+  let committed: PersistedStore;
+  try {
+    committed = mutateJsonStateFile(MCP_STATE_PATH, {
+      label: 'MCP runtime state',
+      validate: isValidStore,
+      createDefault: createEmptyStore,
+      mutate: (current) => {
+        const normalized = normalizeStore(current);
+        store = pending
+          ? {
+              ...normalized,
+              records: { ...normalized.records, ...pending.records },
+              actions: { ...normalized.actions, ...pending.actions },
+              operation_commit_outbox: {
+                ...normalized.operation_commit_outbox,
+                ...pending.operation_commit_outbox,
+              },
+            }
+          : normalized;
+        storeMutationDepth += 1;
+        try {
+          result = mutate();
+          store.updated_at = nowIso();
+          return store;
+        } finally {
+          storeMutationDepth -= 1;
+        }
+      },
+    });
+  } catch (error) {
+    deferredOperationCommitIds.splice(deliveryStart);
+    throw error;
+  }
+  store = normalizeStore(committed);
+  unpersistedStore = null;
+  const deliveryIds = deferredOperationCommitIds.splice(deliveryStart);
+  for (const operationId of deliveryIds) {
+    mutateCanonicalStore(() => attemptOperationCommitDelivery(operationId));
+  }
+  return result as T;
+}
+
+function retainUnpersistedStore(): void {
+  if (storeMutationDepth === 0) {
+    unpersistedStore = store;
+  }
 }
 
 function enqueueOperationCommit(event: OperationCommitEvent): void {
@@ -310,7 +383,7 @@ function attemptOperationCommitDelivery(operationId: string): boolean {
   return false;
 }
 
-export function drainOperationCommitOutbox(input: { maxItems?: number } = {}) {
+function drainOperationCommitOutboxMutation(input: { maxItems?: number } = {}) {
   const maxItems = Math.max(1, input.maxItems ?? 32);
   const pending = Object.values(store.operation_commit_outbox)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -330,6 +403,10 @@ export function drainOperationCommitOutbox(input: { maxItems?: number } = {}) {
   return { attempted: pending.length, delivered, retained };
 }
 
+export function drainOperationCommitOutbox(input: { maxItems?: number } = {}) {
+  return mutateCanonicalStore(() => drainOperationCommitOutboxMutation(input));
+}
+
 export function listOperationCommitOutbox(): OperationCommitOutboxItem[] {
   return Object.values(store.operation_commit_outbox)
     .map((item) => ({ ...item, event: { ...item.event } }))
@@ -339,6 +416,10 @@ export function listOperationCommitOutbox(): OperationCommitOutboxItem[] {
 function persistCommittedOperation(event: OperationCommitEvent): void {
   enqueueOperationCommit(event);
   persistStore();
+  if (storeMutationDepth > 0) {
+    deferredOperationCommitIds.push(event.operationId);
+    return;
+  }
   attemptOperationCommitDelivery(event.operationId);
 }
 
@@ -505,7 +586,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function deleteRecord(id: string, options: PersistOptions = {}) {
+function deleteRecordMutation(id: string, options: PersistOptions = {}) {
   if (!store.records[id]) {
     return false;
   }
@@ -516,7 +597,16 @@ export function deleteRecord(id: string, options: PersistOptions = {}) {
   return true;
 }
 
-export function restoreRecord(record: McpRecord) {
+export function deleteRecord(id: string, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = deleteRecordMutation(id, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => deleteRecordMutation(id, options));
+}
+
+function restoreRecordMutation(record: McpRecord) {
   const normalized = normalizeRecord({
     ...record,
     created_at: record.created_at,
@@ -532,6 +622,10 @@ export function restoreRecord(record: McpRecord) {
   };
   persistStore();
   return { ...store.records[normalized.id] };
+}
+
+export function restoreRecord(record: McpRecord) {
+  return mutateCanonicalStore(() => restoreRecordMutation(record));
 }
 
 function isWorkflowFileName(value: string) {
@@ -779,7 +873,7 @@ function normalizeProviderSourceEquality(source: RecordSource) {
 }
 
 /** Apply a provider pull only after the provider adapter has passed its authority checks. */
-export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
+function upsertProviderCanonicalRecordMutation(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
   const authority = process.env.LIFEOS_AUTHORITY_PROVIDER?.trim() || 'notion';
   if (authority !== input.provider) {
     return {
@@ -828,7 +922,11 @@ export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInpu
   return { applied: true, record };
 }
 
-export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'> & { now?: string }, options: PersistOptions = {}) {
+export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
+  return mutateCanonicalStore(() => upsertProviderCanonicalRecordMutation(input));
+}
+
+function createRecordMutation(input: Omit<McpRecord, 'created_at' | 'updated_at'> & { now?: string }, options: PersistOptions = {}) {
   const now = input.now ?? nowIso();
   const base = normalizeRecord(input as Omit<McpRecord, 'created_at' | 'updated_at'> & Partial<McpRecord>);
   const next = {
@@ -839,7 +937,16 @@ export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'>
   return upsertRecord(next, options);
 }
 
-export function updateRecord(id: string, patch: Partial<McpRecord>, options: PersistOptions = {}) {
+export function createRecord(input: Omit<McpRecord, 'created_at' | 'updated_at'> & { now?: string }, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = createRecordMutation(input, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => createRecordMutation(input, options));
+}
+
+function updateRecordMutation(id: string, patch: Partial<McpRecord>, options: PersistOptions = {}) {
   const existing = store.records[id];
   if (!existing) {
     return null;
@@ -860,7 +967,16 @@ export function updateRecord(id: string, patch: Partial<McpRecord>, options: Per
   };
 }
 
-export function archiveRecord(id: string, options: PersistOptions = {}) {
+export function updateRecord(id: string, patch: Partial<McpRecord>, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = updateRecordMutation(id, patch, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => updateRecordMutation(id, patch, options));
+}
+
+function archiveRecordMutation(id: string, options: PersistOptions = {}) {
   const existing = store.records[id];
   if (!existing) {
     return null;
@@ -891,6 +1007,15 @@ export function archiveRecord(id: string, options: PersistOptions = {}) {
   };
 }
 
+export function archiveRecord(id: string, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = archiveRecordMutation(id, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => archiveRecordMutation(id, options));
+}
+
 export type ActionWriteResult = {
   action: ActionEvent;
   record?: McpRecord;
@@ -910,7 +1035,7 @@ function resolveIdempotencyKey(input?: string) {
   return typeof input === 'string' ? input.trim() : '';
 }
 
-export function createRecordWithAction(input: {
+function createRecordWithActionMutation(input: {
   actionId: string;
   actor: string;
   domain: string;
@@ -1025,7 +1150,11 @@ export function createRecordWithAction(input: {
   };
 }
 
-export function updateRecordWithAction(input: {
+export function createRecordWithAction(input: Parameters<typeof createRecordWithActionMutation>[0]): ActionWriteResult {
+  return mutateCanonicalStore(() => createRecordWithActionMutation(input));
+}
+
+function updateRecordWithActionMutation(input: {
   actionId: string;
   actor: string;
   domain: string;
@@ -1204,7 +1333,11 @@ export function updateRecordWithAction(input: {
   };
 }
 
-export function archiveRecordWithAction(input: {
+export function updateRecordWithAction(input: Parameters<typeof updateRecordWithActionMutation>[0]): ActionWriteResult {
+  return mutateCanonicalStore(() => updateRecordWithActionMutation(input));
+}
+
+function archiveRecordWithActionMutation(input: {
   actionId: string;
   actor: string;
   domain: string;
@@ -1381,6 +1514,119 @@ export function archiveRecordWithAction(input: {
   };
 }
 
+export function archiveRecordWithAction(input: Parameters<typeof archiveRecordWithActionMutation>[0]): ActionWriteResult {
+  return mutateCanonicalStore(() => archiveRecordWithActionMutation(input));
+}
+
+export function deleteRecordWithAction(input: {
+  actionId: string;
+  actor: string;
+  domain: string;
+  tool: string;
+  risk: ActionRisk;
+  command: string;
+  id: string;
+  idempotencyKey?: string;
+  sourceIds?: string[];
+  conversationId?: string | null;
+  expectedRevision?: number;
+  operationId?: string;
+  causeId?: string;
+  undoPayload?: Record<string, unknown>;
+}): ActionWriteResult {
+  return mutateCanonicalStore(() => {
+    const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
+    const replay = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    if (replay?.status === 'completed') {
+      return { action: replay, replayed: true };
+    }
+    const previous = findRecord(input.id);
+    if (!previous) {
+      const action = createActionEvent({
+        id: input.actionId,
+        actor: input.actor,
+        domain: input.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey,
+        command: input.command,
+        before: null,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      }, { persist: false });
+      const failed = markActionFailed(action.id, 'record not found', { persist: false }) ?? action;
+      persistStore();
+      return { action: failed, replayed: false };
+    }
+    if (input.expectedRevision !== undefined && (previous.revision ?? 0) !== input.expectedRevision) {
+      const action = createActionEvent({
+        id: input.actionId,
+        actor: input.actor,
+        domain: previous.domain,
+        tool: input.tool,
+        risk: input.risk,
+        recordIds: [input.id],
+        idempotencyKey,
+        command: input.command,
+        before: previous,
+        after: null,
+        undoPayload: null,
+        sourceIds: input.sourceIds,
+        conversationId: input.conversationId ?? null,
+        operationId: input.operationId,
+        causeId: input.causeId,
+        expectedRevision: input.expectedRevision,
+        status: 'failed',
+      }, { persist: false });
+      const failed = markActionFailed(action.id, 'revision conflict', { persist: false }) ?? action;
+      persistStore();
+      return { action: failed, record: previous, replayed: false };
+    }
+
+    delete store.records[input.id];
+    const actionSeed = createActionEvent({
+      id: input.actionId,
+      actor: input.actor,
+      domain: previous.domain,
+      tool: input.tool,
+      risk: input.risk,
+      recordIds: [input.id],
+      idempotencyKey,
+      command: input.command,
+      before: previous,
+      after: null,
+      undoPayload: input.undoPayload ?? {
+        operation: 'restore_record',
+        record_id: previous.id,
+        record: previous,
+      },
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId ?? null,
+      operationId: input.operationId,
+      causeId: input.causeId,
+      expectedRevision: input.expectedRevision,
+    }, { persist: false });
+    const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: null }, { persist: false }) ?? actionSeed;
+    persistCommittedOperation({
+      actionId: action.id,
+      operationId: action.operation_id,
+      causeId: action.cause_id,
+      domain: action.domain,
+      recordId: previous.id,
+      before: previous,
+      after: null,
+    });
+    return { action, replayed: false };
+  });
+}
+
 function readActions(): ActionEvent[] {
   return Object.values(store.actions);
 }
@@ -1395,7 +1641,7 @@ export function findActionByIdempotencyKey(idempotencyKey: string) {
   return events.find((action) => action.idempotency_key && action.idempotency_key === idempotencyKey) || null;
 }
 
-export function createActionEvent(input: {
+function createActionEventMutation(input: {
   id: string;
   actor: string;
   domain: string;
@@ -1481,7 +1727,19 @@ export function createActionEvent(input: {
   return cloneActionEvent(event);
 }
 
-export function markActionCompleted(id: string, command?: string, after?: unknown, options: PersistOptions = {}) {
+export function createActionEvent(
+  input: Parameters<typeof createActionEventMutation>[0],
+  options: PersistOptions = {},
+): ActionEvent {
+  if (options.persist === false) {
+    const result = createActionEventMutation(input, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => createActionEventMutation(input, options));
+}
+
+function markActionCompletedMutation(id: string, command?: string, after?: unknown, options: PersistOptions = {}) {
   const existing = store.actions[id];
   if (!existing) {
     return null;
@@ -1500,7 +1758,16 @@ export function markActionCompleted(id: string, command?: string, after?: unknow
   return cloneActionEvent(store.actions[id]);
 }
 
-export function attachActionVerification(id: string, verification: unknown, options: PersistOptions = {}) {
+export function markActionCompleted(id: string, command?: string, after?: unknown, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = markActionCompletedMutation(id, command, after, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => markActionCompletedMutation(id, command, after, options));
+}
+
+function attachActionVerificationMutation(id: string, verification: unknown, options: PersistOptions = {}) {
   const existing = store.actions[id];
   if (!existing) {
     return null;
@@ -1516,7 +1783,16 @@ export function attachActionVerification(id: string, verification: unknown, opti
   return cloneActionEvent(store.actions[id]);
 }
 
-export function markActionFailed(id: string, reason?: string, options: PersistOptions = {}) {
+export function attachActionVerification(id: string, verification: unknown, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = attachActionVerificationMutation(id, verification, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => attachActionVerificationMutation(id, verification, options));
+}
+
+function markActionFailedMutation(id: string, reason?: string, options: PersistOptions = {}) {
   const existing = store.actions[id];
   if (!existing) {
     return null;
@@ -1531,6 +1807,15 @@ export function markActionFailed(id: string, reason?: string, options: PersistOp
     persistStore();
   }
   return { ...cloneActionEvent(store.actions[id]), reason };
+}
+
+export function markActionFailed(id: string, reason?: string, options: PersistOptions = {}) {
+  if (options.persist === false) {
+    const result = markActionFailedMutation(id, reason, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => markActionFailedMutation(id, reason, options));
 }
 
 function updateUndoLifecycle(
@@ -1556,11 +1841,21 @@ function updateUndoLifecycle(
 }
 
 export function markActionUndone(id: string, verification: unknown, options: PersistOptions = {}) {
-  return updateUndoLifecycle(id, 'undone', verification, options);
+  if (options.persist === false) {
+    const result = updateUndoLifecycle(id, 'undone', verification, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => updateUndoLifecycle(id, 'undone', verification, options));
 }
 
 export function markActionUndoFailed(id: string, verification: unknown, options: PersistOptions = {}) {
-  return updateUndoLifecycle(id, 'undo_failed', verification, options);
+  if (options.persist === false) {
+    const result = updateUndoLifecycle(id, 'undo_failed', verification, options);
+    retainUnpersistedStore();
+    return result;
+  }
+  return mutateCanonicalStore(() => updateUndoLifecycle(id, 'undo_failed', verification, options));
 }
 
 function isUndoWindowOpen(deadlineAt: string | null) {
@@ -1701,7 +1996,19 @@ export function applyLocalUndoOperation(input: {
   operation: 'delete_record' | 'restore_after_update' | 'restore_after_archive' | 'restore_record';
   recordId?: string;
   record?: McpRecord | null;
+  parentActionId?: string;
+  workflowRunId?: string;
+  actor?: string;
 }): { ok: true; receipt: LocalUndoReceipt } | { ok: false; receipt: LocalUndoReceipt } {
+  const mutationScope = (
+    input.parentActionId
+    || input.workflowRunId
+    || `${input.recordId || input.record?.id || 'unknown'}:${input.record?.revision ?? 'current'}`
+  ).replace(/[^A-Za-z0-9_.:-]/g, '_');
+  const actionId = `canonical-undo:${mutationScope}:${input.operation}`;
+  const idempotencyKey = `canonical-undo:${mutationScope}:${input.operation}`;
+  const actor = input.actor?.trim() || (input.workflowRunId ? 'workflow' : 'agent');
+
   if (input.operation === 'delete_record') {
     const recordId = asText(input.recordId);
     const before = recordId ? findRecord(recordId) : null;
@@ -1715,19 +2022,20 @@ export function applyLocalUndoOperation(input: {
         },
       };
     }
-    if (!before) {
-      return {
-        ok: false,
-        receipt: {
-          status: 'undo_failed',
-          operation: input.operation,
-          record_id: recordId,
-          message: 'Created record was already missing.',
-        },
-      };
-    }
-    const deleted = deleteRecord(recordId);
-    if (!deleted) {
+    const write = deleteRecordWithAction({
+      actionId,
+      actor,
+      domain: before?.domain || input.record?.domain || 'food',
+      tool: 'canonical_undo_delete_record',
+      risk: 'standard',
+      command: `undo create_record ${recordId}`,
+      id: recordId,
+      idempotencyKey,
+      sourceIds: input.parentActionId ? [input.parentActionId] : [],
+      expectedRevision: before?.revision,
+      causeId: input.parentActionId || input.workflowRunId || actionId,
+    });
+    if (write.action.status !== 'completed') {
       return {
         ok: false,
         receipt: {
@@ -1735,7 +2043,7 @@ export function applyLocalUndoOperation(input: {
           operation: input.operation,
           record_id: recordId,
           before,
-          message: 'Created record was already missing.',
+          message: 'Canonical undo delete failed.',
         },
       };
     }
@@ -1747,7 +2055,7 @@ export function applyLocalUndoOperation(input: {
         record_id: recordId,
         before,
         after: null,
-        message: 'Undo applied.',
+        message: write.replayed ? 'Undo already applied.' : 'Undo applied.',
       },
     };
   }
@@ -1765,7 +2073,59 @@ export function applyLocalUndoOperation(input: {
   }
 
   const before = findRecord(record.id);
-  const after = restoreRecord(record);
+  const write = before
+    ? updateRecordWithAction({
+        actionId,
+        actor,
+        domain: before.domain,
+        tool: 'canonical_undo_restore_record',
+        risk: 'standard',
+        command: `${input.operation} ${record.id}`,
+        id: record.id,
+        patch: {
+          title: record.title,
+          properties: record.properties,
+          relations: record.relations,
+          source: record.source,
+          archived_at: record.archived_at,
+        },
+        source: record.source,
+        idempotencyKey,
+        sourceIds: input.parentActionId ? [input.parentActionId] : [],
+        expectedRevision: before.revision,
+        causeId: input.parentActionId || input.workflowRunId || actionId,
+        undoPayload: {
+          operation: 'restore_record',
+          record_id: before.id,
+          record: before,
+        },
+      })
+    : createRecordWithAction({
+        actionId,
+        actor,
+        domain: record.domain,
+        tool: 'canonical_undo_restore_record',
+        risk: 'standard',
+        command: `${input.operation} ${record.id}`,
+        record,
+        idempotencyKey,
+        sourceIds: input.parentActionId ? [input.parentActionId] : [],
+        causeId: input.parentActionId || input.workflowRunId || actionId,
+      });
+  const after = write.record ?? findRecord(record.id);
+  if (write.action.status !== 'completed' || !after) {
+    return {
+      ok: false,
+      receipt: {
+        status: 'undo_failed',
+        operation: input.operation,
+        record_id: record.id,
+        before,
+        after: after ?? null,
+        message: 'Canonical undo restore failed.',
+      },
+    };
+  }
   return {
     ok: true,
     receipt: {
@@ -1774,7 +2134,7 @@ export function applyLocalUndoOperation(input: {
       record_id: record.id,
       before,
       after,
-      message: 'Undo applied.',
+      message: write.replayed ? 'Undo already applied.' : 'Undo applied.',
     },
   };
 }
@@ -1786,7 +2146,7 @@ function toWorkflowUndoRecordId(raw: unknown): string {
   return asText((raw as { id?: unknown }).id);
 }
 
-function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): WorkflowCheckpointUndoResult {
+function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint, parentActionId: string): WorkflowCheckpointUndoResult {
   const result: WorkflowCheckpointUndoResult = {
     applied: 0,
     skipped: 0,
@@ -1816,6 +2176,9 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
       const localUndo = applyLocalUndoOperation({
         operation: 'delete_record',
         recordId,
+        parentActionId: `${parentActionId}:${step.id}`,
+        workflowRunId: checkpoint.run_id,
+        actor: checkpoint.actor,
       });
       if (localUndo.ok) {
         result.applied += 1;
@@ -1846,6 +2209,9 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
       const localUndo = applyLocalUndoOperation({
         operation: tool === 'archive_record' ? 'restore_after_archive' : 'restore_after_update',
         record,
+        parentActionId: `${parentActionId}:${step.id}`,
+        workflowRunId: checkpoint.run_id,
+        actor: checkpoint.actor,
       });
       if (localUndo.ok) {
         result.applied += 1;
@@ -1883,6 +2249,9 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
             const localUndo = applyLocalUndoOperation({
               operation: 'delete_record',
               recordId,
+              parentActionId: `${parentActionId}:${step.id}:${recordId}`,
+              workflowRunId: checkpoint.run_id,
+              actor: checkpoint.actor,
             });
             if (localUndo.ok) {
               result.applied += 1;
@@ -1912,6 +2281,9 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
             const localUndo = applyLocalUndoOperation({
               operation: nestedTool === 'archive_record' ? 'restore_after_archive' : 'restore_after_update',
               record: nestedRecord,
+              parentActionId: `${parentActionId}:${step.id}:${nestedRecordId}`,
+              workflowRunId: checkpoint.run_id,
+              actor: checkpoint.actor,
             });
             if (localUndo.ok) {
               result.applied += 1;
@@ -2052,7 +2424,7 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
       return failUndo(`Workflow checkpoint ${checkpointRunId} not found.`);
     }
 
-    const undoResult = applyWorkflowCheckpointUndo(checkpoint);
+    const undoResult = applyWorkflowCheckpointUndo(checkpoint, actionId);
     if (undoResult.errors.length > 0) {
       return failUndo(`Undo workflow checkpoint failed: ${undoResult.errors.join('; ')}`, {
         workflow_undo: {
@@ -2094,6 +2466,8 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     operation,
     recordId: payload.record_id || payload.target_id,
     record: record as McpRecord | null,
+    parentActionId: actionId,
+    actor: action.actor,
   });
   if (!localUndo.ok) {
     return failUndo(localUndo.receipt.message, {
@@ -2139,5 +2513,5 @@ export function listActionEvents(): ActionEvent[] {
 }
 
 export function touch() {
-  persistStore();
+  mutateCanonicalStore(() => persistStore());
 }

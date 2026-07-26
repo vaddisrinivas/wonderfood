@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -221,5 +222,43 @@ startReactiveRuntimeWorker({
 await waitFor(() => readRuntime().outbox.items['runtime-proposal']?.status === 'acked');
 assert.deepEqual(approvalResumeSeen, ['runtime-proposal']);
 stopReactiveRuntimeWorker();
+
+writeRuntime(baseOutbox);
+try {
+  unlinkSync(leasePath);
+} catch {
+  // No lease is the expected clean starting state.
+}
+const resultPath = join(dir, 'lease-executions.txt');
+const leaseFixturePath = join(process.cwd(), 'server', 'test', 'fixtures', 'reactive-lease-worker-process.ts');
+const tsxPath = join(process.cwd(), 'server', 'node_modules', '.bin', 'tsx');
+await Promise.all(Array.from({ length: 8 }, (_, worker) => new Promise<void>((resolve, reject) => {
+  const child = spawn(tsxPath, [leaseFixturePath], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      LIFEOS_REACTIVE_RUNTIME_PATH: runtimePath,
+      LIFEOS_REACTIVE_LEASE_RESULT_PATH: resultPath,
+      LIFEOS_REACTIVE_LEASE_WORKER_ID: String(worker),
+      LIFEOS_REACTIVE_WORKER_POLL_INTERVAL_MS: '25',
+      LIFEOS_REACTIVE_WORKER_LEASE_TTL_MS: '500',
+      LIFEOS_REACTIVE_WORKER_HEARTBEAT_MS: '100',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += String(chunk);
+  });
+  child.once('error', reject);
+  child.once('exit', (code) => {
+    if (code === 0) resolve();
+    else reject(new Error(`reactive worker ${worker} exited ${code}: ${stderr}`));
+  });
+})));
+const executions = readFileSync(resultPath, 'utf-8').trim().split('\n').filter(Boolean);
+assert.equal(executions.length, 1, `exclusive lease must execute once; got ${executions.join(', ')}`);
+assert.match(executions[0]!, /^\d:runtime-proposal$/);
+assert.equal(readRuntime().outbox.items['runtime-proposal']?.status, 'acked');
 
 console.log('reactive-runtime-worker: passed');

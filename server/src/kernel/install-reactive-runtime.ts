@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
@@ -233,16 +233,53 @@ function writeLease(path: string, lease: ReactiveRuntimeLease): void {
   }
 }
 
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withLeaseGuard<T>(path: string, mutate: () => T): T {
+  const guardPath = `${path}.guard`;
+  const deadline = Date.now() + 2_000;
+  mkdirSync(dirname(path), { recursive: true });
+  while (true) {
+    try {
+      mkdirSync(guardPath);
+      break;
+    } catch (error) {
+      try {
+        if (Date.now() - statSync(guardPath).mtimeMs > 10_000) {
+          rmSync(guardPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      if (Date.now() >= deadline) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Timed out waiting for reactive lease guard ${guardPath}: ${detail}`);
+      }
+      sleepSync(5);
+    }
+  }
+  try {
+    return mutate();
+  } finally {
+    rmSync(guardPath, { recursive: true, force: true });
+  }
+}
+
 function clearLease(path: string, ownerId?: string): void {
-  const lease = readLease(path);
-  if (!lease) {
+  withLeaseGuard(path, () => {
+    const lease = readLease(path);
+    if (!lease) {
+      unlinkIfExists(path);
+      return;
+    }
+    if (ownerId && lease.ownerId !== ownerId) {
+      return;
+    }
     unlinkIfExists(path);
-    return;
-  }
-  if (ownerId && lease.ownerId !== ownerId) {
-    return;
-  }
-  unlinkIfExists(path);
+  });
 }
 
 function unlinkIfExists(path: string): void {
@@ -256,38 +293,55 @@ function unlinkIfExists(path: string): void {
 }
 
 function tryAcquireLease(worker: ReactiveRuntimeWorker, now = Date.now()): { acquired: boolean; retryMs: number } {
-  const lease = readLease(worker.leasePath);
-  if (lease && lease.ownerId !== worker.ownerId && Date.parse(lease.expiresAt) > now) {
+  return withLeaseGuard(worker.leasePath, () => {
+    const lease = readLease(worker.leasePath);
+    if (lease && lease.ownerId !== worker.ownerId && Date.parse(lease.expiresAt) > now) {
+      return {
+        acquired: false,
+        retryMs: Math.max(250, Date.parse(lease.expiresAt) - now),
+      };
+    }
+    const acquiredAt = lease?.ownerId === worker.ownerId ? lease.acquiredAt : new Date(now).toISOString();
+    writeLease(worker.leasePath, {
+      ownerId: worker.ownerId,
+      acquiredAt,
+      heartbeatAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + worker.leaseTtlMs).toISOString(),
+    });
+    const written = readLease(worker.leasePath);
     return {
-      acquired: false,
-      retryMs: Math.max(250, Date.parse(lease.expiresAt) - now),
+      acquired: written?.ownerId === worker.ownerId,
+      retryMs: worker.pollIntervalMs,
     };
-  }
-  const acquiredAt = lease?.ownerId === worker.ownerId ? lease.acquiredAt : new Date(now).toISOString();
-  writeLease(worker.leasePath, {
-    ownerId: worker.ownerId,
-    acquiredAt,
-    heartbeatAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + worker.leaseTtlMs).toISOString(),
   });
-  const written = readLease(worker.leasePath);
-  return {
-    acquired: written?.ownerId === worker.ownerId,
-    retryMs: worker.pollIntervalMs,
-  };
 }
 
-function renewLease(worker: ReactiveRuntimeWorker): void {
-  if (worker.stopped) return;
-  const lease = readLease(worker.leasePath);
-  if (lease && lease.ownerId !== worker.ownerId && Date.parse(lease.expiresAt) > Date.now()) {
-    return;
-  }
-  writeLease(worker.leasePath, {
-    ownerId: worker.ownerId,
-    acquiredAt: lease?.ownerId === worker.ownerId ? lease.acquiredAt : new Date().toISOString(),
-    heartbeatAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + worker.leaseTtlMs).toISOString(),
+function renewLease(worker: ReactiveRuntimeWorker): boolean {
+  if (worker.stopped) return false;
+  return withLeaseGuard(worker.leasePath, () => {
+    const lease = readLease(worker.leasePath);
+    if (!lease || lease.ownerId !== worker.ownerId) {
+      return false;
+    }
+    const now = Date.now();
+    writeLease(worker.leasePath, {
+      ownerId: worker.ownerId,
+      acquiredAt: lease.acquiredAt,
+      heartbeatAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + worker.leaseTtlMs).toISOString(),
+    });
+    return readLease(worker.leasePath)?.ownerId === worker.ownerId;
+  });
+}
+
+function ownsLiveLease(worker: ReactiveRuntimeWorker): boolean {
+  return withLeaseGuard(worker.leasePath, () => {
+    const lease = readLease(worker.leasePath);
+    return Boolean(
+      lease
+      && lease.ownerId === worker.ownerId
+      && Date.parse(lease.expiresAt) > Date.now(),
+    );
   });
 }
 
@@ -295,7 +349,10 @@ function ensureHeartbeat(worker: ReactiveRuntimeWorker): void {
   if (worker.heartbeat) return;
   worker.heartbeat = setInterval(() => {
     try {
-      renewLease(worker);
+      if (!renewLease(worker) && worker.heartbeat) {
+        clearInterval(worker.heartbeat);
+        worker.heartbeat = null;
+      }
     } catch {
       // The next wake will attempt to reacquire.
     }
@@ -334,11 +391,20 @@ async function runWorkerPass(worker: ReactiveRuntimeWorker): Promise<void> {
       return;
     }
     ensureHeartbeat(worker);
+    if (!ownsLiveLease(worker)) {
+      scheduleWorker(worker, worker.pollIntervalMs);
+      return;
+    }
     drainOperationCommitOutbox({ maxItems: worker.maxItemsPerDrain });
     recoverRuntimeOutbox(worker.path);
     const result = await drainReactiveRuntimeOutbox({
       path: worker.path,
-      executeProposal: worker.executeProposal,
+      executeProposal: async (item) => {
+        if (!ownsLiveLease(worker)) {
+          return { ok: false, error: 'reactive_worker_lease_lost' };
+        }
+        return worker.executeProposal(item);
+      },
       maxItems: worker.maxItemsPerDrain,
       retryDelayMs: worker.retryDelayMs,
     });

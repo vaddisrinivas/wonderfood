@@ -4,7 +4,6 @@ import { readMcpResource } from './resources';
 import {
   WorkflowDocument,
   createActionEvent,
-  createRecord,
   createRecordWithAction,
   findActionByIdempotencyKey,
   findRecord,
@@ -16,8 +15,6 @@ import {
   runUndo,
   updateRecordWithAction,
   archiveRecordWithAction,
-  updateRecord,
-  archiveRecord,
   listWorkflows,
   ActionEvent,
   McpRecord,
@@ -1379,26 +1376,52 @@ async function runWorkflowStep(
       };
     }
 
-    const record = createRecord({
-      id: recordId,
+    const mutationKey = `workflow-step:${options?.seed || deterministicHash({
+      workflow: workflow.id,
+      run: context.workflowRunId,
+      tool,
+      recordId,
+    })}`;
+    const write = createRecordWithAction({
+      actionId: mutationKey,
+      actor,
       domain,
-      collection,
-      title,
-      properties,
-      relations: isObject(relations[0] as object) ? (relations as McpRecord['relations']) : [],
-      source: {
-        provider: source.source.provider,
-        external_id: source.source.external_id,
-        url: source.source.url,
-        observed_at: source.source.observed_at,
-        content_hash: source.source.content_hash,
+      tool: 'workflow_create_record',
+      risk: 'standard',
+      command: commandText,
+      record: {
+        id: recordId,
+        domain,
+        collection,
+        title,
+        properties,
+        relations: isObject(relations[0] as object) ? (relations as McpRecord['relations']) : [],
+        source: {
+          provider: source.source.provider,
+          external_id: source.source.external_id,
+          url: source.source.url,
+          observed_at: source.source.observed_at,
+          content_hash: source.source.content_hash,
+        },
+        archived_at: null,
       },
-      archived_at: null,
-    } as Omit<McpRecord, 'created_at' | 'updated_at'>);
+      idempotencyKey: mutationKey,
+      operationId: `${mutationKey}:operation`,
+      causeId: context.workflowRunId || mutationKey,
+    });
+    const record = write.record;
+    if (write.action.status !== 'completed' || !record) {
+      return {
+        status: 'failed',
+        tool,
+        stepResult: { error: 'canonical workflow create failed', action: write.action },
+        changedRecords: [],
+      };
+    }
     return {
       status: 'ok',
       tool,
-      stepResult: { id: record.id, after: record, source_snapshot: source.source_snapshot },
+      stepResult: { id: record.id, after: record, source_snapshot: source.source_snapshot, action_id: write.action.id },
       changedRecords: [record.id],
     };
   }
@@ -1560,26 +1583,46 @@ async function runWorkflowStep(
       };
     }
 
-    const updated = updateRecord(id, {
-      ...patch,
-      title: updatedTitle || existing.title,
-      properties,
-      relations,
+    const mutationKey = `workflow-step:${options?.seed || deterministicHash({
+      workflow: workflow.id,
+      run: context.workflowRunId,
+      tool,
+      id,
+    })}`;
+    const write = updateRecordWithAction({
+      actionId: mutationKey,
+      actor,
+      domain,
+      tool: 'workflow_update_record',
+      risk: 'standard',
+      command: commandText,
+      id,
+      patch: {
+        ...patch,
+        title: updatedTitle || existing.title,
+        properties,
+        relations,
+      } as Partial<McpRecord>,
       ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
-    } as Partial<McpRecord>);
-    if (!updated) {
-      return { status: 'failed', tool, stepResult: { error: 'record_not_found', id }, changedRecords: [] };
+      idempotencyKey: mutationKey,
+      expectedRevision: existing.revision,
+      operationId: `${mutationKey}:operation`,
+      causeId: context.workflowRunId || mutationKey,
+    });
+    if (write.action.status !== 'completed' || !write.record) {
+      return { status: 'failed', tool, stepResult: { error: 'canonical workflow update failed', action: write.action }, changedRecords: [] };
     }
 
     return {
       status: 'ok',
       tool,
       stepResult: {
-        before: updated.before,
-        after: updated.after,
+        before: existing,
+        after: write.record,
         source_snapshot: source.source_snapshot,
+        action_id: write.action.id,
       },
-      changedRecords: [updated.after.id],
+      changedRecords: [write.record.id],
     };
   }
 
@@ -1710,22 +1753,39 @@ async function runWorkflowStep(
       };
     }
 
-    const result = archiveRecord(id);
-    if (!result) {
-      return { status: 'failed', tool, stepResult: { error: 'record_not_found', id }, changedRecords: [] };
+    const mutationKey = `workflow-step:${options?.seed || deterministicHash({
+      workflow: workflow.id,
+      run: context.workflowRunId,
+      tool,
+      id,
+    })}`;
+    const write = archiveRecordWithAction({
+      actionId: mutationKey,
+      actor,
+      domain,
+      tool: 'workflow_archive_record',
+      risk: 'standard',
+      command: commandText,
+      id,
+      ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
+      idempotencyKey: mutationKey,
+      expectedRevision: existing.revision,
+      operationId: `${mutationKey}:operation`,
+      causeId: context.workflowRunId || mutationKey,
+    });
+    if (write.action.status !== 'completed' || !write.record) {
+      return { status: 'failed', tool, stepResult: { error: 'canonical workflow archive failed', action: write.action }, changedRecords: [] };
     }
     return {
       status: 'ok',
       tool,
       stepResult: {
-        before: result.before,
-        after: {
-          ...result.after,
-          source: dataHome === 'local_sqlite' ? result.after.source : source.source,
-        },
+        before: existing,
+        after: write.record,
         source_snapshot: source.source_snapshot,
+        action_id: write.action.id,
       },
-      changedRecords: [result.after.id],
+      changedRecords: [write.record.id],
     };
   }
 

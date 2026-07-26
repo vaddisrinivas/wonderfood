@@ -39,6 +39,8 @@ function applyCompensationLocalUndo(input: {
     operation: input.operation,
     recordId: input.action.recordId,
     record: input.record ?? input.action.record,
+    workflowRunId: input.action.workflowRunId,
+    actor: 'workflow',
   });
   if (localUndo.ok) {
     return { ok: true };

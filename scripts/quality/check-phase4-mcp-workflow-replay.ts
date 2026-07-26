@@ -149,6 +149,19 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
   if (checkpoint.steps.length < 2) {
     fail(`expected checkpoint to contain at least two steps, got ${checkpoint.steps.length}`);
   }
+  const stepActionIds = checkpoint.steps
+    .map((step) => step.result && typeof step.result === 'object'
+      ? String((step.result as { action_id?: unknown }).action_id ?? '')
+      : '')
+    .filter(Boolean);
+  assert(stepActionIds.length === changedRecords.length, 'every workflow mutation must emit a canonical child action');
+  for (const childActionId of stepActionIds) {
+    assert(state.getActionEvent(childActionId)?.status === 'completed', `workflow child action ${childActionId} must complete`);
+  }
+  const childOperationIds = new Set(state.listOperationCommitOutbox().map((item) => item.event.operationId));
+  for (const childActionId of stepActionIds) {
+    assert(childOperationIds.has(`${childActionId}:operation`), `workflow child action ${childActionId} must enqueue a commit event`);
+  }
 
   const runReplayToolResult = await callTool(tools, 'wonderfood.run_workflow', {
     actor: 'hearth',
@@ -184,6 +197,12 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
       fail(`record ${id} should have been undone`);
     }
   }
+  const canonicalUndoActions = state.listActionEvents().filter((action) =>
+    action.id.startsWith(`canonical-undo:${runPayload.action?.id}:`)
+    || action.source_ids.includes(runPayload.action?.id ?? '')
+  );
+  assert(canonicalUndoActions.length === changedRecords.length, 'workflow undo must emit one canonical mutation action per record');
+  assert(canonicalUndoActions.every((action) => action.status === 'completed'), 'canonical workflow undo actions must complete');
 
   const failureActionId = `${actionId}-failure`;
   const compensationRun = await callTool(tools, 'wonderfood.run_workflow', {
@@ -234,6 +253,8 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
       checkpoint_run_id: checkpointRunId,
       checkpoint_status: checkpoint.status,
       checkpoint_steps: checkpoint.steps.length,
+      canonical_step_actions: stepActionIds,
+      canonical_undo_actions: canonicalUndoActions.map((action) => action.id),
       run_replayed: runReplayPayload.replayed === true,
       run_action_stable: runReplayPayload.action?.id === runPayload.action.id,
       undo_replayed: undoReplay.replayed === true,
