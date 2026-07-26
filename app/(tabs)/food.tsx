@@ -16,7 +16,7 @@ import { importRecoverySnapshot } from '@/src/db/recovery';
 import { applyOperation } from '@/src/ops/apply';
 import { undoOperation } from '@/src/ops/undo';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
-import { colors, radius, useLifeOSTheme } from '@/src/theme';
+import { colors, radius, shadow, useLifeOSTheme } from '@/src/theme';
 import { recordWorkflowStep, startWorkflowRun } from '@/src/workflows/runtime';
 
 type FoodRecordView = DomainRecordViewModel;
@@ -34,7 +34,7 @@ const FOOD_MODES: Array<{ id: FoodMode; label: string; glyph: string }> = [
 const fallbackMeals = [
   { title: 'Breakfast: Greek yogurt bowl', detail: 'Blueberries, walnuts, honey. Protein estimate pending review.', badge: '+22g protein', tone: 'moss' as const },
   { title: 'Lunch: Chickpea spinach wraps', detail: 'Use spinach before Sunday; add tomatoes from shopping list.', badge: 'use first', tone: 'amber' as const },
-  { title: 'Dinner: Salmon rice bowls', detail: 'Receipt draft matched salmon, cucumber, rice vinegar.', badge: 'draft', tone: 'red' as const },
+  { title: 'Dinner: Salmon rice bowls', detail: 'Receipt matched salmon, cucumber, and a tiny rice-vinegar gap.', badge: 'tonight', tone: 'plum' as const },
 ];
 
 const fallbackKitchen = [
@@ -42,7 +42,7 @@ const fallbackKitchen = [
   { title: 'Salmon fillets', detail: 'Freezer. Receipt confidence 92%. 1.4 lb estimated.', badge: 'new', tone: 'moss' as const },
   { title: 'Greek yogurt', detail: 'Opened yesterday. Protein value reviewed by user.', badge: 'reviewed', tone: 'moss' as const },
   { title: 'Chickpeas', detail: 'Pantry. 3 cans. Recipe match: spinach wraps.', badge: '3 cans', tone: 'blue' as const },
-  { title: 'Blueberries', detail: 'Fridge. Price captured from receipt draft.', badge: '$3.99', tone: 'red' as const },
+  { title: 'Blueberries', detail: 'Fridge. Sweet breakfast upgrade, already matched from receipt.', badge: '$3.99', tone: 'plum' as const },
 ];
 
 const fallbackShop = [
