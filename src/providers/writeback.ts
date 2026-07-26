@@ -28,6 +28,7 @@ export type ProviderWritebackResult =
 export type ProviderWriteDeliveryResult =
   | { status: 'delivered'; event_id: string; provider: DirectSyncProvider; statusCode: number; readback: Record<string, unknown> }
   | { status: 'blocked'; event_id: string; provider?: DirectSyncProvider; reason: string }
+  | { status: 'pending_verification'; event_id: string; provider: DirectSyncProvider; statusCode: number; reason: string }
   | { status: 'failed'; event_id: string; provider: DirectSyncProvider; statusCode: number; reason: string };
 
 type FetchLike = (url: string, init: {
@@ -340,21 +341,48 @@ export async function deliverProviderWriteEvent(input: {
     return { status: 'blocked', event_id: input.event.id, provider: payload.provider, reason: request.blocked ?? 'provider_config_missing' };
   }
   const fetcher = input.fetcher ?? fetch;
-  const response = await fetcher(request.url, request.init);
+  let response: { ok: boolean; status: number; text: () => Promise<string> };
+  try {
+    response = await fetcher(request.url, request.init);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const hasTimeout = reason.toLowerCase().includes('timeout') || reason.toLowerCase().includes('timed out') || reason.toLowerCase().includes('abort');
+    const finalReason = hasTimeout ? 'provider_writeback_readback_timeout' : `provider_writeback_unknown_write_error:${reason}`;
+    await markOutboxEvent(input.db, input.event.id, { status: 'pending', last_error: finalReason, attemptsDelta: 1 });
+    return { status: 'pending_verification', event_id: input.event.id, provider: payload.provider, statusCode: 0, reason: finalReason };
+  }
+
   const bodyText = await response.text().catch(() => '');
   if (response.ok) {
-    const verified = await verifyProviderWriteback({
-      payload,
-      settings: input.settings,
-      writeBody: parseJsonText(bodyText),
-      fetcher,
-    });
-    if (!verified.ok) {
-      await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: verified.reason, attemptsDelta: 1 });
-      return { status: 'failed', event_id: input.event.id, provider: payload.provider, statusCode: verified.statusCode || response.status, reason: verified.reason };
+    try {
+      const verified = await verifyProviderWriteback({
+        payload,
+        settings: input.settings,
+        writeBody: parseJsonText(bodyText),
+        fetcher,
+      });
+      if (!verified.ok) {
+        const isDeterministicMismatch = verified.reason === 'provider_writeback_readback_title_mismatch'
+          || verified.reason === 'provider_writeback_readback_archive_mismatch'
+          || verified.reason === 'provider_writeback_readback_row_mismatch'
+          || verified.reason === 'provider_writeback_readback_missing_page_id';
+        if (!isDeterministicMismatch && (verified.statusCode >= 500 || verified.statusCode === 0 || verified.reason.toLowerCase().includes('timeout'))) {
+          await markOutboxEvent(input.db, input.event.id, { status: 'pending', last_error: verified.reason, attemptsDelta: 1 });
+          return { status: 'pending_verification', event_id: input.event.id, provider: payload.provider, statusCode: verified.statusCode || response.status, reason: verified.reason };
+        }
+        await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: verified.reason, attemptsDelta: 1 });
+        return { status: 'failed', event_id: input.event.id, provider: payload.provider, statusCode: verified.statusCode || response.status, reason: verified.reason };
+      }
+      await markOutboxEvent(input.db, input.event.id, { status: 'done', last_error: null });
+      return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status, readback: verified.snapshot };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const finalReason = reason.toLowerCase().includes('timeout')
+        ? 'provider_writeback_readback_timeout'
+        : `provider_writeback_readback_unknown:${reason}`;
+      await markOutboxEvent(input.db, input.event.id, { status: 'pending', last_error: finalReason, attemptsDelta: 1 });
+      return { status: 'pending_verification', event_id: input.event.id, provider: payload.provider, statusCode: 0, reason: finalReason };
     }
-    await markOutboxEvent(input.db, input.event.id, { status: 'done', last_error: null });
-    return { status: 'delivered', event_id: input.event.id, provider: payload.provider, statusCode: response.status, readback: verified.snapshot };
   }
   const reason = bodyText.slice(0, 240) || `HTTP ${response.status}`;
   await markOutboxEvent(input.db, input.event.id, { status: 'failed', last_error: reason, attemptsDelta: 1 });

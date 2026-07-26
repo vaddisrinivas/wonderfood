@@ -231,6 +231,49 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_title_mismatch');
   });
 
+  it('keeps Notion delivery pending verification on timeout during write or readback', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-notion-timeout');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'notion', opId: 'writeback-deliver-notion-timeout' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+
+    const writeTimeout = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async () => {
+        throw new Error('request timed out');
+      },
+      platform: 'native',
+    });
+
+    expect(writeTimeout.status).toBe('pending_verification');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('pending');
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_timeout');
+
+    const readTimeout = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        notion: { enabled: true, token: 'test-token', pageId: '', dataSourceIds: 'ds-1' },
+      },
+      fetcher: async (url, init) => {
+        if (init.method === 'GET') throw new Error('request timed out');
+        return jsonResponse({ id: 'notion-page-1' });
+      },
+      platform: 'native',
+    });
+
+    expect(readTimeout.status).toBe('pending_verification');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('pending');
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_timeout');
+  });
+
   it('delivers Notion archive as a trash request against the provider page id', async () => {
     const db = new MemoryDb();
     const created = await createRecord(db, 'writeback-deliver-notion-archive-create');
@@ -369,6 +412,32 @@ describe('enqueueProviderWriteForOperation', () => {
     expect(failed.status).toBe('failed');
     expect(db.outbox.get(queued.event.id)?.status).toBe('failed');
     expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_row_mismatch');
+  });
+
+  it('keeps Sheets delivery pending verification when readback cannot be verified', async () => {
+    const db = new MemoryDb();
+    await createRecord(db, 'writeback-deliver-sheets-timeout');
+    const queued = await enqueueProviderWriteForOperation({ db: db as any, provider: 'google_sheets', opId: 'writeback-deliver-sheets-timeout' });
+    expect(queued.status).toBe('queued');
+    if (queued.status !== 'queued') throw new Error('expected queued writeback');
+
+    const pending = await deliverProviderWriteEvent({
+      db: db as any,
+      event: queued.event,
+      settings: {
+        ...defaultLifeOSSettings,
+        sheets: { enabled: true, token: 'sheet-token', workbookId: 'book-1', sheetName: 'LifeOS Canonical' },
+      },
+      fetcher: async (url, init) => {
+        if (init.method === 'GET') throw new Error('network timeout');
+        return jsonResponse(sheetsAppendResponse());
+      },
+      platform: 'native',
+    });
+
+    expect(pending.status).toBe('pending_verification');
+    expect(db.outbox.get(queued.event.id)?.status).toBe('pending');
+    expect(db.outbox.get(queued.event.id)?.last_error).toBe('provider_writeback_readback_timeout');
   });
 
   it('blocks browser delivery and marks failed provider responses', async () => {
