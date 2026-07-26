@@ -15,13 +15,50 @@ import type {
   WorkflowStepReceipt,
   WorkflowStepStatus,
 } from '@/packages/shared/contracts/workflow';
+import { computeInverse } from '@/src/ops/inverse';
+import type { Operation } from '@/src/ops/operation';
+import { transitionWorkflow, WorkflowControlEvent, WorkflowControlState } from '@/server/src/workflows/control-machine';
+import type { CanonicalRecord } from '@/packages/shared/contracts/records';
 
 export type WorkflowRunSnapshot = {
   row: WorkflowRunRow;
   checkpoint: WorkflowCheckpointPayload;
 };
 
+export type WorkflowCompensationProposal = {
+  run_id: string;
+  workflow_id: string;
+  control_state: WorkflowControlState;
+  proposals: Operation[];
+};
+
 const VERSION = 'lifeos.workflow-run.v1' as const;
+
+type WorkflowOperationRow = {
+  op_id: string;
+  kind: string;
+  domain: string;
+  collection: string;
+  record_id: string;
+  expected_revision: number | null;
+  actor: string;
+  origin: string;
+  idempotency_key: string | null;
+  changes_json: string | null;
+  before_json: string | null;
+  after_json: string | null;
+  status: string;
+};
+
+type RuntimeCheckpoint = WorkflowCheckpointPayload & {
+  workflow_control_state?: WorkflowControlState;
+};
+
+type RowStatusOptions = 'running' | 'completed' | 'cancelled' | 'failed';
+
+const FAILED_REASONS = {
+  NOT_CANCEL_SAFE: 'Step is not cancellation safe.',
+};
 
 export async function startWorkflowRun(input: {
   db: SQLiteDatabase;
@@ -32,7 +69,7 @@ export async function startWorkflowRun(input: {
   steps: WorkflowStepDefinition[];
 }): Promise<WorkflowRunSnapshot> {
   const now = new Date().toISOString();
-  const checkpoint: WorkflowCheckpointPayload = {
+  const checkpoint: RuntimeCheckpoint = {
     schema_version: VERSION,
     run_id: input.id,
     domain: input.domain,
@@ -50,6 +87,7 @@ export async function startWorkflowRun(input: {
     source_ids: [],
     created_at: now,
     updated_at: now,
+    workflow_control_state: 'running',
   };
   const row = await createWorkflowRun(input.db, {
     id: input.id,
@@ -71,6 +109,24 @@ export async function getWorkflowRunSnapshot(
   return { row, checkpoint: checkpointFromRow(row) };
 }
 
+export async function pauseWorkflowRun(input: {
+  db: SQLiteDatabase;
+  runId: string;
+}): Promise<WorkflowRunSnapshot> {
+  const snapshot = await requireSnapshot(input.db, input.runId);
+  const state = controlStateFromSnapshot(snapshot);
+  if (state === 'completed' || state === 'cancelled') return snapshot;
+  const nextState = transitionWorkflowSafe(state, 'PAUSE');
+  if (!nextState || nextState === state) return snapshot;
+
+  const checkpoint = checkpointWithControlState(snapshot.checkpoint, nextState);
+  await updateWorkflowRun(input.db, input.runId, {
+    status: toRowStatus(nextState),
+    payload: checkpoint,
+  });
+  return requireSnapshot(input.db, input.runId);
+}
+
 export async function recordWorkflowStep(input: {
   db: SQLiteDatabase;
   runId: string;
@@ -80,7 +136,8 @@ export async function recordWorkflowStep(input: {
   error?: string;
 }): Promise<WorkflowRunSnapshot> {
   const snapshot = await requireSnapshot(input.db, input.runId);
-  if (snapshot.row.status === 'completed' || snapshot.row.status === 'cancelled' || snapshot.row.status === 'failed') {
+  const controlState = controlStateFromSnapshot(snapshot);
+  if (snapshot.row.status === 'completed' || snapshot.row.status === 'cancelled' || snapshot.row.status === 'failed' || controlState === 'paused') {
     throw new Error(`Workflow run is ${snapshot.row.status}; resume before recording more steps.`);
   }
   const checkpoint = cloneCheckpoint(snapshot.checkpoint);
@@ -108,9 +165,58 @@ export async function recordWorkflowStep(input: {
 
   checkpoint.cursor = nextCursor(checkpoint.steps);
   checkpoint.updated_at = now;
+
   const status = workflowStatus(checkpoint.steps, input.status);
-  await updateWorkflowRun(input.db, input.runId, { status, payload: checkpoint });
+  const event = nextControlEventFromStepStatus(input.status, status);
+  const nextControlState = event ? transitionWorkflowSafe(controlState, event) : null;
+  const nextStatus = nextControlState ? toRowStatus(nextControlState) : status;
+  const nextCheckpoint = checkpointWithControlState(checkpoint, nextControlState ?? controlState);
+  await updateWorkflowRun(input.db, input.runId, { status: nextStatus, payload: nextCheckpoint });
   return requireSnapshot(input.db, input.runId);
+}
+
+export async function proposeWorkflowCompensation(input: {
+  db: SQLiteDatabase;
+  runId: string;
+}): Promise<WorkflowCompensationProposal> {
+  const snapshot = await requireSnapshot(input.db, input.runId);
+  const controlState = controlStateFromSnapshot(snapshot);
+
+  if (controlState === 'running' || controlState === 'paused' || controlState === 'cancelled') {
+    throw new Error(`Cannot propose compensation for workflow in ${controlState} state.`);
+  }
+
+  let nextState = controlState;
+  if (controlState === 'failed') {
+    nextState = 'compensating';
+  } else if (controlState !== 'compensating' && controlState !== 'compensated') {
+    const compensatedState = transitionWorkflowSafe(controlState, 'COMPENSATE');
+    if (!compensatedState) {
+      throw new Error(`Cannot propose compensation for workflow in ${controlState} state.`);
+    }
+    if (compensatedState === 'running' || compensatedState === 'paused' || compensatedState === 'cancelled') {
+      throw new Error(`Cannot propose compensation for workflow in ${controlState} state.`);
+    }
+    nextState = compensatedState;
+  }
+
+  if (nextState !== controlState) {
+    const controlCheckpoint = checkpointWithControlState(snapshot.checkpoint, nextState);
+    await updateWorkflowRun(input.db, input.runId, {
+      status: toRowStatus(nextState),
+      payload: controlCheckpoint,
+    });
+  }
+
+  const refreshed = await requireSnapshot(input.db, input.runId);
+  const proposals = await buildCompensationProposals(input.db, refreshed.checkpoint);
+  const finalState = controlStateFromSnapshot(refreshed);
+  return {
+    run_id: refreshed.row.id,
+    workflow_id: refreshed.row.workflow_id,
+    control_state: finalState,
+    proposals,
+  };
 }
 
 export async function cancelWorkflowRun(input: {
@@ -120,16 +226,19 @@ export async function cancelWorkflowRun(input: {
 }): Promise<WorkflowRunSnapshot> {
   const snapshot = await requireSnapshot(input.db, input.runId);
   if (snapshot.row.status === 'completed') return snapshot;
+  const controlState = controlStateFromSnapshot(snapshot);
 
   const checkpoint = cloneCheckpoint(snapshot.checkpoint);
   const now = new Date().toISOString();
+  let hasUnsafeStep = false;
   for (const step of checkpoint.steps) {
     if (step.status === 'pending' || step.status === 'running') {
       step.status = step.cancellable === false ? 'failed' : 'cancelled';
       if (step.status === 'cancelled') step.cancelled_at = now;
       if (step.status === 'failed') {
+        hasUnsafeStep = true;
         step.failed_at = now;
-        step.error = 'Step is not cancellation safe.';
+        step.error = FAILED_REASONS.NOT_CANCEL_SAFE;
       }
     }
   }
@@ -138,8 +247,12 @@ export async function cancelWorkflowRun(input: {
   checkpoint.updated_at = now;
   checkpoint.cursor = nextCursor(checkpoint.steps);
 
-  const status = checkpoint.steps.some((step) => step.status === 'failed') ? 'failed' : 'cancelled';
-  await updateWorkflowRun(input.db, input.runId, { status, payload: checkpoint });
+  const nextState = transitionWorkflowSafe(controlState, hasUnsafeStep ? 'FAIL' : 'CANCEL') ?? controlState;
+
+  await updateWorkflowRun(input.db, input.runId, {
+    status: toRowStatus(nextState),
+    payload: checkpointWithControlState(checkpoint, nextState),
+  });
   return requireSnapshot(input.db, input.runId);
 }
 
@@ -149,6 +262,8 @@ export async function resumeWorkflowRun(input: {
 }): Promise<WorkflowRunSnapshot> {
   const snapshot = await requireSnapshot(input.db, input.runId);
   if (snapshot.row.status === 'completed') return snapshot;
+  const controlState = controlStateFromSnapshot(snapshot);
+  const baseControlState = controlState === 'cancelled' ? 'paused' : controlState;
 
   const checkpoint = cloneCheckpoint(snapshot.checkpoint);
   const now = new Date().toISOString();
@@ -168,7 +283,14 @@ export async function resumeWorkflowRun(input: {
   delete checkpoint.cancel_reason;
   delete checkpoint.failure_reason;
 
-  await updateWorkflowRun(input.db, input.runId, { status: 'running', payload: checkpoint });
+  const nextControlState =
+    transitionWorkflowSafe(baseControlState, 'RESUME')
+    ?? (baseControlState === 'failed' ? 'running' : baseControlState);
+
+  await updateWorkflowRun(input.db, input.runId, {
+    status: toRowStatus(nextControlState),
+    payload: checkpointWithControlState(checkpoint, nextControlState),
+  });
   return requireSnapshot(input.db, input.runId);
 }
 
@@ -202,7 +324,7 @@ async function requireSnapshot(db: SQLiteDatabase, runId: string): Promise<Workf
 }
 
 function checkpointFromRow(row: WorkflowRunRow): WorkflowCheckpointPayload {
-  const parsed = row.payload_json ? safeParse(row.payload_json) : null;
+  const parsed = row.payload_json ? safeParseJson(row.payload_json) : null;
   if (isCheckpointPayload(parsed)) {
     return parsed;
   }
@@ -234,7 +356,7 @@ function isCheckpointPayload(value: unknown): value is WorkflowCheckpointPayload
     && Array.isArray(candidate.source_ids);
 }
 
-function safeParse(raw: string) {
+function safeParseJson(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
@@ -258,6 +380,109 @@ function workflowStatus(
 function nextCursor(steps: WorkflowCheckpointStep[]) {
   const index = steps.findIndex((step) => step.status !== 'completed');
   return index === -1 ? steps.length : index;
+}
+
+function controlStateFromSnapshot(snapshot: WorkflowRunSnapshot): WorkflowControlState {
+  const checkpoint = snapshot.checkpoint as RuntimeCheckpoint;
+  if (checkpoint.workflow_control_state && isWorkflowControlState(checkpoint.workflow_control_state)) {
+    return checkpoint.workflow_control_state;
+  }
+
+  return mapRowStatusToControlState(snapshot.row.status);
+}
+
+function checkpointWithControlState(
+  checkpoint: WorkflowCheckpointPayload,
+  state: WorkflowControlState,
+): WorkflowCheckpointPayload {
+  const withState = cloneCheckpoint(checkpoint);
+  (withState as RuntimeCheckpoint).workflow_control_state = state;
+  return withState;
+}
+
+function isWorkflowControlState(value: unknown): value is WorkflowControlState {
+  return typeof value === 'string' && [
+    'running',
+    'paused',
+    'completed',
+    'failed',
+    'cancelled',
+    'compensating',
+    'compensated',
+  ].includes(value);
+}
+
+function mapRowStatusToControlState(status: RowStatusOptions): WorkflowControlState {
+  if (status === 'completed') return 'completed';
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'failed') return 'failed';
+  return 'running';
+}
+
+function toRowStatus(state: WorkflowControlState): RowStatusOptions {
+  if (state === 'completed') return 'completed';
+  if (state === 'cancelled') return 'cancelled';
+  return state === 'failed' || state === 'compensating' || state === 'compensated' ? 'failed' : 'running';
+}
+
+function transitionWorkflowSafe(state: WorkflowControlState, event: WorkflowControlEvent): WorkflowControlState | null {
+  try {
+    const next = transitionWorkflow(state, event);
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+async function buildCompensationProposals(
+  db: SQLiteDatabase,
+  checkpoint: WorkflowCheckpointPayload,
+): Promise<Operation[]> {
+  const operationIds = Array.from(new Set(checkpoint.completed_operation_ids)).reverse();
+  const proposals: Operation[] = [];
+
+  for (const operationId of operationIds) {
+    const operation = await loadOperationById(db, operationId);
+    if (!operation) continue;
+
+    const row = operation;
+    if (row.status !== 'applied') continue;
+
+    const before = safeParse<CanonicalRecord>(row.before_json);
+    const after = safeParse<CanonicalRecord>(row.after_json);
+    const original = safeParse<Operation>(row.changes_json);
+    if (!original || !after) continue;
+
+    proposals.push(computeInverse(before, original, after));
+  }
+
+  return proposals;
+}
+
+async function loadOperationById(
+  db: SQLiteDatabase,
+  opId: string,
+): Promise<WorkflowOperationRow | null> {
+  return db.getFirstAsync<WorkflowOperationRow>('SELECT * FROM operations WHERE op_id = ?', [opId]);
+}
+
+function nextControlEventFromStepStatus(
+  stepStatus: WorkflowStepStatus,
+  checkpointStatus: WorkflowRunStatus,
+): WorkflowControlEvent | null {
+  if (stepStatus === 'completed' && checkpointStatus === 'completed') return 'COMPLETE';
+  if (stepStatus === 'failed') return 'FAIL';
+  if (stepStatus === 'cancelled') return 'CANCEL';
+  return null;
+}
+
+function safeParse<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 function mergeUnique(target: string[], values?: string[]) {
