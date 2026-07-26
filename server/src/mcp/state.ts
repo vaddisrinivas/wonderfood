@@ -1,4 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
 import { getDomainManifest, loadCatalog } from '../../../src/domain/catalog';
 import type { CanonicalRecord, CanonicalProvenance } from '@/src/domain/runtime';
@@ -7,6 +9,8 @@ import { planOperation } from '@/src/ops/plan';
 import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
 import { executeQuery, QueryPredicate, QuerySort } from '../kernel/query';
 import { notifyOperationCommit } from '../kernel/operation-observer';
+import { readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
+import type { ProviderUndoInput, ProviderUndoResult } from '../providers/undo';
 
 type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
 
@@ -108,17 +112,14 @@ const MCP_STATE_PATH = process.env.LIFEOS_MCP_STATE_PATH ?? join(process.cwd(), 
 const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKFLOW_DIR = join(process.cwd(), 'packages', 'domain-config', 'workflows');
 
+const PROVIDER_UNDO_WORKER_PATH = fileURLToPath(new URL('../providers/undo-worker.ts', import.meta.url));
+const PROVIDER_UNDO_TSX_PATH = join(process.cwd(), 'server', 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
+
 let store: PersistedStore = loadStore();
 let workflowCache: WorkflowDocument[] | null = null;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function ensureDir(path: string) {
-  if (!existsSync(dirname(path))) {
-    mkdirSync(dirname(path), { recursive: true });
-  }
 }
 
 function nowIso(): string {
@@ -202,45 +203,29 @@ function loadStore(): PersistedStore {
     };
   }
 
-  try {
-    const raw = readFileSync(MCP_STATE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isValidStore(parsed)) {
-      return {
-        version: 1,
-        updated_at: nowIso(),
-        records: {},
-        actions: {},
-      };
-    }
-    return {
-      version: 1,
-      updated_at: String(parsed.updated_at),
-      records: parsed.records as Record<string, McpRecord>,
-      actions: Object.fromEntries(
-        Object.entries(parsed.actions as Record<string, ActionEvent>).map(([id, action]) => [id, {
-          ...action,
-          operation_id: action.operation_id || `${action.id || id}:operation`,
-          cause_id: action.cause_id || action.id || id,
-          expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
-          verification_json: action.verification_json ?? null,
-        }]),
-      ),
-    };
-  } catch {
-    return {
-      version: 1,
-      updated_at: nowIso(),
-      records: {},
-      actions: {},
-    };
-  }
+  const parsed = readJsonStateFile(MCP_STATE_PATH, {
+    label: 'MCP runtime state',
+    validate: isValidStore,
+  });
+  return {
+    version: 1,
+    updated_at: String(parsed.updated_at),
+    records: parsed.records as Record<string, McpRecord>,
+    actions: Object.fromEntries(
+      Object.entries(parsed.actions as Record<string, ActionEvent>).map(([id, action]) => [id, {
+        ...action,
+        operation_id: action.operation_id || `${action.id || id}:operation`,
+        cause_id: action.cause_id || action.id || id,
+        expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
+        verification_json: action.verification_json ?? null,
+      }]),
+    ),
+  };
 }
 
 function persistStore() {
-  ensureDir(MCP_STATE_PATH);
   store.updated_at = nowIso();
-  writeFileSync(MCP_STATE_PATH, JSON.stringify(store, null, 2), 'utf-8');
+  writeJsonStateFileAtomic(MCP_STATE_PATH, store);
 }
 
 function getSupportedProviders(): RecordProvider[] {
@@ -388,6 +373,22 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
     persistStore();
   }
   return { ...store.records[next.id] };
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export function deleteRecord(id: string, options: PersistOptions = {}) {
@@ -654,6 +655,15 @@ export type ProviderCanonicalApplyResult = {
   reason?: string;
 };
 
+function normalizeProviderSourceEquality(source: RecordSource) {
+  return {
+    provider: source.provider,
+    external_id: source.external_id,
+    url: source.url,
+    content_hash: source.content_hash,
+  };
+}
+
 /** Apply a provider pull only after the provider adapter has passed its authority checks. */
 export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
   const authority = process.env.LIFEOS_AUTHORITY_PROVIDER?.trim() || 'notion';
@@ -667,7 +677,10 @@ export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInpu
 
   const now = nowIso();
   const existing = store.records[input.id];
-  const record = upsertRecord({
+  const archivedAt = input.archived
+    ? existing?.archived_at ?? now
+    : null;
+  const next = normalizeRecord({
     id: input.id,
     domain: input.domain,
     collection: input.collection,
@@ -678,13 +691,26 @@ export function upsertProviderCanonicalRecord(input: ProviderCanonicalRecordInpu
       provider: input.provider,
       external_id: input.externalId?.trim() || input.id,
       url: input.url ?? null,
-      observed_at: input.observedAt?.trim() || now,
+      observed_at: input.observedAt?.trim() || existing?.source.observed_at || now,
       content_hash: input.contentHash ?? null,
     },
-    archived_at: input.archived ? now : null,
+    archived_at: archivedAt,
     created_at: existing?.created_at ?? now,
     updated_at: now,
   });
+  if (
+    existing
+    && existing.domain === next.domain
+    && existing.collection === next.collection
+    && existing.title === next.title
+    && existing.archived_at === next.archived_at
+    && stableStringify(existing.properties) === stableStringify(next.properties)
+    && stableStringify(existing.relations) === stableStringify(next.relations)
+    && stableStringify(normalizeProviderSourceEquality(existing.source)) === stableStringify(normalizeProviderSourceEquality(next.source))
+  ) {
+    return { applied: true, record: { ...existing } };
+  }
+  const record = upsertRecord(next);
   return { applied: true, record };
 }
 
@@ -1413,6 +1439,123 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function extractActionRecord(value: unknown): McpRecord | null {
+  const direct = asRecord(value);
+  if (!direct) {
+    return null;
+  }
+  if (typeof direct.id === 'string' && typeof direct.domain === 'string' && typeof direct.collection === 'string') {
+    return direct as unknown as McpRecord;
+  }
+  const nested = asRecord(direct.record) || asRecord(direct.after) || asRecord(direct.before);
+  if (nested && typeof nested.id === 'string' && typeof nested.domain === 'string' && typeof nested.collection === 'string') {
+    return nested as unknown as McpRecord;
+  }
+  return null;
+}
+
+function extractProviderSnapshot(action: ActionEvent, payload: Record<string, unknown> | null) {
+  const candidate =
+    asRecord(payload?.provider_snapshot)
+    || asRecord(asRecord(action.after_json)?.source_snapshot)
+    || asRecord(asRecord(action.before_json)?.source_snapshot)
+    || asRecord(asRecord(asRecord(action.after_json)?.record)?.source_snapshot)
+    || asRecord(asRecord(asRecord(action.before_json)?.record)?.source_snapshot);
+  return candidate;
+}
+
+function providerFromUndoContext(input: {
+  payload: Record<string, unknown> | null;
+  beforeRecord: McpRecord | null;
+  afterRecord: McpRecord | null;
+  providerSnapshot: Record<string, unknown> | null;
+}) {
+  const fromSnapshot = asText(input.providerSnapshot?.provider);
+  if (fromSnapshot === 'notion' || fromSnapshot === 'google_sheets') {
+    return fromSnapshot;
+  }
+  const fromBefore = input.beforeRecord?.source.provider;
+  if (fromBefore === 'notion' || fromBefore === 'google_sheets') {
+    return fromBefore;
+  }
+  const fromAfter = input.afterRecord?.source.provider;
+  if (fromAfter === 'notion' || fromAfter === 'google_sheets') {
+    return fromAfter;
+  }
+  const snapshotProvider = asText(input.payload?.provider);
+  return snapshotProvider === 'notion' || snapshotProvider === 'google_sheets' ? snapshotProvider : null;
+}
+
+export function runProviderUndoSync(input: ProviderUndoInput): ProviderUndoResult {
+  try {
+    const command = existsSync(PROVIDER_UNDO_TSX_PATH) ? PROVIDER_UNDO_TSX_PATH : process.execPath;
+    const hasTsx = existsSync(PROVIDER_UNDO_TSX_PATH);
+    const args = hasTsx
+      ? ['--tsconfig', 'tsconfig.json', PROVIDER_UNDO_WORKER_PATH, JSON.stringify(input)]
+      : ['--experimental-strip-types', PROVIDER_UNDO_WORKER_PATH, JSON.stringify(input)];
+    const output = execFileSync(command, args, {
+      encoding: 'utf-8',
+      env: process.env,
+      cwd: dirname(fileURLToPath(new URL('../../../package.json', import.meta.url))),
+    }).trim();
+    const parsed = JSON.parse(output || '{}') as ProviderUndoResult;
+    if (!parsed || typeof parsed !== 'object' || !('ok' in parsed)) {
+      return { ok: false, message: 'Provider undo worker returned malformed output.' };
+    }
+    return parsed;
+  } catch (error) {
+    const stdout = typeof error === 'object' && error !== null && 'stdout' in error
+      ? String((error as { stdout?: unknown }).stdout ?? '').trim()
+      : '';
+    if (stdout) {
+      try {
+        const parsed = JSON.parse(stdout) as ProviderUndoResult;
+        if (parsed && typeof parsed === 'object' && 'ok' in parsed) {
+          return parsed;
+        }
+      } catch {
+        // Fall through to generic error handling below.
+      }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message: `Provider undo worker failed: ${message}` };
+  }
+}
+
+function undoProviderFromStepResult(input: {
+  tool: string;
+  result: Record<string, unknown> | null;
+}) {
+  const beforeRecord = extractActionRecord(input.result?.before);
+  const afterRecord = extractActionRecord(input.result?.after) || extractActionRecord(input.result);
+  const providerSnapshot = asRecord(input.result?.source_snapshot);
+  const provider = providerFromUndoContext({
+    payload: input.result,
+    beforeRecord,
+    afterRecord,
+    providerSnapshot,
+  });
+  if (!provider) {
+    return { ok: true } as const;
+  }
+  const operation = input.tool === 'create_record'
+    ? 'delete_record'
+    : input.tool === 'archive_record'
+      ? 'restore_after_archive'
+      : 'restore_after_update';
+  return runProviderUndoSync({
+    operation,
+    provider,
+    currentRecord: afterRecord,
+    desiredRecord: beforeRecord,
+    providerSnapshot,
+  });
+}
+
 function toWorkflowUndoRecordId(raw: unknown): string {
   if (!raw || typeof raw !== 'object') {
     return '';
@@ -1432,6 +1575,11 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
     const stepResult = step.result && typeof step.result === 'object' ? (step.result as Record<string, unknown>) : null;
     const tool = asText(step.tool);
     if (tool === 'create_record') {
+      const providerUndo = undoProviderFromStepResult({ tool, result: stepResult });
+      if (!providerUndo.ok) {
+        result.errors.push(providerUndo.message);
+        continue;
+      }
       const recordId = asText(stepResult?.id) || asText(stepResult?.after && (stepResult.after as { id?: unknown }).id) || asText(step.changed_records[0]);
       if (!recordId) {
         result.skipped += 1;
@@ -1452,6 +1600,11 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
     }
 
     if (tool === 'update_record' || tool === 'archive_record') {
+      const providerUndo = undoProviderFromStepResult({ tool, result: stepResult });
+      if (!providerUndo.ok) {
+        result.errors.push(providerUndo.message);
+        continue;
+      }
       const before = stepResult?.before;
       if (!before || typeof before !== 'object') {
         result.skipped += 1;
@@ -1487,6 +1640,11 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
           const nestedTool = asText(entry.tool);
           const nestedResult = entry.result && typeof entry.result === 'object' ? (entry.result as Record<string, unknown>) : null;
           if (nestedTool === 'create_record') {
+            const providerUndo = undoProviderFromStepResult({ tool: nestedTool, result: nestedResult });
+            if (!providerUndo.ok) {
+              result.errors.push(providerUndo.message);
+              continue;
+            }
             const recordId = asText(nestedResult?.id) || toWorkflowUndoRecordId(nestedResult?.after);
             if (!recordId || visited.has(recordId)) {
               result.skipped += 1;
@@ -1502,6 +1660,11 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
             continue;
           }
           if (nestedTool === 'update_record' || nestedTool === 'archive_record') {
+            const providerUndo = undoProviderFromStepResult({ tool: nestedTool, result: nestedResult });
+            if (!providerUndo.ok) {
+              result.errors.push(providerUndo.message);
+              continue;
+            }
             const nestedBefore = nestedResult?.before;
             if (!nestedBefore || typeof nestedBefore !== 'object') {
               result.skipped += 1;
@@ -1575,6 +1738,31 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
 
   const record = payload.record || payload.before || payload.after || null;
   const operation = payload.operation?.trim();
+  const payloadRecord = asRecord(payload);
+  const beforeRecord = extractActionRecord(payload.before) || extractActionRecord(action.before_json);
+  const afterRecord = extractActionRecord(payload.after) || extractActionRecord(action.after_json);
+  const providerSnapshot = extractProviderSnapshot(action, payloadRecord);
+  const provider = providerFromUndoContext({
+    payload: payloadRecord,
+    beforeRecord,
+    afterRecord,
+    providerSnapshot,
+  });
+
+  if (provider) {
+    const providerUndo = runProviderUndoSync({
+      operation: operation === 'delete_record' || operation === 'restore_after_update' || operation === 'restore_after_archive' || operation === 'restore_record'
+        ? operation
+        : 'restore_record',
+      provider,
+      currentRecord: afterRecord,
+      desiredRecord: beforeRecord || extractActionRecord(record),
+      providerSnapshot,
+    });
+    if (!providerUndo.ok) {
+      return { success: false, action: cloneActionEvent(action), message: providerUndo.message };
+    }
+  }
 
   if (operation === 'delete_record') {
     const recordId = payload.record_id || payload.target_id;

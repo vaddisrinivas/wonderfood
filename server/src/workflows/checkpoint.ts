@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
 import { transitionWorkflow, WorkflowControlEvent, WorkflowControlState } from './control-machine';
 
 type WorkflowCheckpointStepStatus = 'ok' | 'failed' | 'skipped' | 'cancelled';
@@ -49,12 +50,6 @@ let store: StorePayload = {
   updated_at: nowIso(),
   runs: {},
 };
-
-function ensureDir(path: string) {
-  if (!existsSync(dirname(path))) {
-    mkdirSync(dirname(path), { recursive: true });
-  }
-}
 
 function nowIso() {
   return new Date().toISOString();
@@ -113,9 +108,8 @@ function cloneCheckpoint(run: WorkflowRunCheckpoint): WorkflowRunCheckpoint {
 }
 
 function persist() {
-  ensureDir(WORKFLOW_CHECKPOINT_PATH);
   store.updated_at = nowIso();
-  writeFileSync(WORKFLOW_CHECKPOINT_PATH, JSON.stringify(store, null, 2), 'utf-8');
+  writeJsonStateFileAtomic(WORKFLOW_CHECKPOINT_PATH, store);
 }
 
 function isRunPayload(value: unknown): value is StorePayload {
@@ -145,20 +139,15 @@ function load() {
     return;
   }
 
-  try {
-    const raw = readFileSync(WORKFLOW_CHECKPOINT_PATH, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRunPayload(parsed)) {
-      return;
-    }
-    store = {
-      schema_version: STORE_VERSION,
-      updated_at: typeof parsed.updated_at === 'string' ? parsed.updated_at : nowIso(),
-      runs: (parsed.runs as Record<string, WorkflowRunCheckpoint>) || {},
-    };
-  } catch {
-    return;
-  }
+  const parsed = readJsonStateFile(WORKFLOW_CHECKPOINT_PATH, {
+    label: 'workflow checkpoint state',
+    validate: isRunPayload,
+  });
+  store = {
+    schema_version: STORE_VERSION,
+    updated_at: typeof parsed.updated_at === 'string' ? parsed.updated_at : nowIso(),
+    runs: (parsed.runs as Record<string, WorkflowRunCheckpoint>) || {},
+  };
 }
 
 function makeRunId(workflowId: string, actor: string, seed?: string) {

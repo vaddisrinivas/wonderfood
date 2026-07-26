@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 import { normalizeWebhookBody, normalizeWebhookEvent } from '../../src/providers/notion/webhook';
 import { syncNotionFromWebhook } from '../../src/providers/sync/notion';
@@ -51,10 +52,11 @@ function withMockNotionFetch(pageId = 'notion-page-1', dataSourceId = 'notion-so
     }
 
     if (url.includes(`/v1/pages/${pageId}`) && method === 'PATCH') {
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) as { archived?: boolean } : {};
       return mockJsonResponse(200, {
         id: pageId,
         url: `https://notion.so/${pageId}`,
-        archived: false,
+        archived: Boolean(body.archived),
         parent: {
           type: 'data_source_id',
           data_source_id: dataSourceId,
@@ -112,6 +114,22 @@ function hasContractField(value: unknown) {
     return false;
   }
   return 'ContractField' in value || 'contract' in value;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+function buildOperationHash(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
 }
 
 (async () => {
@@ -177,11 +195,38 @@ function hasContractField(value: unknown) {
     ensure(update.json?.source_snapshot?.provider === 'notion', 'update_record source_snapshot.provider must be notion');
     ensure(Boolean(update.json?.action_receipt && typeof update.json.action_receipt === 'object'), 'update_record action_receipt should be present');
 
+    const queuedArchive = await callMcpTool('wonderfood.archive_record', {
+      actor: 'hearth',
+      id: createdId,
+      data_home: 'notion',
+      archived: true,
+      idempotency_key: 'notion-contract-archive',
+    });
+    ensure(queuedArchive.json?.status === 'queued_for_review', 'archive_record with notion data_home should request review first');
+    const approvalRequest = queuedArchive.json?.approval_request as {
+      tool: string;
+      operationId: string;
+      idempotencyKey: string;
+      operationHash: string;
+    };
     const archive = await callMcpTool('wonderfood.archive_record', {
       actor: 'hearth',
       id: createdId,
       data_home: 'notion',
       archived: true,
+      idempotency_key: 'notion-contract-archive',
+      approval_receipt: {
+        schemaVersion: 'wonder.mcp-review-approval.v1',
+        approver: 'hearth',
+        authority: 'contract-test',
+        tool: approvalRequest.tool,
+        operationId: approvalRequest.operationId,
+        idempotencyKey: approvalRequest.idempotencyKey,
+        operationHash: approvalRequest.operationHash || buildOperationHash({ archive: createdId }),
+        localActor: 'hearth',
+        approvedAt: '2026-07-26T00:00:00.000Z',
+        expiresAt: '2999-01-01T00:00:00.000Z',
+      },
     });
     ensure(archive.json?.success === true, 'archive_record with notion data_home should return success');
     ensure(archive.json?.provider_record_id === 'notion-page-1', 'archive_record provider_record_id should match notion page id');

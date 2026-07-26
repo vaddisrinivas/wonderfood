@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-export const SHEETS_API_BASE_URL = 'https://sheets.googleapis.com/v4';
+export const SHEETS_API_BASE_URL = process.env.GOOGLE_SHEETS_API_BASE_URL?.trim() || 'https://sheets.googleapis.com/v4';
 export const SHEETS_REQUEST_TIMEOUT_MS = 15000;
 export const SHEETS_WORKBOOK_TAB_PREFIX = 'LifeOS';
 export const SHEETS_WORKBOOK_DEFAULT_RANGE = 'A:Z';
@@ -70,12 +70,36 @@ export function sheetsHeaders(config?: SheetsClientConfig) {
 }
 
 function withTimeout(ms: number, signal?: AbortSignal) {
-  if (signal) {
-    return signal;
-  }
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
+  let settled = false;
+  const onAbort = () => {
+    if (!settled) {
+      controller.abort(signal?.reason);
+    }
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (!settled) {
+      controller.abort(new Error(`Sheets request timed out after ${ms}ms`));
+    }
+  }, ms);
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      settled = true;
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
+    },
+  };
 }
 
 export async function sheetsFetch<T>(path: string, init: RequestInit = {}): Promise<SheetsApiResponse<T>> {
@@ -104,11 +128,14 @@ export async function sheetsFetch<T>(path: string, init: RequestInit = {}): Prom
       ...(init.headers as Record<string, string> | undefined),
     },
     body: init.body,
-    signal: withTimeout(SHEETS_REQUEST_TIMEOUT_MS, init.signal as AbortSignal | undefined),
   };
 
+  const timeout = withTimeout(SHEETS_REQUEST_TIMEOUT_MS, init.signal as AbortSignal | undefined);
   try {
-    const response = await fetch(endpoint, requestInit);
+    const response = await fetch(endpoint, {
+      ...requestInit,
+      signal: timeout.signal,
+    });
     const text = await response.text();
     let payload: unknown = null;
     if (text) {
@@ -138,5 +165,7 @@ export async function sheetsFetch<T>(path: string, init: RequestInit = {}): Prom
       status: 0,
       error: error instanceof Error ? error.message : 'unknown-sheets-request-failure',
     };
+  } finally {
+    timeout.cleanup();
   }
 }

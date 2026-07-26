@@ -75,6 +75,7 @@ type LiveSheetsResult = {
 type LiveSheetsPullInput = {
   domain?: string;
   collection?: string;
+  limit?: number;
 };
 
 function nowDigest(values: string[]) {
@@ -457,14 +458,16 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
     headerValidation.missing.length === 0 && headerValidation.extra.length === 0
       ? []
       : [`Missing columns: ${headerValidation.missing.join(',')}`];
+  const limit = typeof input.limit === 'number' && input.limit > 0 ? Math.trunc(input.limit) : null;
+  const limitedRows = limit ? rowsWithProjection.slice(0, limit) : rowsWithProjection;
 
   return {
     status: 'ready',
     configured: true,
-    records: rowsWithProjection.map((entry) => entry.projection),
-    source_snapshots: rowsWithProjection.map((entry) => entry.source),
+    records: limitedRows.map((entry) => entry.projection),
+    source_snapshots: limitedRows.map((entry) => entry.source),
     message:
-      `Sheets pull succeeded for ${config.spreadsheetId} with ${rowsWithProjection.length} rows.` +
+      `Sheets pull succeeded for ${config.spreadsheetId} with ${limitedRows.length} rows.` +
       (extraInfo.length > 0 ? ` (${extraInfo.join('; ')})` : ''),
     headers: knownHeader,
     gridColumns: runtimeTab.gridColumns,

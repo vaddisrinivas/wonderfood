@@ -1,12 +1,15 @@
 import { toNotionCanonicalProjection } from './projection';
 import { readNotionConfig } from './client';
 import { notionApiPath, notionFetch, NOTION_DATA_SOURCE_QUERY_PATH } from './client';
+import type { NotionApiResponse } from './client';
 import { queryNotionDataSourceRecords } from './push';
 
 export type NotionPullInput = {
   domain?: string;
   collection?: string;
   limit?: number;
+  pageId?: string;
+  externalId?: string;
 };
 
 export type NotionPullResult = {
@@ -20,6 +23,12 @@ export type NotionPullResult = {
 export type NotionLivePullResult = NotionPullResult & {
   status_code?: number;
   error?: string | null;
+};
+
+type NotionQueryResponse = {
+  results?: unknown[];
+  has_more?: boolean;
+  next_cursor?: string | null;
 };
 
 type NotionRecordLike = {
@@ -279,104 +288,117 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
   }
 
   const path = notionApiPath(NOTION_DATA_SOURCE_QUERY_PATH, { data_source_id: config.dataSourceId });
-  const response = await notionFetch<{ results?: unknown[] }>(path, {
-    method: 'POST',
-    body: JSON.stringify({
-      page_size: Math.max(1, Math.min(input.limit ?? 50, 100)),
-    }),
-  });
-
-  if (!response.ok) {
-    return {
-      status: 'disabled',
-      configured: true,
-      records: [],
-      source_snapshots: [],
-      message: `Notion pull failed for ${config.dataSourceId}`,
-      error: response.error?.message || 'notion pull failed',
-      status_code: response.status,
-    };
-  }
-
-  const rowsInput = Array.isArray((response.data as { results?: unknown[] })?.results)
-    ? (response.data as { results: unknown[] }).results
-    : [];
-
+  const pageSize = Math.max(1, Math.min(input.limit ?? 50, 100));
+  const targetPageId = input.pageId?.trim() || input.externalId?.trim() || '';
+  let cursor: string | null = null;
+  let statusCode = 200;
   const rows: Array<{ projection: ReturnType<typeof toNotionCanonicalProjection>; source: NotionSourceSnapshot }> = [];
-  for (const row of rowsInput) {
-    if (!row || typeof row !== 'object') {
-      continue;
-    }
-    const candidate = row as NotionRecordLike;
-    const pageId = typeof candidate.id === 'string' ? candidate.id : '';
-    if (!pageId) {
-      continue;
-    }
-
-    const properties = candidateProperties(candidate) || {};
-    const mapped = readRecordDomain(candidate, input);
-    const title = inferTitle(candidate);
-    if (!title) {
-      continue;
-    }
-
-    if (input.domain && mapped.domain !== input.domain) {
-      continue;
-    }
-
-    if (input.collection && mapped.collection !== input.collection) {
-      continue;
-    }
-
-    const filtered = {
-      ...properties,
-      food_detail: parseJsonProperty(properties, FOOD_DETAIL_KEYS),
-      notion: {
-        domain: properties['LifeOS Domain'] ?? properties['Lifeos Domain'] ?? properties.Domain ?? properties['domain'] ?? undefined,
-        collection: properties['LifeOS Collection'] ?? properties['Lifeos Collection'] ?? properties.Collection ?? properties['collection'] ?? undefined,
-        source: 'data_source',
-        data_source_id: config.dataSourceId,
-      },
-    };
-    if (filtered.food_detail === undefined) {
-      delete filtered.food_detail;
-    }
-    const relations = parseRelationProperty(properties);
-    const unsupportedProperties = Object.entries(properties).reduce<Record<string, unknown>>((acc, [key, value]) => {
-      if (key === 'Name' || key === 'notion' || key === 'Domain' || key === 'Collection' || key === 'LifeOS Domain' || key === 'LifeOS Collection') {
-        return acc;
-      }
-      acc[key] = value;
-      return acc;
-    }, {});
-
-    rows.push({
-      projection: toNotionCanonicalProjection({
-        id: pageId,
-        domain: mapped.domain,
-        collection: mapped.collection,
-        title,
-        properties: filtered,
-        relations,
-      }),
-      source: buildNotionSourceSnapshot({
-        candidate,
-        mapped,
-        pageId,
-        configDataSourceId: config.dataSourceId,
-        properties: filtered,
-        unsupported: unsupportedProperties,
+  let hasMore = true;
+  while (hasMore) {
+    const response: NotionApiResponse<NotionQueryResponse> = await notionFetch<NotionQueryResponse>(path, {
+      method: 'POST',
+      body: JSON.stringify({
+        page_size: pageSize,
+        ...(cursor ? { start_cursor: cursor } : {}),
       }),
     });
+
+    if (!response.ok) {
+      return {
+        status: 'disabled',
+        configured: true,
+        records: [],
+        source_snapshots: [],
+        message: `Notion pull failed for ${config.dataSourceId}`,
+        error: response.error?.message || 'notion pull failed',
+        status_code: response.status,
+      };
+    }
+
+    statusCode = response.status;
+    const rowsInput = Array.isArray(response.data?.results) ? response.data.results : [];
+    for (const row of rowsInput) {
+      if (!row || typeof row !== 'object') {
+        continue;
+      }
+      const candidate = row as NotionRecordLike;
+      const pageId = typeof candidate.id === 'string' ? candidate.id : '';
+      if (!pageId) {
+        continue;
+      }
+
+      const properties = candidateProperties(candidate) || {};
+      const mapped = readRecordDomain(candidate, input);
+      const title = inferTitle(candidate);
+      if (!title) {
+        continue;
+      }
+
+      if (input.domain && mapped.domain !== input.domain) {
+        continue;
+      }
+
+      if (input.collection && mapped.collection !== input.collection) {
+        continue;
+      }
+
+      const filtered = {
+        ...properties,
+        food_detail: parseJsonProperty(properties, FOOD_DETAIL_KEYS),
+        notion: {
+          domain: properties['LifeOS Domain'] ?? properties['Lifeos Domain'] ?? properties.Domain ?? properties['domain'] ?? undefined,
+          collection: properties['LifeOS Collection'] ?? properties['Lifeos Collection'] ?? properties.Collection ?? properties['collection'] ?? undefined,
+          source: 'data_source',
+          data_source_id: config.dataSourceId,
+        },
+      };
+      if (filtered.food_detail === undefined) {
+        delete filtered.food_detail;
+      }
+      const relations = parseRelationProperty(properties);
+      const unsupportedProperties = Object.entries(properties).reduce<Record<string, unknown>>((acc, [key, value]) => {
+        if (key === 'Name' || key === 'notion' || key === 'Domain' || key === 'Collection' || key === 'LifeOS Domain' || key === 'LifeOS Collection') {
+          return acc;
+        }
+        acc[key] = value;
+        return acc;
+      }, {});
+
+      rows.push({
+        projection: toNotionCanonicalProjection({
+          id: pageId,
+          domain: mapped.domain,
+          collection: mapped.collection,
+          title,
+          properties: filtered,
+          relations,
+        }),
+        source: buildNotionSourceSnapshot({
+          candidate,
+          mapped,
+          pageId,
+          configDataSourceId: config.dataSourceId,
+          properties: filtered,
+          unsupported: unsupportedProperties,
+        }),
+      });
+    }
+
+    const foundTarget = targetPageId && rows.some((entry) => entry.projection.id === targetPageId);
+    const limitSatisfied = !targetPageId && rows.length >= (input.limit ?? 50);
+    hasMore = Boolean(response.data?.has_more) && !foundTarget && !limitSatisfied;
+    cursor = response.data?.next_cursor || null;
   }
+
+  const limitedRows = rows.slice(0, targetPageId ? rows.length : (input.limit ?? rows.length));
 
   return {
     status: 'ready',
     configured: true,
-    records: rows.map((entry) => entry.projection),
-    source_snapshots: rows.map((entry) => entry.source),
-    message: `Notion pull succeeded for data_source_id ${config.dataSourceId} with ${rows.length} records.`,
-    status_code: response.status,
+    records: limitedRows.map((entry) => entry.projection),
+    source_snapshots: limitedRows.map((entry) => entry.source),
+    message: `Notion pull succeeded for data_source_id ${config.dataSourceId} with ${limitedRows.length} records.`,
+    status_code: statusCode,
     error: null,
   };
 }

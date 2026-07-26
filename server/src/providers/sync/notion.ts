@@ -90,6 +90,8 @@ export async function syncNotionFromWebhook(input: NotionSyncInput): Promise<Not
     domain: input.domain,
     collection: input.collection,
     limit: input.limit,
+    pageId: pageId || undefined,
+    externalId: externalId || undefined,
   });
 
   if (pull.status !== 'ready') {

@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readJsonStateFile, writeJsonStateFileAtomic } from '../json-state';
 import {
   extractWebhookEventId,
   hasWebhookOrderHint,
@@ -56,13 +56,15 @@ function readReplayState(path: string): NotionWebhookReplayState {
   if (!existsSync(path)) {
     return { events: [] };
   }
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as NotionWebhookReplayState;
-    if (parsed && Array.isArray(parsed.events)) {
-      return { events: parsed.events.filter((entry) => entry?.event_id) };
-    }
-  } catch {
-    return { events: [] };
+  const parsed = readJsonStateFile(path, {
+    label: 'Notion webhook replay state',
+    validate: (value: unknown): value is NotionWebhookReplayState =>
+      typeof value === 'object'
+      && value !== null
+      && Array.isArray((value as { events?: unknown }).events),
+  });
+  if (Array.isArray(parsed.events)) {
+    return { events: parsed.events.filter((entry) => entry?.event_id) };
   }
   return { events: [] };
 }
@@ -76,8 +78,7 @@ function pruneReplayState(state: NotionWebhookReplayState, now = Date.now()) {
 }
 
 function persistReplayState(path: string, state: NotionWebhookReplayState) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(state, null, 2), 'utf-8');
+  writeJsonStateFileAtomic(path, state);
 }
 
 function fingerprintEvent(event: ReturnType<typeof normalizeWebhookEvent>) {

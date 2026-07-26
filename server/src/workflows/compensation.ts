@@ -1,5 +1,5 @@
-import { deleteRecord, restoreRecord } from '../mcp/state';
-import { McpRecord } from '../mcp/state';
+import { deleteRecord, findRecord, restoreRecord, runProviderUndoSync } from '../mcp/state';
+import type { McpRecord } from '../mcp/state';
 
 export type CompensationAction =
   | {
@@ -7,12 +7,14 @@ export type CompensationAction =
       workflowRunId: string;
       recordId: string;
       record?: McpRecord;
+      providerSnapshot?: Record<string, unknown>;
     }
   | {
       action: 'restore_record';
       workflowRunId: string;
       recordId: string;
       record: McpRecord;
+      providerSnapshot?: Record<string, unknown>;
     };
 
 export type WorkflowCompensationPlan = {
@@ -81,6 +83,10 @@ function normalizeDetails(details: unknown): NormalizedWorkflowStep[] {
   return normalized;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 export function buildWorkflowCompensation(input: {
   workflowRunId: string;
   workflowId: string;
@@ -106,6 +112,7 @@ export function buildWorkflowCompensation(input: {
           workflowRunId: input.workflowRunId,
           recordId: id,
           ...(step.result?.after ? { record: step.result.after } : {}),
+          ...(asRecord(step.result as unknown)?.source_snapshot ? { providerSnapshot: asRecord(step.result as unknown)?.source_snapshot as Record<string, unknown> } : {}),
         });
       }
       continue;
@@ -121,6 +128,7 @@ export function buildWorkflowCompensation(input: {
           workflowRunId: input.workflowRunId,
           recordId: id,
           record: before,
+          ...(asRecord(step.result as unknown)?.source_snapshot ? { providerSnapshot: asRecord(step.result as unknown)?.source_snapshot as Record<string, unknown> } : {}),
         });
       }
       continue;
@@ -177,6 +185,25 @@ export function runWorkflowCompensation(plan: WorkflowCompensationPlan): Workflo
     }
 
     try {
+      const currentRecord = findRecord(action.recordId);
+      const provider = typeof action.providerSnapshot?.provider === 'string' ? action.providerSnapshot.provider : null;
+      if (provider === 'notion' || provider === 'google_sheets') {
+        const providerUndo = runProviderUndoSync({
+          operation: action.action === 'delete_record' ? 'delete_record' : 'restore_record',
+          provider,
+          currentRecord: currentRecord ?? action.record ?? null,
+          desiredRecord: action.action === 'restore_record' ? action.record : null,
+          providerSnapshot: action.providerSnapshot ?? null,
+        });
+        if (!providerUndo.ok) {
+          errors.push({
+            action,
+            error: providerUndo.message,
+          });
+          continue;
+        }
+      }
+
       if (action.action === 'delete_record') {
         const removed = deleteRecord(action.recordId);
         if (removed) {

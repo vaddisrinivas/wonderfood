@@ -1,5 +1,5 @@
 export const NOTION_API_VERSION = '2026-03-11';
-export const NOTION_BASE_URL = 'https://api.notion.com/v1';
+export const NOTION_BASE_URL = process.env.NOTION_BASE_URL?.trim() || 'https://api.notion.com/v1';
 export const NOTION_DATA_SOURCE_QUERY_PATH = '/data_sources/{data_source_id}/query';
 export const NOTION_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
@@ -80,12 +80,36 @@ export function notionApiUrl(path: string, base = NOTION_BASE_URL) {
 }
 
 function withTimeout(ms: number, signal?: AbortSignal) {
-  if (signal) {
-    return signal;
-  }
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
+  let settled = false;
+  const onAbort = () => {
+    if (!settled) {
+      controller.abort(signal?.reason);
+    }
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (!settled) {
+      controller.abort(new Error(`Notion request timed out after ${ms}ms`));
+    }
+  }, ms);
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      settled = true;
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
+    },
+  };
 }
 
 export function notionApiPath(template: string, params: Record<string, string> = {}) {
@@ -166,14 +190,13 @@ export async function notionFetch<T>(
 
   const url = /^https?:\/\//i.test(path) ? path : notionApiUrl(path);
   const requestTrace = readNotionConfig()?.requestTrace;
-    const requestInit: RequestInit = {
+  const requestInit: RequestInit = {
     method: init.method || 'GET',
     headers: {
       ...headers,
       ...(init.headers as Record<string, string> | undefined),
     },
     body: init.body,
-    signal: withTimeout(NOTION_REQUEST_TIMEOUT_MS, init.signal as AbortSignal | undefined),
   };
 
   if (requestTrace) {
@@ -185,8 +208,12 @@ export async function notionFetch<T>(
   let attempt = 0;
 
   while (attempt <= maxRetries) {
+    const timeout = withTimeout(NOTION_REQUEST_TIMEOUT_MS, init.signal as AbortSignal | undefined);
     try {
-      const response = await fetch(url, requestInit);
+      const response = await fetch(url, {
+        ...requestInit,
+        signal: timeout.signal,
+      });
       const text = await response.text();
       const parsed = parseResponseText(text);
 
@@ -217,6 +244,18 @@ export async function notionFetch<T>(
         data: parsed as T,
       };
     } catch (error: unknown) {
+      if ((init.signal as AbortSignal | undefined)?.aborted) {
+        const message = error instanceof Error ? error.message : 'notion request aborted';
+        return {
+          ok: false,
+          status: 0,
+          error: {
+            status: 0,
+            message,
+            body: error,
+          },
+        };
+      }
       if (!retry || attempt >= maxRetries) {
         const message = error instanceof Error ? error.message : 'unknown-notion-request-failure';
         return {
@@ -233,6 +272,8 @@ export async function notionFetch<T>(
       const waitMs = parseRetryDelayMs(undefined, attempt);
       attempt += 1;
       await delay(waitMs);
+    } finally {
+      timeout.cleanup();
     }
   }
 

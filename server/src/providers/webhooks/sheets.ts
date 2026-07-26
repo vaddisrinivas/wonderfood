@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readJsonStateFile, writeJsonStateFileAtomic } from '../json-state';
 
 export type SheetsWebhookEvent = {
   event_id?: string;
@@ -86,22 +86,23 @@ function readReplayState(path: string): SheetsWebhookReplayState {
   if (!existsSync(path)) {
     return { events: [] };
   }
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as SheetsWebhookReplayState;
-    if (parsed && Array.isArray(parsed.events)) {
-      return {
-        events: parsed.events.filter((entry) => entry?.event_id).map((entry) => ({ ...entry })),
-      };
-    }
-  } catch {
-    return { events: [] };
+  const parsed = readJsonStateFile(path, {
+    label: 'Sheets webhook replay state',
+    validate: (value: unknown): value is SheetsWebhookReplayState =>
+      typeof value === 'object'
+      && value !== null
+      && Array.isArray((value as { events?: unknown }).events),
+  });
+  if (Array.isArray(parsed.events)) {
+    return {
+      events: parsed.events.filter((entry) => entry?.event_id).map((entry) => ({ ...entry })),
+    };
   }
   return { events: [] };
 }
 
 function persistReplayState(path: string, state: SheetsWebhookReplayState) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(state, null, 2), 'utf-8');
+  writeJsonStateFileAtomic(path, state);
 }
 
 function pruneReplayState(state: SheetsWebhookReplayState, now = Date.now()) {

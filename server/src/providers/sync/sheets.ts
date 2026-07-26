@@ -190,10 +190,9 @@ export async function syncSheetsFromWebhook(input: SheetsSyncInput): Promise<She
     };
   }
 
-  const pullInput: SheetsPullInput & { limit?: number } = {
+  const pullInput: SheetsPullInput = {
     domain: input.domain,
     collection: input.collection,
-    limit: input.limit,
   };
 
   const pull = await pullSheetsRecordsLive(pullInput);

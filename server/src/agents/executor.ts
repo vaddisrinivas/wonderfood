@@ -7,12 +7,16 @@ import {
   createActionEvent,
   createRecord,
   findActionByIdempotencyKey,
+  getActionEvent,
   findRecord,
   listRecords,
   markActionCompleted,
   markActionFailed,
   updateRecord,
 } from '../mcp/state';
+import { callMcpTool, type ToolResult } from '../mcp/tools';
+import { readNotionConfig } from '../providers/notion/client';
+import { readSheetsConfig } from '../providers/sheets/client';
 
 export type AgentStep = {
   id: string;
@@ -377,6 +381,121 @@ function createBaseAction(input: {
   });
 }
 
+type ExecutorDataHome = 'local_sqlite' | 'notion' | 'google_sheets';
+
+function authorityDataHome(): ExecutorDataHome {
+  const authority = process.env.LIFEOS_AUTHORITY_PROVIDER?.trim();
+  return authority === 'notion' || authority === 'google_sheets' ? authority : 'local_sqlite';
+}
+
+function providerConfigured(dataHome: ExecutorDataHome) {
+  if (dataHome === 'notion') {
+    const config = readNotionConfig();
+    return Boolean(config?.token && config.dataSourceId);
+  }
+  if (dataHome === 'google_sheets') {
+    const config = readSheetsConfig();
+    return Boolean(config?.accessToken && config.spreadsheetId);
+  }
+  return true;
+}
+
+function providerConfigReason(dataHome: ExecutorDataHome) {
+  if (dataHome === 'notion') {
+    return 'Notion is the configured authority, but NOTION_TOKEN or NOTION_DATA_SOURCE_ID is missing.';
+  }
+  if (dataHome === 'google_sheets') {
+    return 'Google Sheets is the configured authority, but GOOGLE_SHEETS_ACCESS_TOKEN or GOOGLE_SHEETS_SPREADSHEET_ID is missing.';
+  }
+  return 'Provider configuration is missing.';
+}
+
+function recordDataHome(record: ReturnType<typeof findRecord>): ExecutorDataHome {
+  if (record?.source.provider === 'notion' || record?.source.provider === 'google_sheets') {
+    return record.source.provider;
+  }
+  return 'local_sqlite';
+}
+
+function actionIdFromToolResult(result: ToolResult): string {
+  if (typeof result.undo_token === 'string' && result.undo_token.length > 0) {
+    return result.undo_token;
+  }
+  const action = result.json.action;
+  if (action && typeof action === 'object' && typeof (action as { id?: unknown }).id === 'string') {
+    return String((action as { id: string }).id);
+  }
+  const receiptActionId = Array.isArray(result.receipts) ? result.receipts[0]?.action_id : '';
+  return typeof receiptActionId === 'string' ? receiptActionId : '';
+}
+
+async function executeViaMcpTool(input: {
+  actionId: string;
+  actor: string;
+  domain: string;
+  command: string;
+  actionTool: string;
+  idempotencyKey?: string;
+  conversationId?: string | null;
+  sourceIds?: string[];
+  args: Record<string, unknown>;
+}): Promise<{ state: ActionStatus; receipt: ActionReceipt }> {
+  const result = await callMcpTool(input.actionTool, input.args);
+  const actionId = actionIdFromToolResult(result);
+  if (actionId) {
+    const action = getActionEvent(actionId);
+    if (action) {
+      return {
+        state: action.status,
+        receipt: toReceipt(action),
+      };
+    }
+  }
+
+  const message = typeof result.json.message === 'string'
+    ? result.json.message
+    : typeof result.json.error === 'string'
+      ? result.json.error
+      : 'Mutation completed without a durable action receipt.';
+
+  const isNoop = /no changes detected|already up to date/i.test(message);
+  if (isNoop) {
+    const action = createBaseAction({
+      actionId: input.actionId,
+      actor: input.actor,
+      domain: input.domain,
+      tool: input.actionTool,
+      policy: { allowed: true, requiresClarification: false, reason: 'ok', risk: 'low', confidence: 'high' } as PolicyDecision,
+      idempotencyKey: input.idempotencyKey,
+      command: input.command,
+      sourceIds: input.sourceIds,
+      recordIds: [],
+      before: null,
+      after: result.json.record ?? null,
+      undoPayload: null,
+      conversationId: input.conversationId,
+    });
+    const completed = markActionCompleted(action.id, action.command, result.json.record ?? null);
+    return {
+      state: (completed ?? action).status,
+      receipt: toReceipt(completed ?? action),
+    };
+  }
+
+  const receipt = buildFailureReceipt({
+    actionId: input.actionId,
+    actor: input.actor,
+    domain: input.domain,
+    tool: input.actionTool,
+    now: new Date().toISOString(),
+    idempotencyKey: input.idempotencyKey,
+    command: input.command,
+    reason: message,
+    sourceIds: input.sourceIds,
+  });
+  return { state: receipt.status, receipt };
+}
+
 export async function executeCommand(input: {
   actionId: string;
   actor: string;
@@ -464,6 +583,7 @@ export async function executeCommand(input: {
 
   const domain = input.domain || 'food';
   const actionTool = ACTION_TOOL_BY_INTENT[intent.type] ?? input.tool;
+  const authorityHome = authorityDataHome();
 
   if (intent.type === 'create') {
     const collection = intent.collection ?? 'recipe';
@@ -481,6 +601,46 @@ export async function executeCommand(input: {
         sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
+    }
+
+    if (authorityHome !== 'local_sqlite') {
+      if (!providerConfigured(authorityHome)) {
+        const receipt = buildFailureReceipt({
+          actionId: input.actionId,
+          actor: input.actor,
+          domain,
+          tool: actionTool,
+          now,
+          idempotencyKey: input.idempotencyKey,
+          command,
+          reason: providerConfigReason(authorityHome),
+          sourceIds: input.sourceIds,
+        });
+        return { state: receipt.status, receipt, step: input.step };
+      }
+      const createdId = `lifeos-${hashSeed({ actionId: input.actionId, domain, collection, title }).slice(0, 20)}`;
+      const providerResult = await executeViaMcpTool({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        command,
+        actionTool,
+        idempotencyKey: input.idempotencyKey,
+        conversationId: input.conversationId,
+        sourceIds: input.sourceIds,
+        args: {
+          actor: input.actor,
+          domain,
+          collection,
+          data_home: authorityHome,
+          id: createdId,
+          title,
+          action_id: input.actionId,
+          idempotency_key: input.idempotencyKey,
+          conversation_id: input.conversationId ?? undefined,
+        },
+      });
+      return { state: providerResult.state, receipt: providerResult.receipt, step: input.step };
     }
 
     const created = createRecord({
@@ -541,6 +701,73 @@ export async function executeCommand(input: {
       return { state: receipt.status, receipt, step: input.step };
     }
 
+    const targetHome = recordDataHome(target);
+    if (targetHome !== 'local_sqlite') {
+      if (authorityHome !== 'local_sqlite' && authorityHome !== targetHome) {
+        const receipt = buildFailureReceipt({
+          actionId: input.actionId,
+          actor: input.actor,
+          domain,
+          tool: actionTool,
+          now,
+          idempotencyKey: input.idempotencyKey,
+          command,
+          reason: `${targetHome} owns ${intent.recordId}; configured authority is ${authorityHome}.`,
+          sourceIds: input.sourceIds,
+        });
+        return { state: receipt.status, receipt, step: input.step };
+      }
+      if (!providerConfigured(targetHome)) {
+        const receipt = buildFailureReceipt({
+          actionId: input.actionId,
+          actor: input.actor,
+          domain,
+          tool: actionTool,
+          now,
+          idempotencyKey: input.idempotencyKey,
+          command,
+          reason: providerConfigReason(targetHome),
+          sourceIds: input.sourceIds,
+        });
+        return { state: receipt.status, receipt, step: input.step };
+      }
+      const providerResult = await executeViaMcpTool({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        command,
+        actionTool,
+        idempotencyKey: input.idempotencyKey,
+        conversationId: input.conversationId,
+        sourceIds: input.sourceIds,
+        args: {
+          actor: input.actor,
+          id: intent.recordId,
+          data_home: targetHome,
+          patch: { title: intent.title ?? target.title },
+          action_id: input.actionId,
+          idempotency_key: input.idempotencyKey,
+          conversation_id: input.conversationId ?? undefined,
+        },
+      });
+      return { state: providerResult.state, receipt: providerResult.receipt, step: input.step };
+    }
+
+    if (authorityHome !== 'local_sqlite') {
+      const receipt = buildFailureReceipt({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        tool: actionTool,
+        now,
+        idempotencyKey: input.idempotencyKey,
+        command,
+        reason: `${authorityHome} is the configured authority; local-only record ${intent.recordId} has no provider binding.`,
+        sourceIds: input.sourceIds,
+      });
+      return { state: receipt.status, receipt, step: input.step };
+    }
+
     const updated = updateRecord(intent.recordId, { title: intent.title ?? target.title });
     if (!updated) {
       const receipt = buildFailureReceipt({
@@ -582,6 +809,88 @@ export async function executeCommand(input: {
   }
 
   if (intent.type === 'archive' && intent.recordId) {
+    const target = findRecord(intent.recordId);
+    if (!target) {
+      const receipt = buildFailureReceipt({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        tool: actionTool,
+        now,
+        idempotencyKey: input.idempotencyKey,
+        command,
+        reason: `Record ${intent.recordId} was not found before archive.`,
+        sourceIds: input.sourceIds,
+      });
+      return { state: receipt.status, receipt, step: input.step };
+    }
+
+    const targetHome = recordDataHome(target);
+    if (targetHome !== 'local_sqlite') {
+      if (authorityHome !== 'local_sqlite' && authorityHome !== targetHome) {
+        const receipt = buildFailureReceipt({
+          actionId: input.actionId,
+          actor: input.actor,
+          domain,
+          tool: actionTool,
+          now,
+          idempotencyKey: input.idempotencyKey,
+          command,
+          reason: `${targetHome} owns ${intent.recordId}; configured authority is ${authorityHome}.`,
+          sourceIds: input.sourceIds,
+        });
+        return { state: receipt.status, receipt, step: input.step };
+      }
+      if (!providerConfigured(targetHome)) {
+        const receipt = buildFailureReceipt({
+          actionId: input.actionId,
+          actor: input.actor,
+          domain,
+          tool: actionTool,
+          now,
+          idempotencyKey: input.idempotencyKey,
+          command,
+          reason: providerConfigReason(targetHome),
+          sourceIds: input.sourceIds,
+        });
+        return { state: receipt.status, receipt, step: input.step };
+      }
+      const providerResult = await executeViaMcpTool({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        command,
+        actionTool,
+        idempotencyKey: input.idempotencyKey,
+        conversationId: input.conversationId,
+        sourceIds: input.sourceIds,
+        args: {
+          actor: input.actor,
+          id: intent.recordId,
+          data_home: targetHome,
+          action_id: input.actionId,
+          idempotency_key: input.idempotencyKey,
+          conversation_id: input.conversationId ?? undefined,
+        },
+      });
+      return { state: providerResult.state, receipt: providerResult.receipt, step: input.step };
+    }
+
+    if (authorityHome !== 'local_sqlite') {
+      const receipt = buildFailureReceipt({
+        actionId: input.actionId,
+        actor: input.actor,
+        domain,
+        tool: actionTool,
+        now,
+        idempotencyKey: input.idempotencyKey,
+        command,
+        reason: `${authorityHome} is the configured authority; local-only record ${intent.recordId} has no provider binding.`,
+        sourceIds: input.sourceIds,
+      });
+      return { state: receipt.status, receipt, step: input.step };
+    }
+
     const archived = archiveRecord(intent.recordId);
     if (!archived) {
       const receipt = buildFailureReceipt({
