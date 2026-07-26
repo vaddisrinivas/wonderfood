@@ -13,6 +13,7 @@ import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 const runtimePath = join(mkdtempSync(join(tmpdir(), 'wonderfood-reactive-runtime-')), 'runtime.json');
 const proposalEvent = { kind: 'query_transition' as const, id: 'runtime-query:enter', queryId: 'runtime-query', transition: 'enter' as const };
 const operationTemplate = { kind: 'custom' as const, tool: 'request_review' };
+const proposalEvidence = { queryId: 'runtime-query', transition: 'enter' as const };
 const authorization = {
   policyId: 'wonder.reactive-proposal-policy' as const,
   policyVersion: 'v1' as const,
@@ -44,6 +45,7 @@ const proposalIdempotencyKey = createOperationProposalIdempotencyKey({
   event: proposalEvent,
   causeId: 'runtime-cause',
   operationTemplate,
+  evidence: proposalEvidence,
 });
 const event: OperationCommitEvent = {
   actionId: 'runtime-action',
@@ -86,7 +88,7 @@ const cycle: ReactiveCycleResult = {
       review: { required: true, reason: 'suggest_mode', policyId: authorization.policyId, policyVersion: authorization.policyVersion },
       authorization,
       dryRun,
-      evidence: { queryId: 'runtime-query', transition: 'enter' },
+      evidence: proposalEvidence,
     },
   }],
 };

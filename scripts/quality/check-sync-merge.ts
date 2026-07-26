@@ -13,6 +13,7 @@ class MemoryDb {
   recordRelations: Row[] = [];
   operations = new Map<string, Row>();
   conflicts = new Map<string, Row>();
+  outbox = new Map<string, Row>();
 
   async execAsync(_sql: string) {}
 
@@ -40,6 +41,11 @@ class MemoryDb {
     if (compact.startsWith('INSERT INTO operations')) {
       const [op_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at] = params;
       this.operations.set(op_id, { op_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at });
+      return;
+    }
+    if (compact.startsWith('INSERT INTO outbox_events')) {
+      const [id, action_key, domain, payload_json, status, created_at, updated_at] = params;
+      this.outbox.set(id, { id, action_key, domain, payload_json, status, attempts: 0, last_error: null, created_at, updated_at });
       return;
     }
     if (compact.startsWith('INSERT INTO sync_conflicts')) {
