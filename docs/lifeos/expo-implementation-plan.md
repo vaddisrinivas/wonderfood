@@ -375,7 +375,6 @@ This phase is blocking for provider polish, Android polish, and workflow polish.
 - server/src/chat.ts
 - server/src/conversations.ts
 - server/src/provenance.ts
-- server/src/actions.ts
 - server/src/agents/registry.ts
 - server/src/agents/orchestrator.ts
 - server/src/agents/retrieval.ts

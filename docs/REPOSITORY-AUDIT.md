@@ -516,9 +516,7 @@
 | [server/.env.example](/Users/srinivasvaddi/Projects/wonderfood/server/.env.example) | data | repo artifact | verified | drift risk; manual review needed | 1.4 KB | source |
 | [server/package-lock.json](/Users/srinivasvaddi/Projects/wonderfood/server/package-lock.json) | lockfile | repo artifact | verified | dependency drift; reproducibility loss | 60.0 KB | generated |
 | [server/package.json](/Users/srinivasvaddi/Projects/wonderfood/server/package.json) | config | workspace config | verified | build drift; env mismatch | 580 B | source |
-| [server/src/actions.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/actions.ts) | code | backend service | verified | behavior drift; boundary mismatch | 1.2 KB | source |
 | [server/src/agents/chat-agent.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/chat-agent.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 8.6 KB | source |
-| [server/src/agents/command-processor.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/command-processor.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 24.7 KB | source |
 | [server/src/agents/domain.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/domain.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 1.0 KB | source |
 | [server/src/agents/executor.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/executor.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 18.0 KB | source |
 | [server/src/agents/planner.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/planner.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 621 B | source |
