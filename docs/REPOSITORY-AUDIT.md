@@ -1,8 +1,8 @@
 # Repository Audit
 
-- Snapshot: `7b8b0a9`
-- Inventory: 736 tracked files + 1 catalog = 737 rows
-- Review status: 617 verified text/source rows, 120 heuristic binary rows
+- Snapshot: `8b2cb9a`
+- Inventory: 744 tracked files + 1 catalog = 745 rows
+- Review status: 625 verified text/source rows, 120 heuristic binary rows
 - Legend: `review=verified` means the generator read the file fully; `review=heuristic` means metadata-only for binary rows.
 - Lineage: `source`, `generated`, `binary`, or `historical`.
 
@@ -305,7 +305,7 @@
 | [docs/images/wonderfood-demo.gif](/Users/srinivasvaddi/Projects/wonderfood/docs/images/wonderfood-demo.gif) | asset | binary asset | heuristic | size bloat; no semantic diff | 1.6 MB | binary |
 | [docs/images/wonderfood-demo.mp4](/Users/srinivasvaddi/Projects/wonderfood/docs/images/wonderfood-demo.mp4) | asset | binary asset | heuristic | size bloat; no semantic diff | 1.3 MB | binary |
 | [docs/lifeos/adr-0001-architecture.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/adr-0001-architecture.md) | doc | LifeOS doc | verified | stale guidance; scope drift | 1.5 KB | source |
-| [docs/lifeos/contracts/chat-contracts.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/contracts/chat-contracts.md) | doc | LifeOS doc | verified | stale guidance; scope drift | 3.1 KB | source |
+| [docs/lifeos/contracts/chat-contracts.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/contracts/chat-contracts.md) | doc | LifeOS doc | verified | stale guidance; scope drift | 3.4 KB | source |
 | [docs/lifeos/contracts/mcp-contracts.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/contracts/mcp-contracts.md) | doc | LifeOS doc | verified | stale guidance; scope drift | 3.2 KB | source |
 | [docs/lifeos/contracts/provider-write-contracts.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/contracts/provider-write-contracts.md) | doc | LifeOS doc | verified | stale guidance; scope drift | 1008 B | source |
 | [docs/lifeos/convergence/baseline-current.md](/Users/srinivasvaddi/Projects/wonderfood/docs/lifeos/convergence/baseline-current.md) | doc | LifeOS doc | verified | evidence rot; false confidence | 4.6 KB | historical |
@@ -346,7 +346,7 @@
 | [docs/quality/wf-d05-command-safety-evidence.md](/Users/srinivasvaddi/Projects/wonderfood/docs/quality/wf-d05-command-safety-evidence.md) | doc | quality evidence | verified | stale guidance; scope drift | 1.3 KB | historical |
 | [docs/release/RELEASE_CHECKLIST.md](/Users/srinivasvaddi/Projects/wonderfood/docs/release/RELEASE_CHECKLIST.md) | doc | release doc | verified | stale guidance; scope drift | 2.6 KB | historical |
 | [docs/releasing.md](/Users/srinivasvaddi/Projects/wonderfood/docs/releasing.md) | doc | documentation | verified | stale guidance; scope drift | 4.2 KB | source |
-| [docs/REPOSITORY-AUDIT.md](/Users/srinivasvaddi/Projects/wonderfood/docs/REPOSITORY-AUDIT.md) | doc | repository audit | verified | regen drift; source mismatch | 177.7 KB | generated |
+| [docs/REPOSITORY-AUDIT.md](/Users/srinivasvaddi/Projects/wonderfood/docs/REPOSITORY-AUDIT.md) | doc | repository audit | verified | regen drift; source mismatch | 179.5 KB | generated |
 | [docs/sync/google-drive-sync.md](/Users/srinivasvaddi/Projects/wonderfood/docs/sync/google-drive-sync.md) | doc | documentation | verified | stale guidance; scope drift | 1.7 KB | source |
 | [docs/testing/external-automation-validation.md](/Users/srinivasvaddi/Projects/wonderfood/docs/testing/external-automation-validation.md) | doc | testing policy | verified | stale guidance; scope drift | 2.8 KB | source |
 | [docs/testing/README.md](/Users/srinivasvaddi/Projects/wonderfood/docs/testing/README.md) | doc | testing policy | verified | stale guidance; scope drift | 4.0 KB | source |
@@ -469,7 +469,7 @@
 | [scripts/quality/check-phase3-chat-rollback-idempotency.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase3-chat-rollback-idempotency.ts) | script | quality gate | verified | workflow drift; shell breakage | 5.1 KB | source |
 | [scripts/quality/check-phase3-chat-send.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase3-chat-send.ts) | script | quality gate | verified | workflow drift; shell breakage | 7.7 KB | source |
 | [scripts/quality/check-phase3-chat-undo.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase3-chat-undo.ts) | script | quality gate | verified | workflow drift; shell breakage | 5.9 KB | source |
-| [scripts/quality/check-phase4-mcp-tool-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase4-mcp-tool-contract.ts) | script | quality gate | verified | workflow drift; shell breakage | 19.5 KB | source |
+| [scripts/quality/check-phase4-mcp-tool-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase4-mcp-tool-contract.ts) | script | quality gate | verified | workflow drift; shell breakage | 24.9 KB | source |
 | [scripts/quality/check-phase4-mcp-workflow-replay-http.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase4-mcp-workflow-replay-http.ts) | script | quality gate | verified | workflow drift; shell breakage | 20.6 KB | source |
 | [scripts/quality/check-phase4-mcp-workflow-replay.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase4-mcp-workflow-replay.ts) | script | quality gate | verified | workflow drift; shell breakage | 9.5 KB | source |
 | [scripts/quality/check-phase5-notion-adapter.ts](/Users/srinivasvaddi/Projects/wonderfood/scripts/quality/check-phase5-notion-adapter.ts) | script | quality gate | verified | workflow drift; shell breakage | 16.2 KB | source |
@@ -516,18 +516,18 @@
 | [server/.env.example](/Users/srinivasvaddi/Projects/wonderfood/server/.env.example) | data | repo artifact | verified | drift risk; manual review needed | 1.4 KB | source |
 | [server/package-lock.json](/Users/srinivasvaddi/Projects/wonderfood/server/package-lock.json) | lockfile | repo artifact | verified | dependency drift; reproducibility loss | 60.0 KB | generated |
 | [server/package.json](/Users/srinivasvaddi/Projects/wonderfood/server/package.json) | config | workspace config | verified | build drift; env mismatch | 580 B | source |
-| [server/src/agents/chat-agent.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/chat-agent.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 8.6 KB | source |
+| [server/src/agents/chat-agent.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/chat-agent.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 12.8 KB | source |
 | [server/src/agents/domain.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/domain.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 1.0 KB | source |
-| [server/src/agents/executor.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/executor.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 18.0 KB | source |
+| [server/src/agents/executor.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/executor.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 28.4 KB | source |
 | [server/src/agents/planner.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/planner.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 621 B | source |
-| [server/src/agents/retrieval.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/retrieval.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 7.5 KB | source |
+| [server/src/agents/retrieval.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/retrieval.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 12.9 KB | source |
 | [server/src/agents/verifier.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/agents/verifier.ts) | code | agent runtime | verified | behavior drift; boundary mismatch | 5.8 KB | source |
-| [server/src/chat-runtime.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/chat-runtime.ts) | code | backend service | verified | behavior drift; boundary mismatch | 6.6 KB | source |
+| [server/src/chat-runtime.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/chat-runtime.ts) | code | backend service | verified | behavior drift; boundary mismatch | 6.9 KB | source |
 | [server/src/chat-storage.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/chat-storage.ts) | code | backend service | verified | behavior drift; boundary mismatch | 171 B | source |
-| [server/src/chat.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/chat.ts) | code | backend service | verified | behavior drift; boundary mismatch | 17.3 KB | source |
-| [server/src/conversations.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/conversations.ts) | code | backend service | verified | behavior drift; boundary mismatch | 4.6 KB | source |
+| [server/src/chat.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/chat.ts) | code | backend service | verified | behavior drift; boundary mismatch | 19.1 KB | source |
+| [server/src/conversations.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/conversations.ts) | code | backend service | verified | behavior drift; boundary mismatch | 6.3 KB | source |
 | [server/src/health/snapshots.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/health/snapshots.ts) | code | backend service | verified | behavior drift; boundary mismatch | 5.8 KB | source |
-| [server/src/index.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/index.ts) | code | backend service | verified | behavior drift; boundary mismatch | 50.2 KB | source |
+| [server/src/index.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/index.ts) | code | backend service | verified | behavior drift; boundary mismatch | 58.2 KB | source |
 | [server/src/kernel/computed-fields.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/kernel/computed-fields.ts) | code | backend kernel | verified | behavior drift; boundary mismatch | 10.5 KB | source |
 | [server/src/kernel/decision-ledger.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/kernel/decision-ledger.ts) | code | backend kernel | verified | behavior drift; boundary mismatch | 4.2 KB | historical |
 | [server/src/kernel/expression.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/kernel/expression.ts) | code | backend kernel | verified | behavior drift; boundary mismatch | 1.2 KB | source |
@@ -559,40 +559,45 @@
 | [server/src/mcp/protocol-compat.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/protocol-compat.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 1.4 KB | source |
 | [server/src/mcp/resources.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/resources.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 11.7 KB | source |
 | [server/src/mcp/server.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/server.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 11.2 KB | source |
-| [server/src/mcp/state.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/state.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 50.4 KB | source |
+| [server/src/mcp/state.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/state.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 58.0 KB | source |
 | [server/src/mcp/tools.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/mcp/tools.ts) | code | MCP transport | verified | behavior drift; boundary mismatch | 106.7 KB | source |
 | [server/src/provenance.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/provenance.ts) | code | backend service | verified | behavior drift; boundary mismatch | 1.4 KB | source |
 | [server/src/providers/contracts.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/contracts.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.6 KB | source |
+| [server/src/providers/json-state.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/json-state.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.7 KB | source |
 | [server/src/providers/notion/citations.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/citations.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.3 KB | source |
-| [server/src/providers/notion/client.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/client.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 6.3 KB | source |
+| [server/src/providers/notion/client.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/client.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 7.2 KB | source |
 | [server/src/providers/notion/discovery.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/discovery.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.1 KB | source |
 | [server/src/providers/notion/projection.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/projection.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.8 KB | source |
-| [server/src/providers/notion/pull.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/pull.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 11.8 KB | source |
+| [server/src/providers/notion/pull.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/pull.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 12.9 KB | source |
 | [server/src/providers/notion/push.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/push.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 16.7 KB | source |
 | [server/src/providers/notion/webhook.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/notion/webhook.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 7.1 KB | source |
-| [server/src/providers/sheets/client.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/client.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 3.8 KB | source |
+| [server/src/providers/sheets/client.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/client.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 4.4 KB | source |
 | [server/src/providers/sheets/health.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/health.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 1.1 KB | source |
 | [server/src/providers/sheets/projection.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/projection.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 4.4 KB | source |
-| [server/src/providers/sheets/pull.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/pull.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 14.6 KB | source |
+| [server/src/providers/sheets/pull.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/pull.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 14.8 KB | source |
 | [server/src/providers/sheets/push.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/push.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 23.4 KB | source |
 | [server/src/providers/sheets/workbook.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sheets/workbook.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 2.5 KB | source |
-| [server/src/providers/sync/notion.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sync/notion.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 5.0 KB | source |
-| [server/src/providers/sync/sheets.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sync/sheets.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 10.0 KB | source |
-| [server/src/providers/webhooks/notion.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/webhooks/notion.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 6.4 KB | source |
+| [server/src/providers/sync/notion.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sync/notion.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 5.1 KB | source |
+| [server/src/providers/sync/sheets.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/sync/sheets.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 9.9 KB | source |
+| [server/src/providers/undo-worker.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/undo-worker.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 610 B | source |
+| [server/src/providers/undo.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/undo.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 8.8 KB | source |
+| [server/src/providers/webhooks/notion.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/webhooks/notion.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 6.5 KB | source |
 | [server/src/providers/webhooks/sheets.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/providers/webhooks/sheets.ts) | code | provider adapter | verified | behavior drift; boundary mismatch | 10.0 KB | source |
 | [server/src/responses.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/responses.ts) | code | backend service | verified | behavior drift; boundary mismatch | 596 B | source |
 | [server/src/server.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/server.ts) | code | backend service | verified | behavior drift; boundary mismatch | 34 B | source |
 | [server/src/types/command.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/types/command.ts) | code | backend service | verified | behavior drift; boundary mismatch | 1.4 KB | source |
 | [server/src/types/json-logic-js.d.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/types/json-logic-js.d.ts) | code | backend service | verified | behavior drift; boundary mismatch | 140 B | source |
-| [server/src/types/local-query.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/types/local-query.ts) | code | backend service | verified | behavior drift; boundary mismatch | 16.2 KB | source |
+| [server/src/types/local-query.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/types/local-query.ts) | code | backend service | verified | behavior drift; boundary mismatch | 17.0 KB | source |
 | [server/src/workflow-checkpoint.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflow-checkpoint.ts) | code | backend service | verified | behavior drift; boundary mismatch | 40 B | source |
-| [server/src/workflows/checkpoint.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/checkpoint.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 7.5 KB | source |
-| [server/src/workflows/compensation.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/compensation.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 5.0 KB | source |
+| [server/src/workflows/checkpoint.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/checkpoint.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 8.1 KB | source |
+| [server/src/workflows/compensation.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/compensation.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 6.4 KB | source |
 | [server/src/workflows/control-machine.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/control-machine.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 1.4 KB | source |
 | [server/src/workflows/index.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/index.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 221 B | source |
 | [server/src/workflows/runner.ts](/Users/srinivasvaddi/Projects/wonderfood/server/src/workflows/runner.ts) | code | workflow engine | verified | behavior drift; boundary mismatch | 228 B | source |
 | [server/test/approval-schema-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/approval-schema-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 5.5 KB | source |
-| [server/test/canonical-verification.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/canonical-verification.ts) | test | server contract test | verified | fixture drift; false confidence | 4.1 KB | source |
+| [server/test/canonical-verification.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/canonical-verification.ts) | test | server contract test | verified | fixture drift; false confidence | 4.3 KB | source |
+| [server/test/chat-agent-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/chat-agent-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 4.1 KB | source |
+| [server/test/chat-isolation-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/chat-isolation-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 6.8 KB | source |
 | [server/test/chat-runtime-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/chat-runtime-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 1.1 KB | source |
 | [server/test/computed-fields-replay.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/computed-fields-replay.ts) | test | server contract test | verified | fixture drift; false confidence | 4.3 KB | source |
 | [server/test/decision-ledger.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/decision-ledger.ts) | test | server contract test | verified | fixture drift; false confidence | 3.5 KB | historical |
@@ -600,20 +605,23 @@
 | [server/test/ingress-security.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/ingress-security.ts) | test | server contract test | verified | fixture drift; false confidence | 7.1 KB | source |
 | [server/test/kernel-validation.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/kernel-validation.ts) | test | server contract test | verified | fixture drift; false confidence | 1.0 KB | source |
 | [server/test/living-rule-worker.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/living-rule-worker.ts) | test | server contract test | verified | fixture drift; false confidence | 5.8 KB | source |
-| [server/test/local-query-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/local-query-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 6.8 KB | source |
+| [server/test/local-query-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/local-query-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 7.7 KB | source |
 | [server/test/mcp-official-security.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/mcp-official-security.ts) | test | server contract test | verified | fixture drift; false confidence | 5.8 KB | source |
 | [server/test/mcp-protocol-compat.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/mcp-protocol-compat.ts) | test | server contract test | verified | fixture drift; false confidence | 879 B | source |
 | [server/test/mcp-resource-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/mcp-resource-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 752 B | source |
 | [server/test/mcp-review-approval.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/mcp-review-approval.ts) | test | server contract test | verified | fixture drift; false confidence | 3.5 KB | source |
-| [server/test/multiturn-conversation-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/multiturn-conversation-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 2.4 KB | source |
-| [server/test/notion/contract-notion-webhook.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/notion/contract-notion-webhook.ts) | test | server contract test | verified | fixture drift; false confidence | 12.5 KB | source |
+| [server/test/multiturn-conversation-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/multiturn-conversation-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 3.8 KB | source |
+| [server/test/notion/contract-notion-webhook.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/notion/contract-notion-webhook.ts) | test | server contract test | verified | fixture drift; false confidence | 14.4 KB | source |
 | [server/test/notion/unit-notion-adapter.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/notion/unit-notion-adapter.ts) | test | server contract test | verified | fixture drift; false confidence | 11.3 KB | source |
 | [server/test/operation-observer.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/operation-observer.ts) | test | server contract test | verified | fixture drift; false confidence | 2.5 KB | source |
 | [server/test/package-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/package-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 4.5 KB | source |
 | [server/test/package-registry-computed-fields.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/package-registry-computed-fields.ts) | test | server contract test | verified | fixture drift; false confidence | 2.9 KB | source |
 | [server/test/package-registry-persistence.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/package-registry-persistence.ts) | test | server contract test | verified | fixture drift; false confidence | 3.1 KB | source |
 | [server/test/package-runtime.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/package-runtime.ts) | test | server contract test | verified | fixture drift; false confidence | 1.4 KB | source |
+| [server/test/provider-persistence-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-persistence-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 1.9 KB | source |
+| [server/test/provider-retry-pagination-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-retry-pagination-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 9.4 KB | source |
 | [server/test/provider-sync-sheets.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-sync-sheets.ts) | test | server contract test | verified | fixture drift; false confidence | 8.5 KB | source |
+| [server/test/provider-undo-authority-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-undo-authority-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 16.8 KB | source |
 | [server/test/provider-webhook-ingress.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-webhook-ingress.ts) | test | server contract test | verified | fixture drift; false confidence | 4.5 KB | source |
 | [server/test/provider-webhook-retry.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/provider-webhook-retry.ts) | test | server contract test | verified | fixture drift; false confidence | 3.0 KB | source |
 | [server/test/query-kernel.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/query-kernel.ts) | test | server contract test | verified | fixture drift; false confidence | 2.6 KB | source |
@@ -630,10 +638,12 @@
 | [server/test/reactive-receipts.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/reactive-receipts.ts) | test | server contract test | verified | fixture drift; false confidence | 2.3 KB | source |
 | [server/test/reactive-runtime-drain.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/reactive-runtime-drain.ts) | test | server contract test | verified | fixture drift; false confidence | 4.2 KB | source |
 | [server/test/reactive-runtime-package-registry.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/reactive-runtime-package-registry.ts) | test | server contract test | verified | fixture drift; false confidence | 2.6 KB | source |
+| [server/test/retrieval-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/retrieval-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 1.8 KB | source |
 | [server/test/rule-engine.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/rule-engine.ts) | test | server contract test | verified | fixture drift; false confidence | 1012 B | source |
 | [server/test/sheets-adapter-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/sheets-adapter-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 9.5 KB | source |
 | [server/test/state-causal-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/state-causal-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 2.0 KB | source |
 | [server/test/view-and-package-registry.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/view-and-package-registry.ts) | test | server contract test | verified | fixture drift; false confidence | 1.3 KB | source |
+| [server/test/workflow-checkpoint-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/workflow-checkpoint-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 2.1 KB | source |
 | [server/test/workflow-control-machine.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/workflow-control-machine.ts) | test | server contract test | verified | fixture drift; false confidence | 673 B | source |
 | [server/test/workflow-document-contract.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/workflow-document-contract.ts) | test | server contract test | verified | fixture drift; false confidence | 1.7 KB | source |
 | [server/test/workflow-input-binding.ts](/Users/srinivasvaddi/Projects/wonderfood/server/test/workflow-input-binding.ts) | test | server contract test | verified | fixture drift; false confidence | 4.1 KB | source |
@@ -711,7 +721,7 @@
 | [src/workflows/runtime.ts](/Users/srinivasvaddi/Projects/wonderfood/src/workflows/runtime.ts) | code | repo artifact | verified | behavior drift; boundary mismatch | 16.4 KB | source |
 | [tests/ai/runtime.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/ai/runtime.test.ts) | test | test coverage | verified | fixture drift; false confidence | 4.3 KB | source |
 | [tests/chat/agent-continuation.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/chat/agent-continuation.test.ts) | test | test coverage | verified | fixture drift; false confidence | 1.9 KB | source |
-| [tests/chat/local-query.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/chat/local-query.test.ts) | test | test coverage | verified | fixture drift; false confidence | 4.1 KB | source |
+| [tests/chat/local-query.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/chat/local-query.test.ts) | test | test coverage | verified | fixture drift; false confidence | 4.8 KB | source |
 | [tests/chat/local-undo.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/chat/local-undo.test.ts) | test | test coverage | verified | fixture drift; false confidence | 3.1 KB | source |
 | [tests/chat/render.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/chat/render.test.ts) | test | test coverage | verified | fixture drift; false confidence | 2.0 KB | source |
 | [tests/config/ai.test.ts](/Users/srinivasvaddi/Projects/wonderfood/tests/config/ai.test.ts) | test | test coverage | verified | fixture drift; false confidence | 2.6 KB | source |
