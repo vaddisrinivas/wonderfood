@@ -235,6 +235,118 @@
       "href": "/sources"
     }
   ],
+  "mobile_surface": {
+    "title": "Food, gently",
+    "subtitle": "Five small clues. Open only what you need.",
+    "card_density": "compact",
+    "header_action": { "label": "Ask", "href": "/chat" },
+    "card_order": ["tonight", "expiring", "pantry_gaps", "shopping_next", "sync_health"],
+    "cards": [
+      {
+        "id": "tonight",
+        "label": "Tonight",
+        "icon": "🍲",
+        "tone": "moss",
+        "query": { "collections": ["meal_plan", "recipe"], "match": "planned|tonight|dinner", "limit": 1 },
+        "empty": { "title": "Pick an easy dinner", "detail": "Use what is already close at hand." },
+        "nested": [
+          {
+            "id": "prep_first",
+            "label": "Prep first",
+            "query": { "collections": ["inventory", "inventory_lot", "ingredient"], "match": "use soon|open|available|expiry", "limit": 1 },
+            "empty": "Nothing urgent"
+          }
+        ],
+        "action": { "label": "Ask for a plan", "href": "/chat" }
+      },
+      {
+        "id": "expiring",
+        "label": "Expiring soon",
+        "icon": "⏳",
+        "tone": "amber",
+        "query": { "collections": ["inventory", "inventory_lot", "ingredient"], "match": "use soon|expire|best by|use by", "limit": 1 },
+        "empty": { "title": "Nothing urgent", "detail": "Freshness alerts will land here." },
+        "nested": [
+          {
+            "id": "good_for",
+            "label": "Good for",
+            "query": { "collections": ["recipe", "meal_plan"], "match": "planned|dinner|recipe", "limit": 1 },
+            "empty": "A simple meal"
+          }
+        ],
+        "action": { "label": "Add item", "href": "/capture" }
+      },
+      {
+        "id": "pantry_gaps",
+        "label": "Pantry gaps",
+        "icon": "🧺",
+        "tone": "plum",
+        "query": { "collections": ["shopping_demand", "ingredient", "shopping_item"], "match": "missing|needed|gap|to buy|demand", "limit": 1 },
+        "empty": { "title": "No known blockers", "detail": "Add a recipe or pantry item to compare." },
+        "nested": [
+          {
+            "id": "already_have",
+            "label": "Have",
+            "query": { "collections": ["inventory", "inventory_lot"], "match": "available|open|pantry", "limit": 1 },
+            "empty": "Pantry not scanned"
+          }
+        ],
+        "action": { "label": "Make list", "href": "/chat" }
+      },
+      {
+        "id": "shopping_next",
+        "label": "Shopping next",
+        "icon": "🛒",
+        "tone": "blue",
+        "query": { "collections": ["shopping_item", "shopping_demand", "shopping_list"], "match": "to buy|needed|shopping|cart", "limit": 1 },
+        "empty": { "title": "No open pickups", "detail": "Keep the next trip small and useful." },
+        "nested": [
+          {
+            "id": "supports",
+            "label": "Supports",
+            "query": { "collections": ["meal_plan", "recipe"], "match": "planned|tonight|dinner", "limit": 1 },
+            "empty": "Your next meal"
+          }
+        ],
+        "action": { "label": "Capture item", "href": "/capture" }
+      },
+      {
+        "id": "sync_health",
+        "label": "Sync health",
+        "icon": "✦",
+        "tone": "neutral",
+        "query": { "collections": ["source_record"], "match": "synced|ready|healthy|current", "limit": 1 },
+        "empty": { "title": "Quiet and ready", "detail": "No source work needs your attention." },
+        "nested": [],
+        "action": { "label": "Keep cooking", "href": "/chat" }
+      }
+    ],
+    "advanced": {
+      "visible": false,
+      "cards": [
+        {
+          "id": "source_provenance",
+          "label": "Source and provenance",
+          "icon": "🔗",
+          "tone": "neutral",
+          "query": { "collections": ["source_record", "audit_event"], "limit": 1 },
+          "empty": { "title": "No source detail loaded", "detail": "Connect or inspect data homes here." },
+          "nested": [],
+          "action": { "label": "Open sources", "href": "/sources" }
+        },
+        {
+          "id": "package_controls",
+          "label": "Package controls",
+          "icon": "⚙",
+          "tone": "neutral",
+          "query": { "collections": ["audit_event"], "limit": 1 },
+          "empty": { "title": "Advanced setup", "detail": "Edit package and debug controls stay hidden by default." },
+          "nested": [],
+          "action": { "label": "Open settings", "href": "/settings" }
+        }
+      ]
+    }
+  },
   "relations": [
     { "from": "household", "to": "member", "name": "has_member" },
     { "from": "member", "to": "preference", "name": "has_preference" },

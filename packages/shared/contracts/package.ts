@@ -38,6 +38,7 @@ export type PackagePresentationSpec = {
   surfaces: PackageSurfaceSpec[];
   visualIdentity?: Record<string, unknown>;
   dashboardBlocks?: Record<string, unknown>[];
+  mobileSurface?: Record<string, unknown>;
   render?: Record<string, unknown>;
   richDetailSchema?: string;
   providerTemplateFields?: Record<string, unknown>;
