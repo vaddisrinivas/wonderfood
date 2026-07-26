@@ -85,6 +85,7 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState('');
   const [testing, setTesting] = useState<AiProviderProfile['id'] | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const enabledAiCount = [settings.ai.primary, settings.ai.fallback].filter((profile) => profile.enabled).length;
   const enabledSourceCount = [settings.notion.enabled, settings.sheets.enabled, settings.postgres.enabled, settings.mcp.enabled].filter(Boolean).length;
   const healthReady = healthStatus?.availability === 'available';
@@ -172,7 +173,7 @@ export default function SettingsScreen() {
             <View style={styles.contextBar}>
               <View>
                 <Text style={[styles.brand, { color: theme.colors.moss }]}>LIFEOS / CONNECTIONS</Text>
-                <Text style={[styles.context, { color: theme.colors.muted }]}>AI · sources · app behavior</Text>
+                <Text style={[styles.context, { color: theme.colors.muted }]}>Food workspace settings</Text>
               </View>
               <Pill tone={settings.ai.primary.enabled ? 'moss' : 'blue'}>
                 {settings.ai.primary.enabled ? 'AI READY' : 'LOCAL FIRST'}
@@ -181,8 +182,8 @@ export default function SettingsScreen() {
 
             <PageHeader
               eyebrow="Local first"
-              title="Choose AI and data sources."
-              subtitle="Paste your own keys, connect your own Notion or Sheets, or keep using local records with no external source."
+              title="Configure food, sources, and app preferences."
+              subtitle="Keep local records on top, and open Advanced for external connectors."
             />
 
             <SectionTitle title="Status" />
@@ -197,7 +198,7 @@ export default function SettingsScreen() {
                 tone={enabledSourceCount ? 'plum' : 'amber'}
                 label="Food data"
                 title={enabledSourceCount ? `${enabledSourceCount} source${enabledSourceCount === 1 ? '' : 's'} enabled` : 'No external sources'}
-                detail="Notion, Sheets and Postgres are optional and editable here."
+                detail="External food connectors are optional and available in Advanced."
               />
               <SettingsStatusCard
                 tone="moss"
@@ -226,135 +227,149 @@ export default function SettingsScreen() {
               </View>
             </Card>
 
-            <SectionTitle title="AI providers" />
-            <View style={[styles.providerGrid, compact && styles.stack]}>
-              <ProviderCard
-                title="Primary"
-                subtitle="Used first for Chat and AI-assisted capture."
-                profile={settings.ai.primary}
-                onChange={(patch) => updateProfile('primary', patch)}
-                onChoose={(provider) => chooseProvider('primary', provider)}
-                onPreset={(patch) => applyProviderPreset('primary', patch)}
-                onTest={() => void test('primary')}
-                testing={testing === 'primary'}
-              />
-              <ProviderCard
-                title="Fallback"
-                subtitle="Used only when Primary is unavailable."
-                profile={settings.ai.fallback}
-                onChange={(patch) => updateProfile('fallback', patch)}
-                onChoose={(provider) => chooseProvider('fallback', provider)}
-                onPreset={(patch) => applyProviderPreset('fallback', patch)}
-                onTest={() => void test('fallback')}
-                testing={testing === 'fallback'}
-              />
-            </View>
-
-            <SectionTitle title="Data sources" />
-            <Card tone="plum" style={styles.healthCard}>
-              <View style={styles.switchRow}>
+            <Card tone="moss" style={styles.advancedCard}>
+              <Pressable accessibilityRole="button" onPress={() => setShowAdvanced((current) => !current)} style={({ pressed }) => [styles.configButton, pressed && styles.pressed, { backgroundColor: theme.colors.paper, borderWidth: 1, borderColor: theme.colors.line }]}>
                 <View style={styles.switchCopy}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Android Health Connect</Text>
-                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{healthStatus?.message ?? 'Checking Health Connect...'}</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Advanced</Text>
+                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Show advanced providers, connectors, behavior, and credentials.</Text>
                 </View>
-                <Pill tone={healthStatus?.availability === 'available' ? 'moss' : 'blue'}>
-                  {Platform.OS === 'android' ? `${healthStatus?.granted.length ?? 0} scopes` : 'Android only'}
-                </Pill>
-              </View>
-              <View style={styles.healthActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    const next = await requestLifeOSHealthPermissions();
-                    setHealthStatus(next);
-                    setNotice(next.message);
-                  }}
-                  style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}
-                >
-                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Grant permissions</Text>
-                  <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={async () => {
-                    const opened = await openLifeOSHealthSettings();
-                    setNotice(opened ? 'Opened Health Connect settings.' : 'Health Connect settings are available on Android only.');
-                  }}
-                  style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}
-                >
-                  <Text style={[styles.secondaryButtonText, { color: theme.colors.ink }]}>Open system settings</Text>
-                </Pressable>
-              </View>
+                <Text style={[styles.configButtonArrow, { color: theme.colors.ink }]}>{showAdvanced ? '-' : '+'}</Text>
+              </Pressable>
             </Card>
 
-            <View style={[styles.providerGrid, compact && styles.stack]}>
-              <SourceCard
-                title="Notion"
-                detail="Pages, databases, relations and exact source blocks."
-                enabled={settings.notion.enabled}
-                onEnabled={(enabled) => setSettings((current) => ({ ...current, notion: { ...current.notion, enabled } }))}
-              >
-                <Field label="Internal integration token" value={settings.notion.token} placeholder="ntn_…" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, notion: { ...current.notion, token } }))} />
-                <Field label="LifeOS root page ID" value={settings.notion.pageId} placeholder="Page ID" onChangeText={(pageId) => setSettings((current) => ({ ...current, notion: { ...current.notion, pageId } }))} />
-                <Field label="Data source IDs" value={settings.notion.dataSourceIds} placeholder="Comma-separated IDs" onChangeText={(dataSourceIds) => setSettings((current) => ({ ...current, notion: { ...current.notion, dataSourceIds } }))} />
-              </SourceCard>
-              <SourceCard
-                title="Google Sheets"
-                detail="Workbook rows, formulas and spreadsheet-primary use."
-                enabled={settings.sheets.enabled}
-                onEnabled={(enabled) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, enabled } }))}
-              >
-                <Field label="Google access token" value={settings.sheets.token} placeholder="Paste or connect OAuth token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, token } }))} />
-                <Field label="Workbook ID" value={settings.sheets.workbookId} placeholder="Spreadsheet ID" onChangeText={(workbookId) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, workbookId } }))} />
-                <Field label="Canonical sheet" value={settings.sheets.sheetName} placeholder="LifeOS Canonical" onChangeText={(sheetName) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, sheetName } }))} />
-              </SourceCard>
-            </View>
-
-            <View style={[styles.providerGrid, compact && styles.stack]}>
-              <SourceCard
-                title="Postgres"
-                detail="Optional durable authority for self-managed or hosted data."
-                enabled={settings.postgres.enabled}
-                onEnabled={(enabled) => setSettings((current) => ({ ...current, postgres: { ...current.postgres, enabled } }))}
-              >
-                <Field label="Database URL" value={settings.postgres.databaseUrl} placeholder="postgresql://…" secureTextEntry onChangeText={(databaseUrl) => setSettings((current) => ({ ...current, postgres: { ...current.postgres, databaseUrl } }))} />
-              </SourceCard>
-              <SourceCard
-                title="MCP"
-                detail="Same LifeOS contract by default: app chat, agents and external AI clients use one skill/schema/tool surface."
-                enabled={settings.mcp.enabled}
-                onEnabled={(enabled) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, enabled } }))}
-              >
-                <Field label="MCP URL" value={settings.mcp.url} placeholder="https://…/mcp" onChangeText={(url) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, url } }))} />
-                <Field label="MCP token" value={settings.mcp.token} placeholder="Optional private token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, token } }))} />
-              </SourceCard>
-            </View>
-
-            <SectionTitle title="LifeOS behavior" />
-            <Card style={styles.connectorCard}>
-              <View style={styles.switchRow}>
-                <View style={styles.switchCopy}>
-                  <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Packages, skills, agents and schemas</Text>
-                  <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Choose active domains, edit skill instructions, enable workflows and agents, and validate schema overrides.</Text>
+            {showAdvanced ? (
+              <>
+                <SectionTitle title="AI providers" />
+                <View style={[styles.providerGrid, compact && styles.stack]}>
+                  <ProviderCard
+                    title="Primary"
+                    subtitle="Used first for Chat and AI-assisted capture."
+                    profile={settings.ai.primary}
+                    onChange={(patch) => updateProfile('primary', patch)}
+                    onChoose={(provider) => chooseProvider('primary', provider)}
+                    onPreset={(patch) => applyProviderPreset('primary', patch)}
+                    onTest={() => void test('primary')}
+                    testing={testing === 'primary'}
+                  />
+                  <ProviderCard
+                    title="Fallback"
+                    subtitle="Used only when Primary is unavailable."
+                    profile={settings.ai.fallback}
+                    onChange={(patch) => updateProfile('fallback', patch)}
+                    onChoose={(provider) => chooseProvider('fallback', provider)}
+                    onPreset={(patch) => applyProviderPreset('fallback', patch)}
+                    onTest={() => void test('fallback')}
+                    testing={testing === 'fallback'}
+                  />
                 </View>
-                <Pill tone="plum">CONFIG STUDIO</Pill>
-              </View>
-              <Link href="/config" asChild>
-                <Pressable accessibilityRole="button" style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
-                  <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Customize app</Text>
-                  <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
-                </Pressable>
-              </Link>
-            </Card>
 
-            <Card tone="blue" style={styles.securityCard}>
-              <Text style={[styles.securityTitle, { color: theme.colors.blue }]}>{Platform.OS === 'web' ? 'Browser storage notice' : 'Device-secured credentials'}</Text>
-              <Text style={[styles.securityBody, { color: theme.colors.muted }]}>
-                {Platform.OS === 'web'
-                  ? 'Web saves credentials only in this browser. For sensitive keys, prefer Android/iOS encrypted storage.'
-                  : 'Provider keys are stored with the operating system secure store and are not bundled into the app or committed to the repository.'}
-              </Text>
-            </Card>
+                <SectionTitle title="Data sources" />
+                <Card tone="plum" style={styles.healthCard}>
+                  <View style={styles.switchRow}>
+                    <View style={styles.switchCopy}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Android Health Connect</Text>
+                      <Text style={[styles.cardBody, { color: theme.colors.muted }]}>{healthStatus?.message ?? 'Checking Health Connect...'}</Text>
+                    </View>
+                    <Pill tone={healthStatus?.availability === 'available' ? 'moss' : 'blue'}>
+                      {Platform.OS === 'android' ? `${healthStatus?.granted.length ?? 0} scopes` : 'Android only'}
+                    </Pill>
+                  </View>
+                  <View style={styles.healthActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={async () => {
+                        const next = await requestLifeOSHealthPermissions();
+                        setHealthStatus(next);
+                        setNotice(next.message);
+                      }}
+                      style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Grant permissions</Text>
+                      <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={async () => {
+                        const opened = await openLifeOSHealthSettings();
+                        setNotice(opened ? 'Opened Health Connect settings.' : 'Health Connect settings are available on Android only.');
+                      }}
+                      style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.secondaryButtonText, { color: theme.colors.ink }]}>Open system settings</Text>
+                    </Pressable>
+                  </View>
+                </Card>
+
+                <View style={[styles.providerGrid, compact && styles.stack]}>
+                  <SourceCard
+                    title="Notion"
+                    detail="Food notes, pages, and lists."
+                    enabled={settings.notion.enabled}
+                    onEnabled={(enabled) => setSettings((current) => ({ ...current, notion: { ...current.notion, enabled } }))}
+                  >
+                    <Field label="Integration token" value={settings.notion.token} placeholder="ntn_…" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, notion: { ...current.notion, token } }))} />
+                    <Field label="Root page ID" value={settings.notion.pageId} placeholder="Page ID" onChangeText={(pageId) => setSettings((current) => ({ ...current, notion: { ...current.notion, pageId } }))} />
+                    <Field label="Page IDs" value={settings.notion.dataSourceIds} placeholder="Comma-separated IDs" onChangeText={(dataSourceIds) => setSettings((current) => ({ ...current, notion: { ...current.notion, dataSourceIds } }))} />
+                  </SourceCard>
+                  <SourceCard
+                    title="Google Sheets"
+                    detail="Kitchen tables and shopping backups."
+                    enabled={settings.sheets.enabled}
+                    onEnabled={(enabled) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, enabled } }))}
+                  >
+                    <Field label="Google access token" value={settings.sheets.token} placeholder="Paste or connect OAuth token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, token } }))} />
+                    <Field label="Workbook ID" value={settings.sheets.workbookId} placeholder="Spreadsheet ID" onChangeText={(workbookId) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, workbookId } }))} />
+                    <Field label="Kitchen tab" value={settings.sheets.sheetName} placeholder="LifeOS Canonical" onChangeText={(sheetName) => setSettings((current) => ({ ...current, sheets: { ...current.sheets, sheetName } }))} />
+                  </SourceCard>
+                </View>
+
+                <View style={[styles.providerGrid, compact && styles.stack]}>
+                  <SourceCard
+                    title="Postgres"
+                    detail="Optional durable storage for advanced exports."
+                    enabled={settings.postgres.enabled}
+                    onEnabled={(enabled) => setSettings((current) => ({ ...current, postgres: { ...current.postgres, enabled } }))}
+                  >
+                    <Field label="Database URL" value={settings.postgres.databaseUrl} placeholder="postgresql://…" secureTextEntry onChangeText={(databaseUrl) => setSettings((current) => ({ ...current, postgres: { ...current.postgres, databaseUrl } }))} />
+                  </SourceCard>
+                  <SourceCard
+                    title="MCP"
+                    detail="Optional command bridge when you run custom agents."
+                    enabled={settings.mcp.enabled}
+                    onEnabled={(enabled) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, enabled } }))}
+                  >
+                    <Field label="MCP URL" value={settings.mcp.url} placeholder="https://…/mcp" onChangeText={(url) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, url } }))} />
+                    <Field label="MCP token" value={settings.mcp.token} placeholder="Optional private token" secureTextEntry onChangeText={(token) => setSettings((current) => ({ ...current, mcp: { ...current.mcp, token } }))} />
+                  </SourceCard>
+                </View>
+
+                <SectionTitle title="LifeOS behavior" />
+                <Card style={styles.connectorCard}>
+                  <View style={styles.switchRow}>
+                    <View style={styles.switchCopy}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.ink }]}>Packages, skills, agents and schemas</Text>
+                      <Text style={[styles.cardBody, { color: theme.colors.muted }]}>Choose active domains, edit skill instructions, enable workflows and agents, and validate schema overrides.</Text>
+                    </View>
+                    <Pill tone="plum">CONFIG STUDIO</Pill>
+                  </View>
+                  <Link href="/config" asChild>
+                    <Pressable accessibilityRole="button" style={({ pressed }) => [styles.configButton, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+                      <Text style={[styles.configButtonText, { color: theme.colors.paper }]}>Customize app</Text>
+                      <Text style={[styles.configButtonArrow, { color: theme.colors.paper }]}>→</Text>
+                    </Pressable>
+                  </Link>
+                </Card>
+
+                <Card tone="blue" style={styles.securityCard}>
+                  <Text style={[styles.securityTitle, { color: theme.colors.blue }]}>{Platform.OS === 'web' ? 'Browser storage notice' : 'Device-secured credentials'}</Text>
+                  <Text style={[styles.securityBody, { color: theme.colors.muted }]}>
+                    {Platform.OS === 'web'
+                      ? 'Web saves credentials only in this browser. For sensitive keys, prefer Android/iOS encrypted storage.'
+                      : 'Provider keys are stored with the operating system secure store and are not bundled into the app or committed to the repository.'}
+                  </Text>
+                </Card>
+              </>
+            ) : null}
 
             {notice ? <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.colors.moss }]}>{notice}</Text> : null}
             <Pressable
@@ -543,6 +558,7 @@ const styles = StyleSheet.create({
   principleKicker: { color: colors.moss, fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
   principleTitle: { color: colors.ink, fontSize: 24, lineHeight: 29, fontWeight: '800', letterSpacing: -0.7, marginTop: 12 },
   principleBody: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 7, maxWidth: 680 },
+  advancedCard: { padding: 0 },
   flow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 20 },
   arrow: { color: colors.muted, fontSize: 15 },
   providerGrid: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },

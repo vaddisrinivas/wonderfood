@@ -23,11 +23,11 @@ type FoodMode = 'Today' | 'Kitchen' | 'Plan' | 'Recipes' | 'Shop';
 type FoodTone = 'moss' | 'amber' | 'blue' | 'plum' | 'red';
 
 const FOOD_MODES: Array<{ id: FoodMode; label: string; glyph: string }> = [
-  { id: 'Today', label: 'Today', glyph: '🍽️' },
-  { id: 'Kitchen', label: 'Kitchen', glyph: '🥬' },
+  { id: 'Today', label: 'Dinner', glyph: '🍽️' },
+  { id: 'Kitchen', label: 'Pantry', glyph: '🥬' },
   { id: 'Plan', label: 'Plan', glyph: '🗓️' },
   { id: 'Recipes', label: 'Recipes', glyph: '🍳' },
-  { id: 'Shop', label: 'Shop', glyph: '🧺' },
+  { id: 'Shop', label: 'Shopping', glyph: '🧺' },
 ];
 
 const fallbackMeals = [
@@ -53,23 +53,23 @@ const fallbackShop = [
 const viewCopy: Record<string, { title: string; subtitle: string; empty: string }> = {
   Overview: {
     title: 'Food home',
-    subtitle: 'Dinner, pantry, shopping and cooking memory.',
-    empty: 'Capture a meal, pantry item or receipt to wake up this food space.',
+    subtitle: 'Tonight, pantry, and shopping in one place.',
+    empty: 'Capture a meal idea, pantry item, or receipt to start.',
   },
   Meals: {
-    title: 'Meals',
-    subtitle: 'Plans, actuals and recipe decisions for the week.',
-    empty: 'Plan dinner or ask AI to draft meals from the kitchen.',
+    title: 'Dinner',
+    subtitle: 'Planned meals and what to cook tonight.',
+    empty: 'Ask Food AI for a dinner plan or add one in capture.',
   },
   Kitchen: {
     title: 'Kitchen',
-    subtitle: 'What you have, what expires, what needs correction.',
-    empty: 'Add pantry items to build the kitchen.',
+    subtitle: 'What is in your pantry and what should move first.',
+    empty: 'Add pantry items to start planning from what you already have.',
   },
   Shopping: {
     title: 'Shopping',
-    subtitle: 'To buy, receipt review and put-away flow.',
-    empty: 'Add missing ingredients or generate a list from meal plans.',
+    subtitle: 'What to buy, what is already in cart, what is missing.',
+    empty: 'Add missing ingredients or create a shopping list.',
   },
 };
 
@@ -551,7 +551,7 @@ export default function FoodScreen() {
     const snapshot = await exportRecoverySnapshot(db);
     setBackupSnapshot(snapshot);
     const totalRows = snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0);
-    setNotice(`Kitchen backup saved: ${totalRows} items.`);
+    setNotice(`Pantry backup saved: ${totalRows} items.`);
   };
 
   const restoreBackup = async () => {
@@ -560,7 +560,7 @@ export default function FoodScreen() {
       return;
     }
     await importRecoverySnapshot(db, backupSnapshot);
-    setNotice('Kitchen backup restored.');
+    setNotice('Pantry backup restored.');
     setRefreshNonce((value) => value + 1);
   };
 
@@ -578,19 +578,22 @@ export default function FoodScreen() {
                 {isFoodDomain && todayMeal ? `Tonight: ${todayMeal.title}` : todayMeal?.title ?? `Run your ${domainLabel.toLowerCase()} workspace.`}
               </Text>
               <Text style={[styles.heroBody, { color: theme.colors.ink }, compact && styles.heroBodyCompact]}>
-                {todayMeal?.body || todayMeal?.meta || `Open a view, ask with context, or add the next ${domainLabel.toLowerCase()} item.`}
+                {todayMeal?.body || todayMeal?.meta || (isFoodDomain ? "Open tonight's board, ask for a dinner idea, or add your next pantry item." : `Open a view, ask with context, or add the next ${domainLabel.toLowerCase()} item.`)}
               </Text>
               <View style={styles.heroActions}>
-                <ActionButton label={todayMeal ? `Open ${isFoodDomain ? 'dinner' : 'record'}` : `Ask ${domainLabel} AI`} onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')} />
-                <ActionButton label={`Ask ${domainLabel} AI`} quiet onPress={() => router.push('/chat')} />
+                <ActionButton
+                  label={todayMeal ? `${isFoodDomain ? 'Open dinner plan' : 'Open record'}` : `Ask ${isFoodDomain ? 'Food' : domainLabel} AI`}
+                  onPress={() => router.push(todayMeal ? `/record/${todayMeal.id}` : '/chat')}
+                />
+                <ActionButton label={isFoodDomain ? 'Ask Food AI' : `Ask ${domainLabel} AI`} quiet onPress={() => router.push('/chat')} />
               </View>
               <View style={styles.commandLane}>
                 {isFoodDomain ? (
                   <>
                     <CommandStep index="01" title="Dinner" detail={todayMeal?.title ?? 'Pick tonight'} tone="moss" href={todayMeal ? `/record/${todayMeal.id}` : '/chat'} />
-                    <CommandStep index="02" title="Pantry risk" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
-                    <CommandStep index="03" title="Shopping gap" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
-                    <CommandStep index="04" title="AI prep" detail="Ask, cook, log, update" tone="plum" href="/chat" />
+                    <CommandStep index="02" title="Pantry priority" detail={kitchenItem?.title ?? 'Nothing urgent'} tone="amber" href={kitchenItem ? `/record/${kitchenItem.id}` : '/capture'} />
+                    <CommandStep index="03" title="Shopping needs" detail={shoppingItem?.title ?? 'No blockers'} tone="blue" href={shoppingItem ? `/record/${shoppingItem.id}` : '/capture'} />
+                    <CommandStep index="04" title="Chef helper" detail="Plan, cook, adjust, log" tone="plum" href="/chat" />
                   </>
                 ) : surfaceColumns.map((surface, index) => (
                   <CommandStep key={surface.id} index={String(index + 1).padStart(2, '0')} title={surface.title} detail={surface.subtitle} tone={index === 0 ? 'moss' : index === 1 ? 'blue' : 'plum'} href="/config" />
@@ -599,8 +602,20 @@ export default function FoodScreen() {
             </Card>
 
             <View style={[styles.todayRail, compact && styles.todayRailCompact]}>
-              <FeatureCard tone="amber" label={isFoodDomain ? 'Use soon' : 'First surface'} item={isFoodDomain ? kitchenItem : surfaceColumns[0]?.records[0]} fallbackTitle={isFoodDomain ? 'Nothing urgent' : surfaceColumns[0]?.title ?? 'No records yet'} fallbackBody={isFoodDomain ? 'Use-soon pantry items will appear here.' : surfaceColumns[0]?.subtitle ?? 'Connect a source or capture a record.'} />
-              <FeatureCard tone="blue" label={isFoodDomain ? 'Shopping' : 'Sources'} item={isFoodDomain ? shoppingItem : undefined} fallbackTitle={isFoodDomain ? 'No shopping pressure' : `${domainLabel} sources`} fallbackBody={isFoodDomain ? 'Missing ingredients and receipt items will appear here.' : 'Notion, Sheets and device records can feed this space.'} />
+              <FeatureCard
+                tone="amber"
+                label={isFoodDomain ? 'Next priority' : 'First surface'}
+                item={isFoodDomain ? kitchenItem : surfaceColumns[0]?.records[0]}
+                fallbackTitle={isFoodDomain ? 'Nothing urgent' : surfaceColumns[0]?.title ?? 'No records yet'}
+                fallbackBody={isFoodDomain ? 'Pantry-ready items appear here.' : surfaceColumns[0]?.subtitle ?? 'Connect a source or capture a record.'}
+              />
+              <FeatureCard
+                tone="blue"
+                label={isFoodDomain ? 'Shopping' : 'Sources'}
+                item={isFoodDomain ? shoppingItem : undefined}
+                fallbackTitle={isFoodDomain ? 'No shopping pressure' : `${domainLabel} sources`}
+                fallbackBody={isFoodDomain ? 'Missing ingredients and pickups appear here.' : 'Notion, Sheets and device records can feed this space.'}
+              />
             </View>
           </View>
         ) : null;
@@ -700,7 +715,7 @@ export default function FoodScreen() {
               {isFoodDomain ? (
                 <>
                   <RecordColumn title="Meals" subtitle="Tonight and next plans" records={mealRecords} visuals={visualIdentity.collections ?? {}} empty="Plan dinner from pantry." />
-                <RecordColumn title="Kitchen" subtitle="Use-soon and available" records={kitchenRecords} visuals={visualIdentity.collections ?? {}} empty="Add pantry items." />
+                  <RecordColumn title="Pantry" subtitle="Use-first and available" records={kitchenRecords} visuals={visualIdentity.collections ?? {}} empty="Add pantry items." />
                   <RecordColumn title="Shopping" subtitle="Missing and to-buy" records={shoppingRecords} visuals={visualIdentity.collections ?? {}} empty="No shopping pressure." />
                 </>
               ) : surfaceColumns.map((surface) => (
@@ -759,7 +774,7 @@ export default function FoodScreen() {
         return foodConfig.showPackageCard ? (
           <Card key={section} style={styles.configCard}>
             <View style={styles.configCopy}>
-              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Want to change the kitchen?</Text>
+              <Text style={[styles.configTitle, { color: theme.colors.ink }]}>Want to tune the Food flow?</Text>
               <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Ask AI to reshape the screen, or open Settings for advanced controls.</Text>
             </View>
             <Link href="/config" style={[styles.configLink, { color: theme.colors.moss }]}>Settings</Link>
@@ -834,7 +849,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
     ? records.length
       ? records.map((record) => record.title).slice(0, 2).join(' + ')
       : 'No records yet'
-    : primary?.title ?? (block.kind === 'action' ? 'Open workspace' : 'Awaiting data');
+    : primary?.title ?? (block.kind === 'action' ? 'Open kitchen board' : 'Awaiting data');
   return (
     <Link href={href as never} asChild>
       <Pressable accessibilityRole="button" style={({ pressed }) => [
