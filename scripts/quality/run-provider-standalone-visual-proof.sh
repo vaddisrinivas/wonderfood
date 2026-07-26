@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+node scripts/quality/require-disposable-lane.mjs provider
 
 STAMP="$(date +%s)"
 OUT_DIR="${PROVIDER_VISUAL_OUT:-app/build/evidence/live-workspace/provider-standalone-authority-$STAMP}"

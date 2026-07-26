@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SPREADSHEET_ID="${GOOGLE_SHEETS_TEST_SPREADSHEET_ID:-1-cu0kk39SBUeKS326Sc5GHCEFGF5L3305fr0Pkpf6H4}"
+node "$ROOT_DIR/scripts/quality/require-disposable-lane.mjs" provider
+: "${GOOGLE_SHEETS_TEST_SPREADSHEET_ID:?Set GOOGLE_SHEETS_TEST_SPREADSHEET_ID to an explicit disposable workbook}"
+SPREADSHEET_ID="$GOOGLE_SHEETS_TEST_SPREADSHEET_ID"
 SCOPE="https://www.googleapis.com/auth/spreadsheets"
 REDIRECT_PORT="${GOOGLE_OAUTH_REDIRECT_PORT:-8765}"
 REDIRECT_URI="http://127.0.0.1:${REDIRECT_PORT}/callback"

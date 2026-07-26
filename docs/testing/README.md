@@ -4,6 +4,31 @@ WonderFood uses JUnit4, Robolectric, coroutine-test, hand-written fakes, Compose
 tests, AndroidX Test/Espresso, Room migration tests, and isolated SQLite store tests.
 Tests are offline by default and fixtures must remain deterministic and generic.
 
+## Live-lane safety gate
+
+Default `quality` and `check:product` gates do not mutate providers or devices.
+They only test the fail-closed guard.
+
+Live provider proofs require both:
+
+```bash
+export WONDERFOOD_LIVE_PROVIDER_ACK=DISPOSABLE_PROVIDER_ONLY
+export WONDERFOOD_DISPOSABLE_PROVIDER_TARGET=notion-ci-fixture
+export NOTION_TEST_PAGE_ID=<disposable-parent-page-id>
+# Set GOOGLE_SHEETS_TEST_SPREADSHEET_ID when a proof writes an existing workbook.
+```
+
+Device mutation proofs require an explicitly selected emulator:
+
+```bash
+export WONDERFOOD_DEVICE_MUTATION_ACK=DISPOSABLE_EMULATOR_ONLY
+export ANDROID_SERIAL=emulator-5554
+```
+
+Production, personal, default, primary, or physical-device targets are rejected.
+The acknowledgement variables grant no credentials; load secrets separately and
+never place secret values in target labels or command output.
+
 ## Commands
 
 Run the local quality harness:

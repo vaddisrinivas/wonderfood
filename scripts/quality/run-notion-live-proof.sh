@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+node scripts/quality/require-disposable-lane.mjs provider
 
 if [[ -z "${NOTION_TOKEN:-${NOTION_API_KEY:-}}" ]]; then
   echo "Set NOTION_TOKEN or NOTION_API_KEY." >&2

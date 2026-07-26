@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+node scripts/quality/require-disposable-lane.mjs provider
 
 STAMP="$(date +%s)"
 SCOPE="https://www.googleapis.com/auth/spreadsheets"

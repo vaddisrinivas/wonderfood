@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -7,6 +8,11 @@ import { defaultLifeOSSettings, type LifeOSSettings } from '../../src/settings/l
 import { MemoryDb } from '../../tests/helpers/memory-db';
 
 type Json = Record<string, unknown>;
+
+execFileSync(process.execPath, ['scripts/quality/require-disposable-lane.mjs', 'provider'], {
+  cwd: process.cwd(),
+  stdio: 'inherit',
+});
 
 const evidenceDir = process.env.PROVIDER_WRITEBACK_OUT
   ? join(process.cwd(), process.env.PROVIDER_WRITEBACK_OUT)
@@ -64,51 +70,11 @@ function pageTitle(page: Json) {
 }
 
 async function findNotionParentPage(token: string) {
-  const shallowParent = async (page: Json | null): Promise<string> => {
-    let current = page;
-    let lastPageId = String(current?.id || '');
-    for (let index = 0; current && index < 8; index += 1) {
-      const parent = current.parent && typeof current.parent === 'object' ? current.parent as Json : null;
-      if (parent?.type === 'workspace') return String(current.id || lastPageId);
-      if (parent?.type !== 'page_id' || !parent.page_id) return lastPageId;
-      lastPageId = String(parent.page_id);
-      current = await notionRequest(token, 'GET', `/pages/${encodeURIComponent(lastPageId)}`).catch(() => null);
-    }
-    return lastPageId;
-  };
-
-  if (process.env.NOTION_TEST_PAGE_ID?.trim()) {
-    const candidate = process.env.NOTION_TEST_PAGE_ID.trim();
-    const page = await notionRequest(token, 'GET', `/pages/${candidate}`).catch(() => null);
-    const shallow = await shallowParent(page);
-    if (shallow) return shallow;
-  }
-
-  const searchPages = async (query?: string, pageSize = 25) => {
-    const search = await notionRequest(token, 'POST', '/search', {
-      filter: { property: 'object', value: 'page' },
-      page_size: pageSize,
-      ...(query ? { query } : {}),
-    });
-    return Array.isArray(search.results) ? search.results as Json[] : [];
-  };
-  const preferredPages = await searchPages('OpenClaw LifeOS', 5);
-  const preferred = preferredPages.find((page) => !page.archived && pageTitle(page) === 'OpenClaw LifeOS');
-  if (preferred?.id) return shallowParent(preferred);
-  const preferredAncestor = preferredPages.find((page) => !page.archived);
-  const shallowPreferred = await shallowParent(preferredAncestor ?? null);
-  if (shallowPreferred) return shallowPreferred;
-
-  const pages = await searchPages(undefined, 25);
-  const workspacePages = pages.filter((page) => {
-    const parent = page.parent && typeof page.parent === 'object' ? page.parent as Json : null;
-    return !page.archived
-      && parent?.type === 'workspace'
-      && !pageTitle(page).startsWith('WonderFood C14 Scenario Proof')
-      && !pageTitle(page).startsWith('WonderFood V4 Linked Workspace');
-  });
-  const fallback = workspacePages[0] || pages.find((page) => !page.archived);
-  return shallowParent(fallback ?? null);
+  const candidate = process.env.NOTION_TEST_PAGE_ID?.trim();
+  ensure(candidate, 'Set NOTION_TEST_PAGE_ID to an explicit disposable parent page.');
+  const page = await notionRequest(token, 'GET', `/pages/${encodeURIComponent(candidate)}`);
+  ensure(!page.archived && !page.in_trash, 'Disposable Notion parent page is unavailable.');
+  return candidate;
 }
 
 function firstDataSourceId(database: Json) {

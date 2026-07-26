@@ -5,6 +5,10 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APK_PATH="$PROJECT_DIR/app/build/outputs/apk/play/debug/app-play-debug.apk"
 OUT_DIR="$PROJECT_DIR/app/build/evidence/android-lifeos-e2e/android-lifeos-e2e-$(date +%s)"
 DEVICE_SERIAL="${1:-}"
+if [[ -n "$DEVICE_SERIAL" ]]; then
+  export LIFEOS_ANDROID_SERIAL="$DEVICE_SERIAL"
+fi
+node "$PROJECT_DIR/scripts/quality/require-disposable-lane.mjs" device
 NOTION_URL="${WONDERFOOD_PROOF_NOTION_URL:-}"
 SHEETS_URL="${WONDERFOOD_PROOF_SHEETS_URL:-}"
 

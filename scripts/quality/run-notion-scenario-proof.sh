@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
+node scripts/quality/require-disposable-lane.mjs provider
 
 STAMP="$(date +%s)"
 OUT_DIR="${NOTION_SCENARIO_OUT:-app/build/evidence/live-workspace}"
@@ -35,63 +36,8 @@ if [[ -z "$token" ]]; then
   exit 1
 fi
 
-parent_page_id="${NOTION_TEST_PAGE_ID:-}"
-if [[ -z "$parent_page_id" ]]; then
-  parent_page_id="$(NOTION_TOKEN="$token" python3 - <<'PY'
-import json
-import os
-import urllib.request
-
-token = os.environ["NOTION_TOKEN"]
-
-def search_pages(query=None, page_size=25):
-    payload = {"filter": {"property": "object", "value": "page"}, "page_size": page_size}
-    if query:
-        payload["query"] = query
-    body = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.notion.com/v1/search",
-        data=body,
-        headers={
-            "Authorization": "Bearer " + token,
-            "Notion-Version": "2026-03-11",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as response:
-        return json.load(response).get("results", [])
-
-def page_title(page):
-    props = page.get("properties") or {}
-    for prop in props.values():
-        title = prop.get("title") if isinstance(prop, dict) else None
-        if title:
-            return "".join(part.get("plain_text", "") for part in title).strip()
-    return ""
-
-preferred = [
-    page for page in search_pages("OpenClaw LifeOS", page_size=5)
-    if not page.get("archived") and page_title(page) == "OpenClaw LifeOS"
-]
-pages = [page for page in search_pages(page_size=25) if not page.get("archived")]
-fallback = [
-    page for page in pages
-    if (page.get("parent") or {}).get("type") == "workspace"
-    and not page_title(page).startswith("WonderFood C14 Scenario Proof")
-    and not page_title(page).startswith("WonderFood V4 Linked Workspace")
-]
-
-chosen = (preferred or fallback or pages or [{}])[0]
-print(chosen.get("id", ""))
-PY
-)"
-fi
-
-if [[ -z "$parent_page_id" ]]; then
-  echo "No accessible Notion parent page found." >&2
-  exit 1
-fi
+: "${NOTION_TEST_PAGE_ID:?Set NOTION_TEST_PAGE_ID to an explicit disposable parent page}"
+parent_page_id="$NOTION_TEST_PAGE_ID"
 
 scenario_page_id="$(NOTION_TOKEN="$token" NOTION_PARENT_PAGE_ID="$parent_page_id" python3 - <<'PY'
 import json

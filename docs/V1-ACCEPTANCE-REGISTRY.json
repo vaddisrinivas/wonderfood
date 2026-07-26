@@ -146,8 +146,8 @@
     {
       "id": "P2-13",
       "priority": "P2",
-      "status": "PARTIAL",
-      "summary": "Default repo gates avoid live mutation, but lane isolation is still soft."
+      "status": "RESOLVED",
+      "summary": "Live provider and device mutation lanes fail closed unless an explicit disposable fixture or emulator target is acknowledged; default gates run non-mutating guard tests."
     }
   ]
 }

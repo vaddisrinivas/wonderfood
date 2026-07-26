@@ -2,6 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
+node "$root_dir/scripts/quality/require-disposable-lane.mjs" device
 sdk_dir="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 emulator_bin="$sdk_dir/emulator/emulator"
 adb_bin="$sdk_dir/platform-tools/adb"
