@@ -36,6 +36,7 @@ import { ChatStreamEvent } from './responses';
 import { getActionEvent, runUndo } from './mcp/state';
 import { installReactiveRuntime } from './kernel/install-reactive-runtime';
 import { chatAgent, localQuery } from './agents/chat-agent';
+import { PackageRegistry } from './kernel/package-registry';
 import {
   deleteHealthSnapshot,
   exportHealthSnapshots,
@@ -49,6 +50,8 @@ const idempotencyCache = new Map<string, { messageId: string; runId: string; con
 const runStatus = new Map<string, { status: 'running' | 'completed' | 'cancelled' | 'failed'; controller: AbortController; conversationId: string }>();
 const runByConversation = new Map<string, string>();
 const previousResponseByConversation = new Map<string, string>();
+const packageRegistryPath = process.env.LIFEOS_PACKAGE_REGISTRY_PATH?.trim()
+  || `${process.cwd()}/server-data/package-registry.json`;
 
 installReactiveRuntime();
 
@@ -127,6 +130,17 @@ function latestUiMessageText(messages: unknown[]): string {
 function shouldUseWebSearch(text: string): boolean {
   if (process.env.OPENAI_WEB_SEARCH_ENABLED?.trim().toLowerCase() === 'false') return false;
   return /\b(today|latest|current|recent|web|internet|news|price|weather|search|look up)\b/i.test(text);
+}
+
+function packageRegistry() {
+  return new PackageRegistry({ path: packageRegistryPath });
+}
+
+function packageRegistryState(registry = packageRegistry()) {
+  return {
+    active: registry.getActive(),
+    receipts: registry.getReceipts(),
+  };
 }
 
 function getPath(rawUrl: string | undefined) {
@@ -891,6 +905,77 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
     ok(res, thread);
+    return;
+  }
+
+  if (req.method === 'GET' && path === '/packages/active') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    ok(res, {
+      status: 'ok',
+      ...packageRegistryState(),
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/packages/preview') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    let payload: { package?: unknown };
+    try {
+      payload = await readJsonBody(req) as typeof payload;
+    } catch {
+      badRequest(res, 'Invalid JSON');
+      return;
+    }
+    const preview = packageRegistry().preview(payload.package);
+    ok(res, {
+      status: preview.valid ? 'valid' : 'invalid',
+      preview,
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/packages/activate') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    let payload: { package?: unknown };
+    try {
+      payload = await readJsonBody(req) as typeof payload;
+    } catch {
+      badRequest(res, 'Invalid JSON');
+      return;
+    }
+    try {
+      const registry = packageRegistry();
+      const active = registry.activate(payload.package);
+      installReactiveRuntime();
+      ok(res, {
+        status: 'activated',
+        active,
+        receipt: registry.getReceipts().at(-1),
+      });
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : 'package_invalid');
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && path === '/packages/rollback') {
+    if (!assertAuth(req, res)) {
+      return;
+    }
+    const registry = packageRegistry();
+    const active = registry.rollback();
+    installReactiveRuntime();
+    ok(res, {
+      status: active ? 'rolled_back' : 'no_previous_package',
+      active,
+      receipt: registry.getReceipts().at(-1),
+    });
     return;
   }
 
