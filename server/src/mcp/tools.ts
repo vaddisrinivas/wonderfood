@@ -5,6 +5,7 @@ import {
   WorkflowDocument,
   createActionEvent,
   createRecord,
+  createRecordWithAction,
   findActionByIdempotencyKey,
   findRecord,
   findWorkflow,
@@ -13,6 +14,8 @@ import {
   markActionCompleted,
   markActionFailed,
   runUndo,
+  updateRecordWithAction,
+  archiveRecordWithAction,
   updateRecord,
   archiveRecord,
   listWorkflows,
@@ -472,6 +475,14 @@ function actionToolPolicy(input: { tool: string; domain: string; command: string
   return evaluateMcpPolicy(input);
 }
 
+function policyBlocksExecution(policy: ReturnType<typeof evaluateMcpPolicy>) {
+  return policy.decision === 'deny' || policy.decision === 'clarify';
+}
+
+function policyNeedsReview(policy: ReturnType<typeof evaluateMcpPolicy>) {
+  return policy.decision === 'review';
+}
+
 function buildDeterministicIdempotencyKey(input: {
   operation: string;
   dataHome: MutableProvider;
@@ -581,7 +592,7 @@ function getOrCreateActionFromPolicy(input: {
   before?: unknown;
   undoPayload?: unknown;
 }): ToolResult {
-  if (!input.policy.allowed) {
+  if (input.policy.decision === 'deny') {
     return {
       reviewOnly: true,
       safety: input.policy.safety,
@@ -591,7 +602,7 @@ function getOrCreateActionFromPolicy(input: {
       },
     };
   }
-  if (input.policy.requiresClarification) {
+  if (input.policy.decision === 'clarify') {
     return {
       reviewOnly: true,
       safety: input.policy.safety,
@@ -599,6 +610,17 @@ function getOrCreateActionFromPolicy(input: {
         allowed: false,
         requiresClarification: true,
         clarifyingQuestion: input.policy.clarifyingQuestion,
+        policy: input.policy,
+      },
+    };
+  }
+  if (input.policy.decision === 'review') {
+    return {
+      reviewOnly: true,
+      safety: input.policy.safety,
+      json: {
+        allowed: false,
+        status: 'queued_for_review',
         policy: input.policy,
       },
     };
@@ -650,7 +672,7 @@ function requireDurableReviewApproval(input: {
   requestedOperation: Record<string, unknown>;
   existingAction?: ActionEvent | null;
 }): { ok: true; action: ActionEvent; approval: McpReviewApprovalReceipt } | { ok: false; result: ToolResult } {
-  const approvalRequest = buildApprovalRequest({
+  const computedApprovalRequest = buildApprovalRequest({
     tool: input.tool,
     domain: input.domain,
     actionId: input.existingAction?.id ?? input.actionId,
@@ -659,6 +681,18 @@ function requireDurableReviewApproval(input: {
     recordIds: input.recordIds,
     requestedOperation: input.requestedOperation,
   });
+  const storedApprovalRequest = asRecord(asRecord(input.existingAction?.after_json)?.approval_request);
+  const approvalRequest = storedApprovalRequest
+    && storedApprovalRequest.tool === computedApprovalRequest.tool
+    && storedApprovalRequest.operationId === computedApprovalRequest.operationId
+    && storedApprovalRequest.idempotencyKey === computedApprovalRequest.idempotencyKey
+    && storedApprovalRequest.operationHash === computedApprovalRequest.operationHash
+    && typeof storedApprovalRequest.requestedAt === 'string'
+    ? {
+        ...computedApprovalRequest,
+        requestedAt: storedApprovalRequest.requestedAt,
+      }
+    : computedApprovalRequest;
   const action = createActionEvent({
     id: input.existingAction?.id ?? input.actionId,
     actor: input.actor,
@@ -1159,9 +1193,9 @@ async function runWorkflowStep(
     command: commandText,
     actor,
   });
-  if (!policy.allowed || policy.requiresClarification) {
+  if (policyBlocksExecution(policy)) {
     return {
-      status: policy.requiresClarification ? 'failed' : 'skipped',
+      status: policy.decision === 'clarify' ? 'failed' : 'skipped',
       tool,
       stepResult: { policy },
       changedRecords: [],
@@ -2414,7 +2448,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       command: `create ${collection} ${title || 'record'}`,
       actor,
     });
-    if (!policy.allowed || policy.requiresClarification) {
+    if (policyBlocksExecution(policy)) {
       return resolveToolResult({ allowed: false, policy }, true, policy.safety);
     }
 
@@ -2448,7 +2482,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
     }
     const idempotencyKeyWithDefault = resolvedIdempotencyKey;
 
-    const reviewGate = policy.safety === 'review-required'
+    const reviewGate = policyNeedsReview(policy)
       ? requireDurableReviewApproval({
         approval: typedArgs.approval_receipt,
         tool: name,
@@ -2575,39 +2609,48 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       }
     }
 
-    const created = createRecord({
-      id: recordId,
-      domain,
-      collection,
-      title,
-      properties,
-      relations,
-      source: source.source,
-      archived_at: null,
-    } as Omit<McpRecord, 'created_at' | 'updated_at'>);
-    const action = createActionEvent({
-      id: (reviewGate && reviewGate.ok ? reviewGate.action.id : existing?.id) ?? actionId,
+    const created = createRecordWithAction({
+      actionId: (reviewGate && reviewGate.ok ? reviewGate.action.id : existing?.id) ?? actionId,
       actor,
       domain,
       tool: name,
       risk: policy.risk,
-      recordIds: [created.id],
-      idempotencyKey: idempotencyKeyWithDefault,
       command: `create_record:${collection}`,
-      after: created,
-      undoPayload: { operation: 'delete_record', record_id: created.id, provider_snapshot: source.source_snapshot },
+      idempotencyKey: idempotencyKeyWithDefault,
       sourceIds: existing ? existing.source_ids : [],
       conversationId,
+      record: {
+        id: recordId,
+        domain,
+        collection,
+        title,
+        properties,
+        relations: relations as McpRecord['relations'],
+        source: source.source,
+        archived_at: null,
+      },
+      undoPayload: { operation: 'delete_record', record_id: recordId, provider_snapshot: source.source_snapshot },
       operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
       causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
     });
-    const completed = markActionCompleted(action.id, action.command, {
-      record: created,
+    if (created.action.status === 'failed' || !created.record) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        action: created.action,
+        message: 'record could not be created through the canonical writer.',
+      }, true, policy.safety, {
+        action: created.action,
+        sourceSnapshot: source.source_snapshot,
+      });
+    }
+    const completed = markActionCompleted(created.action.id, created.action.command, {
+      record: created.record,
       source_snapshot: source.source_snapshot,
     });
     return resolveWriteResult({
-      action: completed || action,
-      record: created,
+      action: completed || created.action,
+      record: created.record,
       source_snapshot: source.source_snapshot,
       ...(notionWriteResult
         ? {
@@ -2616,7 +2659,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
             action_receipt: notionWriteResult.action_receipt,
           }
         : {}),
-    }, completed || action);
+    }, completed || created.action);
   }
 
   if (name === RECORD_TOOLS.updateRecord) {
@@ -2695,7 +2738,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
           dataHome,
         },
       });
-    if (!policy.allowed || policy.requiresClarification) {
+    if (policyBlocksExecution(policy)) {
       return getOrCreateActionFromPolicy({
         tool: name,
         domain,
@@ -2718,7 +2761,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         source_snapshot: getActionSourceSnapshot(repeated),
       }, repeated);
     }
-    const reviewGate = policy.safety === 'review-required'
+    const reviewGate = policyNeedsReview(policy)
       ? requireDurableReviewApproval({
         approval: typedArgs.approval_receipt,
         tool: name,
@@ -2871,43 +2914,56 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
     }, true, policy.safety);
   }
 
-  const updated = updateRecord(id, {
-    ...patch,
-    title: updatedTitle,
-    domain: updatedDomain,
-    collection: updatedCollection,
-    properties: updatedProperties,
+  const updated = updateRecordWithAction({
+    actionId: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
+    actor,
+    domain,
+    tool: name,
+    risk: policy.risk,
+    command: `update_record:${id}`,
+    id,
+    patch: {
+      ...patch,
+      title: updatedTitle,
+      domain: updatedDomain,
+      collection: updatedCollection,
+      properties: updatedProperties,
+      ...(updatedArchivedAt === null ? { archived_at: null } : {}),
+    },
+    idempotencyKey: resolvedIdempotencyKey,
+    sourceIds: repeated ? repeated.source_ids : [],
+    conversationId,
     ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
-    ...(updatedArchivedAt === null ? { archived_at: null } : {}),
+    undoPayload: {
+      operation: 'restore_after_update',
+      before: existing,
+      record_id: id,
+      provider_snapshot: source.source_snapshot,
+    },
+    expectedRevision: existing.revision,
+    operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
+    causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
   });
-  if (!updated) {
-    throw new Error(`record ${id} not found`);
+  if (updated.action.status === 'failed' || !updated.record) {
+    return resolveToolResult({
+      allowed: false,
+      policy,
+      action: updated.action,
+      message: 'record could not be updated through the canonical writer.',
+      source_snapshot: source.source_snapshot,
+    }, true, policy.safety, {
+      action: updated.action,
+      sourceSnapshot: source.source_snapshot,
+    });
   }
-
-    const action = repeated ?? createActionEvent({
-      id: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
-      actor,
-      domain,
-      tool: name,
-      risk: policy.risk,
-      recordIds: [updated.after.id],
-      idempotencyKey: resolvedIdempotencyKey,
-      command: `update_record:${id}`,
-      before: updated.before,
-      after: updated.after,
-      undoPayload: { operation: 'restore_after_update', before: updated.before, provider_snapshot: source.source_snapshot },
-      conversationId,
-      operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
-      causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
-  });
-  const completed = markActionCompleted((repeated ?? action).id, action.command, {
-    record: updated.after,
+  const completed = markActionCompleted(updated.action.id, updated.action.command, {
+    record: updated.record,
     source_snapshot: source.source_snapshot,
   });
   return resolveWriteResult(
     {
-      action: completed || action,
-      record: updated.after,
+      action: completed || updated.action,
+      record: updated.record,
       source_snapshot: source.source_snapshot,
       ...(notionWriteResult
         ? {
@@ -2917,7 +2973,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
           }
         : {}),
     },
-    completed || action,
+    completed || updated.action,
   );
 }
 
@@ -2948,7 +3004,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       command: `archive ${existing.collection} ${id}`,
       actor,
     });
-    if (!policy.allowed || policy.requiresClarification) {
+    if (policyBlocksExecution(policy)) {
       return getOrCreateActionFromPolicy({
         tool: name,
         domain,
@@ -2997,7 +3053,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         source_snapshot: getActionSourceSnapshot(repeated),
       }, repeated);
     }
-    const reviewGate = policy.safety === 'review-required'
+    const reviewGate = policyNeedsReview(policy)
       ? requireDurableReviewApproval({
         approval: typedArgs.approval_receipt,
         tool: name,
@@ -3147,42 +3203,43 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       }, true, policy.safety);
     }
 
-    const archived = archiveRecord(id);
-    if (!archived) {
-      throw new Error(`record ${id} not found`);
-    }
-
-    if (dataHome !== 'local_sqlite') {
-      archived.after = {
-        ...archived.after,
-        source: source.source,
-      };
-    }
-
-    const action = repeated ?? createActionEvent({
-      id: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
+    const archived = archiveRecordWithAction({
+      actionId: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
       actor,
       domain,
       tool: name,
       risk: policy.risk,
-      recordIds: [archived.after.id],
-      idempotencyKey,
       command: `archive_record:${id}`,
-      before: archived.before,
-      after: archived.after,
-      undoPayload: { operation: 'restore_after_archive', record: archived.before, provider_snapshot: source.source_snapshot },
+      id,
+      idempotencyKey: resolvedIdempotencyKey,
+      sourceIds: repeated ? repeated.source_ids : [],
       conversationId,
+      ...(dataHome === 'local_sqlite' ? {} : { source: source.source }),
+      undoPayload: { operation: 'restore_after_archive', record: existing, provider_snapshot: source.source_snapshot },
+      expectedRevision: existing.revision,
       operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
       causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
     });
-    const completed = markActionCompleted(action.id, action.command, {
-      record: archived.after,
+    if (archived.action.status === 'failed' || !archived.record) {
+      return resolveToolResult({
+        allowed: false,
+        policy,
+        action: archived.action,
+        message: 'record could not be archived through the canonical writer.',
+        source_snapshot: source.source_snapshot,
+      }, true, policy.safety, {
+        action: archived.action,
+        sourceSnapshot: source.source_snapshot,
+      });
+    }
+    const completed = markActionCompleted(archived.action.id, archived.action.command, {
+      record: archived.record,
       source_snapshot: source.source_snapshot,
     });
   return resolveWriteResult(
       {
-        action: completed || action,
-        record: archived.after,
+        action: completed || archived.action,
+        record: archived.record,
         source_snapshot: source.source_snapshot,
         ...(notionWriteResult
           ? {
@@ -3192,7 +3249,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
             }
           : {}),
       },
-      completed || action,
+      completed || archived.action,
     );
   }
 
@@ -3234,15 +3291,14 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         sourceSnapshot: getActionSourceSnapshot(preexisting),
       });
     }
-    if (!policy.allowed || policy.requiresClarification) {
+    if (policyBlocksExecution(policy)) {
       return resolveToolResult({
         allowed: false,
-        requiresClarification: true,
         policy,
         message: 'workflow run blocked by policy',
       }, true, policy.safety);
     }
-    const reviewGate = policy.safety === 'review-required'
+    const reviewGate = policyNeedsReview(policy)
       ? requireDurableReviewApproval({
         approval: typedArgs.approval_receipt,
         tool: name,
@@ -3377,7 +3433,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       command: `undo ${actionId}`,
       actor,
     });
-    if (!policy.allowed || policy.requiresClarification) {
+    if (policyBlocksExecution(policy)) {
       return resolveToolResult({ allowed: false, policy }, true, policy.safety);
     }
 
@@ -3398,7 +3454,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         sourceSnapshot: snapshot,
       });
     }
-    const reviewGate = policy.safety === 'review-required'
+    const reviewGate = policyNeedsReview(policy)
       ? requireDurableReviewApproval({
         approval: typedArgs.approval_receipt,
         tool: name,
@@ -3451,10 +3507,10 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
 
     const undoResult = runUndo(actionId);
     if (!undoResult.success) {
-      markActionFailed(undoAction.id, undoResult.message);
-      return resolveToolResult({ status: 'failed', action: action, undoResult }, false, 'review-only', {
-        action,
-        sourceSnapshot: getActionSourceSnapshot(action),
+      const failedUndoAction = markActionFailed(undoAction.id, undoResult.message) ?? undoAction;
+      return resolveToolResult({ status: 'failed', action: failedUndoAction, undoResult }, false, 'review-only', {
+        action: failedUndoAction,
+        sourceSnapshot: getActionSourceSnapshot(undoResult.action ?? action),
       });
     }
 

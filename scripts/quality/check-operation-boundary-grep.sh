@@ -18,4 +18,9 @@ if ! rg -n "DELETE FROM records WHERE source_provider = \\?" src/providers/provi
   exit 1
 fi
 
+if rg -n "^\s*import\s*\{[^}]*\b(createRecord|updateRecord|archiveRecord)\b" server/src/agents/executor.ts; then
+  echo "Operation boundary violation: chat executor must not import direct MCP record mutators." >&2
+  exit 1
+fi
+
 echo "Operation boundary grep passed"

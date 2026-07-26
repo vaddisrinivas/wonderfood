@@ -1,10 +1,12 @@
+import { normalizeConfidence, type ConfidenceValue } from '@/packages/shared/contracts/confidence';
+
 type Policy = {
   domain: string;
   command: string;
   allowed: boolean;
   reason: string;
   policy: string;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: ConfidenceValue;
   requiresClarification?: boolean;
   clarifyingQuestion?: string;
 };
@@ -20,7 +22,7 @@ export async function applyDomainPolicy(input: { domain: string; command: string
     policy: 'food-safe',
     allowed: !ambiguousWrite,
     reason: ambiguousWrite ? 'Write command missing target subject for safe approval policy.' : 'Within allowed domain tool surface.',
-    confidence: 'high' as const,
+    confidence: normalizeConfidence(ambiguousWrite ? 'medium' : 'high'),
     requiresClarification: ambiguousWrite,
     clarifyingQuestion: ambiguousWrite
       ? 'Which exact record should I update?'

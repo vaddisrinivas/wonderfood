@@ -1,18 +1,24 @@
 import { loadCatalog } from '../../../src/domain/catalog';
-import { ActionRisk, evaluateCommandPolicy, PolicyDecision } from '@/src/actions/policy';
+import {
+  ActionRisk,
+  evaluateCommandPolicy,
+  PolicyDecision,
+  policyCanExecute,
+  policyNeedsClarification,
+} from '@/src/actions/policy';
 import { createHash } from 'node:crypto';
 import {
   ActionEvent,
-  archiveRecord,
+  archiveRecordWithAction,
   createActionEvent,
-  createRecord,
+  createRecordWithAction,
   findActionByIdempotencyKey,
   getActionEvent,
   findRecord,
   listRecords,
   markActionCompleted,
   markActionFailed,
-  updateRecord,
+  updateRecordWithAction,
 } from '../mcp/state';
 import { callMcpTool, type ToolResult } from '../mcp/tools';
 import { readNotionConfig } from '../providers/notion/client';
@@ -24,7 +30,7 @@ export type AgentStep = {
   required: boolean;
 };
 
-export type ActionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type ActionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
 
 export type ActionReceipt = {
   id: string;
@@ -111,6 +117,28 @@ function toReceipt(action: ActionEvent): ActionReceipt {
     updated_at: action.updated_at,
     idempotency_key: action.idempotency_key ?? undefined,
     undo_deadline_at: action.undo_deadline_at ?? undefined,
+  };
+}
+
+function toActionResult(action: ActionEvent): { state: ActionStatus; receipt: ActionReceipt } {
+  return {
+    state: action.status as ActionStatus,
+    receipt: toReceipt(action),
+  };
+}
+
+function localSourceSnapshot(input: {
+  operation: 'create_record' | 'update_record' | 'archive_record';
+  domain: string;
+  collection: string;
+}) {
+  return {
+    provider: 'sqlite',
+    mode: 'authoritative_local',
+    operation: input.operation,
+    domain: input.domain,
+    collection: input.collection,
+    timestamp: new Date().toISOString(),
   };
 }
 
@@ -465,7 +493,12 @@ async function executeViaMcpTool(input: {
       actor: input.actor,
       domain: input.domain,
       tool: input.actionTool,
-      policy: { allowed: true, requiresClarification: false, reason: 'ok', risk: 'low', confidence: 'high' } as PolicyDecision,
+      policy: evaluateCommandPolicy({
+        domain: input.domain,
+        tool: input.actionTool,
+        command: input.command,
+        actor: input.actor,
+      }),
       idempotencyKey: input.idempotencyKey,
       command: input.command,
       sourceIds: input.sourceIds,
@@ -531,7 +564,8 @@ export async function executeCommand(input: {
     actor: input.actor,
   });
 
-  if (!policy.allowed) {
+  if (!policyCanExecute(policy)) {
+    const clarifyingQuestion = policyNeedsClarification(policy) ? policy.clarifyingQuestion : undefined;
     const receipt = buildFailureReceipt({
       actionId: input.actionId,
       actor: input.actor,
@@ -540,24 +574,7 @@ export async function executeCommand(input: {
       now,
       idempotencyKey: input.idempotencyKey,
       command,
-      reason: policy.reason,
-      records: input.record_ids,
-      sourceIds: input.sourceIds,
-    });
-    return { state: receipt.status, receipt, step: input.step };
-  }
-
-  if (policy.requiresClarification) {
-    const clarifyingQuestion = policy.clarifyingQuestion;
-    const receipt = buildFailureReceipt({
-      actionId: input.actionId,
-      actor: input.actor,
-      domain: input.domain,
-      tool: input.tool,
-      now,
-      idempotencyKey: input.idempotencyKey,
-      command,
-      reason: clarifyingQuestion ?? policy.reason,
+      reason: policyNeedsClarification(policy) ? clarifyingQuestion ?? policy.reason : policy.reason,
       records: input.record_ids,
       sourceIds: input.sourceIds,
     });
@@ -643,45 +660,49 @@ export async function executeCommand(input: {
       return { state: providerResult.state, receipt: providerResult.receipt, step: input.step };
     }
 
-    const created = createRecord({
-      id: `lifeos-${hashSeed({ actionId: input.actionId, domain, collection, title }).slice(0, 20)}`,
-      domain,
-      collection,
-      title,
-      properties: {},
-      relations: [],
-      source: {
-        provider: 'user',
-        external_id: input.actionId,
-        url: null,
-        observed_at: now,
-        content_hash: null,
-      },
-      archived_at: null,
-    });
-
-    const action = createBaseAction({
+    const createdId = `lifeos-${hashSeed({ actionId: input.actionId, domain, collection, title }).slice(0, 20)}`;
+    const created = createRecordWithAction({
       actionId: input.actionId,
       actor: input.actor,
       domain,
       tool: actionTool,
-      policy,
-      idempotencyKey: input.idempotencyKey,
+      risk: policy.risk,
       command,
+      idempotencyKey: input.idempotencyKey,
       sourceIds: input.sourceIds,
-      recordIds: [created.id],
-      before: null,
-      after: created,
-      undoPayload: {
-        operation: 'delete_record',
-        record_id: created.id,
-        record: created,
-      },
       conversationId: input.conversationId,
+      record: {
+        id: createdId,
+        domain,
+        collection,
+        title,
+        properties: {},
+        relations: [],
+        source: {
+          provider: 'sqlite',
+          external_id: createdId,
+          url: null,
+          observed_at: now,
+          content_hash: null,
+        },
+        archived_at: null,
+      },
     });
-    const completed = markActionCompleted(action.id, action.command, { record: created });
-    const receipt = toReceipt(completed ?? action);
-    return { state: receipt.status, receipt, step: input.step };
+    const completed = created.record
+      ? markActionCompleted(created.action.id, created.action.command, {
+        record: created.record,
+        source_snapshot: localSourceSnapshot({
+          operation: 'create_record',
+          domain,
+          collection,
+        }),
+      })
+      : null;
+
+    return {
+      ...toActionResult(completed ?? created.action),
+      step: input.step,
+    };
   }
 
   if (intent.type === 'update' && intent.recordId) {
@@ -768,8 +789,21 @@ export async function executeCommand(input: {
       return { state: receipt.status, receipt, step: input.step };
     }
 
-    const updated = updateRecord(intent.recordId, { title: intent.title ?? target.title });
-    if (!updated) {
+    const updated = updateRecordWithAction({
+      actionId: input.actionId,
+      actor: input.actor,
+      domain,
+      tool: actionTool,
+      risk: policy.risk,
+      command,
+      id: intent.recordId,
+      patch: { title: intent.title ?? target.title },
+      idempotencyKey: input.idempotencyKey,
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId,
+      expectedRevision: target.revision,
+    });
+    if (updated.action.status === 'failed') {
       const receipt = buildFailureReceipt({
         actionId: input.actionId,
         actor: input.actor,
@@ -778,34 +812,25 @@ export async function executeCommand(input: {
         now,
         idempotencyKey: input.idempotencyKey,
         command,
-        reason: `Unable to update ${intent.recordId}.`,
+        reason: 'Unable to update local record through canonical writer.',
         sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
-
-    const action = createBaseAction({
-      actionId: input.actionId,
-      actor: input.actor,
-      domain,
-      tool: actionTool,
-      policy,
-        idempotencyKey: input.idempotencyKey,
-        command,
-        sourceIds: input.sourceIds,
-        recordIds: [updated.after.id],
-        before: updated.before,
-        after: updated.after,
-      undoPayload: {
-        operation: 'restore_after_update',
-        before: updated.before,
-        record_id: updated.after.id,
-      },
-      conversationId: input.conversationId,
-    });
-    const completed = markActionCompleted(action.id, action.command, { record: updated.after });
-    const receipt = toReceipt(completed ?? action);
-    return { state: receipt.status, receipt, step: input.step };
+    const completed = updated.record
+      ? markActionCompleted(updated.action.id, updated.action.command, {
+        record: updated.record,
+        source_snapshot: localSourceSnapshot({
+          operation: 'update_record',
+          domain,
+          collection: target.collection,
+        }),
+      })
+      : null;
+    return {
+      ...toActionResult(completed ?? updated.action),
+      step: input.step,
+    };
   }
 
   if (intent.type === 'archive' && intent.recordId) {
@@ -891,8 +916,20 @@ export async function executeCommand(input: {
       return { state: receipt.status, receipt, step: input.step };
     }
 
-    const archived = archiveRecord(intent.recordId);
-    if (!archived) {
+    const archived = archiveRecordWithAction({
+      actionId: input.actionId,
+      actor: input.actor,
+      domain,
+      tool: actionTool,
+      risk: policy.risk,
+      command,
+      id: intent.recordId,
+      idempotencyKey: input.idempotencyKey,
+      sourceIds: input.sourceIds,
+      conversationId: input.conversationId,
+      expectedRevision: target.revision,
+    });
+    if (archived.action.status === 'failed') {
       const receipt = buildFailureReceipt({
         actionId: input.actionId,
         actor: input.actor,
@@ -901,34 +938,25 @@ export async function executeCommand(input: {
         now,
         idempotencyKey: input.idempotencyKey,
         command,
-        reason: `Could not archive ${intent.recordId}.`,
+        reason: 'Could not archive local record through canonical writer.',
         sourceIds: input.sourceIds,
       });
       return { state: receipt.status, receipt, step: input.step };
     }
-
-    const action = createBaseAction({
-      actionId: input.actionId,
-      actor: input.actor,
-      domain,
-      tool: actionTool,
-      policy,
-      idempotencyKey: input.idempotencyKey,
-        command,
-        sourceIds: input.sourceIds,
-        recordIds: [archived.after.id],
-        before: archived.before,
-        after: archived.after,
-      undoPayload: {
-        operation: 'restore_after_archive',
-        before: archived.before,
-        record_id: archived.after.id,
-      },
-      conversationId: input.conversationId,
-    });
-    const completed = markActionCompleted(action.id, action.command, { record: archived.after });
-    const receipt = toReceipt(completed ?? action);
-    return { state: receipt.status, receipt, step: input.step };
+    const completed = archived.record
+      ? markActionCompleted(archived.action.id, archived.action.command, {
+        record: archived.record,
+        source_snapshot: localSourceSnapshot({
+          operation: 'archive_record',
+          domain,
+          collection: target.collection,
+        }),
+      })
+      : null;
+    return {
+      ...toActionResult(completed ?? archived.action),
+      step: input.step,
+    };
   }
 
   const receipt = buildFailureReceipt({

@@ -45,6 +45,6 @@ export type ReactiveProposalExecutionReceipt = Readonly<{
   actionId: string;
   idempotencyKey: string;
   replayed: boolean;
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
   verification?: ReactiveProposalVerificationReceipt;
 }>;

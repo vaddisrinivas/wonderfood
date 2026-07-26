@@ -6,7 +6,13 @@ import {
   updateActionState,
 } from '@/src/db/actions';
 import { createUndoEvent, getUndoForAction } from '@/src/db/undo';
-import { ActionRisk, evaluateCommandPolicy, PolicyDecision } from './policy';
+import {
+  ActionRisk,
+  evaluateCommandPolicy,
+  PolicyDecision,
+  policyCanExecute,
+  policyNeedsClarification,
+} from './policy';
 
 export type ActionCommand = {
   id: string;
@@ -65,11 +71,10 @@ export async function executeAction(input: {
     if (seen && seen.status === 'completed') {
       return {
         policy: {
-          allowed: true,
-          requiresClarification: false,
+          decision: 'execute',
           reason: 'Idempotency key replayed.',
           risk: seen.tool.includes('sensitive') ? 'standard' : 'low',
-          confidence: 'high',
+          confidence: normalizeReplayConfidence(),
         },
         command: input.command,
         receipt: {
@@ -102,7 +107,7 @@ export async function executeAction(input: {
     actor: input.command.actor,
   });
 
-  if (!policy.allowed) {
+  if (!policyCanExecute(policy)) {
     const now = new Date().toISOString();
     const deniedReceipt: ActionReceipt = {
       id: input.command.id,
@@ -144,7 +149,7 @@ export async function executeAction(input: {
         status: 'denied',
         expected: input.command.tool,
         checks: ['policy'],
-        reason: policy.reason,
+        reason: policyNeedsClarification(policy) ? policy.clarifyingQuestion : policy.reason,
       },
     };
   }
@@ -218,6 +223,10 @@ export async function executeAction(input: {
       checks: ['policy', 'idempotency', 'db_event'],
     },
   };
+}
+
+function normalizeReplayConfidence() {
+  return { score: 0.9, band: 'high' as const };
 }
 
 function parseUndoDeadlineFromEvent(undoPayloadJson: string | null) {

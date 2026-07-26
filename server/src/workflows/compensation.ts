@@ -1,5 +1,5 @@
-import { deleteRecord, findRecord, restoreRecord, runProviderUndoSync } from '../mcp/state';
-import type { McpRecord } from '../mcp/state';
+import { applyLocalUndoOperation, findRecord, runProviderUndoSync } from '../mcp/state';
+import type { LocalUndoReceipt, McpRecord } from '../mcp/state';
 
 export type CompensationAction =
   | {
@@ -29,6 +29,22 @@ export type WorkflowCompensationResult = {
   skipped: number;
   errors: Array<{ action: CompensationAction; error: string }>;
 };
+
+function applyCompensationLocalUndo(input: {
+  action: CompensationAction;
+  operation: LocalUndoReceipt['operation'];
+  record?: McpRecord;
+}): { ok: true } | { ok: false; error: string } {
+  const localUndo = applyLocalUndoOperation({
+    operation: input.operation,
+    recordId: input.action.recordId,
+    record: input.record ?? input.action.record,
+  });
+  if (localUndo.ok) {
+    return { ok: true };
+  }
+  return { ok: false, error: localUndo.receipt.message };
+}
 
 function normalizeString(input: unknown) {
   return typeof input === 'string' ? input.trim() : '';
@@ -205,18 +221,35 @@ export function runWorkflowCompensation(plan: WorkflowCompensationPlan): Workflo
       }
 
       if (action.action === 'delete_record') {
-        const removed = deleteRecord(action.recordId);
-        if (removed) {
+        const localUndo = applyCompensationLocalUndo({
+          action,
+          operation: 'delete_record',
+        });
+        if (localUndo.ok) {
           applied += 1;
         } else {
-          skipped += 1;
+          errors.push({
+            action,
+            error: localUndo.error,
+          });
         }
         continue;
       }
 
       if (action.action === 'restore_record') {
-        restoreRecord(action.record);
-        applied += 1;
+        const localUndo = applyCompensationLocalUndo({
+          action,
+          operation: 'restore_record',
+          record: action.record,
+        });
+        if (localUndo.ok) {
+          applied += 1;
+        } else {
+          errors.push({
+            action,
+            error: localUndo.error,
+          });
+        }
       }
     } catch (error) {
       errors.push({

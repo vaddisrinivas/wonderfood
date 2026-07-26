@@ -1,15 +1,24 @@
 import { loadCatalog } from '../../../src/domain/catalog';
+import { normalizeConfidence, type ConfidenceValue } from '@/packages/shared/contracts/confidence';
+import type { ActionRisk } from '@/src/actions/policy';
 
 export type McpToolKind = 'read' | 'write';
 
-type McpPolicy = {
-  allowed: boolean;
-  risk: 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
-  requiresClarification: boolean;
-  clarifyingQuestion?: string;
+type McpSafety = 'read-only' | 'review-only' | 'review-required' | 'blocked';
+
+type McpPolicyBase<TDecision extends 'deny' | 'clarify' | 'review' | 'execute'> = {
+  decision: TDecision;
+  risk: ActionRisk;
   reason: string;
-  safety: 'read-only' | 'review-only' | 'review-required' | 'blocked';
+  confidence: ConfidenceValue;
+  safety: McpSafety;
 };
+
+export type McpPolicy =
+  | McpPolicyBase<'deny'>
+  | (McpPolicyBase<'clarify'> & { clarifyingQuestion: string })
+  | McpPolicyBase<'review'>
+  | McpPolicyBase<'execute'>;
 
 const READ_TOOLS = new Set([
   'wonderfood.status',
@@ -53,12 +62,12 @@ export function isMcpToolAllowed(toolName: string): boolean {
 function evaluateCommandRisk(command: string) {
   const normalized = command.toLowerCase();
   if (BLOCKED_ACTION_RE.test(normalized)) {
-    return 'restricted';
+    return 'restricted' as const;
   }
   if (/(delete|archive|cancel|remove|bill|export|transfer|message)/i.test(command)) {
-    return 'standard';
+    return 'standard' as const;
   }
-  return 'low';
+  return 'low' as const;
 }
 
 export function evaluateMcpPolicy(input: {
@@ -72,10 +81,10 @@ export function evaluateMcpPolicy(input: {
 
   if (!isMcpToolAllowed(input.tool)) {
     return {
-      allowed: false,
+      decision: 'deny',
       risk: 'restricted',
-      requiresClarification: false,
       reason: `Tool ${input.tool} is not registered for this MCP server.`,
+      confidence: normalizeConfidence('high'),
       safety: 'blocked',
     };
   }
@@ -85,19 +94,19 @@ export function evaluateMcpPolicy(input: {
       const catalog = loadCatalog();
       if (!catalog.catalog.domains.some((entry) => entry.id === input.domain)) {
         return {
-          allowed: false,
+          decision: 'deny',
           risk: 'restricted',
-          requiresClarification: false,
           reason: `Unknown domain ${input.domain} for MCP policy.`,
+          confidence: normalizeConfidence('high'),
           safety: 'blocked',
         };
       }
     } catch {
       return {
-        allowed: false,
+        decision: 'deny',
         risk: 'restricted',
-        requiresClarification: false,
         reason: 'Domain policy verification is unavailable.',
+        confidence: normalizeConfidence('high'),
         safety: 'blocked',
       };
     }
@@ -105,10 +114,10 @@ export function evaluateMcpPolicy(input: {
 
   if (getMcpToolKind(input.tool) === 'read') {
     return {
-      allowed: true,
+      decision: 'execute',
       risk: 'low',
-      requiresClarification: false,
       reason: `Read operation ${input.tool} is allowed for ${actor}.`,
+      confidence: normalizeConfidence('high'),
       safety: 'read-only',
     };
   }
@@ -116,19 +125,19 @@ export function evaluateMcpPolicy(input: {
   if (input.tool === 'wonderfood.undo_action') {
     if (!command || !command.trim()) {
       return {
-        allowed: false,
+        decision: 'clarify',
         risk: 'standard',
-        requiresClarification: true,
         reason: 'Undo requires an action id.',
         clarifyingQuestion: 'Please provide an action id to undo.',
+        confidence: normalizeConfidence('medium'),
         safety: 'review-required',
       };
     }
     return {
-      allowed: true,
+      decision: 'execute',
       risk: 'standard',
-      requiresClarification: false,
       reason: `Undo is allowed for ${actor}.`,
+      confidence: normalizeConfidence('high'),
       safety: 'review-only',
     };
   }
@@ -136,31 +145,41 @@ export function evaluateMcpPolicy(input: {
   const risk = evaluateCommandRisk(command);
   if (risk === 'restricted') {
     return {
-      allowed: false,
+      decision: 'deny',
       risk: 'restricted',
-      requiresClarification: false,
       reason: 'Tool command was blocked by policy safeguards.',
+      confidence: normalizeConfidence('high'),
       safety: 'blocked',
     };
   }
 
   if (risk === 'standard' && !command) {
     return {
-      allowed: false,
+      decision: 'clarify',
       risk: 'standard',
-      requiresClarification: true,
       reason: 'Unsafe write command is missing explicit request text.',
       clarifyingQuestion: 'Can you state the exact record subject and mutation in one sentence?',
+      confidence: normalizeConfidence('medium'),
       safety: 'review-required',
     };
   }
 
+  if (risk === 'low') {
+    return {
+      decision: 'execute',
+      risk,
+      reason: `Write operation ${input.tool} is allowed under MCP policy.`,
+      confidence: normalizeConfidence('high'),
+      safety: 'review-only',
+    };
+  }
+
   return {
-    allowed: true,
+    decision: 'review',
     risk,
-    requiresClarification: false,
     reason: `Write operation ${input.tool} is allowed under MCP policy.`,
-    safety: risk === 'low' ? 'review-only' : 'review-required',
+    confidence: normalizeConfidence('high'),
+    safety: 'review-required',
   };
 }
 

@@ -1,6 +1,7 @@
-import { ActionRisk } from '@/src/actions/policy';
+import type { ConfidenceValue } from '@/packages/shared/contracts/confidence';
+import type { ActionRisk, PolicyDecision } from '@/src/actions/policy';
 
-export type ActionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type ActionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
 
 export type ActionReceipt = {
   id: string;
@@ -51,11 +52,7 @@ export type ParsedCommandIntent = {
   reason?: string;
 };
 
-export type CommandPolicyDecision = {
-  allowed: boolean;
-  requiresClarification: boolean;
-  clarifyingQuestion?: string;
-  reason: string;
+export type CommandPolicyDecision = PolicyDecision & {
   risk: ActionRisk;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: ConfidenceValue;
 };

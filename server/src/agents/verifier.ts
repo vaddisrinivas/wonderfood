@@ -14,7 +14,7 @@ export type VerifyInput = {
   expected: string;
   sourceBound?: boolean;
   expectedSupportsUndo?: boolean;
-  actualStatus?: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  actualStatus?: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
   actualRecordIds?: string[];
 };
 
@@ -23,7 +23,7 @@ const verifyInputSchema = z.object({
   expected: z.string(),
   sourceBound: z.boolean().optional(),
   expectedSupportsUndo: z.boolean().optional(),
-  actualStatus: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']).optional(),
+  actualStatus: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled', 'undone', 'undo_failed']).optional(),
   actualRecordIds: z.array(z.string().trim().min(1)).optional(),
 });
 

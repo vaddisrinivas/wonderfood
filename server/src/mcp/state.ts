@@ -45,7 +45,7 @@ export type McpRecord = {
 };
 
 type ActionState = {
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
 };
 
 export type ActionEvent = {
@@ -783,6 +783,15 @@ export type ActionWriteResult = {
   replayed: boolean;
 };
 
+export type LocalUndoReceipt = {
+  status: 'undone' | 'undo_failed';
+  operation: 'delete_record' | 'restore_after_update' | 'restore_after_archive' | 'restore_record';
+  record_id?: string;
+  before?: McpRecord | null;
+  after?: McpRecord | null;
+  message: string;
+};
+
 function resolveIdempotencyKey(input?: string) {
   return typeof input === 'string' ? input.trim() : '';
 }
@@ -916,11 +925,7 @@ export function updateRecordWithAction(input: {
   sourceIds?: string[];
   conversationId?: string | null;
   source?: McpRecord['source'];
-  undoPayload?: {
-    operation: string;
-    before?: unknown;
-    record_id?: string;
-  };
+  undoPayload?: Record<string, unknown>;
   expectedRevision?: number;
   operationId?: string;
   causeId?: string;
@@ -1102,11 +1107,7 @@ export function archiveRecordWithAction(input: {
   expectedRevision?: number;
   operationId?: string;
   causeId?: string;
-  undoPayload?: {
-    operation: string;
-    before?: unknown;
-    record_id?: string;
-  };
+  undoPayload?: Record<string, unknown>;
 }): ActionWriteResult {
   const idempotencyKey = resolveIdempotencyKey(input.idempotencyKey);
   const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
@@ -1422,6 +1423,36 @@ export function markActionFailed(id: string, reason?: string, options: PersistOp
   return { ...cloneActionEvent(store.actions[id]), reason };
 }
 
+function updateUndoLifecycle(
+  id: string,
+  status: 'undone' | 'undo_failed',
+  verification: unknown,
+  options: PersistOptions = {},
+) {
+  const existing = store.actions[id];
+  if (!existing) {
+    return null;
+  }
+  store.actions[id] = {
+    ...existing,
+    status,
+    verification_json: verification,
+    updated_at: nowIso(),
+  };
+  if (options.persist !== false) {
+    persistStore();
+  }
+  return cloneActionEvent(store.actions[id]);
+}
+
+export function markActionUndone(id: string, verification: unknown, options: PersistOptions = {}) {
+  return updateUndoLifecycle(id, 'undone', verification, options);
+}
+
+export function markActionUndoFailed(id: string, verification: unknown, options: PersistOptions = {}) {
+  return updateUndoLifecycle(id, 'undo_failed', verification, options);
+}
+
 function isUndoWindowOpen(deadlineAt: string | null) {
   if (!deadlineAt) {
     return false;
@@ -1556,6 +1587,88 @@ function undoProviderFromStepResult(input: {
   });
 }
 
+export function applyLocalUndoOperation(input: {
+  operation: 'delete_record' | 'restore_after_update' | 'restore_after_archive' | 'restore_record';
+  recordId?: string;
+  record?: McpRecord | null;
+}): { ok: true; receipt: LocalUndoReceipt } | { ok: false; receipt: LocalUndoReceipt } {
+  if (input.operation === 'delete_record') {
+    const recordId = asText(input.recordId);
+    const before = recordId ? findRecord(recordId) : null;
+    if (!recordId) {
+      return {
+        ok: false,
+        receipt: {
+          status: 'undo_failed',
+          operation: input.operation,
+          message: 'Undo payload missing created record id.',
+        },
+      };
+    }
+    if (!before) {
+      return {
+        ok: false,
+        receipt: {
+          status: 'undo_failed',
+          operation: input.operation,
+          record_id: recordId,
+          message: 'Created record was already missing.',
+        },
+      };
+    }
+    const deleted = deleteRecord(recordId);
+    if (!deleted) {
+      return {
+        ok: false,
+        receipt: {
+          status: 'undo_failed',
+          operation: input.operation,
+          record_id: recordId,
+          before,
+          message: 'Created record was already missing.',
+        },
+      };
+    }
+    return {
+      ok: true,
+      receipt: {
+        status: 'undone',
+        operation: input.operation,
+        record_id: recordId,
+        before,
+        after: null,
+        message: 'Undo applied.',
+      },
+    };
+  }
+
+  const record = input.record ?? null;
+  if (!record || typeof record !== 'object') {
+    return {
+      ok: false,
+      receipt: {
+        status: 'undo_failed',
+        operation: input.operation,
+        message: 'Undo payload missing prior record.',
+      },
+    };
+  }
+
+  const before = findRecord(record.id);
+  const after = restoreRecord(record);
+  return {
+    ok: true,
+    receipt: {
+      status: 'undone',
+      operation: input.operation,
+      record_id: record.id,
+      before,
+      after,
+      message: 'Undo applied.',
+    },
+  };
+}
+
 function toWorkflowUndoRecordId(raw: unknown): string {
   if (!raw || typeof raw !== 'object') {
     return '';
@@ -1590,11 +1703,14 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
         continue;
       }
       visited.add(recordId);
-      const deleted = deleteRecord(recordId);
-      if (deleted) {
+      const localUndo = applyLocalUndoOperation({
+        operation: 'delete_record',
+        recordId,
+      });
+      if (localUndo.ok) {
         result.applied += 1;
       } else {
-        result.skipped += 1;
+        result.errors.push(localUndo.receipt.message);
       }
       continue;
     }
@@ -1617,11 +1733,14 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
         continue;
       }
       visited.add(recordId);
-      try {
-        restoreRecord(record);
+      const localUndo = applyLocalUndoOperation({
+        operation: tool === 'archive_record' ? 'restore_after_archive' : 'restore_after_update',
+        record,
+      });
+      if (localUndo.ok) {
         result.applied += 1;
-      } catch {
-        result.errors.push(`failed to restore ${recordId}`);
+      } else {
+        result.errors.push(localUndo.receipt.message);
       }
       continue;
     }
@@ -1651,11 +1770,14 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
               continue;
             }
             visited.add(recordId);
-            const nestedDeleted = deleteRecord(recordId);
-            if (nestedDeleted) {
+            const localUndo = applyLocalUndoOperation({
+              operation: 'delete_record',
+              recordId,
+            });
+            if (localUndo.ok) {
               result.applied += 1;
             } else {
-              result.skipped += 1;
+              result.errors.push(localUndo.receipt.message);
             }
             continue;
           }
@@ -1677,11 +1799,14 @@ function applyWorkflowCheckpointUndo(checkpoint: WorkflowRunCheckpoint): Workflo
               continue;
             }
             visited.add(nestedRecordId);
-            try {
-              restoreRecord(nestedRecord);
+            const localUndo = applyLocalUndoOperation({
+              operation: nestedTool === 'archive_record' ? 'restore_after_archive' : 'restore_after_update',
+              record: nestedRecord,
+            });
+            if (localUndo.ok) {
               result.applied += 1;
-            } catch {
-              result.errors.push(`failed to restore nested ${nestedRecordId}`);
+            } else {
+              result.errors.push(localUndo.receipt.message);
             }
             continue;
           }
@@ -1711,7 +1836,15 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     };
   }
 
-  if (action.status !== 'completed') {
+  if (action.status === 'undone') {
+    return {
+      success: true,
+      action: cloneActionEvent(action),
+      message: 'Action already undone.',
+    };
+  }
+
+  if (action.status !== 'completed' && action.status !== 'undo_failed') {
     return {
       success: false,
       action: cloneActionEvent(action),
@@ -1719,8 +1852,21 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     };
   }
 
+  const failUndo = (message: string, verification?: Record<string, unknown>) => {
+    const failedAction = markActionUndoFailed(actionId, {
+      status: 'undo_failed',
+      message,
+      ...(verification ?? {}),
+    }) ?? cloneActionEvent(store.actions[actionId] ?? action);
+    return {
+      success: false,
+      action: failedAction,
+      message,
+    };
+  };
+
   if (!isUndoWindowOpen(action.undo_deadline_at)) {
-    return { success: false, action: cloneActionEvent(action), message: 'Undo window has expired.' };
+    return failUndo('Undo window has expired.');
   }
 
   const payload = action.undo_payload_json as {
@@ -1733,7 +1879,7 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     checkpoint_run_id?: unknown;
   } | null;
   if (!payload || typeof payload !== 'object') {
-    return { success: false, action: cloneActionEvent(action), message: 'No reversible payload stored.' };
+    return failUndo('No reversible payload stored.');
   }
 
   const record = payload.record || payload.before || payload.after || null;
@@ -1748,6 +1894,7 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
     afterRecord,
     providerSnapshot,
   });
+  let providerVerification: Record<string, unknown> | undefined;
 
   if (provider) {
     const providerUndo = runProviderUndoSync({
@@ -1760,80 +1907,98 @@ export function runUndo(actionId: string): { success: boolean; action?: ActionEv
       providerSnapshot,
     });
     if (!providerUndo.ok) {
-      return { success: false, action: cloneActionEvent(action), message: providerUndo.message };
+      return failUndo(providerUndo.message, {
+        provider_undo: {
+          status: 'undo_failed',
+          provider,
+          operation: operation ?? 'restore_record',
+          message: providerUndo.message,
+        },
+      });
     }
+    providerVerification = {
+      provider_undo: {
+        status: 'undone',
+        provider,
+        operation: operation ?? 'restore_record',
+        message: providerUndo.message,
+        snapshot: providerUndo.snapshot ?? null,
+      },
+    };
   }
 
-  if (operation === 'delete_record') {
-    const recordId = payload.record_id || payload.target_id;
-    if (!recordId) {
-      return { success: false, action: cloneActionEvent(action), message: 'Undo payload missing created record id.' };
-    }
-    const deleted = deleteRecord(recordId);
-    if (!deleted) {
-      return { success: false, action: cloneActionEvent(action), message: 'Created record was already missing.' };
-    }
-  } else if (operation === 'restore_record' || operation === 'restore_after_update' || operation === 'restore_after_archive') {
-    if (!record || typeof record !== 'object') {
-      return { success: false, action: cloneActionEvent(action), message: 'Undo payload missing prior record.' };
-    }
-    store.records[record.id] = record as McpRecord;
-    persistStore();
-  } else if (operation === 'undo_workflow_checkpoint') {
+  if (operation === 'undo_workflow_checkpoint') {
     const after = action.after_json && typeof action.after_json === 'object' ? (action.after_json as { checkpoint_run_id?: unknown }) : null;
     const checkpointRunId =
       asText(payload.checkpoint_run_id) ||
       asText((action.before_json as { checkpoint_run_id?: unknown })?.checkpoint_run_id) ||
       asText(after?.checkpoint_run_id);
     if (!checkpointRunId) {
-      return { success: false, action: cloneActionEvent(action), message: 'Undo workflow payload missing checkpoint id.' };
+      return failUndo('Undo workflow payload missing checkpoint id.');
     }
 
     const checkpoint = getWorkflowCheckpoint(checkpointRunId);
     if (!checkpoint) {
-      return { success: false, action: cloneActionEvent(action), message: `Workflow checkpoint ${checkpointRunId} not found.` };
+      return failUndo(`Workflow checkpoint ${checkpointRunId} not found.`);
     }
 
     const undoResult = applyWorkflowCheckpointUndo(checkpoint);
     if (undoResult.errors.length > 0) {
-      return {
-        success: false,
-        action: cloneActionEvent(action),
-        message: `Undo workflow checkpoint failed: ${undoResult.errors.join('; ')}`,
-      };
-    }
-
-    store.actions[actionId] = {
-      ...action,
-      status: 'cancelled',
-      updated_at: nowIso(),
-      after_json: {
-        ...(typeof action.after_json === 'object' && action.after_json !== null ? (action.after_json as Record<string, unknown>) : {}),
+      return failUndo(`Undo workflow checkpoint failed: ${undoResult.errors.join('; ')}`, {
         workflow_undo: {
+          status: 'undo_failed',
+          workflow_run_id: checkpointRunId,
           applied: undoResult.applied,
           skipped: undoResult.skipped,
           errors: undoResult.errors,
         },
+      });
+    }
+
+    const undone = markActionUndone(actionId, {
+      status: 'undone',
+      workflow_undo: {
+        status: 'undone',
+        workflow_run_id: checkpointRunId,
+        applied: undoResult.applied,
+        skipped: undoResult.skipped,
+        errors: undoResult.errors,
       },
-    };
-    persistStore();
+      ...(providerVerification ?? {}),
+    }) ?? cloneActionEvent(store.actions[actionId] ?? action);
     return {
       success: true,
-      action: cloneActionEvent(store.actions[actionId]),
+      action: undone,
       message: `Undo applied.${undoResult.applied > 0 ? ` ${undoResult.applied} step(s) reverted.` : ''}${undoResult.skipped > 0 ? ` ${undoResult.skipped} step(s) skipped.` : ''}`.trim(),
     };
-  } else {
-    return { success: false, action: cloneActionEvent(action), message: 'Unsupported undo payload.' };
   }
 
-  store.actions[actionId] = {
-    ...action,
-    status: 'cancelled',
-    updated_at: nowIso(),
-  };
-  persistStore();
+  if (operation !== 'delete_record'
+    && operation !== 'restore_record'
+    && operation !== 'restore_after_update'
+    && operation !== 'restore_after_archive') {
+    return failUndo('Unsupported undo payload.');
+  }
 
-  return { success: true, action: cloneActionEvent(store.actions[actionId]), message: 'Undo applied.' };
+  const localUndo = applyLocalUndoOperation({
+    operation,
+    recordId: payload.record_id || payload.target_id,
+    record: record as McpRecord | null,
+  });
+  if (!localUndo.ok) {
+    return failUndo(localUndo.receipt.message, {
+      local_undo: localUndo.receipt,
+      ...(providerVerification ?? {}),
+    });
+  }
+
+  const undone = markActionUndone(actionId, {
+    status: 'undone',
+    local_undo: localUndo.receipt,
+    ...(providerVerification ?? {}),
+  }) ?? cloneActionEvent(store.actions[actionId] ?? action);
+
+  return { success: true, action: undone, message: localUndo.receipt.message };
 }
 
 export function listWorkflows(): WorkflowDocument[] {

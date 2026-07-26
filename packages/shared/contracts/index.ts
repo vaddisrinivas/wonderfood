@@ -1,4 +1,5 @@
 export * from './records';
+export * from './confidence';
 export * from './operation';
 export * from './query';
 export * from './package';
