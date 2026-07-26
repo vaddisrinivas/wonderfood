@@ -284,8 +284,9 @@ export async function resumeWorkflowRun(input: {
   delete checkpoint.failure_reason;
 
   const nextControlState =
-    transitionWorkflowSafe(baseControlState, 'RESUME')
-    ?? (baseControlState === 'failed' ? 'running' : baseControlState);
+    baseControlState === 'failed'
+      ? 'running'
+      : transitionWorkflowSafe(baseControlState, 'RESUME') ?? baseControlState;
 
   await updateWorkflowRun(input.db, input.runId, {
     status: toRowStatus(nextControlState),

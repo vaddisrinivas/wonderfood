@@ -17,6 +17,7 @@ import { applyOperation } from '@/src/ops/apply';
 import { undoOperation } from '@/src/ops/undo';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
+import { recordWorkflowStep, startWorkflowRun } from '@/src/workflows/runtime';
 
 type FoodRecordView = DomainRecordViewModel;
 type FoodMode = 'Today' | 'Kitchen' | 'Plan' | 'Recipes' | 'Shop';
@@ -267,6 +268,7 @@ export default function FoodScreen() {
   const [notice, setNotice] = useState('');
   const [lastArchivedId, setLastArchivedId] = useState<string | null>(null);
   const [lastDinnerLoopOpId, setLastDinnerLoopOpId] = useState<string | null>(null);
+  const [lastDinnerLoopRunId, setLastDinnerLoopRunId] = useState<string | null>(null);
   const [dinnerLoopPending, setDinnerLoopPending] = useState(false);
   const [backupSnapshot, setBackupSnapshot] = useState<RecoveryExport | null>(null);
 
@@ -368,11 +370,55 @@ export default function FoodScreen() {
     setDinnerLoopPending(true);
     const now = new Date().toISOString();
     const opId = `food-tonight-loop-${Date.now().toString(36)}`;
+    const runId = `${opId}:workflow`;
     try {
       const target = actionableShoppingRecords[0];
+      await startWorkflowRun({
+        db,
+        id: runId,
+        domain: activeManifest.id,
+        workflowId: 'wonderfood-dinner-to-shopping',
+        inputs: {
+          dinner_id: todayMeal?.id ?? null,
+          pantry_item_id: kitchenItem?.id ?? null,
+          shopping_item_id: target?.id ?? null,
+        },
+        steps: [
+          { id: 'suggest', title: 'Suggest dinner from pantry', tool: 'food.dinner.suggest' },
+          { id: 'approve', title: 'Approve shopping change', tool: 'food.shopping.approve', cancellable: false },
+          { id: 'shop', title: 'Update shopping list', tool: 'food.shopping.update', compensation_tool: 'food.shopping.undo' },
+          { id: 'undo-window', title: 'Undo available', tool: 'food.shopping.undo' },
+        ],
+      });
+      await recordWorkflowStep({
+        db,
+        runId,
+        stepId: 'suggest',
+        status: 'completed',
+        receipt: {
+          record_ids: [todayMeal?.id, kitchenItem?.id, target?.id].filter((value): value is string => Boolean(value)),
+          message: 'Dinner suggestion prepared from pantry and shopping context.',
+          payload: {
+            dinner_title: todayMeal?.title ?? 'Tonight dinner',
+            pantry_title: kitchenItem?.title ?? null,
+            shopping_title: target?.title ?? null,
+          },
+        },
+      });
       if (target) {
         const canonical = await getDomainRecordCanonical(db, target.id);
         if (!canonical || !['shopping_item', 'shopping_demand'].includes(canonical.collection)) {
+          await recordWorkflowStep({
+            db,
+            runId,
+            stepId: 'approve',
+            status: 'failed',
+            error: 'Shopping item changed before approval.',
+            receipt: {
+              record_ids: [target.id],
+              message: 'Shopping item changed before approval.',
+            },
+          });
           setNotice('Shopping item changed. Refresh and try again.');
           return;
         }
@@ -398,11 +444,47 @@ export default function FoodScreen() {
           confidence: 0.92,
         });
         if (result.status === 'applied' || result.status === 'duplicate') {
+          await recordWorkflowStep({
+            db,
+            runId,
+            stepId: 'approve',
+            status: 'completed',
+            receipt: {
+              operation_ids: [result.op_id],
+              record_ids: [canonical.id],
+              source_ids: [canonical.source.external_id],
+              message: 'Shopping update approved.',
+            },
+          });
+          await recordWorkflowStep({
+            db,
+            runId,
+            stepId: 'shop',
+            status: 'completed',
+            receipt: {
+              operation_ids: [result.op_id],
+              record_ids: [canonical.id],
+              source_ids: [canonical.source.external_id],
+              message: `${target.title} moved to cart.`,
+            },
+          });
           setLastDinnerLoopOpId(result.op_id);
+          setLastDinnerLoopRunId(runId);
           setNotice(`Dinner loop saved. ${target.title} moved to cart. Undo is ready.`);
           setRefreshNonce((value) => value + 1);
           return;
         }
+        await recordWorkflowStep({
+          db,
+          runId,
+          stepId: 'approve',
+          status: 'failed',
+          error: result.reject_reason ?? 'Operation rejected.',
+          receipt: {
+            record_ids: [canonical.id],
+            message: result.reject_reason ?? 'Operation rejected.',
+          },
+        });
         setNotice(`Dinner loop paused: ${result.reject_reason ?? 'operation rejected'}.`);
         return;
       }
@@ -445,10 +527,46 @@ export default function FoodScreen() {
         confidence: 0.88,
       });
       if (result.status === 'applied' || result.status === 'duplicate') {
+        await recordWorkflowStep({
+          db,
+          runId,
+          stepId: 'approve',
+          status: 'completed',
+          receipt: {
+            operation_ids: [result.op_id],
+            record_ids: [recordId],
+            source_ids: [recordId],
+            message: 'New shopping item approved.',
+          },
+        });
+        await recordWorkflowStep({
+          db,
+          runId,
+          stepId: 'shop',
+          status: 'completed',
+          receipt: {
+            operation_ids: [result.op_id],
+            record_ids: [recordId],
+            source_ids: [recordId],
+            message: 'Rice vinegar added to shopping.',
+          },
+        });
         setLastDinnerLoopOpId(result.op_id);
+        setLastDinnerLoopRunId(runId);
         setNotice('Dinner loop saved. Rice vinegar added to shopping. Undo is ready.');
         setRefreshNonce((value) => value + 1);
       } else {
+        await recordWorkflowStep({
+          db,
+          runId,
+          stepId: 'approve',
+          status: 'failed',
+          error: result.reject_reason ?? 'Operation rejected.',
+          receipt: {
+            record_ids: [recordId],
+            message: result.reject_reason ?? 'Operation rejected.',
+          },
+        });
         setNotice(`Dinner loop paused: ${result.reject_reason ?? 'operation rejected'}.`);
       }
     } finally {
@@ -463,8 +581,22 @@ export default function FoodScreen() {
     }
     const result = await undoOperation(db, activeManifest, lastDinnerLoopOpId);
     if (result.status === 'applied' || result.status === 'duplicate') {
+      if (lastDinnerLoopRunId) {
+        await recordWorkflowStep({
+          db,
+          runId: lastDinnerLoopRunId,
+          stepId: 'undo-window',
+          status: 'completed',
+          receipt: {
+            operation_ids: [result.op_id],
+            action_ids: ['undo_shopping_update'],
+            message: result.status === 'duplicate' ? 'Dinner loop undo replayed safely.' : 'Dinner loop undone.',
+          },
+        });
+      }
       setNotice(result.status === 'duplicate' ? 'Dinner loop was already undone.' : 'Dinner loop undone.');
       setLastDinnerLoopOpId(null);
+      setLastDinnerLoopRunId(null);
       setRefreshNonce((value) => value + 1);
     } else {
       setNotice(`Undo paused: ${result.reject_reason ?? 'operation rejected'}.`);

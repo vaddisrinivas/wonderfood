@@ -10,6 +10,7 @@ import { importRecoverySnapshot } from '../../src/db/recovery';
 import { getRecord, upsertRecord } from '../../src/db/records';
 import { applyOperation } from '../../src/ops/apply';
 import { undoOperation } from '../../src/ops/undo';
+import { getWorkflowReceiptSummary, recordWorkflowStep, startWorkflowRun } from '../../src/workflows/runtime';
 
 type Row = Record<string, any>;
 
@@ -80,6 +81,17 @@ class FoodGoldenDb {
       if (row) row.status = status;
       return;
     }
+    if (compact.startsWith('UPDATE workflow_runs SET')) {
+      const values = params as any[];
+      const id = values[values.length - 1];
+      const row = this.rows('workflow_runs').find((item) => item.id === id);
+      if (row) {
+        if (compact.includes('status = ?')) row.status = values[0];
+        if (compact.includes('payload_json = ?')) row.payload_json = values[compact.includes('status = ?') ? 1 : 0];
+        row.updated_at = values[values.length - 2];
+      }
+      return;
+    }
     if (compact.startsWith('INSERT OR REPLACE INTO app_packages')) {
       const row = namedParams(params);
       this.upsert('app_packages', {
@@ -137,6 +149,9 @@ class FoodGoldenDb {
     }
     if (compact === 'SELECT * FROM operations WHERE op_id = ?') {
       return (this.rows('operations').find((row) => row.op_id === (params as any[])[0]) ?? null) as T | null;
+    }
+    if (compact === 'SELECT * FROM workflow_runs WHERE id = ?') {
+      return (this.rows('workflow_runs').find((row) => row.id === (params as any[])[0]) ?? null) as T | null;
     }
     if (compact === 'SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?') {
       const row = this.rows('operations').find((item) => item.idempotency_key === (params as any[])[0]);
@@ -252,7 +267,34 @@ function checksum(db: FoodGoldenDb) {
 
   const shopping = await getRecord(db, 'golden-shop-berries');
   assert(shopping, 'shopping item missing');
-  await applyOperation(db, manifest, {
+  await startWorkflowRun({
+    db,
+    id: 'golden-dinner-loop-run',
+    domain: manifest.id,
+    workflowId: 'wonderfood-dinner-to-shopping',
+    inputs: {
+      dinner_id: 'golden-meal-bowl',
+      pantry_item_id: 'golden-pantry-yogurt',
+      shopping_item_id: 'golden-shop-berries',
+    },
+    steps: [
+      { id: 'suggest', title: 'Suggest dinner from pantry', tool: 'food.dinner.suggest' },
+      { id: 'approve', title: 'Approve shopping change', tool: 'food.shopping.approve', cancellable: false },
+      { id: 'shop', title: 'Update shopping list', tool: 'food.shopping.update', compensation_tool: 'food.shopping.undo' },
+      { id: 'undo-window', title: 'Undo available', tool: 'food.shopping.undo' },
+    ],
+  });
+  await recordWorkflowStep({
+    db,
+    runId: 'golden-dinner-loop-run',
+    stepId: 'suggest',
+    status: 'completed',
+    receipt: {
+      record_ids: ['golden-pantry-yogurt', 'golden-meal-bowl', 'golden-shop-berries'],
+      message: 'Dinner suggestion prepared from pantry and shopping context.',
+    },
+  });
+  const shoppingApproval = await applyOperation(db, manifest, {
     op_id: 'golden-shop-purchased',
     kind: 'update',
     domain: manifest.id,
@@ -267,6 +309,36 @@ function checksum(db: FoodGoldenDb) {
     changes: { ...shopping.properties, status: 'In cart', tone: 'moss', meta: 'Approved for tonight' },
     reason: 'Approved Food dinner suggestion updates the shopping list.',
   });
+  assert(shoppingApproval.status === 'applied' || shoppingApproval.status === 'duplicate', `approval failed: ${shoppingApproval.status}`);
+  await recordWorkflowStep({
+    db,
+    runId: 'golden-dinner-loop-run',
+    stepId: 'approve',
+    status: 'completed',
+    receipt: {
+      operation_ids: [shoppingApproval.op_id],
+      record_ids: ['golden-shop-berries'],
+      source_ids: ['golden-shop-berries'],
+      message: 'Shopping update approved.',
+    },
+  });
+  await recordWorkflowStep({
+    db,
+    runId: 'golden-dinner-loop-run',
+    stepId: 'shop',
+    status: 'completed',
+    receipt: {
+      operation_ids: [shoppingApproval.op_id],
+      record_ids: ['golden-shop-berries'],
+      source_ids: ['golden-shop-berries'],
+      message: 'Golden berries moved to cart.',
+    },
+  });
+  const workflowSummary = await getWorkflowReceiptSummary(db, 'golden-dinner-loop-run');
+  assert(workflowSummary.status === 'running', 'dinner loop workflow should stay running while undo is available');
+  assert(workflowSummary.completed_steps === 3, 'dinner loop workflow did not record approval steps');
+  assert(workflowSummary.operation_ids.includes('golden-shop-purchased'), 'dinner loop workflow missing shopping operation receipt');
+  assert(workflowSummary.record_ids.includes('golden-shop-berries'), 'dinner loop workflow missing shopping record receipt');
   const purchased = await getRecord(db, 'golden-shop-berries');
   assert(purchased?.properties.status === 'In cart', 'approval did not update shopping item');
   assert(purchased?.properties.tone === 'moss', 'approval did not update shopping tone');
@@ -278,6 +350,22 @@ function checksum(db: FoodGoldenDb) {
 
   const undoShopping = await undoOperation(db, manifest, 'golden-shop-purchased');
   assert(undoShopping.status === 'applied' || undoShopping.status === 'duplicate', `shopping undo failed: ${undoShopping.status}`);
+  await recordWorkflowStep({
+    db,
+    runId: 'golden-dinner-loop-run',
+    stepId: 'undo-window',
+    status: 'completed',
+    receipt: {
+      operation_ids: [undoShopping.op_id],
+      action_ids: ['undo_shopping_update'],
+      record_ids: ['golden-shop-berries'],
+      message: 'Dinner loop undone.',
+    },
+  });
+  const completedWorkflowSummary = await getWorkflowReceiptSummary(db, 'golden-dinner-loop-run');
+  assert(completedWorkflowSummary.status === 'completed', 'dinner loop workflow did not complete after undo');
+  assert(completedWorkflowSummary.completed_steps === 4, 'dinner loop workflow did not record undo step');
+  assert(completedWorkflowSummary.operation_ids.includes(undoShopping.op_id), 'dinner loop workflow missing undo operation receipt');
   const undoneShopping = await getRecord(db, 'golden-shop-berries');
   assert(undoneShopping?.properties.status === 'To buy', 'shopping undo did not restore prior status');
 
@@ -338,6 +426,7 @@ function checksum(db: FoodGoldenDb) {
   assert(beforeChecksum === afterChecksum, `backup restore mismatch ${beforeChecksum}/${afterChecksum}`);
   assert(restoredProof.tables.get('app_packages')!.length === 1, 'app package not exported/restored');
   assert(restoredProof.tables.get('app_package_state')![0]?.active_package_key === 'food@1.0.0', 'active package state not restored');
+  assert(restoredProof.tables.get('workflow_runs')!.length === 1, 'workflow run not exported/restored');
 
   const outDir = join(process.cwd(), 'app', 'build', 'evidence', 'food');
   mkdirSync(outDir, { recursive: true });
@@ -360,9 +449,11 @@ function checksum(db: FoodGoldenDb) {
       'add_shopping_item',
       'expiry_detected',
       'dinner_suggested',
-      'approval_receipt_simulated_by_operation',
+      'workflow_run_started',
+      'approval_receipt_persisted',
       'mark_purchased',
       'undo_shopping_update',
+      'workflow_undo_receipt_persisted',
       'search',
       'edit',
       'archive',
