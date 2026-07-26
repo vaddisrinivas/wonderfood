@@ -52,7 +52,7 @@ export default function RootLayout() {
   const activeColors = activeDark ? darkColors : colors;
 
   return (
-    <LifeOSDatabaseProvider>
+    <LifeOSDatabaseProvider seedInDev={__DEV__}>
       <>
         <StatusBar style={activeDark ? 'light' : 'dark'} />
         <Stack screenOptions={{

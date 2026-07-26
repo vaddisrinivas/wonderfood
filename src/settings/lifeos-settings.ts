@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { readSettingsValue, writeSettingsValue } from './settings-storage';
+
 export type AiProviderKind = 'openai_compatible' | 'azure_openai' | 'anthropic';
 
 export type AiProviderProfile = {
@@ -145,37 +147,11 @@ export type LifeOSSettings = {
   };
 };
 
-const STORAGE_KEY = 'lifeos.settings.v1';
 const listeners = new Set<(settings: LifeOSSettings) => void>();
 const oldFoodSectionOrderDefault = 'hero,tabs,manifest,workspace,attention,widgets,view,package';
 const oldFoodWidgetsDefault = 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings';
 const weakFoodWidgetMarkers = ['Skills and MCP', 'Open profile-configured Food views'];
 const oldCaptureDestinationDefault = 'Writes to Food local graph with no network dependency.';
-
-type SecureStoreModule = {
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY?: string;
-  getItemAsync: (key: string) => Promise<string | null>;
-  setItemAsync: (key: string, value: string, options?: Record<string, unknown>) => Promise<void>;
-};
-
-function platformOS() {
-  try {
-    const optionalRequire = typeof require === 'function' ? require : null;
-    const reactNative = optionalRequire?.(`react${'-native'}`) as { Platform?: { OS?: string } } | undefined;
-    return reactNative?.Platform?.OS ?? 'node';
-  } catch {
-    return typeof window === 'undefined' ? 'node' : 'web';
-  }
-}
-
-function secureStore(): SecureStoreModule | null {
-  try {
-    const optionalRequire = typeof require === 'function' ? require : null;
-    return optionalRequire?.(`expo${'-secure-store'}`) as SecureStoreModule;
-  } catch {
-    return null;
-  }
-}
 
 export const defaultLifeOSSettings: LifeOSSettings = {
   ai: {
@@ -528,32 +504,11 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
 }
 
 async function readRaw(): Promise<string | null> {
-  const os = platformOS();
-  if (os === 'web') {
-    return typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
-  }
-  if (os === 'node') {
-    return null;
-  }
-  return secureStore()?.getItemAsync(STORAGE_KEY) ?? null;
+  return readSettingsValue();
 }
 
 async function writeRaw(value: string): Promise<void> {
-  const os = platformOS();
-  if (os === 'web') {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, value);
-    return;
-  }
-  if (os === 'node') {
-    return;
-  }
-  const store = secureStore();
-  if (!store) {
-    return;
-  }
-  await store.setItemAsync(STORAGE_KEY, value, {
-    keychainAccessible: store.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
+  await writeSettingsValue(value);
 }
 
 export async function loadLifeOSSettings(): Promise<LifeOSSettings> {
