@@ -1836,7 +1836,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       return;
     }
 
-    if (action.status === 'cancelled') {
+    if (action.status === 'undone') {
       ok(res, {
         status: 'completed',
         action_id: actionId,
@@ -1846,6 +1846,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
           message: 'Action already undone',
           replayed: true,
           actor: payload.actor?.trim() || 'hearth',
+          idempotency_key: typeof payload.idempotency_key === 'string' ? payload.idempotency_key : undefined,
         },
       });
       return;

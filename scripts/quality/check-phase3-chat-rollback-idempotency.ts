@@ -18,6 +18,9 @@ type SendResult = {
 type UndoResult = {
   status?: 'completed' | 'failed';
   action_id?: string;
+  action?: {
+    status?: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
+  };
   undo_result?: {
     success?: boolean;
     message?: string;
@@ -140,6 +143,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = true): Pro
 
     assert(firstUndo.status === 'completed', `first undo failed: ${String(firstUndo.undo_result?.message)}`);
     assert(firstUndo.undo_result?.success === true, 'first undo did not report success');
+    assert(firstUndo.action?.status === 'undone', 'first undo did not persist the undone lifecycle');
 
     const secondUndo = await postJson<UndoResult>('/chat/undo', {
       action_id: actionId,
@@ -152,6 +156,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = true): Pro
       secondUndo.undo_result?.replayed === true,
       'second undo was not idempotent',
     );
+    assert(secondUndo.action?.status === 'undone', 'idempotent undo replay lost the undone lifecycle');
 
     const proof = {
       proof: 'phase3_chat_rollback_idempotency',
