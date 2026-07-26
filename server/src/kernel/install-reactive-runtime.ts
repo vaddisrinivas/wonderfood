@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { mkdirSync } from 'node:fs';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog } from '../../../src/domain/catalog';
 import { createActionEvent, listRecords } from '../mcp/state';
+import { mutateJsonStateFile, readJsonStateFile } from '../providers/json-state';
 import { setOperationCommitFailureObserver, setOperationCommitObserver, type OperationCommitFailure } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';
 import { createReactiveReceiptStore, parseReactiveReceiptStore, type ReactiveReceiptStore } from './reactive-receipts';
@@ -47,13 +46,7 @@ function createReactiveRuntimeStore(): ReactiveRuntimeStore {
   };
 }
 
-function parseRuntimeStore(serialized: string): ReactiveRuntimeStore {
-  let value: unknown;
-  try {
-    value = JSON.parse(serialized);
-  } catch {
-    throw new Error('Reactive runtime store is not valid JSON.');
-  }
+function parseRuntimeStoreValue(value: unknown): ReactiveRuntimeStore {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Reactive runtime store is not an object.');
   }
@@ -68,8 +61,26 @@ function parseRuntimeStore(serialized: string): ReactiveRuntimeStore {
   };
 }
 
-function loadRuntimeStore(path: string): ReactiveRuntimeStore {
-  if (existsSync(path)) return parseRuntimeStore(readFileSync(path, 'utf8'));
+function isReactiveRuntimeStore(value: unknown): value is ReactiveRuntimeStore {
+  try {
+    parseRuntimeStoreValue(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseRuntimeStore(serialized: string): ReactiveRuntimeStore {
+  let value: unknown;
+  try {
+    value = JSON.parse(serialized);
+  } catch {
+    throw new Error('Reactive runtime store is not valid JSON.');
+  }
+  return parseRuntimeStoreValue(value);
+}
+
+function createDefaultRuntimeStore(): ReactiveRuntimeStore {
   if (existsSync(legacyReceiptPath)) {
     return {
       ...createReactiveRuntimeStore(),
@@ -79,11 +90,34 @@ function loadRuntimeStore(path: string): ReactiveRuntimeStore {
   return createReactiveRuntimeStore();
 }
 
-function writeRuntimeStore(path: string, store: ReactiveRuntimeStore): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tempPath = `${path}.tmp-${process.pid}`;
-  writeFileSync(tempPath, JSON.stringify(store, null, 2), 'utf8');
-  renameSync(tempPath, path);
+function loadRuntimeStore(path: string): ReactiveRuntimeStore {
+  if (existsSync(path)) {
+    try {
+      return parseRuntimeStore(readFileSync(path, 'utf8'));
+    } catch {
+      try {
+        return parseRuntimeStoreValue(readJsonStateFile(path, {
+          label: 'reactive runtime state',
+          validate: isReactiveRuntimeStore,
+        }));
+      } catch {
+        return createDefaultRuntimeStore();
+      }
+    }
+  }
+  return createDefaultRuntimeStore();
+}
+
+function persistRuntimeStore(
+  path: string,
+  mutate: (current: ReactiveRuntimeStore) => ReactiveRuntimeStore,
+): ReactiveRuntimeStore {
+  return mutateJsonStateFile(path, {
+    label: 'reactive runtime state',
+    validate: isReactiveRuntimeStore,
+    createDefault: createDefaultRuntimeStore,
+    mutate: (current) => mutate(parseRuntimeStoreValue(current)),
+  });
 }
 
 /** Install the default manifest-backed observer at server startup. */
@@ -101,8 +135,7 @@ export function installReactiveRuntime(path = defaultRuntimePath): void {
     getRows: () => listRecords({ domain: appPackage.id, includeArchived: true }) as unknown as Record<string, unknown>[],
     getReceiptStore: () => runtime.receipts,
     setReceiptStore: (next) => {
-      runtime = { ...runtime, receipts: next };
-      writeRuntimeStore(path, runtime);
+      runtime = persistRuntimeStore(path, (current) => ({ ...current, receipts: next }));
     },
     commitCycle: ({ receipt, cycle, event }) => {
       const outbox = enqueueReactiveProposals(runtime.outbox, {
@@ -110,12 +143,11 @@ export function installReactiveRuntime(path = defaultRuntimePath): void {
         event,
         proposalIds: receipt.newProposalIds,
       });
-      runtime = {
+      runtime = persistRuntimeStore(path, () => ({
         schemaVersion: REACTIVE_RUNTIME_SCHEMA_VERSION,
         receipts: receipt.store,
         outbox,
-      };
-      writeRuntimeStore(path, runtime);
+      }));
     },
   }));
 }
@@ -136,12 +168,10 @@ export async function drainReactiveRuntimeOutbox(input: {
     maxItems: input.maxItems,
     retryDelayMs: input.retryDelayMs,
     onStoreChange: (outbox) => {
-      runtime = { ...runtime, outbox };
-      writeRuntimeStore(path, runtime);
+      runtime = persistRuntimeStore(path, (current) => ({ ...current, outbox }));
     },
   });
-  runtime = { ...runtime, outbox: result.store };
-  writeRuntimeStore(path, runtime);
+  runtime = persistRuntimeStore(path, (current) => ({ ...current, outbox: result.store }));
   return result;
 }
 

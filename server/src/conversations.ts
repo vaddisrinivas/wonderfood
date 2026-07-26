@@ -1,6 +1,7 @@
 import type { ServerChatMessage } from './chat';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { mutateJsonStateFile, readJsonStateFile } from './providers/json-state';
 
 const DEFAULT_CONVERSATION_OWNER = 'server';
 
@@ -44,7 +45,7 @@ const conversations = new Map<string, StoredConversationEnvelope>();
 let isLoaded = false;
 
 function ensureDir() {
-  mkdirSync(dirname(STORAGE_PATH), { recursive: true });
+  return;
 }
 
 function deepClone<T>(value: T): T {
@@ -72,12 +73,13 @@ function cloneConversation(conversation: StoredConversationEnvelope): Conversati
   };
 }
 
-function persist() {
-  ensureDir();
-  const payload: PersistedFile = {
+function createPersistedFile(
+  source: Iterable<StoredConversationEnvelope> = conversations.values(),
+): PersistedFile {
+  return {
     version: STORE_VERSION,
     updated_at: new Date().toISOString(),
-    conversations: [...conversations.values()].map((conversation) => ({
+    conversations: [...source].map((conversation) => ({
       id: conversation.id,
       owner: conversation.owner,
       domain: conversation.domain,
@@ -87,7 +89,57 @@ function persist() {
       ...(conversation.last_response_id ? { last_response_id: conversation.last_response_id } : {}),
     })),
   };
-  writeFileSync(STORAGE_PATH, JSON.stringify(payload), FILE_ENCODING);
+}
+
+function hydrateFromPayload(payload: PersistedFile) {
+  conversations.clear();
+  for (const row of payload.conversations) {
+    if (!isConversationRow(row)) {
+      continue;
+    }
+    const owner = normalizeOwner(row.owner);
+    conversations.set(storageKey(row.id, owner), {
+      id: row.id,
+      owner,
+      domain: row.domain,
+      messages: deepClone(row.messages ?? []),
+      title: row.title,
+      detail: row.detail,
+      ...(row.last_response_id ? { last_response_id: row.last_response_id } : {}),
+    });
+  }
+}
+
+function withPersistedConversations<T>(mutate: (draft: Map<string, StoredConversationEnvelope>) => T): T {
+  ensureDir();
+  let result: T | undefined;
+  const payload = mutateJsonStateFile(STORAGE_PATH, {
+    label: 'conversation state',
+    validate: isValidPersistedFile,
+    createDefault: () => createPersistedFile([]),
+    mutate: (current) => {
+      const draft = new Map<string, StoredConversationEnvelope>();
+      for (const row of current.conversations) {
+        if (!isConversationRow(row)) {
+          continue;
+        }
+        const owner = normalizeOwner(row.owner);
+        draft.set(storageKey(row.id, owner), {
+          id: row.id,
+          owner,
+          domain: row.domain,
+          messages: deepClone(row.messages ?? []),
+          title: row.title,
+          detail: row.detail,
+          ...(row.last_response_id ? { last_response_id: row.last_response_id } : {}),
+        });
+      }
+      result = mutate(draft);
+      return createPersistedFile(draft.values());
+    },
+  });
+  hydrateFromPayload(payload);
+  return result as T;
 }
 
 function load() {
@@ -101,27 +153,10 @@ function load() {
   }
 
   try {
-    const raw = readFileSync(STORAGE_PATH, FILE_ENCODING);
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isValidPersistedFile(parsed)) {
-      return;
-    }
-
-    for (const row of parsed.conversations) {
-      if (!isConversationRow(row)) {
-        continue;
-      }
-      const owner = normalizeOwner(row.owner);
-      conversations.set(storageKey(row.id, owner), {
-        id: row.id,
-        owner,
-        domain: row.domain,
-        messages: deepClone(row.messages ?? []),
-        title: row.title,
-        detail: row.detail,
-        ...(row.last_response_id ? { last_response_id: row.last_response_id } : {}),
-      });
-    }
+    hydrateFromPayload(readJsonStateFile(STORAGE_PATH, {
+      label: 'conversation state',
+      validate: isValidPersistedFile,
+    }));
   } catch {
     return;
   }
@@ -170,45 +205,51 @@ export function upsertConversation(
   owner?: string,
 ): ConversationEnvelope {
   load();
-  const normalizedOwner = normalizeOwner(owner);
-  const key = storageKey(conversation.id, normalizedOwner);
-  const existing = conversations.get(key);
-  const next: StoredConversationEnvelope = existing
-    ? {
-      ...existing,
-      ...conversation,
-    }
-    : {
-      ...conversation,
-      owner: normalizedOwner,
-      messages: [],
-    };
-  conversations.set(key, next);
-  persist();
-  return cloneConversation(next);
+  return withPersistedConversations((draft) => {
+    const normalizedOwner = normalizeOwner(owner);
+    const key = storageKey(conversation.id, normalizedOwner);
+    const existing = draft.get(key);
+    const next: StoredConversationEnvelope = existing
+      ? {
+        ...existing,
+        ...conversation,
+      }
+      : {
+        ...conversation,
+        owner: normalizedOwner,
+        messages: [],
+      };
+    draft.set(key, next);
+    return cloneConversation(next);
+  });
 }
 
 export function appendServerMessage(id: string, message: ServerChatMessage, owner?: string): ConversationEnvelope {
   load();
-  const conversation = getStoredConversation(id, owner);
-  if (!conversation) {
-    throw new Error('Conversation not found');
-  }
-  conversation.messages.push(deepClone(message));
-  conversations.set(storageKey(id, conversation.owner), conversation);
-  persist();
-  return cloneConversation(conversation);
+  return withPersistedConversations((draft) => {
+    const conversation = draft.get(storageKey(id, normalizeOwner(owner)));
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+    conversation.messages.push(deepClone(message));
+    draft.set(storageKey(id, conversation.owner), conversation);
+    return cloneConversation(conversation);
+  });
 }
 
 export function setConversationResponseId(id: string, responseId: string, owner?: string) {
   load();
-  const conversation = getStoredConversation(id, owner);
-  if (!conversation || !responseId.trim()) {
+  if (!responseId.trim()) {
     return;
   }
-  conversation.last_response_id = responseId.trim();
-  conversations.set(storageKey(id, conversation.owner), conversation);
-  persist();
+  withPersistedConversations((draft) => {
+    const conversation = draft.get(storageKey(id, normalizeOwner(owner)));
+    if (!conversation) {
+      return;
+    }
+    conversation.last_response_id = responseId.trim();
+    draft.set(storageKey(id, conversation.owner), conversation);
+  });
 }
 
 export function listConversations(owner?: string) {

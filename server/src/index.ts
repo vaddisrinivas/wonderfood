@@ -47,6 +47,13 @@ import { installReactiveRuntime } from './kernel/install-reactive-runtime';
 import { chatAgent, localQuery } from './agents/chat-agent';
 import { PackageRegistry } from './kernel/package-registry';
 import {
+  findRunningConversationRun,
+  getRunState,
+  getScopedIdempotencyRecord,
+  setRunState,
+  setScopedIdempotencyRecord,
+} from './chat-runtime-state';
+import {
   deleteHealthSnapshot,
   exportHealthSnapshots,
   listHealthSnapshots,
@@ -62,66 +69,17 @@ const CHAT_CONTROL_BODY_LIMIT_BYTES = 64 * 1024;
 const PROVIDER_BODY_LIMIT_BYTES = 1024 * 1024;
 const PACKAGE_BODY_LIMIT_BYTES = 512 * 1024;
 const HEALTH_BODY_LIMIT_BYTES = 512 * 1024;
+const REQUEST_DEADLINE_MS = Number(process.env.LIFEOS_REQUEST_DEADLINE_MS ?? '15000');
+const BODY_CHUNK_TIMEOUT_MS = Number(process.env.LIFEOS_BODY_CHUNK_TIMEOUT_MS ?? '3000');
+const HEADER_TIMEOUT_MS = Number(process.env.LIFEOS_HEADER_TIMEOUT_MS ?? '5000');
+const MAX_HEADER_COUNT = Number(process.env.LIFEOS_MAX_HEADER_COUNT ?? '64');
+const MAX_HEADER_BYTES = Number(process.env.LIFEOS_MAX_HEADER_BYTES ?? '16384');
 const DEFAULT_AUTHENTICATED_PRINCIPAL = 'server';
 const DEFAULT_LOCAL_DEVELOPMENT_PRINCIPAL = 'local-development';
-const CHAT_IDEMPOTENCY_CACHE_LIMIT = 512;
-const CHAT_RUN_STATUS_LIMIT = 256;
-const CHAT_CONVERSATION_RUN_LIMIT = 256;
 const packageRegistryPath = process.env.LIFEOS_PACKAGE_REGISTRY_PATH?.trim()
   || `${process.cwd()}/server-data/package-registry.json`;
 
-type ScopedIdempotencyRecord = {
-  messageId: string;
-  runId: string;
-  conversationId: string;
-  principalId: string;
-  operationFingerprint: string;
-};
-
-type RunState = {
-  status: 'running' | 'completed' | 'cancelled' | 'failed';
-  controller: AbortController;
-  conversationId: string;
-  principalId: string;
-};
-
-class BoundedMap<K, V> {
-  readonly #map = new Map<K, V>();
-
-  constructor(private readonly limit: number) {}
-
-  get(key: K): V | undefined {
-    const value = this.#map.get(key);
-    if (value === undefined) {
-      return undefined;
-    }
-    this.#map.delete(key);
-    this.#map.set(key, value);
-    return value;
-  }
-
-  set(key: K, value: V) {
-    if (this.#map.has(key)) {
-      this.#map.delete(key);
-    }
-    this.#map.set(key, value);
-    while (this.#map.size > this.limit) {
-      const oldest = this.#map.keys().next();
-      if (oldest.done) {
-        break;
-      }
-      this.#map.delete(oldest.value);
-    }
-  }
-
-  delete(key: K) {
-    return this.#map.delete(key);
-  }
-}
-
-const idempotencyCache = new BoundedMap<string, ScopedIdempotencyRecord>(CHAT_IDEMPOTENCY_CACHE_LIMIT);
-const runStatus = new BoundedMap<string, RunState>(CHAT_RUN_STATUS_LIMIT);
-const runByConversation = new BoundedMap<string, string>(CHAT_CONVERSATION_RUN_LIMIT);
+const activeRunControllers = new Map<string, AbortController>();
 
 installReactiveRuntime();
 const CORS_ORIGINS = new Set(
@@ -171,15 +129,33 @@ function payloadTooLarge(res: any, message: string) {
   setJson(res, 413, { status: 'error', message });
 }
 
+function requestTimeout(res: any, message: string) {
+  setJson(res, 408, { status: 'error', message });
+}
+
+function requestHeaderTooLarge(res: any, message: string) {
+  setJson(res, 431, { status: 'error', message });
+}
+
 function ok(res: any, body: unknown) {
   setJson(res, 200, body);
 }
 
 class PayloadTooLargeError extends Error {}
+class RequestTimeoutError extends Error {}
+class RequestHeaderTooLargeError extends Error {}
 
 function handleBodyReadError(res: any, error: unknown) {
   if (error instanceof PayloadTooLargeError) {
     payloadTooLarge(res, error.message);
+    return true;
+  }
+  if (error instanceof RequestTimeoutError) {
+    requestTimeout(res, error.message);
+    return true;
+  }
+  if (error instanceof RequestHeaderTooLargeError) {
+    requestHeaderTooLarge(res, error.message);
     return true;
   }
   if (error instanceof Error && error.message === 'Invalid Content-Length header') {
@@ -200,6 +176,21 @@ function parseContentLength(req: any): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
 }
 
+function validateRequestHeaders(req: any) {
+  const rawHeaders: string[] = Array.isArray(req.rawHeaders) ? req.rawHeaders.map((value: unknown) => String(value)) : [];
+  const headerCount = Math.floor(rawHeaders.length / 2);
+  if (headerCount > MAX_HEADER_COUNT) {
+    throw new RequestHeaderTooLargeError(`Request has too many headers. Limit is ${MAX_HEADER_COUNT}.`);
+  }
+  const totalHeaderBytes = rawHeaders.reduce(
+    (sum, value) => sum + Buffer.byteLength(String(value), 'utf-8'),
+    0,
+  );
+  if (totalHeaderBytes > MAX_HEADER_BYTES) {
+    throw new RequestHeaderTooLargeError(`Request headers too large. Limit is ${MAX_HEADER_BYTES} bytes.`);
+  }
+}
+
 async function readBoundedTextBody(req: any, maxBytes: number): Promise<string> {
   const contentLength = parseContentLength(req);
   if (contentLength !== null) {
@@ -211,18 +202,53 @@ async function readBoundedTextBody(req: any, maxBytes: number): Promise<string> 
     }
   }
 
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
-    totalBytes += buffer.byteLength;
-    if (totalBytes > maxBytes) {
-      req.destroy?.();
-      throw new PayloadTooLargeError(`Request body too large. Limit is ${maxBytes} bytes.`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf-8');
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let settled = false;
+    let chunkTimer: ReturnType<typeof setTimeout> | null = null;
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimers = () => {
+      if (chunkTimer) clearTimeout(chunkTimer);
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      callback();
+    };
+    const armChunkTimer = () => {
+      if (chunkTimer) clearTimeout(chunkTimer);
+      chunkTimer = setTimeout(() => {
+        req.destroy(new RequestTimeoutError(`Request body timed out after ${BODY_CHUNK_TIMEOUT_MS} ms without progress.`));
+      }, BODY_CHUNK_TIMEOUT_MS);
+    };
+    const onError = (error: unknown) => finish(() => reject(error));
+    const onEnd = () => finish(() => resolve(Buffer.concat(chunks).toString('utf-8')));
+    const onData = (chunk: Buffer | string) => {
+      armChunkTimer();
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      totalBytes += buffer.byteLength;
+      if (totalBytes > maxBytes) {
+        req.destroy(new PayloadTooLargeError(`Request body too large. Limit is ${maxBytes} bytes.`));
+        return;
+      }
+      chunks.push(buffer);
+    };
+
+    deadlineTimer = setTimeout(() => {
+      req.destroy(new RequestTimeoutError(`Request exceeded ${REQUEST_DEADLINE_MS} ms deadline.`));
+    }, REQUEST_DEADLINE_MS);
+    armChunkTimer();
+    req.on('data', onData);
+    req.on('end', onEnd);
+    req.on('error', onError);
+  });
 }
 
 async function readJsonBody(req: any, maxBytes: number): Promise<Record<string, unknown>> {
@@ -387,7 +413,7 @@ async function readRawBody(req: any, maxBytes: number): Promise<string> {
 }
 
 function sendStopReply(res: any, id: string, status: 'running' | 'completed' | 'cancelled' | 'failed') {
-  const run = runStatus.get(id);
+  const run = getRunState(id);
   if (!run) {
     setJson(res, 404, { status: 'error', message: 'run_id not found' });
     return;
@@ -407,7 +433,12 @@ async function parseChatSend(req: any, maxBytes: number): Promise<NormalizedChat
   try {
     payload = (await readJsonBody(req, maxBytes)) as ChatSendRequest;
   } catch (error) {
-    if (error instanceof PayloadTooLargeError || (error instanceof Error && error.message === 'Invalid Content-Length header')) {
+    if (
+      error instanceof PayloadTooLargeError
+      || error instanceof RequestTimeoutError
+      || error instanceof RequestHeaderTooLargeError
+      || (error instanceof Error && error.message === 'Invalid Content-Length header')
+    ) {
       throw error;
     }
     throw new Error('Invalid JSON');
@@ -454,15 +485,12 @@ async function runServerChat(params: {
 }): Promise<ChatRunResponse> {
   const controller = new AbortController();
   const { conversationId, principalId, runId } = params;
-  const scopedConversationKey = conversationScopeKey(principalId, conversationId);
-
-  runStatus.set(runId, {
+  activeRunControllers.set(runId, controller);
+  setRunState(runId, {
     status: 'running',
-    controller,
     conversationId,
     principalId,
   });
-  runByConversation.set(scopedConversationKey, runId);
 
   const shouldAppendUser = params.appendUserMessage !== false;
   if (shouldAppendUser) {
@@ -537,16 +565,15 @@ async function runServerChat(params: {
       ? 'completed'
       : 'failed';
 
-  runStatus.set(runId, {
+  setRunState(runId, {
     status: terminalRunStatus,
-    controller,
     conversationId,
     principalId,
   });
 
   for (const message of response.messages) {
     appendServerMessage(conversationId, message, principalId);
-    idempotencyCache.set(params.idempotencyNamespace, {
+    setScopedIdempotencyRecord(params.idempotencyNamespace, {
       messageId: message.id,
       runId,
       conversationId,
@@ -559,7 +586,7 @@ async function runServerChat(params: {
     setConversationResponseId(conversationId, response.run.previous_response_id, principalId);
   }
 
-  runByConversation.delete(scopedConversationKey);
+  activeRunControllers.delete(runId);
 
   response.thread = {
     id: conversationId,
@@ -570,7 +597,13 @@ async function runServerChat(params: {
   return response;
 }
 
-const server = createServer(async (req: any, res: any) => {
+const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any, res: any) => {
+  try {
+    validateRequestHeaders(req);
+  } catch (error) {
+    if (handleBodyReadError(res, error)) return;
+    throw error;
+  }
   applyCors(req, res);
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -1102,8 +1135,8 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
     const principalId = getAuthenticatedPrincipalId(req.headers ?? {}, auth);
-    const runId = runByConversation.get(conversationScopeKey(principalId, conversationId));
-    if (!runId) {
+    const activeRun = findRunningConversationRun(principalId, conversationId);
+    if (!activeRun) {
       ok(res, {
         conversation_id: conversationId,
         active: false,
@@ -1112,12 +1145,11 @@ const server = createServer(async (req: any, res: any) => {
       });
       return;
     }
-    const run = runStatus.get(runId);
     ok(res, {
       conversation_id: conversationId,
       active: true,
-      status: run?.status ?? 'failed',
-      run_id: runId,
+      status: activeRun.run.status,
+      run_id: activeRun.runId,
     });
     return;
   }
@@ -1281,7 +1313,7 @@ const server = createServer(async (req: any, res: any) => {
       const previousResponseId = resolveStoredPreviousResponseId({
         storedConversationResponseId: conversation.last_response_id,
       });
-      const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
+      const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
       if (existing) {
         if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
           conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
@@ -1322,23 +1354,20 @@ const server = createServer(async (req: any, res: any) => {
         }
       }
 
-      const runByMessage = runByConversation.get(scopedRequest.conversationRunKey);
-      if (runByMessage) {
-        const existingRun = runStatus.get(runByMessage);
-        if (existingRun?.status === 'running' && existingRun.principalId === principalId) {
-          res.writeHead(200, {
-            'content-type': 'text/event-stream',
-            'cache-control': 'no-cache',
-            connection: 'keep-alive',
-          });
-          sendStreamEvent(res, {
-            type: 'error',
-            conversation_id: conversation.id,
-            error: `A run is already active for conversation ${conversation.id}.`,
-          });
-          res.end();
-          return;
-        }
+      const existingRun = findRunningConversationRun(principalId, conversation.id);
+      if (existingRun) {
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        sendStreamEvent(res, {
+          type: 'error',
+          conversation_id: conversation.id,
+          error: `A run is already active for conversation ${conversation.id}.`,
+        });
+        res.end();
+        return;
       }
 
       const runMessageText = getRunMessageText(
@@ -1500,7 +1529,7 @@ const server = createServer(async (req: any, res: any) => {
       const previousResponseId = resolveStoredPreviousResponseId({
         storedConversationResponseId: conversation.last_response_id,
       });
-      const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
+      const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
       if (existing) {
         if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
           conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
@@ -1596,7 +1625,7 @@ const server = createServer(async (req: any, res: any) => {
       return;
     }
 
-    const run = runStatus.get(payload.run_id);
+    const run = getRunState(payload.run_id);
     if (!run) {
       badRequest(res, 'Unknown run');
       return;
@@ -1610,8 +1639,13 @@ const server = createServer(async (req: any, res: any) => {
       ok(res, { run_id: payload.run_id, status: run.status });
       return;
     }
-    run.controller.abort();
-    run.status = 'cancelled';
+    activeRunControllers.get(payload.run_id)?.abort();
+    setRunState(payload.run_id, {
+      status: 'cancelled',
+      conversationId: run.conversationId,
+      principalId: run.principalId,
+    });
+    activeRunControllers.delete(payload.run_id);
     sendStopReply(res, payload.run_id, 'cancelled');
     return;
   }
@@ -1666,7 +1700,7 @@ const server = createServer(async (req: any, res: any) => {
       retryOfMessageId: userMessageId,
       preview: false,
     });
-    const existing = idempotencyCache.get(scopedRequest.idempotencyNamespace);
+    const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
     if (existing) {
       if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
         conflict(res, 'Idempotency key already used for a different retry operation in this conversation.');
@@ -1839,6 +1873,9 @@ const server = createServer(async (req: any, res: any) => {
 
   badRequest(res, 'Unsupported method');
 });
+
+server.headersTimeout = HEADER_TIMEOUT_MS;
+server.requestTimeout = REQUEST_DEADLINE_MS;
 
 server.listen(port, host, () => {
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;

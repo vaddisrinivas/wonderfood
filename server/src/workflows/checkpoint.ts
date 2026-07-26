@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
+import { mutateJsonStateFile, readJsonStateFile } from '../providers/json-state';
 import { transitionWorkflow, WorkflowControlEvent, WorkflowControlState } from './control-machine';
 
 type WorkflowCheckpointStepStatus = 'ok' | 'failed' | 'skipped' | 'cancelled';
@@ -45,11 +45,7 @@ const MAX_WORKFLOW_STEP_RESULT_BYTES = 32 * 1024;
 const WORKFLOW_RESULT_PREVIEW_BYTES = 4 * 1024;
 
 let loaded = false;
-let store: StorePayload = {
-  schema_version: STORE_VERSION,
-  updated_at: nowIso(),
-  runs: {},
-};
+let store: StorePayload = createEmptyStore();
 
 function nowIso() {
   return new Date().toISOString();
@@ -107,9 +103,38 @@ function cloneCheckpoint(run: WorkflowRunCheckpoint): WorkflowRunCheckpoint {
   };
 }
 
-function persist() {
-  store.updated_at = nowIso();
-  writeJsonStateFileAtomic(WORKFLOW_CHECKPOINT_PATH, store);
+function createEmptyStore(): StorePayload {
+  return {
+    schema_version: STORE_VERSION,
+    updated_at: nowIso(),
+    runs: {},
+  };
+}
+
+function persistMutation<T>(mutate: (draft: StorePayload) => T): T {
+  let result: T | undefined;
+  const next = mutateJsonStateFile(WORKFLOW_CHECKPOINT_PATH, {
+    label: 'workflow checkpoint state',
+    validate: isRunPayload,
+    createDefault: createEmptyStore,
+    mutate: (current) => {
+      const draft: StorePayload = {
+        schema_version: STORE_VERSION,
+        updated_at: nowIso(),
+        runs: deepClone((current.runs as Record<string, WorkflowRunCheckpoint>) || {}),
+      };
+      result = mutate(draft);
+      draft.updated_at = nowIso();
+      return draft;
+    },
+  });
+  store = {
+    schema_version: STORE_VERSION,
+    updated_at: next.updated_at,
+    runs: deepClone(next.runs),
+  };
+  loaded = true;
+  return result as T;
 }
 
 function isRunPayload(value: unknown): value is StorePayload {
@@ -139,15 +164,19 @@ function load() {
     return;
   }
 
-  const parsed = readJsonStateFile(WORKFLOW_CHECKPOINT_PATH, {
-    label: 'workflow checkpoint state',
-    validate: isRunPayload,
-  });
-  store = {
-    schema_version: STORE_VERSION,
-    updated_at: typeof parsed.updated_at === 'string' ? parsed.updated_at : nowIso(),
-    runs: (parsed.runs as Record<string, WorkflowRunCheckpoint>) || {},
-  };
+  try {
+    const parsed = readJsonStateFile(WORKFLOW_CHECKPOINT_PATH, {
+      label: 'workflow checkpoint state',
+      validate: isRunPayload,
+    });
+    store = {
+      schema_version: STORE_VERSION,
+      updated_at: typeof parsed.updated_at === 'string' ? parsed.updated_at : nowIso(),
+      runs: deepClone((parsed.runs as Record<string, WorkflowRunCheckpoint>) || {}),
+    };
+  } catch {
+    store = createEmptyStore();
+  }
 }
 
 function makeRunId(workflowId: string, actor: string, seed?: string) {
@@ -164,18 +193,19 @@ export function startWorkflowCheckpoint(input: {
 }): string {
   load();
   const runId = makeRunId(input.workflowId, input.actor, input.seed);
-  store.runs[runId] = {
-    run_id: runId,
-    workflow_id: input.workflowId,
-    domain: input.domain,
-    actor: input.actor,
-    status: 'running',
-    started_at: nowIso(),
-    updated_at: nowIso(),
-    steps: [],
-    changed_records: [...(input.changedRecords ?? [])],
-  };
-  persist();
+  persistMutation((draft) => {
+    draft.runs[runId] = {
+      run_id: runId,
+      workflow_id: input.workflowId,
+      domain: input.domain,
+      actor: input.actor,
+      status: 'running',
+      started_at: nowIso(),
+      updated_at: nowIso(),
+      steps: [],
+      changed_records: [...(input.changedRecords ?? [])],
+    };
+  });
   return runId;
 }
 
@@ -191,28 +221,28 @@ export function markWorkflowStep(input: {
   finishedAt: string;
 }) {
   load();
-  const run = store.runs[input.runId];
-  if (!run) {
-    return;
-  }
-
-  run.steps.push({
-    id: input.id,
-    tool: input.tool,
-    status: input.status,
-    changed_records: input.changedRecords ?? [],
-    result: boundStepResult(input.result),
-    error: input.error,
-    started_at: input.startedAt,
-    finished_at: input.finishedAt,
-  });
-  for (const id of input.changedRecords ?? []) {
-    if (!run.changed_records.includes(id)) {
-      run.changed_records.push(id);
+  persistMutation((draft) => {
+    const run = draft.runs[input.runId];
+    if (!run) {
+      return;
     }
-  }
-  run.updated_at = nowIso();
-  persist();
+    run.steps.push({
+      id: input.id,
+      tool: input.tool,
+      status: input.status,
+      changed_records: input.changedRecords ?? [],
+      result: boundStepResult(input.result),
+      error: input.error,
+      started_at: input.startedAt,
+      finished_at: input.finishedAt,
+    });
+    for (const id of input.changedRecords ?? []) {
+      if (!run.changed_records.includes(id)) {
+        run.changed_records.push(id);
+      }
+    }
+    run.updated_at = nowIso();
+  });
 }
 
 export function completeWorkflowCheckpoint(
@@ -224,29 +254,28 @@ export function completeWorkflowCheckpoint(
   },
 ): void {
   load();
-  const run = store.runs[runId];
-  if (!run) {
-    return;
-  }
-
-  const event: WorkflowControlEvent = opts.status === 'completed'
-    ? 'COMPLETE'
-    : opts.status === 'failed' ? 'FAIL' : 'CANCEL';
-  const next = transitionWorkflow(run.status as WorkflowControlState, event);
-  if (next !== opts.status) {
-    throw new Error(`Invalid workflow transition ${run.status} -> ${opts.status}`);
-  }
-
-  run.status = opts.status;
-  run.updated_at = nowIso();
-  run.finished_at = nowIso();
-  run.error = opts.error;
-  for (const id of opts.changedRecords ?? []) {
-    if (!run.changed_records.includes(id)) {
-      run.changed_records.push(id);
+  persistMutation((draft) => {
+    const run = draft.runs[runId];
+    if (!run) {
+      return;
     }
-  }
-  persist();
+    const event: WorkflowControlEvent = opts.status === 'completed'
+      ? 'COMPLETE'
+      : opts.status === 'failed' ? 'FAIL' : 'CANCEL';
+    const next = transitionWorkflow(run.status as WorkflowControlState, event);
+    if (next !== opts.status) {
+      throw new Error(`Invalid workflow transition ${run.status} -> ${opts.status}`);
+    }
+    run.status = opts.status;
+    run.updated_at = nowIso();
+    run.finished_at = nowIso();
+    run.error = opts.error;
+    for (const id of opts.changedRecords ?? []) {
+      if (!run.changed_records.includes(id)) {
+        run.changed_records.push(id);
+      }
+    }
+  });
 }
 
 export function pauseWorkflowCheckpoint(runId: string): void {
@@ -259,35 +288,37 @@ export function resumeWorkflowCheckpoint(runId: string): void {
 
 function transitionCheckpoint(runId: string, event: WorkflowControlEvent, expected: WorkflowCheckpointRunStatus) {
   load();
-  const run = store.runs[runId];
-  if (!run) return;
-  const next = transitionWorkflow(run.status as WorkflowControlState, event);
-  if (next !== expected) throw new Error(`Invalid workflow transition ${run.status} -> ${expected}`);
-  run.status = expected;
-  run.updated_at = nowIso();
-  persist();
+  persistMutation((draft) => {
+    const run = draft.runs[runId];
+    if (!run) return;
+    const next = transitionWorkflow(run.status as WorkflowControlState, event);
+    if (next !== expected) throw new Error(`Invalid workflow transition ${run.status} -> ${expected}`);
+    run.status = expected;
+    run.updated_at = nowIso();
+  });
 }
 
 export function finalizeWorkflowCompensated(runId: string, message?: string) {
   load();
-  const run = store.runs[runId];
-  if (!run) {
-    return;
-  }
-  if (run.status === 'failed') {
-    const compensating = transitionWorkflow('failed', 'COMPENSATE');
-    if (compensating !== 'compensating') throw new Error('Invalid workflow compensation transition');
-    run.status = 'compensating';
-  }
-  const compensated = transitionWorkflow(run.status as WorkflowControlState, 'COMPENSATED');
-  if (compensated !== 'compensated') throw new Error(`Invalid workflow transition ${run.status} -> compensated`);
-  run.status = 'compensated';
-  run.updated_at = nowIso();
-  run.finished_at = nowIso();
-  if (message) {
-    run.error = message;
-  }
-  persist();
+  persistMutation((draft) => {
+    const run = draft.runs[runId];
+    if (!run) {
+      return;
+    }
+    if (run.status === 'failed') {
+      const compensating = transitionWorkflow('failed', 'COMPENSATE');
+      if (compensating !== 'compensating') throw new Error('Invalid workflow compensation transition');
+      run.status = 'compensating';
+    }
+    const compensated = transitionWorkflow(run.status as WorkflowControlState, 'COMPENSATED');
+    if (compensated !== 'compensated') throw new Error(`Invalid workflow transition ${run.status} -> compensated`);
+    run.status = 'compensated';
+    run.updated_at = nowIso();
+    run.finished_at = nowIso();
+    if (message) {
+      run.error = message;
+    }
+  });
 }
 
 export function getWorkflowCheckpoint(runId: string): WorkflowRunCheckpoint | null {

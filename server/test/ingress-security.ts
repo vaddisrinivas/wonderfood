@@ -18,6 +18,11 @@ process.env.NOTION_DATA_SOURCE_ID = 'status-notion-source';
 process.env.GOOGLE_SHEETS_ACCESS_TOKEN = 'status-sheets-token';
 process.env.GOOGLE_SHEETS_SPREADSHEET_ID = 'status-sheet-id';
 process.env.GOOGLE_SHEETS_DATA_SOURCE_ID = 'status-sheet-source';
+process.env.LIFEOS_REQUEST_DEADLINE_MS = '900';
+process.env.LIFEOS_BODY_CHUNK_TIMEOUT_MS = '400';
+process.env.LIFEOS_HEADER_TIMEOUT_MS = '500';
+process.env.LIFEOS_MAX_HEADER_COUNT = '24';
+process.env.LIFEOS_MAX_HEADER_BYTES = '2048';
 
 const { server } = await import('../src/index');
 await delay(25);
@@ -32,7 +37,12 @@ async function readJson(response: Response) {
   return (await response.json()) as Record<string, unknown>;
 }
 
-async function chunkedPost(path: string, bodyChunks: string[], authorization?: string) {
+async function chunkedPost(
+  path: string,
+  bodyChunks: string[],
+  authorization?: string,
+  options: { delayMsBetweenChunks?: number; headers?: Record<string, string> } = {},
+) {
   return new Promise<{ statusCode: number; body: string; errorCode?: string }>((resolve, reject) => {
     const req = httpRequest(
       {
@@ -43,6 +53,7 @@ async function chunkedPost(path: string, bodyChunks: string[], authorization?: s
         headers: {
           'content-type': 'application/json',
           ...(authorization ? { authorization } : {}),
+          ...(options.headers ?? {}),
         },
       },
       (res) => {
@@ -64,10 +75,15 @@ async function chunkedPost(path: string, bodyChunks: string[], authorization?: s
       }
       reject(error);
     });
-    for (const chunk of bodyChunks) {
-      req.write(chunk);
-    }
-    req.end();
+    (async () => {
+      for (const chunk of bodyChunks) {
+        req.write(chunk);
+        if (options.delayMsBetweenChunks) {
+          await delay(options.delayMsBetweenChunks);
+        }
+      }
+      req.end();
+    })().catch(reject);
   });
 }
 
@@ -149,6 +165,60 @@ try {
   if (oversizedProvider.statusCode === 413) {
     ensure(oversizedProvider.body.includes('Limit is'), 'provider chunked oversize response should mention the byte limit');
   }
+
+  const slowBodyDeadline = await chunkedPost(
+    '/providers/sheets/sync',
+    ['{"event":"a', 'b', 'c', 'd', '"}'],
+    `Bearer ${token}`,
+    { delayMsBetweenChunks: 250 },
+  );
+  ensure(
+    slowBodyDeadline.statusCode === 408 || slowBodyDeadline.errorCode === 'ECONNRESET',
+    `provider ingress should time out slow total body reads, got status=${slowBodyDeadline.statusCode} error=${slowBodyDeadline.errorCode ?? 'none'}`,
+  );
+  if (slowBodyDeadline.statusCode === 408) {
+    ensure(slowBodyDeadline.body.includes('deadline'), 'slow total body timeout should mention the request deadline');
+  }
+
+  const slowlorisBody = await chunkedPost(
+    '/providers/sheets/sync',
+    ['{"event":"hang', '"}'],
+    `Bearer ${token}`,
+    { delayMsBetweenChunks: 450 },
+  );
+  ensure(
+    slowlorisBody.statusCode === 408 || slowlorisBody.errorCode === 'ECONNRESET',
+    `provider ingress should time out idle slow-body reads, got status=${slowlorisBody.statusCode} error=${slowlorisBody.errorCode ?? 'none'}`,
+  );
+  if (slowlorisBody.statusCode === 408) {
+    ensure(slowlorisBody.body.includes('without progress'), 'slowloris timeout should mention stalled body progress');
+  }
+
+  const tooManyHeaders = await chunkedPost(
+    '/health',
+    [],
+    undefined,
+    {
+      headers: Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`x-test-${index}`, '1'])),
+    },
+  );
+  ensure(tooManyHeaders.statusCode === 431, `header-count protection should return 431, got ${tooManyHeaders.statusCode}`);
+  ensure(tooManyHeaders.body.includes('too many headers'), 'header-count protection should explain the limit');
+
+  const oversizedHeaders = await chunkedPost(
+    '/health',
+    [],
+    undefined,
+    {
+      headers: {
+        'x-large-header': 'x'.repeat(2100),
+      },
+    },
+  );
+  ensure(
+    oversizedHeaders.statusCode === 431 || oversizedHeaders.statusCode === 400 || oversizedHeaders.errorCode === 'ECONNRESET',
+    `header-size protection should reject oversized headers, got status=${oversizedHeaders.statusCode} error=${oversizedHeaders.errorCode ?? 'none'}`,
+  );
 
   console.log('PASS server/test/ingress-security.ts');
 } finally {
