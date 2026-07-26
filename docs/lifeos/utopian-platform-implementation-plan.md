@@ -12,7 +12,7 @@
 **Only worker model:** `gpt-5.3-codex-spark`  
 **Canonical local authority:** Expo SQLite  
 **Primary product proof:** WonderFood  
-**Explicitly deferred:** Store signing, physical-device certification, iOS release, hosted multiplayer sync, general renderer, plugin marketplace, paired-device MCP, arbitrary downloaded code
+**Explicitly deferred:** Store signing, physical-device certification, iOS release, hosted multiplayer sync, plugin marketplace, paired-device MCP, arbitrary downloaded code
 
 ---
 
@@ -2066,12 +2066,160 @@ AI cannot change:
 
 ---
 
-# 17. Phase 9 — Generality and optional plugin escape
+# 17. Phase 9 — Generic widget registry, platform capabilities, and generality
+
+**Goal:** Make the base app powerful enough to produce many polished apps from
+configuration alone, without downloaded plugin code or bespoke route rewrites.
+
+**Estimated duration:** 2–4 days  
+**Dependencies:** Phase 8
+
+V1 must include a trusted built-in widget registry. Plugins remain optional and
+deferred; the registry is the safe path that gives most plugin value without a
+new trust boundary.
+
+## V1 widget registry
+
+All widgets are compiled into the app, registered by stable IDs, and selected
+only through package/config. A package may pass validated props, bind an existing
+view/query, and bind named actions. A widget may not receive DB handles,
+provider credentials, raw SQL, arbitrary code, or filesystem/network access.
+
+Required V1 registry, small version:
+
+- `PostCard`
+- `PollCard`
+- `LinkPreviewCard`
+- `FeedList`
+- `KanbanBoard`
+- `ChartBlock`
+- `FormBlock`
+- `DetailDrawer`
+- `ActionBar`
+- `PermissionPrompt`
+
+These are enough for social feeds, communities, lightweight CRMs, issue
+trackers, planning apps, dashboards, review workflows, forms, approvals, and
+Food.
+
+V1 optional simple media widgets, only if they use existing Expo/web primitives
+without a large dependency:
+
+- `ImageBlock`
+- `AudioBlock`
+- `VideoBlock`
+- `FileLinkBlock`
+- `MapPreviewBlock`
+
+`MapPreviewBlock` can start as a static/address/lat-lng preview with an external
+open action. Full interactive maps are not V1 unless required by a fixture.
+
+## Content and link primitives
+
+V1 config must be able to model social/content surfaces without custom code:
+
+- posts, replies, comments, reactions, bookmarks, moderation events;
+- polls, poll options, votes, close state, result visibility;
+- URL preview records with title, description, thumbnail, provider, canonical
+  URL, embed URL, safety status, fetched-at timestamp, and refresh workflow;
+- YouTube previews through oEmbed/OpenGraph metadata, rendered by
+  `LinkPreviewCard`; playback can open externally or use the simple
+  `VideoBlock` only when platform support is already present;
+- feeds with chronological, grouped, pinned, ranked, and filtered modes.
+
+URL enrichment is a workflow/provider-style capability. Fetch success does not
+mutate UI directly; it proposes or applies canonical records through the normal
+operation path, with receipts and retry.
+
+## Layout and nesting
+
+The base app must support a small declarative layout model:
+
+- stack, grid, scroll, tabs, section, detail drawer, and widget node;
+- max depth, max node count, max widget count, and acyclic graph validation;
+- density, spacing, tone, icon/image, empty/loading/error state, and responsive
+  visibility tokens;
+- no raw React component name, raw CSS, HTML event handler, script string,
+  remote module, or inline executable expression.
+
+Screens are owned by `AppPackage.presentation.ui` or successor config. Expo
+route files remain thin shells that call the generic renderer.
+
+## Platform capabilities and permissions
+
+Android, iOS, and web capabilities must be declared in config and validated
+before activation. The app may request only capabilities declared by the active
+package and approved by policy.
+
+V1 capability declarations:
+
+- camera, photo library, microphone, audio playback, video playback;
+- file picker, share sheet, clipboard;
+- map preview/open-external and optional foreground location;
+- notifications;
+- calendar/contact access only behind explicit future gates;
+- external URL open, deep link, provider OAuth, and web embed;
+- platform fallback per widget: `android`, `ios`, `web`, `native`, `fallback`.
+
+Permission UI is generated from capability config. Debug/provenance details stay
+behind Advanced; normal UI asks for permissions in user language.
+
+## Widget contract
+
+Each widget declares:
+
+- `kind`, version, target platforms, fallback kind;
+- props JSON Schema with `additionalProperties: false`;
+- required view/query shape;
+- supported actions and operation templates;
+- required capabilities and permissions;
+- empty/loading/error config;
+- accessibility label policy;
+- performance budget and snapshot coverage.
+
+Every widget consumes frozen `ViewModel` rows and emits only named action events
+that route through policy and operation proposals.
+
+## Open-source reuse
+
+Default rule: do not import heavy UI frameworks for V1. Use existing Expo,
+React Native and web primitives first. Adopt libraries only behind a widget
+adapter when the simple implementation cannot satisfy a real package.
+
+V1 reuse posture:
+
+- charts: simple built-in SVG/view chart first; library spike later;
+- kanban: non-drag board first; drag later;
+- maps: static preview/open-in-map first; MapLibre later;
+- media: Expo image/audio/video primitives first;
+- rich documents: markdown/text display first; editor later;
+- page builder/studio: defer.
+
+Do not adopt a plugin framework before the compiled registry is boring and
+well-tested.
+
+## Gates
+
+V1 widget registry is accepted only when:
+
+- package validation rejects unknown widget kinds, props, views, actions,
+  permissions, unsafe URLs, raw code, and excessive layout graphs;
+- Android and web render every V1 widget or deterministic fallback;
+- no widget can write directly, call providers, read secrets, or bypass policy;
+- sample packages prove at least Food plus one non-Food app use the same
+  widgets without route rewrites;
+- visual/a11y/performance gates cover compact phone, tablet, and web;
+- `check:web-product` is updated to assert config-driven UI, not legacy
+  hardcoded copy.
+
+---
+
+# 18. Phase 10 — Generality fixtures and optional plugin escape
 
 **Goal:** Prove the platform is not Food-only without building more polished apps.
 
 **Estimated duration:** 4–8 days  
-**Dependencies:** Phase 8
+**Dependencies:** Phase 9
 
 ## Fixture package A — Trip skeleton
 
@@ -2128,7 +2276,7 @@ No marketplace.
 
 ---
 
-# 18. Phase 10 — Final deletion and consolidated proof
+# 19. Phase 11 — Final deletion and consolidated proof
 
 **Goal:** Remove the obsolete architectures and leave one production path.
 
