@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
-import { createReactiveCycleObserver } from '../src/kernel/reactive-observer';
-import { createReactiveReceiptStore } from '../src/kernel/reactive-receipts';
-import { createReactiveOutboxStore, enqueueReactiveProposals } from '../src/kernel/reactive-outbox';
-import { setOperationCommitFailureObserver, setOperationCommitObserver } from '../src/kernel/operation-observer';
-import { createRecordWithAction, deleteRecord, listRecords } from '../src/mcp/state';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AppPackageV2 } from '../src/kernel/package';
+
+process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-reactive-observer-')), 'mcp-runtime.json');
+
+const { createReactiveCycleObserver } = await import('../src/kernel/reactive-observer');
+const { createReactiveReceiptStore } = await import('../src/kernel/reactive-receipts');
+const { createReactiveOutboxStore, enqueueReactiveProposals } = await import('../src/kernel/reactive-outbox');
+const { setOperationCommitFailureObserver, setOperationCommitObserver } = await import('../src/kernel/operation-observer');
+const { createRecordWithAction, deleteRecord, listRecords } = await import('../src/mcp/state');
 
 const appPackage: AppPackageV2 = {
   schemaVersion: 'wonder.app-package.v2', id: 'observer-proof', version: '1.0.0',

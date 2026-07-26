@@ -5,6 +5,7 @@ import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog } from '../../../src/domain/catalog';
 import {
   createActionEvent,
+  drainOperationCommitOutbox,
   findActionByIdempotencyKey,
   listRecords,
 } from '../mcp/state';
@@ -333,6 +334,7 @@ async function runWorkerPass(worker: ReactiveRuntimeWorker): Promise<void> {
       return;
     }
     ensureHeartbeat(worker);
+    drainOperationCommitOutbox({ maxItems: worker.maxItemsPerDrain });
     recoverRuntimeOutbox(worker.path);
     const result = await drainReactiveRuntimeOutbox({
       path: worker.path,
@@ -455,6 +457,7 @@ export function installReactiveRuntime(path = DEFAULT_RUNTIME_PATH): void {
       wakeReactiveRuntimeWorker();
     },
   }));
+  drainOperationCommitOutbox();
   startReactiveRuntimeWorker({ path });
 }
 

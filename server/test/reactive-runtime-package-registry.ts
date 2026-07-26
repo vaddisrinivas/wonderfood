@@ -40,7 +40,7 @@ const registry = new PackageRegistry({ path: registryPath, now: () => '2026-07-2
 registry.activate(activePackage);
 
 installReactiveRuntime(runtimePath);
-notifyOperationCommit({
+const duplicateEvent = {
   actionId: 'runtime-authority-action',
   operationId: 'runtime-authority-operation',
   causeId: 'runtime-authority-cause',
@@ -48,7 +48,9 @@ notifyOperationCommit({
   recordId: 'runtime-authority-record',
   before: null,
   after: { id: 'runtime-authority-record', state: 'open' },
-});
+};
+assert.equal(notifyOperationCommit(duplicateEvent).delivered, true);
+assert.equal(notifyOperationCommit(duplicateEvent).delivered, true, 'crash-window redelivery must be idempotent');
 
 const restored = new PackageRegistry({ path: registryPath });
 assert.equal(restored.getActive()?.id, 'runtime-authority');

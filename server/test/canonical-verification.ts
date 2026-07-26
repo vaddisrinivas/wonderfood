@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
-import { verifyResult } from '../src/agents/verifier';
-import { createActionEvent, createRecordWithAction, deleteRecord, markActionFailed } from '../src/mcp/state';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-canonical-verification-')), 'mcp-runtime.json');
+
+const { verifyResult } = await import('../src/agents/verifier');
+const { createActionEvent, createRecordWithAction, deleteRecord, markActionFailed } = await import('../src/mcp/state');
 
 const incomplete = await verifyResult({
   actionId: 'a1',

@@ -110,8 +110,8 @@
     {
       "id": "P2-07",
       "priority": "P2",
-      "status": "PARTIAL",
-      "summary": "Observer failures are durable, but delivery remains advisory."
+      "status": "RESOLVED",
+      "summary": "Canonical writes atomically persist commit events; startup and supervised worker drains provide idempotent at-least-once reactive delivery across failures and restarts."
     },
     {
       "id": "P2-08",

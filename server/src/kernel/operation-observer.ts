@@ -21,6 +21,9 @@ export type OperationCommitFailure = Readonly<{
   };
 }>;
 export type OperationCommitFailureObserver = (failure: OperationCommitFailure) => void;
+export type OperationCommitDeliveryResult =
+  | Readonly<{ delivered: true }>
+  | Readonly<{ delivered: false; failure: OperationCommitFailure | null }>;
 
 let observer: OperationCommitObserver | null = null;
 let failureObserver: OperationCommitFailureObserver | null = null;
@@ -34,10 +37,20 @@ export function setOperationCommitFailureObserver(next: OperationCommitFailureOb
   failureObserver = next;
 }
 
-/** Observers are advisory; a failed proposal pass must never roll back a committed operation. */
-export function notifyOperationCommit(event: OperationCommitEvent): void {
+/**
+ * Attempt delivery of a durable commit event.
+ *
+ * The canonical store owns retry durability. A failed proposal pass never rolls
+ * back the committed operation, and the caller must retain the event until this
+ * function reports delivery.
+ */
+export function notifyOperationCommit(event: OperationCommitEvent): OperationCommitDeliveryResult {
+  if (!observer) {
+    return { delivered: false, failure: null };
+  }
   try {
-    observer?.(event);
+    observer(event);
+    return { delivered: true };
   } catch (error) {
     const failure = toOperationCommitFailure(event, error);
     try {
@@ -45,6 +58,7 @@ export function notifyOperationCommit(event: OperationCommitEvent): void {
     } catch {
       // Failure capture must not affect the committed write boundary.
     }
+    return { delivered: false, failure };
   }
 }
 

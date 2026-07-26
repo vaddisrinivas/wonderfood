@@ -159,12 +159,11 @@ Branch basis: `codex/lifeos-e2e-implementation`
   Commit/test evidence: `server/test/reactive-proposal-executor.ts:116-133`; `server/test/reactive-runtime-drain.ts:108-121`
   Resolution detail: queued-for-review results no longer count as executed/acked work.
 
-- `P2-07` `PARTIAL`
-  Summary: observer failures now emit durable failed receipts, but the observer is still advisory.
-  Source: `server/src/kernel/operation-observer.ts:37-49`; `server/src/kernel/install-reactive-runtime.ts:148-166`
-  Commit/test evidence: `server/test/reactive-observer-failure-receipt.ts:14-49`
-  Residual gap: downstream work is still outside the canonical write transaction; there is no transactional outbox boundary.
-  Acceptance impact: silent failure is reduced, but guaranteed reactive delivery is not proven.
+- `P2-07` `RESOLVED`
+  Summary: canonical record/action commits atomically persist their reactive commit event in the same durable state snapshot before any observer delivery is attempted.
+  Source: `server/src/mcp/state.ts`; `server/src/kernel/operation-observer.ts`; `server/src/kernel/install-reactive-runtime.ts`
+  Commit/test evidence: `server/test/operation-commit-transactional-outbox.ts`; `server/test/operation-observer.ts`; `server/test/reactive-runtime-package-registry.ts`
+  Resolution detail: failed or unavailable observers retain a pending event; startup and supervised worker polls retry it. Acknowledgement happens only after downstream receipt/outbox persistence succeeds. Deterministic cycle/proposal identities make crash-window redelivery idempotent.
 
 - `P2-08` `PARTIAL`
   Summary: release readiness now refuses to call unsigned/debug artifacts release proof, but the artifact lane itself still has ambiguity.
@@ -236,6 +235,7 @@ The historical statuses above remain the audit trail. The machine-readable regis
 - `P1-02`, `P1-03`, `P1-04` -> `RESOLVED`: exhaustive policy decisions, canonical chat writer parity, and explicit undo lifecycle, proven by `server/test/ingress-parity-boundary.ts` and `server/test/undo-lifecycle-contract.ts`.
 - `P1-06`, `P1-07`, `P1-08` -> `RESOLVED`: shared atomic/quarantine persistence, bounded slow-body ingress, and restart-safe chat replay, proven by `server/test/state-persistence-contract.ts`, `server/test/json-state-concurrency.ts`, `server/test/ingress-security.ts`, and `server/test/chat-restart-replay.ts`.
 - `P2-03`, `P2-05` -> `RESOLVED`: retrieval runtime controls and supervised reactive worker lifecycle, proven by `server/test/retrieval-runtime-controls.ts` and `server/test/reactive-runtime-worker.ts`.
+- `P2-07` -> `RESOLVED`: canonical writes and commit events now share one atomic state snapshot, with restart recovery, retained failures, worker retry, and idempotent downstream delivery proven by `server/test/operation-commit-transactional-outbox.ts`, `server/test/operation-observer.ts`, and `server/test/reactive-runtime-package-registry.ts`.
 - `P2-09` -> `RESOLVED`: strict Ajv config validation and expanded mutation coverage.
 - `P2-10` -> `RESOLVED`: `tests/ops/writer-boundary-sqlite.test.ts` proves canonical user, sync, AI, undo, JSON persistence, idempotency, and transactional rollback on real SQLite.
 - `P2-11` -> `RESOLVED`: shared confidence contract and convergence test.

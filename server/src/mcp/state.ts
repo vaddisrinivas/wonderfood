@@ -8,7 +8,10 @@ import type { Operation, OperationActor, OperationOrigin } from '@/src/ops/opera
 import { planOperation } from '@/src/ops/plan';
 import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
 import { executeQuery, QueryPredicate, QuerySort } from '../kernel/query';
-import { notifyOperationCommit } from '../kernel/operation-observer';
+import {
+  notifyOperationCommit,
+  type OperationCommitEvent,
+} from '../kernel/operation-observer';
 import { readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
 import type { ProviderUndoInput, ProviderUndoResult } from '../providers/undo';
 
@@ -79,6 +82,16 @@ type PersistedStore = {
   updated_at: string;
   records: Record<string, McpRecord>;
   actions: Record<string, ActionEvent>;
+  operation_commit_outbox: Record<string, OperationCommitOutboxItem>;
+};
+
+export type OperationCommitOutboxItem = {
+  event: OperationCommitEvent;
+  status: 'pending';
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type PersistOptions = {
@@ -189,7 +202,37 @@ function isValidStore(value: unknown): value is PersistedStore {
     row.version === 1 &&
     typeof row.updated_at === 'string' &&
     isObject(row.records) &&
-    isObject(row.actions)
+    isObject(row.actions) &&
+    (
+      row.operation_commit_outbox === undefined
+      || (
+        isObject(row.operation_commit_outbox)
+        && Object.entries(row.operation_commit_outbox).every(([operationId, item]) => (
+          isOperationCommitOutboxItem(item)
+          && item.event.operationId === operationId
+        ))
+      )
+    )
+  );
+}
+
+function isOperationCommitOutboxItem(value: unknown): value is OperationCommitOutboxItem {
+  if (!isObject(value) || !isObject(value.event)) return false;
+  const event = value.event;
+  return (
+    value.status === 'pending'
+    && Number.isInteger(value.attempts)
+    && Number(value.attempts) >= 0
+    && (value.last_error === null || typeof value.last_error === 'string')
+    && typeof value.created_at === 'string'
+    && typeof value.updated_at === 'string'
+    && typeof event.actionId === 'string'
+    && typeof event.operationId === 'string'
+    && typeof event.causeId === 'string'
+    && typeof event.domain === 'string'
+    && typeof event.recordId === 'string'
+    && Object.hasOwn(event, 'before')
+    && Object.hasOwn(event, 'after')
   );
 }
 
@@ -200,6 +243,7 @@ function loadStore(): PersistedStore {
       updated_at: nowIso(),
       records: {},
       actions: {},
+      operation_commit_outbox: {},
     };
   }
 
@@ -220,12 +264,82 @@ function loadStore(): PersistedStore {
         verification_json: action.verification_json ?? null,
       }]),
     ),
+    operation_commit_outbox: normalizeOperationCommitOutbox(parsed.operation_commit_outbox),
   };
+}
+
+function normalizeOperationCommitOutbox(value: unknown): Record<string, OperationCommitOutboxItem> {
+  if (!isObject(value)) return {};
+  return value as Record<string, OperationCommitOutboxItem>;
 }
 
 function persistStore() {
   store.updated_at = nowIso();
   writeJsonStateFileAtomic(MCP_STATE_PATH, store);
+}
+
+function enqueueOperationCommit(event: OperationCommitEvent): void {
+  if (store.operation_commit_outbox[event.operationId]) return;
+  const now = nowIso();
+  store.operation_commit_outbox[event.operationId] = {
+    event,
+    status: 'pending',
+    attempts: 0,
+    last_error: null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function attemptOperationCommitDelivery(operationId: string): boolean {
+  const item = store.operation_commit_outbox[operationId];
+  if (!item) return true;
+  const result = notifyOperationCommit(item.event);
+  if (result.delivered) {
+    delete store.operation_commit_outbox[operationId];
+    persistStore();
+    return true;
+  }
+  store.operation_commit_outbox[operationId] = {
+    ...item,
+    attempts: item.attempts + 1,
+    last_error: result.failure?.error.message ?? 'reactive_observer_unavailable',
+    updated_at: nowIso(),
+  };
+  persistStore();
+  return false;
+}
+
+export function drainOperationCommitOutbox(input: { maxItems?: number } = {}) {
+  const maxItems = Math.max(1, input.maxItems ?? 32);
+  const pending = Object.values(store.operation_commit_outbox)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .slice(0, maxItems);
+  const delivered: string[] = [];
+  const retained: string[] = [];
+  for (const item of pending) {
+    if (attemptOperationCommitDelivery(item.event.operationId)) {
+      delivered.push(item.event.operationId);
+    } else {
+      retained.push(item.event.operationId);
+      // Preserve canonical commit order. A later event must not overtake a
+      // retained predecessor and observe a causally impossible sequence.
+      break;
+    }
+  }
+  return { attempted: pending.length, delivered, retained };
+}
+
+export function listOperationCommitOutbox(): OperationCommitOutboxItem[] {
+  return Object.values(store.operation_commit_outbox)
+    .map((item) => ({ ...item, event: { ...item.event } }))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+function persistCommittedOperation(event: OperationCommitEvent): void {
+  enqueueOperationCommit(event);
+  persistStore();
+  attemptOperationCommitDelivery(event.operationId);
 }
 
 function getSupportedProviders(): RecordProvider[] {
@@ -895,8 +1009,7 @@ export function createRecordWithAction(input: {
     { persist: false },
   );
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record }, { persist: false }) ?? actionSeed;
-  persistStore();
-  notifyOperationCommit({
+  persistCommittedOperation({
     actionId: action.id,
     operationId: action.operation_id,
     causeId: action.cause_id,
@@ -1075,8 +1188,7 @@ export function updateRecordWithAction(input: {
     { persist: false },
   );
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: updated.after }, { persist: false }) ?? actionSeed;
-  persistStore();
-  notifyOperationCommit({
+  persistCommittedOperation({
     actionId: action.id,
     operationId: action.operation_id,
     causeId: action.cause_id,
@@ -1252,9 +1364,7 @@ export function archiveRecordWithAction(input: {
   );
 
   const action = markActionCompleted(actionSeed.id, actionSeed.command, { record: resolvedAfter }, { persist: false }) ?? actionSeed;
-  persistStore();
-
-  notifyOperationCommit({
+  persistCommittedOperation({
     actionId: action.id,
     operationId: action.operation_id,
     causeId: action.cause_id,
