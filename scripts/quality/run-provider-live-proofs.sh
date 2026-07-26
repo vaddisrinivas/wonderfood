@@ -3,8 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-node scripts/quality/require-disposable-lane.mjs provider
-
 PROVIDERS=("$@")
 if [[ "${#PROVIDERS[@]}" -eq 0 ]]; then
   PROVIDERS=(notion sheets postgres)
@@ -87,12 +85,15 @@ fi
 for provider in "${PROVIDERS[@]}"; do
   case "$provider" in
     notion)
+      node scripts/quality/require-disposable-lane.mjs provider notion
       scripts/quality/run-notion-scenario-proof.sh
       ;;
     sheets|google-sheets)
+      node scripts/quality/require-disposable-lane.mjs provider sheets
       scripts/quality/run-google-sheets-scenario-proof.sh
       ;;
     postgres)
+      node scripts/quality/require-disposable-lane.mjs provider postgres
       scripts/quality/run-postgres-live-proof.sh
       ;;
   esac

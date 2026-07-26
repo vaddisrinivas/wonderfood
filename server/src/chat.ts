@@ -71,9 +71,10 @@ export type ChatOperationFingerprintInput = {
 };
 
 export function buildChatOperationFingerprint(input: ChatOperationFingerprintInput): string {
+  const logicalOperation = input.operation === 'stream' ? 'send' : input.operation;
   return createHash('sha256')
     .update(JSON.stringify({
-      operation: input.operation,
+      operation: logicalOperation,
       message: input.message.trim(),
       domainId: input.domainId.trim(),
       retryOfMessageId: input.retryOfMessageId?.trim() || null,

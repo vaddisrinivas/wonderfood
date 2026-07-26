@@ -42,6 +42,21 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+async function stopChild(child: ReturnType<typeof spawn>): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const forceTimer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }, 5_000);
+    forceTimer.unref();
+    child.once('exit', () => {
+      clearTimeout(forceTimer);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
+}
+
 async function waitForServerReady(): Promise<void> {
   for (let i = 0; i < 120; i += 1) {
     try {
@@ -189,7 +204,7 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
     writeFileSync(evidencePath, JSON.stringify(evidence, null, 2), 'utf8');
     console.log(`PASS ${evidencePath}`);
   } finally {
-    server.kill('SIGTERM');
+    await stopChild(server);
     rmSync(stateDir, { recursive: true, force: true });
   }
 

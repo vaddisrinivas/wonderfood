@@ -3,8 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-node scripts/quality/require-disposable-lane.mjs provider
-
 STAMP="$(date +%s)"
 OUT_DIR="${PROVIDER_VISUAL_OUT:-app/build/evidence/live-workspace/provider-standalone-authority-$STAMP}"
 mkdir -p "$OUT_DIR"
@@ -15,6 +13,9 @@ if [[ "${WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV:-0}" != "1" &&
       -f "$HOME/.config/agent-secrets/agent.env" ]]; then
   WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV=1 exec "$AGENT_ENV_WRAPPER" "$0" "$@"
 fi
+
+node scripts/quality/require-disposable-lane.mjs provider notion
+node scripts/quality/require-disposable-lane.mjs provider sheets
 
 NOTION_SCENARIO_OUT="$OUT_DIR" ./scripts/quality/run-notion-scenario-proof.sh >/dev/null
 GOOGLE_SHEETS_SCENARIO_OUT="$OUT_DIR" ./scripts/quality/run-google-sheets-scenario-proof.sh >/dev/null

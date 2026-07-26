@@ -9,10 +9,12 @@ import { MemoryDb } from '../../tests/helpers/memory-db';
 
 type Json = Record<string, unknown>;
 
-execFileSync(process.execPath, ['scripts/quality/require-disposable-lane.mjs', 'provider'], {
-  cwd: process.cwd(),
-  stdio: 'inherit',
-});
+for (const provider of ['notion', 'sheets']) {
+  execFileSync(process.execPath, ['scripts/quality/require-disposable-lane.mjs', 'provider', provider], {
+    cwd: process.cwd(),
+    stdio: 'inherit',
+  });
+}
 
 const evidenceDir = process.env.PROVIDER_WRITEBACK_OUT
   ? join(process.cwd(), process.env.PROVIDER_WRITEBACK_OUT)

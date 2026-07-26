@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-node scripts/quality/require-disposable-lane.mjs provider
+node scripts/quality/require-disposable-lane.mjs provider postgres
 
 if [[ -z "${POSTGRES_TEST_API_ROOT:-${WONDERFOOD_POSTGRES_API_ROOT:-}}" ]]; then
   echo "Set POSTGRES_TEST_API_ROOT or WONDERFOOD_POSTGRES_API_ROOT." >&2

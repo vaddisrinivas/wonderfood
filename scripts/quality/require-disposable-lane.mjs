@@ -1,17 +1,77 @@
 #!/usr/bin/env node
 
-const PROVIDER_ACK = 'DISPOSABLE_PROVIDER_ONLY';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 const DEVICE_ACK = 'DISPOSABLE_EMULATOR_ONLY';
 const unsafeLabel = /(^|[-_:])(prod|production|personal|primary|default|real)([-_:]|$)/i;
 
-export function validateDisposableLane(lane, env = process.env) {
+function required(env, names, label) {
+  for (const name of names) {
+    const value = env[name]?.trim();
+    if (value) return value;
+  }
+  throw new Error(`set ${label}`);
+}
+
+export function providerAuthorizationDigest(provider, targetId, accountId, authorizationKey) {
+  if (typeof authorizationKey !== 'string' || authorizationKey.length < 32) {
+    throw new Error('provider authorization key must contain at least 32 characters');
+  }
+  return createHmac('sha256', authorizationKey)
+    .update(JSON.stringify({
+      schemaVersion: 'wonderfood.disposable-provider-authorization.v1',
+      provider,
+      targetId,
+      accountId,
+    }))
+    .digest('hex');
+}
+
+function providerBinding(provider, env) {
+  if (provider === 'notion') {
+    return {
+      targetId: required(env, ['NOTION_TEST_PAGE_ID'], 'NOTION_TEST_PAGE_ID'),
+      accountId: required(env, ['NOTION_TEST_ACCOUNT_ID', 'NOTION_WORKSPACE_ID'], 'NOTION_TEST_ACCOUNT_ID'),
+    };
+  }
+  if (provider === 'sheets' || provider === 'google-sheets') {
+    return {
+      targetId: required(env, ['GOOGLE_SHEETS_TEST_SPREADSHEET_ID'], 'GOOGLE_SHEETS_TEST_SPREADSHEET_ID'),
+      accountId: required(env, ['GOOGLE_SHEETS_TEST_ACCOUNT_ID', 'GOOGLE_ACCOUNT_ID'], 'GOOGLE_SHEETS_TEST_ACCOUNT_ID'),
+    };
+  }
+  if (provider === 'postgres') {
+    return {
+      targetId: required(env, ['POSTGRES_TEST_HOUSEHOLD_ID', 'WONDERFOOD_POSTGRES_HOUSEHOLD_ID'], 'POSTGRES_TEST_HOUSEHOLD_ID'),
+      accountId: required(env, ['POSTGRES_TEST_API_ROOT', 'WONDERFOOD_POSTGRES_API_ROOT'], 'POSTGRES_TEST_API_ROOT'),
+    };
+  }
+  if (provider === 'local-postgres') {
+    return {
+      targetId: required(env, ['WONDERFOOD_LOCAL_POSTGRES_DB'], 'WONDERFOOD_LOCAL_POSTGRES_DB'),
+      accountId: 'local-loopback',
+    };
+  }
+  throw new Error('provider kind must be notion, sheets, postgres, or local-postgres');
+}
+
+export function validateDisposableLane(lane, env = process.env, provider = '') {
   if (lane === 'provider') {
-    if (env.WONDERFOOD_LIVE_PROVIDER_ACK !== PROVIDER_ACK) {
-      throw new Error(`set WONDERFOOD_LIVE_PROVIDER_ACK=${PROVIDER_ACK}`);
+    const normalizedProvider = provider.trim().toLowerCase();
+    const { targetId, accountId } = providerBinding(normalizedProvider, env);
+    const authorizationKey = required(
+      env,
+      ['WONDERFOOD_DISPOSABLE_PROVIDER_AUTHORIZATION_KEY'],
+      'WONDERFOOD_DISPOSABLE_PROVIDER_AUTHORIZATION_KEY',
+    );
+    const digest = providerAuthorizationDigest(normalizedProvider, targetId, accountId, authorizationKey);
+    const expected = `DISPOSABLE_PROVIDER_ONLY:hmac-sha256:${digest}`;
+    const supplied = env.WONDERFOOD_LIVE_PROVIDER_ACK || '';
+    const matches = supplied.length === expected.length
+      && timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+    if (!matches) {
+      throw new Error(`provider authorization is not HMAC-bound to the exact ${normalizedProvider} target and account`);
     }
-    const target = env.WONDERFOOD_DISPOSABLE_PROVIDER_TARGET?.trim();
-    if (!target) throw new Error('set WONDERFOOD_DISPOSABLE_PROVIDER_TARGET to the isolated fixture name');
-    if (unsafeLabel.test(target)) throw new Error('provider target label is not disposable');
     return;
   }
 
@@ -34,7 +94,7 @@ export function validateDisposableLane(lane, env = process.env) {
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   try {
-    validateDisposableLane(process.argv[2]);
+    validateDisposableLane(process.argv[2], process.env, process.argv[3]);
     console.log(`Disposable ${process.argv[2]} lane: authorized`);
   } catch (error) {
     console.error(`Disposable lane guard: BLOCKED (${error instanceof Error ? error.message : 'invalid configuration'}). No mutation attempted.`);

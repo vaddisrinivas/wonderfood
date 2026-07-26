@@ -1,4 +1,5 @@
 import { createServer } from 'http';
+import { randomUUID } from 'node:crypto';
 import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
 import {
   buildChatOperationFingerprint,
@@ -48,10 +49,10 @@ import { chatAgent, localQuery } from './agents/chat-agent';
 import { PackageRegistry } from './kernel/package-registry';
 import {
   findRunningConversationRun,
+  completeScopedIdempotencyReservation,
   getRunState,
-  getScopedIdempotencyRecord,
+  reserveScopedIdempotencyRecord,
   setRunState,
-  setScopedIdempotencyRecord,
 } from './chat-runtime-state';
 import {
   deleteHealthSnapshot,
@@ -456,6 +457,7 @@ async function runServerChat(params: {
   detail: string;
   idempotencyKey: string;
   idempotencyNamespace: string;
+  reservationId: string;
   operationFingerprint: string;
   domainId: string;
   runId: string;
@@ -558,12 +560,12 @@ async function runServerChat(params: {
 
   for (const message of response.messages) {
     appendServerMessage(conversationId, message, principalId);
-    setScopedIdempotencyRecord(params.idempotencyNamespace, {
-      messageId: message.id,
-      runId,
-      conversationId,
-      principalId,
-      operationFingerprint: params.operationFingerprint,
+  }
+  const replayMessage = response.messages.at(-1);
+  if (replayMessage) {
+    completeScopedIdempotencyReservation(params.idempotencyNamespace, {
+      reservationId: params.reservationId,
+      messageId: replayMessage.id,
     });
   }
 
@@ -1298,14 +1300,23 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       const previousResponseId = resolveStoredPreviousResponseId({
         storedConversationResponseId: conversation.last_response_id,
       });
-      const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
-      if (existing) {
-        if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+      const reservation = reserveScopedIdempotencyRecord(scopedRequest.idempotencyNamespace, {
+        reservationId: randomUUID(),
+        runId,
+        conversationId: conversation.id,
+        principalId,
+        operationFingerprint: scopedRequest.operationFingerprint,
+      });
+      if (reservation.status !== 'reserved') {
+        const existing = reservation.record;
+        if (reservation.status === 'conflict') {
           conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
           return;
         }
-        const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
-        if (prior) {
+        const prior = existing.messageId
+          ? getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId)
+          : null;
+        if (reservation.status === 'completed' && prior) {
           const thread = getConversation(conversation.id, principalId);
           const cachedResponse: ChatRunResponse = {
             conversation_id: conversation.id,
@@ -1337,10 +1348,17 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
           res.end();
           return;
         }
+        conflict(res, 'An identical chat operation is already in progress for this conversation.');
+        return;
       }
 
-      const existingRun = findRunningConversationRun(principalId, conversation.id);
+      const existingRun = findRunningConversationRun(principalId, conversation.id, runId);
       if (existingRun) {
+        setRunState(runId, {
+          status: 'failed',
+          conversationId: conversation.id,
+          principalId,
+        });
         res.writeHead(200, {
           'content-type': 'text/event-stream',
           'cache-control': 'no-cache',
@@ -1381,6 +1399,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
         detail: conversation.detail,
         idempotencyKey: scopedRequest.scopedIdempotencyKey,
         idempotencyNamespace: scopedRequest.idempotencyNamespace,
+        reservationId: reservation.record.reservationId,
         operationFingerprint: scopedRequest.operationFingerprint,
         domainId: conversation.domain,
         runId,
@@ -1514,14 +1533,23 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       const previousResponseId = resolveStoredPreviousResponseId({
         storedConversationResponseId: conversation.last_response_id,
       });
-      const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
-      if (existing) {
-        if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+      const reservation = reserveScopedIdempotencyRecord(scopedRequest.idempotencyNamespace, {
+        reservationId: randomUUID(),
+        runId,
+        conversationId: conversation.id,
+        principalId,
+        operationFingerprint: scopedRequest.operationFingerprint,
+      });
+      if (reservation.status !== 'reserved') {
+        const existing = reservation.record;
+        if (reservation.status === 'conflict') {
           conflict(res, 'Idempotency key already used for a different chat operation in this conversation.');
           return;
         }
-        const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
-        if (prior) {
+        const prior = existing.messageId
+          ? getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId)
+          : null;
+        if (reservation.status === 'completed' && prior) {
           const thread = getConversation(conversation.id, principalId);
           const cachedResponse: ChatRunResponse = {
             conversation_id: conversation.id,
@@ -1548,6 +1576,8 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
           ok(res, cachedResponse);
           return;
         }
+        conflict(res, 'An identical chat operation is already in progress for this conversation.');
+        return;
       }
 
       const runMessageText = getRunMessageText(
@@ -1564,6 +1594,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
         detail: conversation.detail,
         idempotencyKey: scopedRequest.scopedIdempotencyKey,
         idempotencyNamespace: scopedRequest.idempotencyNamespace,
+        reservationId: reservation.record.reservationId,
         operationFingerprint: scopedRequest.operationFingerprint,
         domainId: conversation.domain,
         runId,
@@ -1685,14 +1716,24 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       retryOfMessageId: userMessageId,
       preview: false,
     });
-    const existing = getScopedIdempotencyRecord(scopedRequest.idempotencyNamespace);
-    if (existing) {
-      if (existing.operationFingerprint !== scopedRequest.operationFingerprint) {
+    const retryRunId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const reservation = reserveScopedIdempotencyRecord(scopedRequest.idempotencyNamespace, {
+      reservationId: randomUUID(),
+      runId: retryRunId,
+      conversationId,
+      principalId,
+      operationFingerprint: scopedRequest.operationFingerprint,
+    });
+    if (reservation.status !== 'reserved') {
+      const existing = reservation.record;
+      if (reservation.status === 'conflict') {
         conflict(res, 'Idempotency key already used for a different retry operation in this conversation.');
         return;
       }
-      const prior = getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId);
-      if (prior) {
+      const prior = existing.messageId
+        ? getConversation(existing.conversationId, principalId)?.messages.find((item) => item.id === existing.messageId)
+        : null;
+      if (reservation.status === 'completed' && prior) {
         ok(res, {
           conversation_id: conversationId,
           messages: [prior],
@@ -1711,6 +1752,8 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
         } satisfies ChatRunResponse);
         return;
       }
+      conflict(res, 'An identical retry operation is already in progress for this conversation.');
+      return;
     }
     const previousResponseId = resolveStoredPreviousResponseId({
       storedConversationResponseId: thread.last_response_id,
@@ -1724,9 +1767,10 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       detail: thread.detail,
       idempotencyKey: scopedRequest.scopedIdempotencyKey,
       idempotencyNamespace: scopedRequest.idempotencyNamespace,
+      reservationId: reservation.record.reservationId,
       operationFingerprint: scopedRequest.operationFingerprint,
       domainId: thread.domain,
-      runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      runId: retryRunId,
       previousResponseId,
       retryOfMessageId: userMessageId,
       userMessageId,

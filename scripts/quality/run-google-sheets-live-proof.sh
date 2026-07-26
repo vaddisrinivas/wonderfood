@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-node "$ROOT_DIR/scripts/quality/require-disposable-lane.mjs" provider
+node "$ROOT_DIR/scripts/quality/require-disposable-lane.mjs" provider sheets
 : "${GOOGLE_SHEETS_TEST_SPREADSHEET_ID:?Set GOOGLE_SHEETS_TEST_SPREADSHEET_ID to an explicit disposable workbook}"
 SPREADSHEET_ID="$GOOGLE_SHEETS_TEST_SPREADSHEET_ID"
 SCOPE="https://www.googleapis.com/auth/spreadsheets"

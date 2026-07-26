@@ -3,8 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-node scripts/quality/require-disposable-lane.mjs provider
-
 STAMP="$(date +%s)"
 SCOPE="https://www.googleapis.com/auth/spreadsheets"
 TOKEN_FILE="${GOOGLE_SHEETS_TOKEN_FILE:-${ROOT_DIR}/build/evidence/live-workspace/google-sheets-token.json}"
@@ -31,6 +29,8 @@ if [[ "${WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV:-0}" != "1" &&
       -f "$HOME/.config/agent-secrets/agent.env" ]]; then
   WONDERFOOD_LIVE_PROOF_SKIP_AGENT_ENV=1 exec "$AGENT_ENV_WRAPPER" "$0" "$@"
 fi
+
+node scripts/quality/require-disposable-lane.mjs provider sheets
 
 : "${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}"
 : "${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}"
@@ -81,26 +81,8 @@ if [[ -z "$GOOGLE_SHEETS_ACCESS_TOKEN" ]]; then
 fi
 
 scenario_output="$OUT_DIR/google_sheets_scenarios-$STAMP.json"
-spreadsheet_id="$(GOOGLE_SHEETS_ACCESS_TOKEN="$GOOGLE_SHEETS_ACCESS_TOKEN" python3 - <<'PY'
-import json
-import os
-import urllib.request
-
-token = os.environ["GOOGLE_SHEETS_ACCESS_TOKEN"]
-body = json.dumps({
-    "properties": {"title": "WonderFood V4 Linked Workspace Proof"},
-    "sheets": [{"properties": {"title": "Home"}}],
-}).encode()
-req = urllib.request.Request(
-    "https://sheets.googleapis.com/v4/spreadsheets",
-    data=body,
-    headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-    method="POST",
-)
-with urllib.request.urlopen(req, timeout=30) as response:
-    print(json.load(response)["spreadsheetId"])
-PY
-)"
+: "${GOOGLE_SHEETS_TEST_SPREADSHEET_ID:?Set GOOGLE_SHEETS_TEST_SPREADSHEET_ID to the exact pre-authorized disposable workbook}"
+spreadsheet_id="$GOOGLE_SHEETS_TEST_SPREADSHEET_ID"
 
 GOOGLE_SHEETS_ACCESS_TOKEN="$GOOGLE_SHEETS_ACCESS_TOKEN" \
 GOOGLE_SHEETS_TEST_SPREADSHEET_ID="$spreadsheet_id" \

@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { providerAuthorizationDigest } from './require-disposable-lane.mjs';
 
 const guard = fileURLToPath(new URL('./require-disposable-lane.mjs', import.meta.url));
 
-function run(lane, extra = {}) {
-  return spawnSync(process.execPath, [guard, lane], {
+function run(lane, extra = {}, provider) {
+  return spawnSync(process.execPath, [guard, lane, ...(provider ? [provider] : [])], {
     encoding: 'utf8',
     env: { PATH: process.env.PATH || '', ...extra },
   });
@@ -16,14 +17,32 @@ function run(lane, extra = {}) {
 
 assert.equal(run('provider').status, 2);
 assert.equal(run('device').status, 2);
-assert.equal(run('provider', {
-  WONDERFOOD_LIVE_PROVIDER_ACK: 'DISPOSABLE_PROVIDER_ONLY',
-  WONDERFOOD_DISPOSABLE_PROVIDER_TARGET: 'production',
-}).status, 2);
-assert.equal(run('provider', {
-  WONDERFOOD_LIVE_PROVIDER_ACK: 'DISPOSABLE_PROVIDER_ONLY',
-  WONDERFOOD_DISPOSABLE_PROVIDER_TARGET: 'notion-ci-fixture',
-}).status, 0);
+const notionTarget = '11111111-2222-3333-4444-555555555555';
+const notionAccount = 'workspace-fixture';
+const authorizationKey = 'fixture-provider-authorization-key-32-characters';
+const notionAck = `DISPOSABLE_PROVIDER_ONLY:hmac-sha256:${providerAuthorizationDigest('notion', notionTarget, notionAccount, authorizationKey)}`;
+const notionEnv = {
+  WONDERFOOD_LIVE_PROVIDER_ACK: notionAck,
+  WONDERFOOD_DISPOSABLE_PROVIDER_AUTHORIZATION_KEY: authorizationKey,
+  NOTION_TEST_PAGE_ID: notionTarget,
+  NOTION_TEST_ACCOUNT_ID: notionAccount,
+};
+assert.equal(run('provider', notionEnv, 'notion').status, 0);
+assert.equal(run('provider', { ...notionEnv, NOTION_TEST_PAGE_ID: 'different-target' }, 'notion').status, 2);
+assert.equal(run('provider', { ...notionEnv, NOTION_TEST_ACCOUNT_ID: 'different-account' }, 'notion').status, 2);
+
+const sheetsTarget = 'spreadsheet-fixture-id';
+const sheetsAccount = 'sheets-fixture@example.invalid';
+const sheetsAck = `DISPOSABLE_PROVIDER_ONLY:hmac-sha256:${providerAuthorizationDigest('sheets', sheetsTarget, sheetsAccount, authorizationKey)}`;
+const sheetsEnv = {
+  WONDERFOOD_LIVE_PROVIDER_ACK: sheetsAck,
+  WONDERFOOD_DISPOSABLE_PROVIDER_AUTHORIZATION_KEY: authorizationKey,
+  GOOGLE_SHEETS_TEST_SPREADSHEET_ID: sheetsTarget,
+  GOOGLE_SHEETS_TEST_ACCOUNT_ID: sheetsAccount,
+};
+assert.equal(run('provider', sheetsEnv, 'sheets').status, 0);
+assert.equal(run('provider', { ...sheetsEnv, GOOGLE_SHEETS_TEST_SPREADSHEET_ID: 'wrong-sheet' }, 'sheets').status, 2);
+assert.equal(run('provider', { ...sheetsEnv, GOOGLE_SHEETS_TEST_ACCOUNT_ID: 'wrong-account' }, 'sheets').status, 2);
 assert.equal(run('device', {
   WONDERFOOD_DEVICE_MUTATION_ACK: 'DISPOSABLE_EMULATOR_ONLY',
   ANDROID_SERIAL: 'physical-secret-serial',
@@ -34,7 +53,7 @@ assert.equal(run('device', {
 }).status, 0);
 
 const secret = 'must-not-appear';
-const blocked = run('provider', { NOTION_TOKEN: secret });
+const blocked = run('provider', { NOTION_TOKEN: secret }, 'notion');
 assert.equal(`${blocked.stdout}${blocked.stderr}`.includes(secret), false);
 
 const guardedEntrypoints = [

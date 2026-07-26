@@ -174,10 +174,20 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  const cleanup = () => {
-    if (!server.killed) {
+  const cleanup = async () => {
+    if (server.exitCode === null && server.signalCode === null) {
       serverStopping = true;
-      server.kill('SIGTERM');
+      await new Promise<void>((resolve) => {
+        const forceTimer = setTimeout(() => {
+          if (server.exitCode === null && server.signalCode === null) server.kill('SIGKILL');
+        }, 5_000);
+        forceTimer.unref();
+        server.once('exit', () => {
+          clearTimeout(forceTimer);
+          resolve();
+        });
+        server.kill('SIGTERM');
+      });
     }
     rmSync(stateDir, { recursive: true, force: true });
   };
@@ -265,6 +275,6 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
     if (serverFailure) {
       fail(serverFailure);
     }
-    cleanup();
+    await cleanup();
   }
 })();

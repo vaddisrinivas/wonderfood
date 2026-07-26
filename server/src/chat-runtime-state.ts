@@ -12,7 +12,9 @@ const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const RUN_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export type PersistedScopedIdempotencyRecord = {
-  messageId: string;
+  status: 'reserved' | 'completed';
+  reservationId: string;
+  messageId: string | null;
   runId: string;
   conversationId: string;
   principalId: string;
@@ -25,6 +27,7 @@ export type PersistedRunState = {
   status: 'running' | 'completed' | 'cancelled' | 'failed';
   conversationId: string;
   principalId: string;
+  ownerPid?: number;
   created_at: string;
   updated_at: string;
 };
@@ -60,8 +63,10 @@ function isPersistedIdempotencyRecord(value: unknown): value is PersistedScopedI
   if (!isRecord(value)) {
     return false;
   }
-  return (
-    typeof value.messageId === 'string'
+  const current = (
+    (value.status === 'reserved' || value.status === 'completed')
+    && typeof value.reservationId === 'string'
+    && (value.messageId === null || typeof value.messageId === 'string')
     && typeof value.runId === 'string'
     && typeof value.conversationId === 'string'
     && typeof value.principalId === 'string'
@@ -69,6 +74,18 @@ function isPersistedIdempotencyRecord(value: unknown): value is PersistedScopedI
     && typeof value.created_at === 'string'
     && typeof value.updated_at === 'string'
   );
+  const legacy = (
+    value.status === undefined
+    && value.reservationId === undefined
+    && typeof value.messageId === 'string'
+    && typeof value.runId === 'string'
+    && typeof value.conversationId === 'string'
+    && typeof value.principalId === 'string'
+    && typeof value.operationFingerprint === 'string'
+    && typeof value.created_at === 'string'
+    && typeof value.updated_at === 'string'
+  );
+  return current || legacy;
 }
 
 function isPersistedRunState(value: unknown): value is PersistedRunState {
@@ -79,6 +96,7 @@ function isPersistedRunState(value: unknown): value is PersistedRunState {
     (value.status === 'running' || value.status === 'completed' || value.status === 'cancelled' || value.status === 'failed')
     && typeof value.conversationId === 'string'
     && typeof value.principalId === 'string'
+    && (value.ownerPid === undefined || (typeof value.ownerPid === 'number' && Number.isInteger(value.ownerPid) && value.ownerPid > 0))
     && typeof value.created_at === 'string'
     && typeof value.updated_at === 'string'
   );
@@ -100,11 +118,26 @@ function isChatRuntimeStateFile(value: unknown): value is ChatRuntimeStateFile {
   );
 }
 
+function isProcessAlive(pid: number | undefined) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
 function pruneStore(input: ChatRuntimeStateFile, options: { markRestartedRunsFailed?: boolean } = {}): ChatRuntimeStateFile {
   const now = Date.now();
   const updatedAt = nowIso();
   const idempotency = Object.fromEntries(
     (Object.entries(input.idempotency) as Array<[string, PersistedScopedIdempotencyRecord]>)
+      .map(([namespace, entry]) => [namespace, {
+        ...entry,
+        status: entry.status ?? 'completed',
+        reservationId: entry.reservationId ?? `legacy-${entry.runId}`,
+      }] as [string, PersistedScopedIdempotencyRecord])
       .filter(([, entry]) => {
         const updatedMs = Date.parse(entry.updated_at);
         return Number.isFinite(updatedMs) && (now - updatedMs) <= IDEMPOTENCY_RETENTION_MS;
@@ -116,7 +149,7 @@ function pruneStore(input: ChatRuntimeStateFile, options: { markRestartedRunsFai
   const runs = Object.fromEntries(
     (Object.entries(input.runs) as Array<[string, PersistedRunState]>)
       .map(([runId, entry]) => {
-        if (options.markRestartedRunsFailed && entry.status === 'running') {
+        if (options.markRestartedRunsFailed && entry.status === 'running' && !isProcessAlive(entry.ownerPid)) {
           return [runId, {
             ...entry,
             status: 'failed' as const,
@@ -172,7 +205,7 @@ function persistState(mutate: (current: ChatRuntimeStateFile) => ChatRuntimeStat
     label: 'chat runtime state',
     validate: isChatRuntimeStateFile,
     createDefault: createDefaultState,
-    mutate: (current) => pruneStore(mutate(current)),
+    mutate: (current) => pruneStore(mutate(pruneStore(current))),
   });
   state = next;
   loaded = true;
@@ -181,12 +214,22 @@ function persistState(mutate: (current: ChatRuntimeStateFile) => ChatRuntimeStat
 
 export function getScopedIdempotencyRecord(namespace: string): PersistedScopedIdempotencyRecord | null {
   loadState();
+  if (existsSync(CHAT_RUNTIME_STATE_PATH)) {
+    try {
+      state = pruneStore(readJsonStateFile(CHAT_RUNTIME_STATE_PATH, {
+        label: 'chat runtime state',
+        validate: isChatRuntimeStateFile,
+      }));
+    } catch {
+      // A writer may be replacing the file. The next locked mutation refreshes it.
+    }
+  }
   return state.idempotency[namespace] ?? null;
 }
 
 export function setScopedIdempotencyRecord(
   namespace: string,
-  record: Omit<PersistedScopedIdempotencyRecord, 'created_at' | 'updated_at'>,
+  record: Omit<PersistedScopedIdempotencyRecord, 'status' | 'reservationId' | 'created_at' | 'updated_at'>,
 ): PersistedScopedIdempotencyRecord {
   loadState();
   const now = nowIso();
@@ -196,11 +239,117 @@ export function setScopedIdempotencyRecord(
       ...current.idempotency,
       [namespace]: {
         ...record,
+        status: 'completed',
+        reservationId: current.idempotency[namespace]?.reservationId ?? `legacy-${record.runId}`,
         created_at: current.idempotency[namespace]?.created_at ?? now,
         updated_at: now,
       },
     },
   }));
+  return state.idempotency[namespace];
+}
+
+export type ScopedIdempotencyReservationResult =
+  | { status: 'reserved'; record: PersistedScopedIdempotencyRecord }
+  | { status: 'completed'; record: PersistedScopedIdempotencyRecord }
+  | { status: 'in_progress'; record: PersistedScopedIdempotencyRecord }
+  | { status: 'conflict'; record: PersistedScopedIdempotencyRecord };
+
+export function reserveScopedIdempotencyRecord(
+  namespace: string,
+  input: {
+    reservationId: string;
+    runId: string;
+    conversationId: string;
+    principalId: string;
+    operationFingerprint: string;
+  },
+): ScopedIdempotencyReservationResult {
+  loadState();
+  const now = nowIso();
+  let result: ScopedIdempotencyReservationResult | null = null;
+  persistState((current) => {
+    const existing = current.idempotency[namespace];
+    if (existing) {
+      if (existing.operationFingerprint !== input.operationFingerprint) {
+        result = { status: 'conflict', record: existing };
+        return current;
+      }
+      if (existing.status === 'completed' && existing.messageId) {
+        result = { status: 'completed', record: existing };
+        return current;
+      }
+      const existingRun = current.runs[existing.runId];
+      if (existing.status === 'reserved' && existingRun?.status === 'running') {
+        result = { status: 'in_progress', record: existing };
+        return current;
+      }
+    }
+
+    const record: PersistedScopedIdempotencyRecord = {
+      status: 'reserved',
+      reservationId: input.reservationId,
+      messageId: null,
+      runId: input.runId,
+      conversationId: input.conversationId,
+      principalId: input.principalId,
+      operationFingerprint: input.operationFingerprint,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    };
+    result = { status: 'reserved', record };
+    return {
+      ...current,
+      idempotency: {
+        ...current.idempotency,
+        [namespace]: record,
+      },
+      runs: {
+        ...current.runs,
+        [input.runId]: {
+          status: 'running',
+          conversationId: input.conversationId,
+          principalId: input.principalId,
+          ownerPid: process.pid,
+          created_at: current.runs[input.runId]?.created_at ?? now,
+          updated_at: now,
+        },
+      },
+    };
+  });
+  if (!result) {
+    throw new Error('chat idempotency reservation did not produce a result');
+  }
+  return result;
+}
+
+export function completeScopedIdempotencyReservation(
+  namespace: string,
+  input: {
+    reservationId: string;
+    messageId: string;
+  },
+): PersistedScopedIdempotencyRecord {
+  loadState();
+  const now = nowIso();
+  persistState((current) => {
+    const existing = current.idempotency[namespace];
+    if (!existing || existing.status !== 'reserved' || existing.reservationId !== input.reservationId) {
+      throw new Error('chat idempotency reservation ownership mismatch');
+    }
+    return {
+      ...current,
+      idempotency: {
+        ...current.idempotency,
+        [namespace]: {
+          ...existing,
+          status: 'completed',
+          messageId: input.messageId,
+          updated_at: now,
+        },
+      },
+    };
+  });
   return state.idempotency[namespace];
 }
 
@@ -221,6 +370,7 @@ export function setRunState(
       ...current.runs,
       [runId]: {
         ...input,
+        ownerPid: input.status === 'running' ? process.pid : current.runs[runId]?.ownerPid,
         created_at: current.runs[runId]?.created_at ?? now,
         updated_at: now,
       },
@@ -229,13 +379,13 @@ export function setRunState(
   return state.runs[runId];
 }
 
-export function findRunningConversationRun(principalId: string, conversationId: string): {
+export function findRunningConversationRun(principalId: string, conversationId: string, excludeRunId?: string): {
   runId: string;
   run: PersistedRunState;
 } | null {
   loadState();
   const match = Object.entries(state.runs)
-    .filter(([, run]) => run.status === 'running' && run.principalId === principalId && run.conversationId === conversationId)
+    .filter(([runId, run]) => runId !== excludeRunId && run.status === 'running' && run.principalId === principalId && run.conversationId === conversationId)
     .sort(([, left], [, right]) => right.updated_at.localeCompare(left.updated_at))[0];
   return match ? { runId: match[0], run: match[1] } : null;
 }

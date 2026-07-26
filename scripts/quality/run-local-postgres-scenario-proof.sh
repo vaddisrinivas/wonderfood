@@ -3,8 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
-node scripts/quality/require-disposable-lane.mjs provider
-
 POSTGRES_BIN="${POSTGRES_BIN:-/opt/homebrew/opt/postgresql@16/bin/postgres}"
 PSQL_BIN="${PSQL_BIN:-/opt/homebrew/opt/postgresql@16/bin/psql}"
 PG_PORT="${WONDERFOOD_LOCAL_POSTGRES_SCENARIO_PORT:-55433}"
@@ -14,6 +12,7 @@ DB_NAME="${WONDERFOOD_LOCAL_POSTGRES_SCENARIO_DB:-wonderfood_live_scenario_proof
 TOKEN="${WONDERFOOD_LOCAL_POSTGRES_SCENARIO_TOKEN:-local-postgres-scenario-token}"
 HOUSEHOLD_ID="${WONDERFOOD_LOCAL_POSTGRES_SCENARIO_HOUSEHOLD_ID:-local-scenario-household}"
 OUT_DIR="${WONDERFOOD_LOCAL_POSTGRES_SCENARIO_OUT:-app/build/evidence/live-workspace}"
+WONDERFOOD_LOCAL_POSTGRES_DB="$DB_NAME" node scripts/quality/require-disposable-lane.mjs provider local-postgres
 
 if [[ ! -x "$POSTGRES_BIN" || ! -x "$PSQL_BIN" ]]; then
   echo "Install postgresql@16 first, or set POSTGRES_BIN and PSQL_BIN." >&2
