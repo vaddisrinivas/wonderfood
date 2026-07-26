@@ -67,7 +67,7 @@ export async function runChatRuntime(input: {
   preview?: boolean;
 }) {
   const query = input.message.trim();
-  const commandText = input.commandHint ?? query;
+  const commandText = query;
   const isPreview = input.preview === true;
   const hasMutatingIntent = /\b(add|create|archive|update|delete|remove|order|buy|purchase)\b/i.test(commandText);
   const executionTool = hasMutatingIntent && !isPreview ? 'chat_execute_command' : 'chat_reply';

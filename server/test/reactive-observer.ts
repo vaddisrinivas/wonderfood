@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createReactiveCycleObserver } from '../src/kernel/reactive-observer';
 import { createReactiveReceiptStore } from '../src/kernel/reactive-receipts';
 import { createReactiveOutboxStore, enqueueReactiveProposals } from '../src/kernel/reactive-outbox';
-import { setOperationCommitObserver } from '../src/kernel/operation-observer';
+import { setOperationCommitFailureObserver, setOperationCommitObserver } from '../src/kernel/operation-observer';
 import { createRecordWithAction, deleteRecord, listRecords } from '../src/mcp/state';
 import type { AppPackageV2 } from '../src/kernel/package';
 
@@ -41,4 +41,28 @@ assert.equal(Object.keys(store.cycles).length, 1);
 assert.equal(Object.keys(outbox.items).length, 1);
 assert.equal(outbox.items[proposals[0]].status, 'pending');
 deleteRecord('reactive-observer-record');
+
+const failures: Array<{ phase: string; error: { message: string } }> = [];
+const failingObserver = createReactiveCycleObserver({
+  package: appPackage,
+  getRows: () => listRecords({ domain: 'food', collection: 'recipe' }) as unknown as Record<string, unknown>[],
+  getReceiptStore: () => store,
+  setReceiptStore: (next) => { store = next; },
+  commitCycle: () => {
+    throw new Error('commit cycle failed');
+  },
+  onFailure: (failure) => failures.push(failure),
+});
+setOperationCommitFailureObserver(() => {});
+setOperationCommitObserver(failingObserver);
+createRecordWithAction({
+  actionId: 'reactive-observer-failure-action', actor: 'test', domain: 'food', tool: 'create_record', risk: 'low', command: 'create failure',
+  record: { id: 'reactive-observer-failure-record', domain: 'food', collection: 'recipe', title: 'Observer fail', properties: { status: 'open' }, relations: [], source: { provider: 'user', external_id: 'reactive-observer-failure-record', url: null, observed_at: new Date().toISOString(), content_hash: null }, archived_at: null },
+});
+setOperationCommitObserver(null);
+setOperationCommitFailureObserver(null);
+assert.equal(failures.length, 1);
+assert.equal(failures[0]?.phase, 'commit_cycle');
+assert.equal(failures[0]?.error.message, 'commit cycle failed');
+deleteRecord('reactive-observer-failure-record');
 console.log('reactive-observer: passed');

@@ -81,6 +81,16 @@ export async function verifyResult(input: VerifyInput): Promise<VerificationResu
     };
   }
 
+  if (input.actualStatus && input.actualStatus !== action.status) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['action_event', 'actual_status'],
+      reason: `Caller reported ${input.actualStatus}; canonical action status is ${action.status}.`,
+    };
+  }
+
   if (action.status !== 'completed') {
     return {
       actionId: input.actionId,
@@ -92,6 +102,20 @@ export async function verifyResult(input: VerifyInput): Promise<VerificationResu
   }
 
   const canonicalRecordIds = action.record_ids.filter((id) => typeof id === 'string' && id.trim().length > 0);
+  if (input.actualRecordIds) {
+    const actualRecordIds = [...new Set(input.actualRecordIds.map((id) => id.trim()).filter(Boolean))].sort();
+    const expectedRecordIds = [...new Set(canonicalRecordIds)].sort();
+    if (actualRecordIds.length !== expectedRecordIds.length
+      || actualRecordIds.some((recordId, index) => recordId !== expectedRecordIds[index])) {
+      return {
+        actionId: input.actionId,
+        expected: input.expected,
+        status: 'denied',
+        checks: ['action_event', 'record_identity'],
+        reason: `Caller reported record ids ${actualRecordIds.join(',') || '(none)'}; canonical action records are ${expectedRecordIds.join(',') || '(none)'}.`,
+      };
+    }
+  }
   if ((reversibleRecordAction || input.expectedSupportsUndo) && canonicalRecordIds.length === 0) {
     return {
       actionId: input.actionId,
@@ -123,9 +147,28 @@ export async function verifyResult(input: VerifyInput): Promise<VerificationResu
     };
   }
 
-  const checks = ['action_event', 'idempotent', 'canonical_postcondition', 'record_reread', 'source_bound'];
-  if (action.source_ids.length === 0) {
-    checks.push('source_bound_fallback');
+  if (input.sourceBound === true && action.source_ids.length === 0) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['action_event', 'source_bound'],
+      reason: 'Caller reported source-bound execution, but canonical action has no bound sources.',
+    };
+  }
+  if (input.sourceBound === false && action.source_ids.length > 0) {
+    return {
+      actionId: input.actionId,
+      expected: input.expected,
+      status: 'denied',
+      checks: ['action_event', 'source_bound'],
+      reason: 'Caller reported sourceBound=false, but canonical action is bound to source ids.',
+    };
+  }
+
+  const checks = ['action_event', 'canonical_postcondition', 'record_reread', 'source_bound'];
+  if (action.idempotency_key) {
+    checks.push('idempotent');
   }
   if (supportsUndo) {
     checks.push('undo_ready');

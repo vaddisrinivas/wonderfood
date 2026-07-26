@@ -94,9 +94,28 @@ const verified = await verifyResult({
   actualRecordIds: [],
   sourceBound: false,
 });
-assert.equal(verified.status, 'verified');
-assert.ok(verified.checks.includes('canonical_postcondition'));
-assert.ok(!verified.checks.includes('source_bound_fallback'));
+assert.equal(verified.status, 'denied');
+assert.match(verified.reason ?? '', /Caller reported failed; canonical action status is completed/);
+
+const mismatchedRecordIds = await verifyResult({
+  actionId: write.action.id,
+  expected: 'wonderfood.update_record',
+  actualStatus: 'completed',
+  actualRecordIds: [],
+});
+assert.equal(mismatchedRecordIds.status, 'denied');
+assert.match(mismatchedRecordIds.reason ?? '', /canonical action records are canonical-verification-record/);
+
+const validVerification = await verifyResult({
+  actionId: write.action.id,
+  expected: 'wonderfood.update_record',
+  expectedSupportsUndo: true,
+  actualStatus: 'completed',
+  actualRecordIds: ['canonical-verification-record'],
+  sourceBound: true,
+});
+assert.equal(validVerification.status, 'verified');
+assert.ok(validVerification.checks.includes('idempotent'));
 
 deleteRecord('canonical-verification-record');
 const missingAfterCommit = await verifyResult({

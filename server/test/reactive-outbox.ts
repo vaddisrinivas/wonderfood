@@ -258,14 +258,15 @@ const drained = await drainReactiveOutbox({
   now,
   retryDelayMs: 1_000,
   executeProposal: (item) => item.proposal.operation === 'request_review'
-    ? { ok: true }
+    ? { ok: true, receipt: { status: 'queued' } }
     : { ok: false, error: 'unexpected operation' },
   onStoreChange: (store) => drainChanges.push(store.items['proposal-a'].status),
 });
 assert.deepEqual(drained.attempted, ['proposal-a']);
-assert.deepEqual(drained.acked, ['proposal-a']);
-assert.equal(drained.store.items['proposal-a'].status, 'acked');
-assert.deepEqual(drainChanges, ['running', 'acked']);
+assert.deepEqual(drained.acked, []);
+assert.deepEqual(drained.queuedForReview, ['proposal-a']);
+assert.equal(drained.store.items['proposal-a'].status, 'awaiting_review');
+assert.deepEqual(drainChanges, ['running', 'awaiting_review']);
 
 const failing = await drainReactiveOutbox({
   store: queued,

@@ -3,8 +3,8 @@ import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog } from '../../../src/domain/catalog';
-import { listRecords } from '../mcp/state';
-import { setOperationCommitObserver } from './operation-observer';
+import { createActionEvent, listRecords } from '../mcp/state';
+import { setOperationCommitFailureObserver, setOperationCommitObserver, type OperationCommitFailure } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';
 import { createReactiveReceiptStore, parseReactiveReceiptStore, type ReactiveReceiptStore } from './reactive-receipts';
 import { PackageRegistry } from './package-registry';
@@ -93,6 +93,9 @@ export function installReactiveRuntime(path = defaultRuntimePath): void {
   const activePackage = registry.getActive();
   const appPackage = activePackage ?? registry.activate(buildAppPackageFromManifest(manifest).package);
   let runtime = loadRuntimeStore(path);
+  setOperationCommitFailureObserver((failure) => {
+    recordReactiveObserverFailure(failure);
+  });
   setOperationCommitObserver(createReactiveCycleObserver({
     package: appPackage,
     getRows: () => listRecords({ domain: appPackage.id, includeArchived: true }) as unknown as Record<string, unknown>[],
@@ -140,4 +143,24 @@ export async function drainReactiveRuntimeOutbox(input: {
   runtime = { ...runtime, outbox: result.store };
   writeRuntimeStore(path, runtime);
   return result;
+}
+
+function recordReactiveObserverFailure(failure: OperationCommitFailure): void {
+  const event = failure.event;
+  const id = `reactive-observer-failure:${event.operationId.replace(/[^A-Za-z0-9_.:-]/g, '_')}`;
+  createActionEvent({
+    id,
+    actor: 'reactive-runtime',
+    domain: event.domain,
+    tool: 'reactive_observer_failure',
+    risk: 'sensitive',
+    status: 'failed',
+    recordIds: event.recordId ? [event.recordId] : [],
+    idempotencyKey: id,
+    command: failure.error.message,
+    before: event,
+    after: failure,
+    operationId: `${id}:operation`,
+    causeId: event.causeId,
+  });
 }

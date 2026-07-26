@@ -93,6 +93,20 @@ export type ValidationResult = {
   nextStep: string;
 };
 
+type McpReviewApprovalReceipt = Readonly<{
+  schemaVersion: 'wonder.mcp-review-approval.v1';
+  approver: string;
+  authority: string;
+  tool: string;
+  operationId: string;
+  idempotencyKey: string;
+  operationHash: string;
+  localActor: string;
+  approvedAt: string;
+  expiresAt?: string;
+  revoked?: boolean;
+}>;
+
 const ACTION_TOOLS = {
   status: 'wonderfood.status',
   getResource: 'wonderfood.get_resource',
@@ -247,6 +261,10 @@ function stringifyForHash(value: unknown): string {
 
 function deterministicHash(value: unknown): string {
   return createHash('sha256').update(stringifyForHash(value)).digest('hex');
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${deterministicHash(value)}`;
 }
 
 function ensureId(raw: unknown, fallbackSeed?: unknown): string {
@@ -527,7 +545,7 @@ function makeReviewFlags(input: {
   const actionStatus = input.action?.status;
   const replayRecoverable = actionStatus === 'completed' && !input.policyReviewRequired && input.idempotencyAware;
   return {
-    policy_reviewed: true,
+    policy_reviewed: !input.policyReviewRequired || actionStatus === 'completed',
     replay_recoverable: replayRecoverable,
     cancellation_safe: input.cancellationSafe,
   };
@@ -615,6 +633,152 @@ function getOrCreateActionFromPolicy(input: {
       action: event,
     },
   };
+}
+
+function requireDurableReviewApproval(input: {
+  approval: unknown;
+  tool: string;
+  domain: string;
+  actor: string;
+  policy: ReturnType<typeof evaluateMcpPolicy>;
+  command: string;
+  idempotencyKey: string;
+  actionId: string;
+  recordIds: string[];
+  conversationId?: string | null;
+  before?: unknown;
+  requestedOperation: Record<string, unknown>;
+  existingAction?: ActionEvent | null;
+}): { ok: true; action: ActionEvent; approval: McpReviewApprovalReceipt } | { ok: false; result: ToolResult } {
+  const approvalRequest = buildApprovalRequest({
+    tool: input.tool,
+    domain: input.domain,
+    actionId: input.existingAction?.id ?? input.actionId,
+    operationId: input.existingAction?.operation_id ?? `${input.actionId}:operation`,
+    idempotencyKey: input.idempotencyKey,
+    recordIds: input.recordIds,
+    requestedOperation: input.requestedOperation,
+  });
+  const action = createActionEvent({
+    id: input.existingAction?.id ?? input.actionId,
+    actor: input.actor,
+    domain: input.domain,
+    tool: input.tool,
+    risk: input.policy.risk,
+    status: 'queued',
+    recordIds: input.recordIds,
+    idempotencyKey: input.idempotencyKey,
+    command: input.command,
+    before: input.before,
+    after: {
+      status: 'queued_for_review',
+      approval_required: true,
+      approval_request: approvalRequest,
+      requested_operation: input.requestedOperation,
+      policy: input.policy,
+    },
+    conversationId: input.conversationId,
+    operationId: input.existingAction?.operation_id ?? `${input.actionId}:operation`,
+    causeId: input.existingAction?.cause_id ?? input.actionId,
+  });
+
+  const parsedApproval = parseApprovalReceipt(input.approval);
+  const approvalError = validateApprovalReceipt(parsedApproval, {
+    actor: input.actor,
+    tool: input.tool,
+    action,
+    idempotencyKey: input.idempotencyKey,
+    requestedOperation: input.requestedOperation,
+  });
+  if (approvalError) {
+    return {
+      ok: false,
+      result: resolveToolResult({
+        allowed: false,
+        status: 'queued_for_review',
+        action,
+        approval_error: approvalError,
+        approval_request: approvalRequest,
+        policy: input.policy,
+      }, true, input.policy.safety, {
+        action,
+        reviewFlags: {
+          policy_reviewed: false,
+          replay_recoverable: false,
+          cancellation_safe: true,
+        },
+      }),
+    };
+  }
+
+  return { ok: true, action, approval: parsedApproval as McpReviewApprovalReceipt };
+}
+
+function buildApprovalRequest(input: {
+  tool: string;
+  domain: string;
+  actionId: string;
+  operationId: string;
+  idempotencyKey: string;
+  recordIds: string[];
+  requestedOperation: Record<string, unknown>;
+}) {
+  return {
+    schemaVersion: 'wonder.mcp-review-approval-request.v1',
+    tool: input.tool,
+    domain: input.domain,
+    actionId: input.actionId,
+    operationId: input.operationId,
+    idempotencyKey: input.idempotencyKey,
+    operationHash: hashValue(input.requestedOperation),
+    recordIds: [...input.recordIds],
+    requestedAt: new Date().toISOString(),
+  };
+}
+
+function parseApprovalReceipt(raw: unknown): McpReviewApprovalReceipt | null {
+  if (!isObject(raw)) return null;
+  const approval = raw as Record<string, unknown>;
+  if (
+    approval.schemaVersion !== 'wonder.mcp-review-approval.v1'
+    || typeof approval.approver !== 'string'
+    || typeof approval.authority !== 'string'
+    || typeof approval.tool !== 'string'
+    || typeof approval.operationId !== 'string'
+    || typeof approval.idempotencyKey !== 'string'
+    || typeof approval.operationHash !== 'string'
+    || typeof approval.localActor !== 'string'
+    || typeof approval.approvedAt !== 'string'
+  ) {
+    return null;
+  }
+  return approval as unknown as McpReviewApprovalReceipt;
+}
+
+function validateApprovalReceipt(
+  approval: McpReviewApprovalReceipt | null,
+  input: {
+    actor: string;
+    tool: string;
+    action: ActionEvent;
+    idempotencyKey: string;
+    requestedOperation: Record<string, unknown>;
+  },
+): string | null {
+  if (!approval) return 'review_approval_required';
+  if (approval.revoked === true) return 'review_approval_revoked';
+  if (!approval.approver.trim() || !approval.authority.trim() || !approval.localActor.trim()) {
+    return 'review_approval_invalid';
+  }
+  if (approval.localActor !== input.actor || approval.approver !== input.actor) {
+    return 'review_approval_actor_mismatch';
+  }
+  if (approval.tool !== input.tool) return 'review_approval_tool_mismatch';
+  if (approval.operationId !== input.action.operation_id) return 'review_approval_operation_mismatch';
+  if (approval.idempotencyKey !== input.idempotencyKey) return 'review_approval_idempotency_mismatch';
+  if (approval.operationHash !== hashValue(input.requestedOperation)) return 'review_approval_hash_mismatch';
+  if (approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now()) return 'review_approval_expired';
+  return null;
 }
 
 function resolveToolResult(
@@ -1811,6 +1975,7 @@ function createRunWorkflowAction({
   command,
   idempotencyKey,
   conversationId,
+  actionId,
 }: {
   workflow: WorkflowDocument;
   domain: string;
@@ -1818,6 +1983,7 @@ function createRunWorkflowAction({
   command: string;
   idempotencyKey?: string;
   conversationId?: string | null;
+  actionId?: string;
 }) {
   const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
   if (existing) {
@@ -1825,7 +1991,7 @@ function createRunWorkflowAction({
   }
 
   const action = createActionEvent({
-    id: makeActionId(`workflow:${workflow.id}`, {
+    id: actionId || makeActionId(`workflow:${workflow.id}`, {
       operation: 'run_workflow',
       workflowId: workflow.id,
       actor,
@@ -1973,6 +2139,7 @@ export function listMcpTools(): McpToolDefinition[] {
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
           conversation_id: { type: 'string' },
+          approval_receipt: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -1992,6 +2159,7 @@ export function listMcpTools(): McpToolDefinition[] {
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
           conversation_id: { type: 'string' },
+          approval_receipt: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -2010,6 +2178,7 @@ export function listMcpTools(): McpToolDefinition[] {
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
           conversation_id: { type: 'string' },
+          approval_receipt: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -2027,6 +2196,7 @@ export function listMcpTools(): McpToolDefinition[] {
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
           conversation_id: { type: 'string' },
+          approval_receipt: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -2042,6 +2212,7 @@ export function listMcpTools(): McpToolDefinition[] {
           actionId: { type: 'string', minLength: 1 },
           idempotency_key: { type: 'string' },
           action_id: { type: 'string' },
+          approval_receipt: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -2275,8 +2446,37 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         sourceSnapshot: getActionSourceSnapshot(existing),
       });
     }
-
     const idempotencyKeyWithDefault = resolvedIdempotencyKey;
+
+    const reviewGate = policy.safety === 'review-required'
+      ? requireDurableReviewApproval({
+        approval: typedArgs.approval_receipt,
+        tool: name,
+        domain,
+        actor,
+        policy,
+        command: `create_record:${collection}`,
+        idempotencyKey: idempotencyKeyWithDefault,
+        actionId,
+        recordIds: [recordId],
+        conversationId,
+        requestedOperation: {
+          tool: name,
+          domain,
+          collection,
+          dataHome,
+          recordId,
+          title,
+          properties,
+          relations,
+          externalId: makeText((recordInput as { external_id?: unknown }).external_id),
+        },
+        existingAction: existing,
+      })
+      : null;
+    if (reviewGate && !reviewGate.ok) {
+      return reviewGate.result;
+    }
     let notionWriteResult: {
       success?: boolean;
       provider_record_id?: string | null;
@@ -2386,7 +2586,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       archived_at: null,
     } as Omit<McpRecord, 'created_at' | 'updated_at'>);
     const action = createActionEvent({
-      id: existing?.id ?? actionId,
+      id: (reviewGate && reviewGate.ok ? reviewGate.action.id : existing?.id) ?? actionId,
       actor,
       domain,
       tool: name,
@@ -2398,6 +2598,8 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       undoPayload: { operation: 'delete_record', record_id: created.id, provider_snapshot: source.source_snapshot },
       sourceIds: existing ? existing.source_ids : [],
       conversationId,
+      operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
+      causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
     });
     const completed = markActionCompleted(action.id, action.command, {
       record: created,
@@ -2493,20 +2695,19 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
           dataHome,
         },
       });
-  const preCheck = getOrCreateActionFromPolicy({
-      tool: name,
-      domain,
-      actor,
-      command: `update_record:${id}`,
-      policy,
-      idempotencyKey: resolvedIdempotencyKey,
-      actionId,
-      recordIds: [id],
-      before: existing,
-      conversationId,
-    });
-    if (preCheck.reviewOnly) {
-      return preCheck;
+    if (!policy.allowed || policy.requiresClarification) {
+      return getOrCreateActionFromPolicy({
+        tool: name,
+        domain,
+        actor,
+        command: `update_record:${id}`,
+        policy,
+        idempotencyKey: resolvedIdempotencyKey,
+        actionId,
+        recordIds: [id],
+        before: existing,
+        conversationId,
+      });
     }
     const repeated = resolvedIdempotencyKey ? findActionByIdempotencyKey(resolvedIdempotencyKey) : null;
     if (repeated && repeated.status === 'completed') {
@@ -2516,6 +2717,40 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         record: findRecord(id),
         source_snapshot: getActionSourceSnapshot(repeated),
       }, repeated);
+    }
+    const reviewGate = policy.safety === 'review-required'
+      ? requireDurableReviewApproval({
+        approval: typedArgs.approval_receipt,
+        tool: name,
+        domain,
+        actor,
+        policy,
+        command: `update_record:${id}`,
+        idempotencyKey: resolvedIdempotencyKey,
+        actionId,
+        recordIds: [id],
+        conversationId,
+        before: existing,
+        requestedOperation: {
+          tool: name,
+          domain,
+          dataHome,
+          recordId: id,
+          expectedRevision: existing.revision ?? null,
+          patch,
+          next: {
+            title: updatedTitle,
+            domain: updatedDomain,
+            collection: updatedCollection,
+            properties: updatedProperties,
+            archived: normalizedArchived,
+          },
+        },
+        existingAction: repeated,
+      })
+      : null;
+    if (reviewGate && !reviewGate.ok) {
+      return reviewGate.result;
     }
 
   let notionWriteResult: {
@@ -2650,7 +2885,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
   }
 
     const action = repeated ?? createActionEvent({
-      id: actionId,
+      id: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
       actor,
       domain,
       tool: name,
@@ -2662,6 +2897,8 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       after: updated.after,
       undoPayload: { operation: 'restore_after_update', before: updated.before, provider_snapshot: source.source_snapshot },
       conversationId,
+      operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
+      causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
   });
   const completed = markActionCompleted((repeated ?? action).id, action.command, {
     record: updated.after,
@@ -2759,6 +2996,35 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         record: findRecord(id),
         source_snapshot: getActionSourceSnapshot(repeated),
       }, repeated);
+    }
+    const reviewGate = policy.safety === 'review-required'
+      ? requireDurableReviewApproval({
+        approval: typedArgs.approval_receipt,
+        tool: name,
+        domain,
+        actor,
+        policy,
+        command: `archive_record:${id}`,
+        idempotencyKey: resolvedIdempotencyKey,
+        actionId,
+        recordIds: [id],
+        conversationId,
+        before: existing,
+        requestedOperation: {
+          tool: name,
+          domain,
+          dataHome,
+          recordId: id,
+          expectedRevision: existing.revision ?? null,
+          sourceProvider: existing.source?.provider ?? null,
+          externalId: existing.source?.external_id ?? null,
+          archived: true,
+        },
+        existingAction: repeated,
+      })
+      : null;
+    if (reviewGate && !reviewGate.ok) {
+      return reviewGate.result;
     }
 
     if (dataHome !== 'local_sqlite' && existing.source?.provider !== dataHome) {
@@ -2894,7 +3160,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
     }
 
     const action = repeated ?? createActionEvent({
-      id: actionId,
+      id: reviewGate && reviewGate.ok ? reviewGate.action.id : actionId,
       actor,
       domain,
       tool: name,
@@ -2906,6 +3172,8 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       after: archived.after,
       undoPayload: { operation: 'restore_after_archive', record: archived.before, provider_snapshot: source.source_snapshot },
       conversationId,
+      operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
+      causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
     });
     const completed = markActionCompleted(action.id, action.command, {
       record: archived.after,
@@ -2974,6 +3242,29 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         message: 'workflow run blocked by policy',
       }, true, policy.safety);
     }
+    const reviewGate = policy.safety === 'review-required'
+      ? requireDurableReviewApproval({
+        approval: typedArgs.approval_receipt,
+        tool: name,
+        domain,
+        actor,
+        policy,
+        command: `run_workflow:${workflowId}`,
+        idempotencyKey: resolvedIdempotencyKey,
+        actionId,
+        recordIds: [],
+        conversationId,
+        requestedOperation: {
+          tool: name,
+          domain,
+          workflowId,
+        },
+        existingAction: preexisting,
+      })
+      : null;
+    if (reviewGate && !reviewGate.ok) {
+      return reviewGate.result;
+    }
 
     const workflow = findWorkflow(workflowId);
     if (!workflow) {
@@ -2993,6 +3284,7 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         command: `run_workflow:${workflowId}`,
         idempotencyKey: resolvedIdempotencyKey,
         conversationId,
+        actionId: reviewGate && reviewGate.ok ? reviewGate.action.id : undefined,
       });
     if (action.status === 'completed') {
       return resolveToolResult(
@@ -3089,7 +3381,16 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       return resolveToolResult({ allowed: false, policy }, true, policy.safety);
     }
 
-    const existing = idempotencyKey ? findActionByIdempotencyKey(idempotencyKey) : null;
+    const resolvedUndoIdempotencyKey = idempotencyKey
+      || buildDeterministicIdempotencyKey({
+        operation: 'undo_action',
+        dataHome: 'local_sqlite',
+        recordId: actionId,
+        domain: action.domain,
+        collection: 'actions',
+        payload: { targetActionId: actionId },
+      });
+    const existing = findActionByIdempotencyKey(resolvedUndoIdempotencyKey);
     if (existing) {
       const snapshot = getActionSourceSnapshot(existing) ?? getActionSourceSnapshot(action);
       return resolveToolResult({ action: existing, replayed: true }, false, 'write', {
@@ -3097,10 +3398,39 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
         sourceSnapshot: snapshot,
       });
     }
+    const reviewGate = policy.safety === 'review-required'
+      ? requireDurableReviewApproval({
+        approval: typedArgs.approval_receipt,
+        tool: name,
+        domain: action.domain,
+        actor,
+        policy,
+        command: `undo_action:${actionId}`,
+        idempotencyKey: resolvedUndoIdempotencyKey,
+        actionId: makeActionId('undo', {
+          operation: 'undo_action',
+          actor,
+          actionId,
+        }),
+        recordIds: action.record_ids,
+        conversationId: action.conversation_id,
+        before: action,
+        requestedOperation: {
+          tool: name,
+          domain: action.domain,
+          targetActionId: actionId,
+          targetOperationId: action.operation_id,
+          targetRecordIds: action.record_ids,
+        },
+      })
+      : null;
+    if (reviewGate && !reviewGate.ok) {
+      return reviewGate.result;
+    }
 
     const undoPayload = { actionId, actor };
     const undoAction = createActionEvent({
-      id: makeActionId('undo', {
+      id: reviewGate && reviewGate.ok ? reviewGate.action.id : makeActionId('undo', {
         operation: 'undo_action',
         actor,
         actionId,
@@ -3110,11 +3440,13 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
       tool: name,
       risk: action.risk,
       recordIds: action.record_ids,
-      idempotencyKey,
+      idempotencyKey: resolvedUndoIdempotencyKey,
       command: `undo_action:${actionId}`,
       before: action,
       undoPayload,
       conversationId: action.conversation_id,
+      operationId: reviewGate && reviewGate.ok ? reviewGate.action.operation_id : undefined,
+      causeId: reviewGate && reviewGate.ok ? reviewGate.action.cause_id : undefined,
     });
 
     const undoResult = runUndo(actionId);

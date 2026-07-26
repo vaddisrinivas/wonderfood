@@ -5,7 +5,7 @@ import { createOperationProposalIdempotencyKey } from './rules';
 
 export const REACTIVE_OUTBOX_SCHEMA_VERSION = 'wonder.reactive-outbox.v1' as const;
 
-export type ReactiveOutboxStatus = 'pending' | 'running' | 'acked' | 'failed';
+export type ReactiveOutboxStatus = 'pending' | 'running' | 'awaiting_review' | 'acked' | 'failed';
 
 export type ReactiveOutboxItem = Readonly<{
   proposalId: string;
@@ -38,6 +38,7 @@ export type ReactiveOutboxDrainResult = Readonly<{
   store: ReactiveOutboxStore;
   attempted: readonly string[];
   acked: readonly string[];
+  queuedForReview: readonly string[];
   failed: readonly { proposalId: string; error: string }[];
 }>;
 
@@ -114,6 +115,22 @@ export function markReactiveOutboxAcked(store: ReactiveOutboxStore, proposalId: 
   });
 }
 
+export function markReactiveOutboxAwaitingReview(
+  store: ReactiveOutboxStore,
+  proposalId: string,
+  input: { now?: string; reason?: string } = {},
+): ReactiveOutboxStore {
+  const now = input.now ?? new Date().toISOString();
+  const item = requiredItem(store, proposalId);
+  return updateItem(store, proposalId, {
+    ...item,
+    status: 'awaiting_review',
+    updatedAt: now,
+    nextAttemptAt: now,
+    ...(input.reason ? { lastError: input.reason } : {}),
+  });
+}
+
 export function markReactiveOutboxFailed(
   store: ReactiveOutboxStore,
   proposalId: string,
@@ -145,6 +162,7 @@ export async function drainReactiveOutbox(input: {
   let store = input.store;
   const attempted: string[] = [];
   const acked: string[] = [];
+  const queuedForReview: string[] = [];
   const failed: { proposalId: string; error: string }[] = [];
 
   for (const item of listRunnableReactiveOutboxItems(store, now).slice(0, maxItems)) {
@@ -153,15 +171,23 @@ export async function drainReactiveOutbox(input: {
     input.onStoreChange?.(store);
     try {
       const result = await input.executeProposal(store.items[item.proposalId]);
-      if (result.ok) {
+      if (shouldAckExecutionResult(result)) {
         store = markReactiveOutboxAcked(store, item.proposalId, new Date().toISOString());
         acked.push(item.proposalId);
+      } else if (isQueuedForReviewResult(result)) {
+        const reason = executionResultReason(result);
+        store = markReactiveOutboxAwaitingReview(store, item.proposalId, {
+          now: new Date().toISOString(),
+          reason,
+        });
+        queuedForReview.push(item.proposalId);
       } else {
+        const error = executionResultReason(result);
         store = markReactiveOutboxFailed(store, item.proposalId, {
-          error: result.error,
+          error,
           retryDelayMs: input.retryDelayMs,
         });
-        failed.push({ proposalId: item.proposalId, error: result.error });
+        failed.push({ proposalId: item.proposalId, error });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -174,7 +200,7 @@ export async function drainReactiveOutbox(input: {
     input.onStoreChange?.(store);
   }
 
-  return immutable({ store, attempted, acked, failed });
+  return immutable({ store, attempted, acked, queuedForReview, failed });
 }
 
 export function serializeReactiveOutboxStore(store: ReactiveOutboxStore): string {
@@ -299,7 +325,7 @@ function updateItem(store: ReactiveOutboxStore, proposalId: string, item: Reacti
 }
 
 function isStatus(value: unknown): value is ReactiveOutboxStatus {
-  return value === 'pending' || value === 'running' || value === 'acked' || value === 'failed';
+  return value === 'pending' || value === 'running' || value === 'awaiting_review' || value === 'acked' || value === 'failed';
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -346,6 +372,28 @@ function stableJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
+}
+
+function shouldAckExecutionResult(result: ReactiveOutboxExecutionResult): boolean {
+  if (!result.ok) return false;
+  const receipt = (result as { receipt?: { status?: unknown; verification?: { ok?: unknown } } }).receipt;
+  if (!receipt) return true;
+  return receipt.status === 'completed' && receipt.verification?.ok === true;
+}
+
+function isQueuedForReviewResult(result: ReactiveOutboxExecutionResult): boolean {
+  if (!result.ok) return false;
+  return (result as { receipt?: { status?: unknown } }).receipt?.status === 'queued';
+}
+
+function executionResultReason(result: ReactiveOutboxExecutionResult): string {
+  if (!result.ok) return result.error;
+  const verificationReason = (result as { receipt?: { verification?: { reason?: unknown } } }).receipt?.verification?.reason;
+  if (typeof verificationReason === 'string' && verificationReason.trim()) {
+    return verificationReason;
+  }
+  const status = (result as { receipt?: { status?: unknown } }).receipt?.status;
+  return typeof status === 'string' && status.trim() ? status : 'execution_result_unverified';
 }
 
 function sortRecord<T>(value: Record<string, T>): Record<string, T> {

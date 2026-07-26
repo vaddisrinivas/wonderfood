@@ -118,7 +118,9 @@ const drained = await drainReactiveOutbox({
   now: '2026-07-23T00:00:00.000Z',
   executeProposal: (item) => executeReactiveProposal(item, { actor: 'test-reactive' }),
 });
-assert.deepEqual(drained.acked, ['proposal-ledger']);
+assert.deepEqual(drained.acked, []);
+assert.deepEqual(drained.queuedForReview, ['proposal-ledger']);
+assert.equal(drained.store.items['proposal-ledger'].status, 'awaiting_review');
 
 const action = findActionByIdempotencyKey(proposalIdempotencyKey);
 assert.ok(action);

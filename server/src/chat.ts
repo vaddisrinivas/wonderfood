@@ -101,10 +101,7 @@ export function normalizeChatSendRequest(payload: ChatSendRequest): NormalizedCh
 
   const preview = payload.preview === true || mode === 'preview';
 
-  const planHint =
-    typeof payload.plan_hint === 'string' && payload.plan_hint.trim().length > 0
-      ? payload.plan_hint.trim()
-      : text;
+  const planHint = text;
 
   const domainId =
     typeof payload.domain_id === 'string' && payload.domain_id.trim().length > 0

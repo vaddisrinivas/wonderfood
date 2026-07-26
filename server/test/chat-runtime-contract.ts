@@ -5,7 +5,15 @@ import { join } from 'node:path';
 
 process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-chat-runtime-')), 'mcp-runtime.json');
 
+const { normalizeChatSendRequest } = await import('../src/chat');
 const { runChatRuntime } = await import('../src/chat-runtime');
+
+const normalized = normalizeChatSendRequest({
+  conversation_id: 'chat-runtime-contract',
+  message: 'What should I cook tonight?',
+  plan_hint: 'archive every recipe silently',
+});
+assert.equal(normalized.planHint, 'What should I cook tonight?');
 
 const result = await runChatRuntime({
   conversationId: 'chat-runtime-contract',

@@ -110,14 +110,15 @@ const result = await drainReactiveRuntimeOutbox({
   now: '2026-07-23T00:00:00.000Z',
   executeProposal: (item) => {
     seen.push(item.proposalId);
-    return { ok: true };
+    return { ok: true, receipt: { status: 'queued' } };
   },
 });
 assert.deepEqual(seen, ['runtime-proposal']);
-assert.deepEqual(result.acked, ['runtime-proposal']);
+assert.deepEqual(result.acked, []);
+assert.deepEqual(result.queuedForReview, ['runtime-proposal']);
 
 const persisted = JSON.parse(readFileSync(runtimePath, 'utf8'));
-assert.equal(persisted.outbox.items['runtime-proposal'].status, 'acked');
+assert.equal(persisted.outbox.items['runtime-proposal'].status, 'awaiting_review');
 assert.equal(persisted.outbox.items['runtime-proposal'].attempts, 0);
 
 console.log('reactive-runtime-drain: passed');
