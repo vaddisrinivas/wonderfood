@@ -26,7 +26,7 @@ RESOURCES = {
     "wonderfood://skill/catalog-v1": ROOT / "docs/ai/skill-catalog-v1.md",
     "wonderfood://schema/command-envelope-v1": ROOT / "docs/ai/command-envelope.schema.v1.json",
     "wonderfood://schema/proposal-package-v1": ROOT / "docs/ai/proposal-package.schema.v1.json",
-    "wonderfood://lifeos/domain-catalog-v1": ROOT / "app/src/main/assets/lifeos/domain-catalog.v1.json",
+    "wonderfood://lifeos/domain-catalog-v1": ROOT / "packages/domain-config/domain-catalog.v1.json",
     "wonderfood://contract/app-command": ROOT / "docs/app-command-contract.md",
 }
 

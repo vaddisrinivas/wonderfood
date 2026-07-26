@@ -70,7 +70,7 @@
       "input_schema": "../schemas/command.v1.schema.json",
       "output_schema": "../schemas/action-event.v1.schema.json",
       "tools": ["create_record", "update_record", "archive_record", "run_workflow"],
-      "capabilities": [{ "domain": "*", "collections": ["*"], "ops": ["create", "update", "archive", "restore", "relate", "unrelate", "delete"] }],
+      "capabilities": [{ "domain": "*", "collections": ["*"], "ops": ["create", "update", "archive", "restore", "relate", "unrelate"] }],
       "risk": "reversible_write",
       "timeout_ms": 20000,
       "concurrency": 1,
