@@ -2,7 +2,7 @@
 
 Status: **NOT ACCEPTED**  
 Audit date: `2026-07-26`  
-Commit: `61cb98b`  
+Commit: `e684ec8`
 Branch basis: `codex/lifeos-e2e-implementation`
 
 ## Audit basis
@@ -11,6 +11,53 @@ Branch basis: `codex/lifeos-e2e-implementation`
 - Machine-readable acceptance registry: `docs/V1-ACCEPTANCE-REGISTRY.json`.
 - Mutation policy for this audit: **no live provider mutation**, **no product edits**, **docs only**.
 - Repository truth check: `docs/REPOSITORY-AUDIT.md` is itself stale at `8b2cb9a`, so it cannot be treated as current acceptance proof.
+
+## Independent current-tree acceptance at `e684ec8`
+
+Range inspected: `85a43b4..e684ec8` (`9` commits, `89` files).
+
+### Passed
+
+- `npm run config:validate`
+- `npm run typecheck`
+- `npm run typecheck:spikes`
+- `npm run test` (`28` files, `115` tests)
+- `npm run test:server:direct`
+- `npm run phase3:check:chat-send`
+- `npm run phase3:check:chat-undo`
+- `npm run phase3:check:chat-rollback-idempotency`
+- `npm run phase4:check:mcp`
+- `npm run check:package-builder-api` on retry
+- `npm run check:local-query-contract`
+- Query, rule, package bridge, package registry, and domain runtime suites (`12` tests)
+- `npm run check:provider-writeback`
+- `npm run check:workflow-runtime`
+- `npm run phase7:check:workflow-resume-cancel`
+- `npm run check:food-schema-depth`
+- `npm run check:food-golden-path`
+- `npm run check:utopia-debug`
+- `npm run doctor` (`19/19`)
+- Current web product, accessibility, visual, responsive, and performance gates
+
+### Failed or incomplete
+
+- First `npm run check:package-builder-api` run exited with `ENOTEMPTY` after functional PASS because the child server exit was not awaited before removing its state directory. A retry passed; the gate is flaky.
+- First web-product run failed on initial SQLite WASM loading and an empty config surface; an immediate clean rerun passed. Current proof is green, but first-load stability remains unproven.
+- `npm run phase9:check:product-polish-review` -> `NEEDS_WORK`: native matrix provenance is stale at `61cb98b`.
+- `npm run phase9:check:completion-audit` -> `NOT_COMPLETE` (`6` passed, `3` missing): current-head live Notion/Sheets authority, native visual matrix, and final polish.
+- Production dependency audit remains red: root `13` vulnerabilities (`12` moderate, `1` high); server `2` moderate.
+
+### Current blockers found by source and runtime review
+
+- `P0-01 PARTIAL`: MCP domain scope is enforced for `resources/*`, not `tools/call`. A `food`-only token successfully called `wonderfood.search_records` for `health/health_note` and received a private health record. `wonderfood.get_resource` also calls unscoped `readMcpResource` directly.
+- `P0-02 OPEN`: server routes derive principal from caller-controlled `x-lifeos-principal` instead of authenticated token configuration.
+- `P1-03 PARTIAL`: workflow steps still call direct `createRecord`, `updateRecord`, and `archiveRecord`; undo calls direct delete/restore. These paths bypass action-aware writers, the operation commit outbox, and reactive rules.
+- `P1-06 PARTIAL`: canonical MCP persistence calls unlocked `writeJsonStateFileAtomic`. A synchronized eight-process probe retained only one record/action/outbox event.
+- `P1-08 PARTIAL`: durable chat idempotency is not an atomic reservation; concurrent requests can both pass the initial lookup.
+- `P2-05 PARTIAL`: the reactive lease is non-atomic read/overwrite/read; two processes can both acquire it, and shutdown can unlink a replacement owner lease.
+- `P2-13 PARTIAL`: provider guard acknowledgement is not bound to the actual page, database, sheet, or account being mutated.
+
+Signed release remains separately blocked and is excluded from debug-app acceptance by product-owner decision. It does not excuse the blockers above.
 
 ## Deterministic gates run at `61cb98b`
 
