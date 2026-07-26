@@ -151,6 +151,10 @@ export class MemoryDb {
         package_key: row.$package_key,
         previous_package_key: row.$previous_package_key,
         created_at: row.$created_at,
+        request_hash: row.$request_hash ?? null,
+        package_hash: row.$package_hash ?? null,
+        approval_hash: row.$approval_hash ?? null,
+        approved_by: row.$approved_by ?? null,
       });
       return;
     }

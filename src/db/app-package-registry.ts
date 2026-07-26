@@ -16,6 +16,13 @@ type AppPackageStateRow = {
 
 type ReceiptAction = 'bootstrap' | 'activate' | 'rollback';
 
+export type AppPackageReceiptEvidence = {
+  requestHash?: string;
+  packageHash?: string;
+  approvalHash?: string;
+  approvedBy?: string;
+};
+
 export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackageV2> {
   const active = await getActiveAppPackage(db);
   if (active) {
@@ -46,6 +53,7 @@ export async function activateAppPackage(
   db: SQLiteDatabase,
   appPackage: AppPackageV2,
   action: ReceiptAction = 'activate',
+  evidence: AppPackageReceiptEvidence = {},
 ): Promise<AppPackageV2> {
   assertAppPackageShape(appPackage);
   const now = new Date().toISOString();
@@ -76,7 +84,7 @@ export async function activateAppPackage(
         $updated_at: now,
       },
     );
-    await insertReceipt(db, action, key, previous?.active_package_key ?? null, now);
+    await insertReceipt(db, action, key, previous?.active_package_key ?? null, now, evidence);
   });
 
   setActivePackageOverride(appPackage);
@@ -100,7 +108,7 @@ export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage
         $updated_at: now,
       },
     );
-    await insertReceipt(db, 'rollback', state.previous_package_key, state.active_package_key, now);
+    await insertReceipt(db, 'rollback', state.previous_package_key, state.active_package_key, now, {});
   });
 
   setActivePackageOverride(previousPackage);
@@ -149,17 +157,22 @@ async function insertReceipt(
   packageKeyValue: string | null,
   previousPackageKey: string | null,
   now: string,
+  evidence: AppPackageReceiptEvidence,
 ): Promise<void> {
   await db.runAsync(
     `INSERT INTO app_package_receipts
-      (id, action, package_key, previous_package_key, created_at)
-      VALUES ($id, $action, $package_key, $previous_package_key, $created_at)`,
+      (id, action, package_key, previous_package_key, created_at, request_hash, package_hash, approval_hash, approved_by)
+      VALUES ($id, $action, $package_key, $previous_package_key, $created_at, $request_hash, $package_hash, $approval_hash, $approved_by)`,
     {
       $id: `app-package:${action}:${packageKeyValue ?? 'none'}:${now}`,
       $action: action,
       $package_key: packageKeyValue,
       $previous_package_key: previousPackageKey,
       $created_at: now,
+      $request_hash: evidence.requestHash ?? null,
+      $package_hash: evidence.packageHash ?? null,
+      $approval_hash: evidence.approvalHash ?? null,
+      $approved_by: evidence.approvedBy?.trim() || null,
     },
   );
 }

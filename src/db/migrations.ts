@@ -2,7 +2,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 6;
+export const DATABASE_VERSION = 7;
 
 const TABLES = {
   meta: 'meta',
@@ -439,6 +439,19 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_package_state}`);
       await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_packages}`);
       await db.execAsync(`PRAGMA user_version = 5`);
+    },
+  },
+  {
+    version: 7,
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE ${TABLES.app_package_receipts} ADD COLUMN request_hash TEXT`);
+      await db.execAsync(`ALTER TABLE ${TABLES.app_package_receipts} ADD COLUMN package_hash TEXT`);
+      await db.execAsync(`ALTER TABLE ${TABLES.app_package_receipts} ADD COLUMN approval_hash TEXT`);
+      await db.execAsync(`ALTER TABLE ${TABLES.app_package_receipts} ADD COLUMN approved_by TEXT`);
+      await db.execAsync(`PRAGMA user_version = 7`);
+    },
+    down: async (db) => {
+      await db.execAsync(`PRAGMA user_version = 6`);
     },
   },
 ];

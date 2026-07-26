@@ -32,7 +32,12 @@ describe('app package SQLite registry', () => {
       },
     };
 
-    await activateAppPackage(db, nextPackage);
+    await activateAppPackage(db, nextPackage, 'activate', {
+      requestHash: 'sha256:request',
+      packageHash: 'sha256:package',
+      approvalHash: 'sha256:approval',
+      approvedBy: 'test-user',
+    });
     const reopened = reopen(db) as any;
     const active = await getActiveAppPackage(reopened);
     expect(active?.id).toBe('runtime-food');
@@ -44,6 +49,12 @@ describe('app package SQLite registry', () => {
     expect(rolledBack?.id).toBe('food');
     expect(loadCatalog().activeManifest.id).toBe('food');
     expect(reopened.appPackageReceipts.map((row: any) => row.action)).toEqual(['bootstrap', 'activate', 'rollback']);
+    expect(reopened.appPackageReceipts[1]).toMatchObject({
+      request_hash: 'sha256:request',
+      package_hash: 'sha256:package',
+      approval_hash: 'sha256:approval',
+      approved_by: 'test-user',
+    });
   });
 
   it('fails closed for invalid package payloads', async () => {
