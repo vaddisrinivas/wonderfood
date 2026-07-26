@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadCatalog } from '@/src/domain/catalog';
 import { upsertRecord } from '@/src/db/records';

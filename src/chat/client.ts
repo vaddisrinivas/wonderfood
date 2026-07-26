@@ -1,6 +1,6 @@
 import { getDomainManifest, loadCatalog, type DomainManifest, type DomainRenderContract, type DomainRenderIntent } from '@/src/domain/catalog';
 import { listConversations, getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
 import { sendDirectModelMessage } from '@/src/chat/direct-provider';
 import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';

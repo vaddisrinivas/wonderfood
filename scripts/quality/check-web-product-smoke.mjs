@@ -49,8 +49,8 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'LIVING FOOD LOOP', 'Approve tonight', 'Approve', 'Advanced', 'Dinner', 'Pantry', 'Plan', 'Recipes', 'Shopping'],
-    forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab'],
+    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'LIVING FOOD LOOP', 'Approve tonight', 'Approve', 'Dinner', 'Pantry', 'Plan', 'Recipes', 'Shopping'],
+    forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab', 'Advanced'],
   },
   {
     name: 'search',

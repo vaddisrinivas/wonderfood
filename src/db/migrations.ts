@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';

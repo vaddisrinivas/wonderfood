@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { DomainManifest } from '@/src/domain/catalog';
 import { CanonicalRecord } from '@/src/domain/runtime';

@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { ActionEvent, getAction } from '@/src/db/actions';
 import { getUndoForAction } from '@/src/db/undo';
 import { ActionCommand, executeAction } from './engine';

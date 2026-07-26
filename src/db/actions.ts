@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 export type ActionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 

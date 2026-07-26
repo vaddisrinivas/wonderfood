@@ -160,8 +160,9 @@ type SecureStoreModule = {
 
 function platformOS() {
   try {
-    const reactNative = require('react-native') as { Platform?: { OS?: string } };
-    return reactNative.Platform?.OS ?? 'node';
+    const optionalRequire = typeof require === 'function' ? require : null;
+    const reactNative = optionalRequire?.(`react${'-native'}`) as { Platform?: { OS?: string } } | undefined;
+    return reactNative?.Platform?.OS ?? 'node';
   } catch {
     return typeof window === 'undefined' ? 'node' : 'web';
   }
@@ -169,7 +170,8 @@ function platformOS() {
 
 function secureStore(): SecureStoreModule | null {
   try {
-    return require('expo-secure-store') as SecureStoreModule;
+    const optionalRequire = typeof require === 'function' ? require : null;
+    return optionalRequire?.(`expo${'-secure-store'}`) as SecureStoreModule;
   } catch {
     return null;
   }

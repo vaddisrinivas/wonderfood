@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 export type WorkflowRunStatus = 'running' | 'completed' | 'cancelled' | 'failed';
 

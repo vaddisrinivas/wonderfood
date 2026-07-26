@@ -1,5 +1,4 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import * as Crypto from 'expo-crypto';
 
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import type { CanonicalRecord } from '@/src/domain/runtime';
@@ -74,7 +73,40 @@ function stableJson(value: unknown): string {
 
 async function schemaHash(value: unknown): Promise<string> {
   const raw = stableJson(value);
-  return `sha256:${await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, raw)}`;
+  return `sha256:${await sha256Hex(raw)}`;
+}
+
+async function sha256Hex(raw: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    const digest = await subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  try {
+    const optionalRequire = typeof require === 'function' ? require : null;
+    const nodeCrypto = optionalRequire?.(`node${':crypto'}`) as typeof import('node:crypto') | undefined;
+    if (nodeCrypto?.createHash) {
+      return nodeCrypto.createHash('sha256').update(raw).digest('hex');
+    }
+  } catch {
+    // fall through to Expo runtime
+  }
+
+  try {
+    const optionalRequire = typeof require === 'function' ? require : null;
+    const expoCrypto = optionalRequire?.(`expo${'-crypto'}`) as {
+      digestStringAsync?: (algorithm: string, value: string) => Promise<string>;
+      CryptoDigestAlgorithm?: { SHA256?: string };
+    } | undefined;
+    if (expoCrypto?.digestStringAsync && expoCrypto.CryptoDigestAlgorithm?.SHA256) {
+      return expoCrypto.digestStringAsync(expoCrypto.CryptoDigestAlgorithm.SHA256, raw);
+    }
+  } catch {
+    // fall through to explicit error
+  }
+
+  throw new Error('local_query_hash_unavailable');
 }
 
 function utf8Bytes(value: string): number {
