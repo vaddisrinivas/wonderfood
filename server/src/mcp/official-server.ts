@@ -308,7 +308,7 @@ function authorizeToolDomain(scope: McpScope, domain: string | null, toolName: s
   }
   return hasDomainAccess(scope, domain)
     ? { ok: true }
-    : { ok: false, message: `Tool ${toolName} is not authorized for domain ${domain}` };
+    : { ok: false, message: `Tool ${toolName} target is not authorized for the trusted MCP domain scope` };
 }
 
 function authorizeScopedToolCall(toolName: string, args: Record<string, unknown>, scope: McpScope): ToolScopeDecision {

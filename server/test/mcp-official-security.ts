@@ -212,6 +212,9 @@ try {
     ensure(Boolean(body.error), `${name} should reject a health-scoped target`);
     ensure(body.error?.code === -32001, `${name} should fail as an authorization denial`);
     ensure(String(body.error?.message).includes('not authorized'), `${name} should explain scope denial`);
+    if (name === 'wonderfood.read_record') {
+      ensure(!JSON.stringify(body).toLowerCase().includes('health'), 'record-id denial must not disclose the target domain');
+    }
   }
 
   await expectFoodToolDenied(22, 'wonderfood.search_records', {
