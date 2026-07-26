@@ -28,6 +28,11 @@ const notionEnv = {
   NOTION_TEST_ACCOUNT_ID: notionAccount,
 };
 assert.equal(run('provider', notionEnv, 'notion').status, 0);
+assert.equal(run('provider', {
+  ...notionEnv,
+  WONDERFOOD_LIVE_PROVIDER_ACK: 'wrong-shared-ack',
+  WONDERFOOD_LIVE_PROVIDER_ACK_NOTION: notionAck,
+}, 'notion').status, 0);
 assert.equal(run('provider', { ...notionEnv, NOTION_TEST_PAGE_ID: 'different-target' }, 'notion').status, 2);
 assert.equal(run('provider', { ...notionEnv, NOTION_TEST_ACCOUNT_ID: 'different-account' }, 'notion').status, 2);
 
@@ -41,6 +46,11 @@ const sheetsEnv = {
   GOOGLE_SHEETS_TEST_ACCOUNT_ID: sheetsAccount,
 };
 assert.equal(run('provider', sheetsEnv, 'sheets').status, 0);
+assert.equal(run('provider', {
+  ...sheetsEnv,
+  WONDERFOOD_LIVE_PROVIDER_ACK: 'wrong-shared-ack',
+  WONDERFOOD_LIVE_PROVIDER_ACK_SHEETS: sheetsAck,
+}, 'sheets').status, 0);
 assert.equal(run('provider', { ...sheetsEnv, GOOGLE_SHEETS_TEST_SPREADSHEET_ID: 'wrong-sheet' }, 'sheets').status, 2);
 assert.equal(run('provider', { ...sheetsEnv, GOOGLE_SHEETS_TEST_ACCOUNT_ID: 'wrong-account' }, 'sheets').status, 2);
 assert.equal(run('device', {

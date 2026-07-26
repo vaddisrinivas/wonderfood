@@ -66,7 +66,8 @@ export function validateDisposableLane(lane, env = process.env, provider = '') {
     );
     const digest = providerAuthorizationDigest(normalizedProvider, targetId, accountId, authorizationKey);
     const expected = `DISPOSABLE_PROVIDER_ONLY:hmac-sha256:${digest}`;
-    const supplied = env.WONDERFOOD_LIVE_PROVIDER_ACK || '';
+    const providerAckName = `WONDERFOOD_LIVE_PROVIDER_ACK_${normalizedProvider.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+    const supplied = env[providerAckName] || env.WONDERFOOD_LIVE_PROVIDER_ACK || '';
     const matches = supplied.length === expected.length
       && timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
     if (!matches) {
