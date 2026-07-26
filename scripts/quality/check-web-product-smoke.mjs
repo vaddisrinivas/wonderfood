@@ -90,15 +90,6 @@ const executablePath = chromeExecutable();
 mkdirSync(outDir, { recursive: true });
 const webServer = await ensureWebBaseUrl({ root, baseUrl });
 
-function isExpectedSqliteWasmFallback(message) {
-  return (
-    message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
-    message.includes('Incorrect response MIME type. Expected') &&
-    message.includes('application/wasm')
-  ) || message === 'falling back to ArrayBuffer instantiation'
-    || message === 'Failed to load resource: the server responded with a status of 404 (Not Found)';
-}
-
 const browser = await chromium.launch({
   headless: true,
   ...(executablePath ? { executablePath } : {}),
@@ -111,8 +102,9 @@ const viewports = [
 ];
 
 for (const viewport of viewports) {
-  const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
   for (const route of routes) {
+    const page = await context.newPage();
     process.stdout.write(`[web-product] ${route.name}-${viewport.label}\n`);
     const result = {
       name: `${route.name}-${viewport.label}`,
@@ -123,17 +115,33 @@ for (const viewport of viewports) {
       missing: [],
       screenshot: join(outDir, `${route.name}-${viewport.label}.png`),
       consoleErrors: [],
+      runtimeErrors: [],
+      wasmResponses: [],
       horizontalOverflow: null,
     };
     const consoleErrors = [];
-    page.removeAllListeners('console');
+    const runtimeErrors = [];
+    const wasmResponses = [];
     page.on('console', (message) => {
       const text = message.text();
-      if (message.type() === 'error' && !isExpectedSqliteWasmFallback(text)) consoleErrors.push(text);
+      if (message.type() === 'error') consoleErrors.push(text);
+    });
+    page.on('pageerror', (error) => {
+      runtimeErrors.push(error.message);
+    });
+    page.on('requestfailed', (request) => {
+      runtimeErrors.push(`Request failed: ${request.url()} (${request.failure()?.errorText || 'unknown'})`);
+    });
+    page.on('response', (response) => {
+      if (!new URL(response.url()).pathname.endsWith('.wasm')) return;
+      const contentType = response.headers()['content-type'] || '';
+      wasmResponses.push({ url: response.url(), status: response.status(), contentType });
+      if (response.status() !== 200 || !contentType.toLowerCase().startsWith('application/wasm')) {
+        runtimeErrors.push(`Invalid WASM response: ${response.status()} ${contentType || 'missing-content-type'}`);
+      }
     });
     try {
-      await page.goto(`${baseUrl}/_sitemap`, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.evaluate((settings) => {
+      await page.addInitScript((settings) => {
         localStorage.removeItem('lifeos.settings.v1');
         if (settings) localStorage.setItem('lifeos.settings.v1', JSON.stringify(settings));
       }, route.localSettings ?? null);
@@ -151,23 +159,31 @@ for (const viewport of viewports) {
         }
       }
       result.consoleErrors = consoleErrors;
+      result.runtimeErrors = runtimeErrors;
+      result.wasmResponses = wasmResponses;
       result.horizontalOverflow = await page.evaluate(() => {
         const doc = document.scrollingElement || document.documentElement;
         return Math.max(0, doc.scrollWidth - window.innerWidth);
       });
       await route.inspect?.(page);
       await page.screenshot({ path: result.screenshot, fullPage: true });
-      result.ok = result.missing.length === 0 && consoleErrors.length === 0 && result.horizontalOverflow <= 2;
+      result.ok = result.missing.length === 0
+        && consoleErrors.length === 0
+        && runtimeErrors.length === 0
+        && wasmResponses.length > 0
+        && result.horizontalOverflow <= 2;
     } catch (error) {
       result.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      await page.close();
     }
     results.push(result);
     process.stdout.write(`[web-product] ${result.ok ? 'ok' : 'fail'} ${result.name}\n`);
     if (!result.ok) {
-      process.stdout.write(`${JSON.stringify({ missing: result.missing, error: result.error, consoleErrors: result.consoleErrors, horizontalOverflow: result.horizontalOverflow })}\n`);
+      process.stdout.write(`${JSON.stringify({ missing: result.missing, error: result.error, consoleErrors: result.consoleErrors, runtimeErrors: result.runtimeErrors, wasmResponses: result.wasmResponses, horizontalOverflow: result.horizontalOverflow })}\n`);
     }
   }
-  await page.close();
+  await context.close();
 }
 
 await browser.close();

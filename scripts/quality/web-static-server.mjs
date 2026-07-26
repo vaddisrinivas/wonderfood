@@ -11,6 +11,7 @@ const mimeTypes = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ttf': 'font/ttf',
+  '.wasm': 'application/wasm',
   '.xml': 'application/xml',
 };
 
@@ -28,12 +29,13 @@ function candidatePaths(webRoot, pathname) {
     .replace(/^(\.\.(\/|\\|$))+/, '')
     .replace(/^[/\\]+/, '');
   const route = clean === '' || clean === '.' ? 'index' : clean.replace(/[/\\]$/, '');
-  return [
+  const candidates = [
     join(webRoot, route),
     join(webRoot, `${route}.html`),
     join(webRoot, route, 'index.html'),
-    join(webRoot, 'index.html'),
   ];
+  if (!extname(route)) candidates.push(join(webRoot, 'index.html'));
+  return candidates;
 }
 
 function createStaticServer(webRoot) {
