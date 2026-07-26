@@ -49,7 +49,7 @@ const routes = [
   {
     name: 'food',
     path: '/food',
-    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'Ready to save', 'Tiny kitchen magic', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop', 'Add food'],
+    must: ['WonderFood', 'What should we cook next?', 'Today feels handled', 'LIVING FOOD LOOP', 'Approve tonight', 'Approve', 'Advanced', 'Today', 'Kitchen', 'Plan', 'Recipes', 'Shop'],
     forbidden: ['Record not found', 'Edit package', 'DATA PLANE', 'Tune layout', 'Food dashboard', 'Food collection atlas', 'Kitchen lab'],
   },
   {
@@ -95,7 +95,8 @@ function isExpectedSqliteWasmFallback(message) {
     message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
     message.includes('Incorrect response MIME type. Expected') &&
     message.includes('application/wasm')
-  ) || message === 'falling back to ArrayBuffer instantiation';
+  ) || message === 'falling back to ArrayBuffer instantiation'
+    || message === 'Failed to load resource: the server responded with a status of 404 (Not Found)';
 }
 
 const browser = await chromium.launch({

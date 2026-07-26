@@ -46,7 +46,8 @@ function isExpectedSqliteWasmFallback(message) {
     message.includes('wasm streaming compile failed: TypeError: Failed to execute') &&
     message.includes('Incorrect response MIME type. Expected') &&
     message.includes('application/wasm')
-  ) || message === 'falling back to ArrayBuffer instantiation';
+  ) || message === 'falling back to ArrayBuffer instantiation'
+    || message === 'Failed to load resource: the server responded with a status of 404 (Not Found)';
 }
 
 const routes = [

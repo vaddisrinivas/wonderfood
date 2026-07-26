@@ -13,6 +13,8 @@ import { archiveRecord, restoreRecord, upsertRecord } from '@/src/db/records';
 import { seedDatabase } from '@/src/db/seed';
 import { exportRecoverySnapshot, type RecoveryExport } from '@/src/db/migrations';
 import { importRecoverySnapshot } from '@/src/db/recovery';
+import { applyOperation } from '@/src/ops/apply';
+import { undoOperation } from '@/src/ops/undo';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 import { colors, radius, useLifeOSTheme } from '@/src/theme';
 
@@ -264,6 +266,7 @@ export default function FoodScreen() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [notice, setNotice] = useState('');
   const [lastArchivedId, setLastArchivedId] = useState<string | null>(null);
+  const [lastDinnerLoopOpId, setLastDinnerLoopOpId] = useState<string | null>(null);
   const [backupSnapshot, setBackupSnapshot] = useState<RecoveryExport | null>(null);
 
   useEffect(() => {
@@ -346,6 +349,112 @@ export default function FoodScreen() {
     });
     setNotice(`${record.title} is now ${nextStatus.toLowerCase()}.`);
     setRefreshNonce((value) => value + 1);
+  };
+
+  const runDinnerLoop = async () => {
+    if (!db) {
+      setNotice('Storage is still starting. Try again in a moment.');
+      return;
+    }
+    const now = new Date().toISOString();
+    const opId = `food-tonight-loop-${Date.now().toString(36)}`;
+    const target = shoppingRecords[0];
+    if (target) {
+      const canonical = await getDomainRecordCanonical(db, target.id);
+      if (!canonical) {
+        setNotice('Shopping item changed. Refresh and try again.');
+        return;
+      }
+      const result = await applyOperation(db, activeManifest, {
+        op_id: opId,
+        kind: 'update',
+        domain: activeManifest.id,
+        collection: canonical.collection,
+        record_id: canonical.id,
+        expected_revision: canonical.revision,
+        actor: 'ai',
+        origin: 'workflow',
+        idempotency_key: `${opId}:approve`,
+        changes: {
+          ...canonical.properties,
+          status: 'In cart',
+          tone: 'moss',
+          meta: 'Approved for tonight',
+          body: canonical.properties.body ?? 'Needed for tonight.',
+        },
+        reason: 'Approved WonderFood dinner suggestion updates the shopping list.',
+        evidence: [todayMeal?.id, kitchenItem?.id, canonical.id].filter((value): value is string => Boolean(value)),
+        confidence: 0.92,
+      });
+      if (result.status === 'applied' || result.status === 'duplicate') {
+        setLastDinnerLoopOpId(opId);
+        setNotice(`Dinner loop saved. ${target.title} moved to cart. Undo is ready.`);
+        setRefreshNonce((value) => value + 1);
+        return;
+      }
+      setNotice(`Dinner loop paused: ${result.reject_reason ?? 'operation rejected'}.`);
+      return;
+    }
+
+    const recordId = `food-shopping-rice-vinegar-${Date.now().toString(36)}`;
+    const result = await applyOperation(db, activeManifest, {
+      op_id: opId,
+      kind: 'create',
+      domain: activeManifest.id,
+      collection: 'shopping_item',
+      record_id: recordId,
+      actor: 'ai',
+      origin: 'workflow',
+      idempotency_key: `${opId}:approve`,
+      record: {
+        id: recordId,
+        domain: activeManifest.id,
+        collection: 'shopping_item',
+        title: 'Rice vinegar',
+        properties: {
+          status: 'To buy',
+          tone: 'blue',
+          meta: 'Needed for tonight',
+          body: `Suggested for ${todayMeal?.title ?? 'tonight dinner'} from pantry context.`,
+        },
+        source: {
+          provider: 'user',
+          external_id: recordId,
+          url: null,
+          observed_at: now,
+          content_hash: null,
+        },
+        archived_at: null,
+        created_at: now,
+        updated_at: now,
+        relations: [],
+      },
+      reason: 'Approved WonderFood dinner suggestion creates a shopping gap.',
+      evidence: [todayMeal?.id, kitchenItem?.id].filter((value): value is string => Boolean(value)),
+      confidence: 0.88,
+    });
+    if (result.status === 'applied' || result.status === 'duplicate') {
+      setLastDinnerLoopOpId(opId);
+      setNotice('Dinner loop saved. Rice vinegar added to shopping. Undo is ready.');
+      setRefreshNonce((value) => value + 1);
+    } else {
+      setNotice(`Dinner loop paused: ${result.reject_reason ?? 'operation rejected'}.`);
+    }
+  };
+
+  const undoDinnerLoop = async () => {
+    if (!db || !lastDinnerLoopOpId) {
+      setNotice('No dinner loop to undo yet.');
+      return;
+    }
+    const result = await undoOperation(db, activeManifest, lastDinnerLoopOpId);
+    if (result.status === 'applied' || result.status === 'duplicate') {
+      setNotice(result.status === 'duplicate' ? 'Dinner loop was already undone.' : 'Dinner loop undone.');
+      setLastDinnerLoopOpId(null);
+      setRefreshNonce((value) => value + 1);
+    } else {
+      setNotice(`Undo paused: ${result.reject_reason ?? 'operation rejected'}.`);
+    }
   };
 
   const loadDemoHousehold = async () => {
@@ -661,6 +770,8 @@ export default function FoodScreen() {
         compact={compact}
         contentWidth={Math.min(contentWidth, 760)}
         onToggleShopping={toggleShoppingRecord}
+        onRunDinnerLoop={runDinnerLoop}
+        onUndoDinnerLoop={undoDinnerLoop}
         onAsk={() => router.push('/chat')}
         onLoadDemo={loadDemoHousehold}
         onQuickAdd={quickAddFoodRecord}
@@ -669,6 +780,7 @@ export default function FoodScreen() {
         onExportBackup={exportBackup}
         onRestoreBackup={restoreBackup}
         canUndoArchive={Boolean(lastArchivedId)}
+        canUndoDinnerLoop={Boolean(lastDinnerLoopOpId)}
         canRestoreBackup={Boolean(backupSnapshot)}
         notice={notice}
       />
@@ -748,7 +860,7 @@ function ManifestDashboardBlock({ block, records }: { block: DashboardBlock; rec
   );
 }
 
-function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canRestoreBackup, notice }: {
+function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping, reviewRows, loading, compact, contentWidth, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onAsk, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, canRestoreBackup, notice }: {
   mode: FoodMode;
   onModeChange: (mode: FoodMode) => void;
   records: FoodRecordView[];
@@ -760,6 +872,8 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   compact: boolean;
   contentWidth: number;
   onToggleShopping: (record: FoodRecordView) => void;
+  onRunDinnerLoop: () => void;
+  onUndoDinnerLoop: () => void;
   onAsk: () => void;
   onLoadDemo: () => void;
   onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
@@ -768,6 +882,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   onExportBackup: () => void;
   onRestoreBackup: () => void;
   canUndoArchive: boolean;
+  canUndoDinnerLoop: boolean;
   canRestoreBackup: boolean;
   notice: string;
 }) {
@@ -818,6 +933,8 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
               shopping={shopping}
               reviewRows={reviewRows}
               onToggleShopping={onToggleShopping}
+              onRunDinnerLoop={onRunDinnerLoop}
+              onUndoDinnerLoop={onUndoDinnerLoop}
               onLoadDemo={onLoadDemo}
               onQuickAdd={onQuickAdd}
               onArchiveFirst={onArchiveFirst}
@@ -825,6 +942,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
               onExportBackup={onExportBackup}
               onRestoreBackup={onRestoreBackup}
               canUndoArchive={canUndoArchive}
+              canUndoDinnerLoop={canUndoDinnerLoop}
               canRestoreBackup={canRestoreBackup}
               notice={notice}
             />
@@ -836,7 +954,7 @@ function FoodDemoSurface({ mode, onModeChange, records, meals, kitchen, shopping
   );
 }
 
-function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canRestoreBackup, notice }: {
+function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onToggleShopping, onRunDinnerLoop, onUndoDinnerLoop, onLoadDemo, onQuickAdd, onArchiveFirst, onUndoArchive, onExportBackup, onRestoreBackup, canUndoArchive, canUndoDinnerLoop, canRestoreBackup, notice }: {
   mode: FoodMode;
   records: FoodRecordView[];
   meals: FoodRecordView[];
@@ -844,6 +962,8 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   shopping: FoodRecordView[];
   reviewRows: FoodRecordView[];
   onToggleShopping: (record: FoodRecordView) => void;
+  onRunDinnerLoop: () => void;
+  onUndoDinnerLoop: () => void;
   onLoadDemo: () => void;
   onQuickAdd: (collection: string, title: string, properties: Record<string, unknown>) => void;
   onArchiveFirst: () => void;
@@ -851,6 +971,7 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   onExportBackup: () => void;
   onRestoreBackup: () => void;
   canUndoArchive: boolean;
+  canUndoDinnerLoop: boolean;
   canRestoreBackup: boolean;
   notice: string;
 }) {
@@ -872,7 +993,7 @@ function FoodDemoBody({ mode, records, meals, kitchen, shopping, reviewRows, onT
   if (mode === 'Plan') return <><PlanDemo meals={meals} kitchen={kitchen} />{tools}</>;
   if (mode === 'Recipes') return <><RecipesDemo meals={meals} kitchen={kitchen} />{tools}</>;
   if (mode === 'Shop') return <><ShopDemo shopping={shopping} onToggleShopping={onToggleShopping} />{tools}</>;
-  return <><TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} />{tools}</>;
+  return <><TodayDemo meals={meals} kitchen={kitchen} shopping={shopping} reviewRows={reviewRows} onRunDinnerLoop={onRunDinnerLoop} onUndoDinnerLoop={onUndoDinnerLoop} canUndoDinnerLoop={canUndoDinnerLoop} notice={notice} />{tools}</>;
 }
 
 function FoodHeroPlate({ records, meals, kitchen, shopping, onAsk, onLoadDemo }: {
@@ -931,11 +1052,15 @@ function FoodHeroStat({ label, value, tone }: { label: string; value: string; to
   );
 }
 
-function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
+function TodayDemo({ meals, kitchen, shopping, reviewRows, onRunDinnerLoop, onUndoDinnerLoop, canUndoDinnerLoop, notice }: {
   meals: FoodRecordView[];
   kitchen: FoodRecordView[];
   shopping: FoodRecordView[];
   reviewRows: FoodRecordView[];
+  onRunDinnerLoop: () => void;
+  onUndoDinnerLoop: () => void;
+  canUndoDinnerLoop: boolean;
+  notice: string;
 }) {
   const liveMeals = meals.slice(0, 3).map((record, index) => ({
     title: `${['Breakfast', 'Lunch', 'Dinner'][index] ?? 'Meal'}: ${record.title}`,
@@ -958,6 +1083,15 @@ function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
         detail={`${rows.length + 1} meals shaped around what is already in your kitchen`}
         badge={`${Math.max(reviewRows.length, 3)} ideas`}
       />
+      <FoodTonightLoopCard
+        dinner={rows[2]?.title ?? rows[0]?.title}
+        useFirst={useSoon?.title ?? 'Use-first pantry'}
+        missing={shop?.title ?? 'Rice vinegar'}
+        notice={notice}
+        canUndo={canUndoDinnerLoop}
+        onApprove={onRunDinnerLoop}
+        onUndo={onUndoDinnerLoop}
+      />
       {rows.map((row) => (
         <FoodDemoRow key={row.title} {...row} />
       ))}
@@ -976,6 +1110,59 @@ function TodayDemo({ meals, kitchen, shopping, reviewRows }: {
         detail={useSoon ? `Cook around ${useSoon.title}.` : 'Cook lentil soup tomorrow: uses carrots, celery, and stock expiring soon.'}
         strong={shop ? `Missing: ${shop.title}` : undefined}
       />
+    </View>
+  );
+}
+
+function FoodTonightLoopCard({ dinner, useFirst, missing, notice, canUndo, onApprove, onUndo }: {
+  dinner: string;
+  useFirst: string;
+  missing: string;
+  notice: string;
+  canUndo: boolean;
+  onApprove: () => void;
+  onUndo: () => void;
+}) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodTonightLoop, { backgroundColor: theme.dark ? '#1F241B' : '#F6F1E5', borderColor: theme.colors.line }]} testID="food-tonight-loop">
+      <View style={styles.foodTonightTop}>
+        <View style={styles.foodTonightCopy}>
+          <Text style={[styles.foodTonightKicker, { color: theme.colors.moss }]}>LIVING FOOD LOOP</Text>
+          <Text style={[styles.foodTonightTitle, { color: theme.colors.ink }]}>Approve tonight</Text>
+          <Text style={[styles.foodTonightBody, { color: theme.colors.muted }]}>
+            Cook {dinner.replace(/^.*?: /, '')}. Use {useFirst} first. Put {missing} on the active shopping list.
+          </Text>
+        </View>
+        <View style={[styles.foodTonightMeter, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+          <Text style={[styles.foodTonightMeterValue, { color: theme.colors.ink }]}>92%</Text>
+          <Text style={[styles.foodTonightMeterLabel, { color: theme.colors.muted }]}>match</Text>
+        </View>
+      </View>
+      <View style={styles.foodTonightSteps}>
+        <FoodTinyStep title="Expire" detail={useFirst} tone="amber" />
+        <FoodTinyStep title="Suggest" detail={dinner.replace(/^.*?: /, '')} tone="moss" />
+        <FoodTinyStep title="Update" detail={missing} tone="blue" />
+      </View>
+      <View style={styles.foodTonightActions}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Approve tonight dinner loop" testID="food-approve-dinner-loop" onPress={onApprove} style={({ pressed }) => [styles.foodTonightPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
+          <Text style={[styles.foodTonightPrimaryText, { color: theme.colors.paper }]}>Approve</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Undo tonight dinner loop" testID="food-undo-dinner-loop" disabled={!canUndo} onPress={onUndo} style={({ pressed }) => [styles.foodTonightSecondary, { borderColor: theme.colors.line, backgroundColor: theme.colors.paper }, !canUndo && styles.disabled, pressed && styles.pressed]}>
+          <Text style={[styles.foodTonightSecondaryText, { color: theme.colors.ink }]}>Undo</Text>
+        </Pressable>
+      </View>
+      {notice ? <Text style={[styles.foodTonightNotice, { color: theme.colors.moss }]} testID="food-loop-notice">{notice}</Text> : null}
+    </View>
+  );
+}
+
+function FoodTinyStep({ title, detail, tone }: { title: string; detail: string; tone: FoodTone }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={[styles.foodTinyStep, foodToneStyle(tone, theme.colors)]}>
+      <Text style={[styles.foodTinyStepTitle, { color: theme.colors.ink }]}>{title}</Text>
+      <Text style={[styles.foodTinyStepDetail, { color: theme.colors.muted }]} numberOfLines={1}>{detail}</Text>
     </View>
   );
 }
@@ -1234,7 +1421,7 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
       <View style={styles.foodLabCollapsed}>
         {notice ? <Text style={[styles.foodLabNotice, { color: theme.colors.moss }]} testID="food-debug-notice">{notice}</Text> : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Add food" testID="food-show-kitchen-lab" onPress={() => setExpanded(true)} style={({ pressed }) => [styles.foodLabButton, { backgroundColor: theme.dark ? theme.colors.paper : '#FFF8EC', borderColor: theme.colors.line }, pressed && styles.pressed]}>
-          <Text style={[styles.foodLabButtonText, { color: theme.colors.muted }]}>Add food</Text>
+          <Text style={[styles.foodLabButtonText, { color: theme.colors.muted }]}>Advanced</Text>
         </Pressable>
       </View>
     );
@@ -1243,7 +1430,7 @@ function FoodDebugTools({ recordCount, notice, canUndoArchive, canRestoreBackup,
     <View style={[styles.foodDebugTools, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]} testID="food-debug-tools">
       <View style={styles.foodDebugHeader}>
         <View>
-          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Start your kitchen</Text>
+          <Text style={[styles.foodActionTitle, { color: theme.colors.ink }]}>Advanced kitchen controls</Text>
           <Text style={[styles.foodActionDetail, { color: theme.colors.muted }]}>{recordCount ? `${recordCount} saved food items` : 'No meals yet. Add your first pantry item or load the demo household.'}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Load demo household" testID="food-load-demo" onPress={onLoadDemo} style={({ pressed }) => [styles.foodDebugPrimary, { backgroundColor: theme.colors.ink }, pressed && styles.pressed]}>
@@ -1702,6 +1889,25 @@ const styles = StyleSheet.create({
   foodActionButtons: { flexDirection: 'row', gap: 18, marginTop: 28 },
   foodActionButton: { flex: 1, minHeight: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   foodActionButtonText: { color: colors.ink, fontSize: 17, fontWeight: '900' },
+  foodTonightLoop: { borderWidth: 1, borderColor: colors.line, borderRadius: 28, padding: 18, gap: 14 },
+  foodTonightTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 },
+  foodTonightCopy: { flex: 1, minWidth: 0 },
+  foodTonightKicker: { color: colors.moss, fontSize: 10, lineHeight: 13, fontWeight: '900', letterSpacing: 1.2 },
+  foodTonightTitle: { color: colors.ink, fontSize: 28, lineHeight: 32, fontWeight: '900', letterSpacing: -0.8, marginTop: 7 },
+  foodTonightBody: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: 8 },
+  foodTonightMeter: { width: 78, minHeight: 78, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  foodTonightMeterValue: { color: colors.ink, fontSize: 24, lineHeight: 28, fontWeight: '900' },
+  foodTonightMeterLabel: { color: colors.muted, fontSize: 10, lineHeight: 13, fontWeight: '900', textTransform: 'uppercase', marginTop: 2 },
+  foodTonightSteps: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  foodTinyStep: { flexGrow: 1, flexBasis: 150, minHeight: 64, borderRadius: 18, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
+  foodTinyStepTitle: { color: colors.ink, fontSize: 13, lineHeight: 16, fontWeight: '900' },
+  foodTinyStepDetail: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 4 },
+  foodTonightActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  foodTonightPrimary: { flexGrow: 1, minHeight: 50, borderRadius: radius.pill, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  foodTonightPrimaryText: { color: colors.paper, fontSize: 16, fontWeight: '900' },
+  foodTonightSecondary: { minHeight: 50, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  foodTonightSecondaryText: { color: colors.ink, fontSize: 16, fontWeight: '900' },
+  foodTonightNotice: { color: colors.moss, fontSize: 13, lineHeight: 18, fontWeight: '800' },
   foodChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 14 },
   foodFilterChip: { minHeight: 52, borderRadius: radius.pill, paddingHorizontal: 18, paddingVertical: 12, borderWidth: 1, justifyContent: 'center' },
   foodFilterChipSelected: { transform: [{ scale: 1.01 }] },

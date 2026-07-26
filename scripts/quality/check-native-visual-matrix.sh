@@ -11,7 +11,8 @@ package_name="com.wonderfood.app"
 activity="$package_name/.MainActivity"
 signed_apk="$root_dir/android/app/build/outputs/apk/release/app-release.apk"
 unsigned_apk="$root_dir/android/app/build/outputs/apk/release/app-release-unsigned.apk"
-apk="$signed_apk"
+debug_apk="$root_dir/android/app/build/outputs/apk/debug/app-debug.apk"
+apk="$debug_apk"
 evidence_dir="$root_dir/app/build/evidence/native-visual-matrix"
 json="$evidence_dir/native-visual-matrix.json"
 mkdir -p "$evidence_dir"
@@ -23,10 +24,13 @@ fail() {
 
 [[ -x "$emulator_bin" ]] || fail "Android emulator not found at $emulator_bin"
 [[ -x "$adb_bin" ]] || fail "adb not found at $adb_bin"
+if [[ ! -f "$apk" && -f "$signed_apk" ]]; then
+  apk="$signed_apk"
+fi
 if [[ ! -f "$apk" && -f "$unsigned_apk" ]]; then
   apk="$unsigned_apk"
 fi
-[[ -f "$apk" ]] || fail "release APK missing: $apk"
+[[ -f "$apk" ]] || fail "debug or release APK missing: $debug_apk"
 
 "$adb_bin" start-server >/dev/null
 serial=""
@@ -66,9 +70,11 @@ for _ in $(seq 1 300); do
 done
 [[ "$boot" == "1" ]] || fail "emulator boot did not complete"
 echo "Native visual matrix: device booted"
+"$adb_bin" -s "$serial" wait-for-device >/dev/null 2>&1 || true
 
 if [[ "$serial" == emulator-* ]]; then
   "$adb_bin" -s "$serial" uninstall "$package_name" >/dev/null 2>&1 || true
+  "$adb_bin" -s "$serial" wait-for-device >/dev/null 2>&1 || true
 fi
 echo "Native visual matrix: installing $(basename "$apk")"
 install_log="$(mktemp -t lifeos-native-install.XXXXXX)"

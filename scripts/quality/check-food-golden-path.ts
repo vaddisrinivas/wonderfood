@@ -9,6 +9,7 @@ import { exportRecoverySnapshot } from '../../src/db/migrations';
 import { importRecoverySnapshot } from '../../src/db/recovery';
 import { getRecord, upsertRecord } from '../../src/db/records';
 import { applyOperation } from '../../src/ops/apply';
+import { undoOperation } from '../../src/ops/undo';
 
 type Row = Record<string, any>;
 
@@ -73,6 +74,12 @@ class FoodGoldenDb {
       this.upsert('operations', { op_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at }, 'op_id');
       return;
     }
+    if (compact === 'UPDATE operations SET status = ? WHERE op_id = ?') {
+      const [status, opId] = params as any[];
+      const row = this.rows('operations').find((item) => item.op_id === opId);
+      if (row) row.status = status;
+      return;
+    }
     if (compact.startsWith('INSERT OR REPLACE INTO app_packages')) {
       const row = namedParams(params);
       this.upsert('app_packages', {
@@ -127,6 +134,9 @@ class FoodGoldenDb {
     const compact = sql.replace(/\s+/g, ' ').trim();
     if (compact === 'SELECT * FROM records WHERE id = ?') {
       return (this.rows('records').find((row) => row.id === (params as any[])[0]) ?? null) as T | null;
+    }
+    if (compact === 'SELECT * FROM operations WHERE op_id = ?') {
+      return (this.rows('operations').find((row) => row.op_id === (params as any[])[0]) ?? null) as T | null;
     }
     if (compact === 'SELECT op_id, after_json, status FROM operations WHERE idempotency_key = ?') {
       const row = this.rows('operations').find((item) => item.idempotency_key === (params as any[])[0]);
@@ -249,11 +259,27 @@ function checksum(db: FoodGoldenDb) {
     collection: shopping.collection,
     record_id: shopping.id,
     expected_revision: shopping.revision,
-    actor: 'user',
-    origin: 'manual',
-    changes: { properties: { ...shopping.properties, status: 'Purchased', tone: 'moss' } },
-    reason: 'Golden path marks shopping item purchased.',
+    actor: 'ai',
+    origin: 'workflow',
+    idempotency_key: 'golden-shop-purchased:approve',
+    confidence: 0.92,
+    evidence: ['golden-pantry-yogurt', 'golden-meal-bowl', 'golden-shop-berries'],
+    changes: { ...shopping.properties, status: 'In cart', tone: 'moss', meta: 'Approved for tonight' },
+    reason: 'Approved Food dinner suggestion updates the shopping list.',
   });
+  const purchased = await getRecord(db, 'golden-shop-berries');
+  assert(purchased?.properties.status === 'In cart', 'approval did not update shopping item');
+  assert(purchased?.properties.tone === 'moss', 'approval did not update shopping tone');
+  assert(purchased?.properties.meta === 'Approved for tonight', 'approval did not update shopping reason');
+  assert(purchased?.provenance?.actor === 'ai', 'approval provenance actor missing');
+  assert(purchased?.provenance?.reason === 'Approved Food dinner suggestion updates the shopping list.', 'approval provenance reason missing');
+  assert(purchased?.provenance?.confidence === 0.92, 'approval provenance confidence missing');
+  assert(purchased?.provenance?.evidence.includes('golden-pantry-yogurt'), 'approval provenance evidence missing pantry record');
+
+  const undoShopping = await undoOperation(db, manifest, 'golden-shop-purchased');
+  assert(undoShopping.status === 'applied' || undoShopping.status === 'duplicate', `shopping undo failed: ${undoShopping.status}`);
+  const undoneShopping = await getRecord(db, 'golden-shop-berries');
+  assert(undoneShopping?.properties.status === 'To buy', 'shopping undo did not restore prior status');
 
   const searchHit = proofDb.tables.get('records')!.find((row) => String(row.title).toLowerCase().includes('breakfast'));
   assert(searchHit?.id === 'golden-meal-bowl', 'search did not find meal plan');
@@ -332,7 +358,11 @@ function checksum(db: FoodGoldenDb) {
       'add_pantry',
       'create_meal_plan',
       'add_shopping_item',
+      'expiry_detected',
+      'dinner_suggested',
+      'approval_receipt_simulated_by_operation',
       'mark_purchased',
+      'undo_shopping_update',
       'search',
       'edit',
       'archive',
