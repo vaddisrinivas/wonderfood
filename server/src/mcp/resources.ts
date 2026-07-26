@@ -11,6 +11,11 @@ export type McpResource = {
   mimeType: string;
 };
 
+export type McpResourceAuthorization =
+  | { kind: 'safe-global' }
+  | { kind: 'global-index' }
+  | { kind: 'domain'; domain: string };
+
 type McpResourceRecord = {
   uri: string;
   name: string;
@@ -162,6 +167,28 @@ const STATIC_RESOURCES: Record<string, McpResourceRecord> = {
   },
 };
 
+const SAFE_GLOBAL_RESOURCE_URIS = new Set([
+  'wonderfood://agent-registry-v1',
+  'wonderfood://lifeos/domain-catalog-v1',
+  'wonderfood://domain-catalog',
+  'wonderfood://schema/command.v1',
+  'wonderfood://schema/action-event.v1',
+  'wonderfood://schema/undo-v1',
+  'wonderfood://schema/workflow.v1',
+  'wonderfood://schema/domain-catalog-v1',
+  'wonderfood://schema/domain.v1',
+  'wonderfood://schema/proposal-package-v1',
+  'wonderfood://schema/command-envelope-v1',
+  'wonderfood://contract/app-command',
+]);
+
+const GLOBAL_INDEX_RESOURCE_URIS = new Set([
+  'wonderfood://records',
+  'wonderfood://actions',
+  'wonderfood://workflows',
+  'wonderfood://conversations',
+]);
+
 function resolveMimeType(path: string, fallback: string) {
   return fallback ?? (extname(path) === '.json' ? 'application/json' : 'text/markdown');
 }
@@ -187,6 +214,71 @@ function getRecordUris(): string[] {
 
 function getActionUris(): string[] {
   return listActionUris();
+}
+
+function extractStaticDomainUri(uri: string): string | null {
+  const staticMatch = uri.match(/^wonderfood:\/\/(?:manifest\/|skill\/bundled-|domain\/|catalog\/domain\/)([^/]+)$/);
+  return staticMatch?.[1]?.trim().toLowerCase() || null;
+}
+
+function readRecordDomain(uri: string): string {
+  const recordId = decodeURIComponent(uri.replace('wonderfood://record/', ''));
+  const record = listRecords({ query: `"${recordId}"`, limit: 200, includeArchived: true }).find((entry) => entry.id === recordId);
+  if (!record) {
+    throw new Error(`Unknown record resource: ${uri}`);
+  }
+  return record.domain.trim().toLowerCase();
+}
+
+function readActionDomain(uri: string): string {
+  const actionId = decodeURIComponent(uri.replace('wonderfood://action/', ''));
+  const event = getActionEvent(actionId);
+  if (!event) {
+    throw new Error(`Unknown action resource: ${uri}`);
+  }
+  return event.domain.trim().toLowerCase();
+}
+
+function readWorkflowDomain(uri: string): string {
+  const workflowId = decodeURIComponent(uri.replace('wonderfood://workflow/', ''));
+  const workflow = findWorkflow(workflowId);
+  if (!workflow) {
+    throw new Error(`Unknown workflow resource: ${uri}`);
+  }
+  return workflow.domain.trim().toLowerCase();
+}
+
+export function describeMcpResourceAuthorization(uri: string): McpResourceAuthorization {
+  if (SAFE_GLOBAL_RESOURCE_URIS.has(uri)) {
+    return { kind: 'safe-global' };
+  }
+
+  if (GLOBAL_INDEX_RESOURCE_URIS.has(uri)) {
+    return { kind: 'global-index' };
+  }
+
+  const staticDomain = extractStaticDomainUri(uri);
+  if (staticDomain) {
+    return { kind: 'domain', domain: staticDomain };
+  }
+
+  if (uri.startsWith('wonderfood://record/')) {
+    return { kind: 'domain', domain: readRecordDomain(uri) };
+  }
+
+  if (uri.startsWith('wonderfood://action/')) {
+    return { kind: 'domain', domain: readActionDomain(uri) };
+  }
+
+  if (uri.startsWith('wonderfood://workflow/')) {
+    return { kind: 'domain', domain: readWorkflowDomain(uri) };
+  }
+
+  if (uri in STATIC_RESOURCES || isConversationCatalogUri(uri)) {
+    throw new Error(`Resource authorization not configured: ${uri}`);
+  }
+
+  throw new Error(`Unknown resource: ${uri}`);
 }
 
 export function getMcpResourceUris(): string[] {

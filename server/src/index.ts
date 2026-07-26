@@ -10,7 +10,7 @@ import {
   type ChatSendRequest,
 } from './chat';
 import { type NormalizedChatSend } from './chat';
-import { authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './mcp/auth';
+import { assertServerStartupSecurity, authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './mcp/auth';
 import { handleMcpRequest } from './mcp/official-server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
@@ -55,6 +55,7 @@ import {
 
 const port = Number(process.env.PORT ?? '8787');
 const host = process.env.LIFEOS_SERVER_HOST?.trim() || '127.0.0.1';
+assertServerStartupSecurity(host);
 const CHAT_SEND_BODY_LIMIT_BYTES = 256 * 1024;
 const CHAT_AGENT_BODY_LIMIT_BYTES = 512 * 1024;
 const CHAT_CONTROL_BODY_LIMIT_BYTES = 64 * 1024;

@@ -5,13 +5,18 @@ import { tmpdir } from 'node:os';
 
 const port = 8904;
 const base = `http://127.0.0.1:${port}`;
-const token = 'mcp-official-security-token';
+const foodToken = 'mcp-official-food-token';
+const healthToken = 'mcp-official-health-token';
+const unscopedToken = 'mcp-official-unscoped-token';
 const stateDir = mkdtempSync(join(tmpdir(), 'wonderfood-mcp-security-'));
 
 process.env.LIFEOS_MCP_STATE_PATH = join(stateDir, 'mcp-runtime.json');
 delete process.env.LIFEOS_LOCAL_DEV;
 delete process.env.LIFEOS_SERVER_TOKEN;
 delete process.env.LIFEOS_MCP_TOKEN;
+delete process.env.LIFEOS_MCP_TRUSTED_TOKENS_JSON;
+delete process.env.LIFEOS_MCP_TRUSTED_PRINCIPAL;
+delete process.env.LIFEOS_MCP_TRUSTED_DOMAINS;
 
 const { handleMcpRequest } = await import('../src/mcp/official-server');
 
@@ -72,7 +77,11 @@ try {
   ensure(failClosed.status === 503, `official MCP should fail closed without configured token, got ${failClosed.status}`);
   ensure(String(failClosedBody.error?.message).includes('not configured'), 'MCP fail-closed response should explain missing token');
 
-  process.env.LIFEOS_SERVER_TOKEN = token;
+  process.env.LIFEOS_MCP_TRUSTED_TOKENS_JSON = JSON.stringify([
+    { token: foodToken, principal: 'food-principal', domains: ['food'] },
+    { token: healthToken, principal: 'health-principal', domains: ['health'] },
+    { token: unscopedToken, principal: 'observer' },
+  ]);
 
   const missingToken = await postMcp(initializeBody);
   const missingTokenBody = await readJson(missingToken);
@@ -84,7 +93,7 @@ try {
   ensure(wrongToken.status === 401, `official MCP should reject wrong bearer token, got ${wrongToken.status}`);
   ensure(String(wrongTokenBody.error?.message).includes('Invalid mcp bearer token'), 'wrong MCP token response should be explicit');
 
-  const initialize = await postMcp(initializeBody, { authorization: `Bearer ${token}` });
+  const initialize = await postMcp(initializeBody, { authorization: `Bearer ${foodToken}` });
   const initializeResult = await readJson(initialize);
   ensure(initialize.status === 200, `authorized initialize should succeed, got ${initialize.status}`);
   ensure(typeof initializeResult.result?.protocolVersion === 'string', 'authorized initialize should return protocolVersion');
@@ -97,8 +106,7 @@ try {
       params: {},
     },
     {
-      authorization: `Bearer ${token}`,
-      'x-lifeos-domain-scope': 'food',
+      authorization: `Bearer ${foodToken}`,
     },
   );
   const scopedListBody = await readJson(scopedList);
@@ -110,6 +118,10 @@ try {
   ensure(scopedUris.includes('wonderfood://manifest/food'), 'food scope should retain food manifest');
   ensure(!scopedUris.includes('wonderfood://manifest/health'), 'food scope should hide health manifest');
   ensure(!scopedUris.includes('wonderfood://domain/health'), 'food scope should hide health domain resource');
+  ensure(scopedUris.includes('wonderfood://records'), 'trusted scoped token should retain filtered records index');
+  ensure(scopedUris.includes('wonderfood://actions'), 'trusted scoped token should retain filtered actions index');
+  ensure(scopedUris.includes('wonderfood://workflows'), 'trusted scoped token should retain filtered workflows index');
+  ensure(scopedUris.includes('wonderfood://conversations'), 'trusted scoped token should retain filtered conversations index');
 
   const scopedRead = await postMcp(
     {
@@ -119,8 +131,7 @@ try {
       params: { uri: 'wonderfood://manifest/health' },
     },
     {
-      authorization: `Bearer ${token}`,
-      'x-lifeos-domain-scope': 'food',
+      authorization: `Bearer ${foodToken}`,
     },
   );
   const scopedReadBody = await readJson(scopedRead);
@@ -131,16 +142,111 @@ try {
   ensure(Boolean(scopedReadBody.error), 'cross-tenant resources/read should fail');
   ensure(String(scopedReadBody.error?.message).includes('not readable'), 'cross-tenant resources/read should explain scope denial');
 
+  const healthScopedList = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'resources/list',
+      params: {},
+    },
+    {
+      authorization: `Bearer ${healthToken}`,
+    },
+  );
+  const healthScopedListBody = await readJson(healthScopedList);
+  const healthResources = Array.isArray(healthScopedListBody.result?.resources)
+    ? healthScopedListBody.result?.resources as Array<{ uri?: unknown }>
+    : [];
+  const healthUris = healthResources.map((resource) => String(resource.uri));
+  ensure(healthScopedList.status === 200, `health-scoped resources/list should succeed, got ${healthScopedList.status}`);
+  ensure(healthUris.includes('wonderfood://manifest/health'), 'health scope should retain health manifest');
+  ensure(!healthUris.includes('wonderfood://manifest/food'), 'health scope should hide food manifest');
+
+  const forgedScope = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'resources/list',
+      params: {},
+    },
+    {
+      authorization: `Bearer ${foodToken}`,
+      'x-lifeos-domain-scope': 'health',
+    },
+  );
+  const forgedScopeBody = await readJson(forgedScope);
+  ensure(forgedScope.status === 403, `forged MCP scope header should be rejected, got ${forgedScope.status}`);
+  ensure(String(forgedScopeBody.error?.message).includes('trusted server configuration'), 'forged scope denial should explain trusted config');
+
+  const forgedPrincipal = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'resources/list',
+      params: {},
+    },
+    {
+      authorization: `Bearer ${foodToken}`,
+      'x-lifeos-principal': 'health-principal',
+    },
+  );
+  const forgedPrincipalBody = await readJson(forgedPrincipal);
+  ensure(forgedPrincipal.status === 403, `forged MCP principal header should be rejected, got ${forgedPrincipal.status}`);
+  ensure(String(forgedPrincipalBody.error?.message).includes('trusted server configuration'), 'forged principal denial should explain trusted config');
+
+  const unscopedList = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'resources/list',
+      params: {},
+    },
+    {
+      authorization: `Bearer ${unscopedToken}`,
+    },
+  );
+  const unscopedListBody = await readJson(unscopedList);
+  const unscopedResources = Array.isArray(unscopedListBody.result?.resources)
+    ? unscopedListBody.result?.resources as Array<{ uri?: unknown }>
+    : [];
+  const unscopedUris = unscopedResources.map((resource) => String(resource.uri));
+  ensure(unscopedList.status === 200, `unscoped resources/list should succeed, got ${unscopedList.status}`);
+  ensure(unscopedUris.includes('wonderfood://agent-registry-v1'), 'unscoped token should retain safe global resources');
+  ensure(!unscopedUris.includes('wonderfood://records'), 'unscoped token should hide records index');
+  ensure(!unscopedUris.includes('wonderfood://actions'), 'unscoped token should hide actions index');
+  ensure(!unscopedUris.includes('wonderfood://workflows'), 'unscoped token should hide workflows index');
+  ensure(!unscopedUris.includes('wonderfood://conversations'), 'unscoped token should hide conversations index');
+  ensure(!unscopedUris.includes('wonderfood://manifest/food'), 'unscoped token should hide domain resources');
+
+  const deniedGlobalIndex = await postMcp(
+    {
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'resources/read',
+      params: { uri: 'wonderfood://records' },
+    },
+    {
+      authorization: `Bearer ${unscopedToken}`,
+    },
+  );
+  const deniedGlobalIndexBody = await readJson(deniedGlobalIndex);
+  ensure(
+    deniedGlobalIndex.status === 400 || deniedGlobalIndex.status === 200,
+    `unscoped records index read should return JSON-RPC error envelope, got HTTP ${deniedGlobalIndex.status}`,
+  );
+  ensure(Boolean(deniedGlobalIndexBody.error), 'unscoped records index read should fail');
+  ensure(String(deniedGlobalIndexBody.error?.message).includes('not readable'), 'unscoped records index denial should explain scope denial');
+
   const oversizedMcp = await fetch(`${base}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token}`,
+      authorization: `Bearer ${foodToken}`,
       'content-type': 'application/json',
       accept: 'application/json',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
-      id: 4,
+      id: 9,
       method: 'initialize',
       params: {
         protocolVersion: '2026-03-11',

@@ -53,21 +53,21 @@ Branch basis: `codex/lifeos-e2e-implementation`
 
 ### P0
 
-- `P0-01` `PARTIAL`
-  Summary: anonymous/private MCP read exposure is fixed, but principal/resource confidentiality is still not fully closed.
-  Source: `server/src/mcp/official-server.ts:302-317,408-417`; `server/src/mcp/auth.ts:127-138`; `server/src/mcp/resources.ts:207-248`
-  Commit/test evidence: hardening landed across `7b8b0a9` and follow-on tests in `server/test/mcp-official-security.ts:70-153`; `npm run phase4:check:mcp` passed.
-  Residual gap: authenticated callers still self-assert domain/principal scope via headers, and authenticated unscoped callers still see global `wonderfood://records`, `wonderfood://actions`, `wonderfood://workflows`, and `wonderfood://conversations` indexes.
-  Acceptance impact: V1 confidentiality is still not accepted.
+- `P0-01` `RESOLVED`
+  Summary: official MCP confidentiality is now server-trusted instead of caller-asserted.
+  Source: `server/src/mcp/auth.ts`; `server/src/mcp/official-server.ts`; `server/src/mcp/resources.ts`
+  Commit/test evidence: trusted token scope binding, forged-header denial, two-principal separation, unscoped-token index denial, and scoped resource coverage in `server/test/mcp-official-security.ts`; `npm run phase4:check:mcp` remains the required rerun gate.
+  Resolution detail: MCP principal/domain scope now comes from trusted bearer-token configuration, unscoped tokens only receive safe global resources, global runtime indexes require explicit trusted domain scope, and every MCP resource URI resolves through an explicit auth class before read.
+  Acceptance impact: the original MCP read confidentiality gap is closed.
 
 ### P1
 
-- `P1-01` `PARTIAL`
-  Summary: request-time auth now fails closed, but deployment-time safety is still incomplete.
-  Source: `server/src/mcp/auth.ts:65-73,75-109`; `server/src/index.ts:56-57,1842-1845`
-  Commit/test evidence: auth hardening in `7b8b0a9`; `server/test/ingress-security.ts:71-97`; `server/test/mcp-official-security.ts:70-90`
-  Residual gap: startup still allows external bind, and `LIFEOS_LOCAL_DEV` bypass is not restricted to loopback.
-  Acceptance impact: external deployment misconfiguration still has too much room for operator error.
+- `P1-01` `RESOLVED`
+  Summary: deployment-time auth safety now fails closed before unsafe hosted boot.
+  Source: `server/src/mcp/auth.ts`; `server/src/index.ts`
+  Commit/test evidence: non-loopback bind refusal and loopback-only `LIFEOS_LOCAL_DEV` coverage in `server/test/startup-security.ts`; request-time ingress auth coverage remains in `server/test/ingress-security.ts`.
+  Resolution detail: server startup now rejects `LIFEOS_LOCAL_DEV=true` on non-loopback bind and refuses non-loopback boot without configured bearer auth.
+  Acceptance impact: the original external-bind operator-error gap is closed.
 
 - `P1-02` `PARTIAL`
   Summary: review approval is now durably enforced at tool call sites, but policy still exposes invalid boolean/meta states.
@@ -223,36 +223,31 @@ Do **not** call V1 complete at `61cb98b`.
 
 Reasons:
 
-- `P0-01` is still only `PARTIAL`.
 - `P1-03` is still `OPEN`.
-- `P1-01`, `P1-02`, `P1-04`, `P1-06`, `P1-07`, and `P1-08` are still `PARTIAL`.
+- `P1-02`, `P1-04`, `P1-06`, `P1-07`, and `P1-08` are still `PARTIAL`.
 - `npm run phase8:check:release-readiness` is `BLOCKED`.
 - repo-wide `npm run typecheck` is `FAIL`.
 - current proof docs are stale relative to `61cb98b`.
 
 ## Next-wave task queue
 
-1. `A` close MCP confidentiality and startup hardening
-   Scope: `server/src/mcp/{auth,official-server,resources}.ts`, `server/src/index.ts`
-   Required checks: extend `server/test/mcp-official-security.ts` for self-asserted-scope denial and add non-loopback boot-refusal coverage.
-
-2. `B` collapse chat/MCP/local authority onto one canonical writer
+1. `B` collapse chat/MCP/local authority onto one canonical writer
    Scope: `server/src/agents/executor.ts`, `server/src/mcp/policy.ts`, `server/src/mcp/tools.ts`
    Required checks: add server ingress parity suite; fail if any chat path imports direct record mutators.
 
-3. `C` make idempotency and server state durable
+2. `C` make idempotency and server state durable
    Scope: `server/src/{index,conversations}.ts`, `server/src/kernel/install-reactive-runtime.ts`, shared persistence helpers
    Required checks: restart replay, corrupt-file quarantine, concurrent-writer, and slow-body suites.
 
-4. `D` finish undo lifecycle truth
+3. `D` finish undo lifecycle truth
    Scope: `server/src/mcp/state.ts`, `server/src/providers/undo.ts`, workflow compensation
    Required checks: provider undo state-machine tests proving `undone`/`undo_failed` semantics instead of `cancelled`.
 
-5. `E` add real reactive worker lifecycle
+4. `E` add real reactive worker lifecycle
    Scope: `server/src/kernel/{install-reactive-runtime,reactive-outbox,reactive-proposal-executor}.ts`
    Required checks: startup recovery, eventual drain, one-active-lease, and approval-resume proof.
 
-6. `F` add retrieval cache/timeouts/source budgets
+5. `F` add retrieval cache/timeouts/source budgets
    Scope: `server/src/agents/retrieval.ts`, provider pull clients
    Required checks: retrieval privacy contract expansion plus timeout/load/pagination tests.
 

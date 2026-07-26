@@ -1,6 +1,6 @@
-import { authorizeMcpRequest, isMcpToolAuthorized, parseMcpScope, type HeaderMap, type McpScope } from './auth';
-import { isMcpToolAllowed, isMcpToolReadOnly } from './policy';
-import { listMcpResources, readMcpResource, resolveResourceMimeType } from './resources';
+import { authorizeMcpRequest, type HeaderMap, type McpScope } from './auth';
+import { isMcpToolAllowed } from './policy';
+import { describeMcpResourceAuthorization, listMcpResources, readMcpResource, resolveResourceMimeType } from './resources';
 import { callMcpTool, listMcpTools } from './tools';
 import { isAllowedMcpOrigin, isMcpProtocolVersion, negotiateMcpProtocolVersion } from './protocol-compat';
 import { validateArgsForTool } from './server';
@@ -8,18 +8,6 @@ import { validateArgsForTool } from './server';
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
 const MCP_SERVER_VERSION = '1.0.0';
 const MCP_BODY_LIMIT_BYTES = 256 * 1024;
-const GLOBAL_SCOPE_SAFE_URIS = new Set([
-  'wonderfood://agent-registry-v1',
-  'wonderfood://schema/command.v1',
-  'wonderfood://schema/action-event.v1',
-  'wonderfood://schema/undo-v1',
-  'wonderfood://schema/workflow.v1',
-  'wonderfood://schema/domain-catalog-v1',
-  'wonderfood://schema/domain.v1',
-  'wonderfood://schema/proposal-package-v1',
-  'wonderfood://schema/command-envelope-v1',
-  'wonderfood://contract/app-command',
-]);
 
 type JsonRpcRequest = {
   jsonrpc?: string;
@@ -148,21 +136,13 @@ function extractScopedDomain(value: unknown): string | null {
   return typeof domain === 'string' && domain.trim().length > 0 ? domain.trim().toLowerCase() : null;
 }
 
-function extractDomainFromUri(uri: string): string | null {
-  const staticMatch = uri.match(/^wonderfood:\/\/(?:manifest\/|skill\/bundled-|domain\/|catalog\/domain\/)([^/]+)$/);
-  if (staticMatch?.[1]) {
-    return staticMatch[1].trim().toLowerCase();
-  }
-  return null;
+function hasDomainAccess(scope: McpScope, domain: string): boolean {
+  return scope.allowAllDomains || scope.domains.has(domain);
 }
 
 function filterScopedJson(uri: string, text: string, scope: McpScope): string {
-  if (scope.domains.size === 0) {
+  if (scope.allowAllDomains || scope.domains.size === 0) {
     return text;
-  }
-
-  if (uri === 'wonderfood://domain-catalog') {
-    throw new Error(`Resource not readable for scoped domains: ${uri}`);
   }
 
   if (uri === 'wonderfood://records') {
@@ -209,48 +189,19 @@ function filterScopedJson(uri: string, text: string, scope: McpScope): string {
     return JSON.stringify({ ...payload, threads }, null, 2);
   }
 
-  if (
-    uri.startsWith('wonderfood://record/')
-    || uri.startsWith('wonderfood://action/')
-    || uri.startsWith('wonderfood://workflow/')
-  ) {
-    const payload = JSON.parse(text) as unknown;
-    const domain = extractScopedDomain(payload);
-    if (!domain || !scope.domains.has(domain)) {
-      throw new Error(`Resource not readable for scoped domains: ${uri}`);
-    }
-    return text;
-  }
-
-  const explicitDomain = extractDomainFromUri(uri);
-  if (explicitDomain && !scope.domains.has(explicitDomain)) {
-    throw new Error(`Resource not readable for scoped domains: ${uri}`);
-  }
-
   return text;
 }
 
 function canReadScopedResource(uri: string, scope: McpScope): boolean {
-  if (scope.domains.size === 0) {
-    return true;
-  }
-
-  if (GLOBAL_SCOPE_SAFE_URIS.has(uri)) {
-    return true;
-  }
-
-  const explicitDomain = extractDomainFromUri(uri);
-  if (explicitDomain) {
-    return scope.domains.has(explicitDomain);
-  }
-
-  if (uri === 'wonderfood://domain-catalog') {
-    return false;
-  }
-
   try {
-    filterScopedJson(uri, readMcpResource(uri), scope);
-    return true;
+    const access = describeMcpResourceAuthorization(uri);
+    if (access.kind === 'safe-global') {
+      return true;
+    }
+    if (access.kind === 'global-index') {
+      return scope.allowAllDomains || scope.domains.size > 0;
+    }
+    return hasDomainAccess(scope, access.domain);
   } catch {
     return false;
   }
@@ -263,8 +214,7 @@ function readScopedResource(uri: string, scope: McpScope): string {
   return filterScopedJson(uri, readMcpResource(uri), scope);
 }
 
-async function responseFor(request: JsonRpcRequest, headers: HeaderMap): Promise<McpResponse> {
-  const scope = parseMcpScope(headers);
+async function responseFor(request: JsonRpcRequest, scope: McpScope): Promise<McpResponse> {
   const requestId = request.id ?? null;
   const method = request.method;
   const params = request.params && typeof request.params === 'object' && !Array.isArray(request.params)
@@ -358,10 +308,6 @@ async function responseFor(request: JsonRpcRequest, headers: HeaderMap): Promise
       };
     }
 
-    if (!isMcpToolReadOnly(toolName) && !isMcpToolAuthorized(headers)) {
-      return { jsonrpc: '2.0', id: requestId, error: { code: -32001, message: 'Unauthorized' } };
-    }
-
     try {
       const result = await callMcpTool(toolName, isRecord(args) ? args : {});
       return {
@@ -415,13 +361,14 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
     );
     return true;
   }
+  const scope = auth.mcpScope ?? { domains: new Set(), principal: auth.principalId, allowAllDomains: false };
 
   try {
     const body = await readJsonRequest(req);
     const acceptsStream = wantsEventStream(req.headers?.accept);
 
     if (Array.isArray(body)) {
-      const responses = await Promise.all(body.map((entry) => responseFor(entry, req.headers ?? {})));
+      const responses = await Promise.all(body.map((entry) => responseFor(entry, scope)));
       if (acceptsStream) {
         writeSse(res, responses);
       } else {
@@ -430,7 +377,7 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
       return true;
     }
 
-    const response = await responseFor(body, req.headers ?? {});
+    const response = await responseFor(body, scope);
     if (!response.result && response.error === undefined) {
       writeJson(res, {}, 202);
       return true;

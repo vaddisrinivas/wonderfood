@@ -8,23 +8,22 @@ Reference docs: `docs/V1-CURRENT-ACCEPTANCE.md`, `docs/REPOSITORY-AUDIT.md`
 
 WonderFood is still **pre-V1 hardening**.
 
-- `P0-01` is only `PARTIAL`: anonymous MCP reads are gone, but bearer-scoped confidentiality is still weak because scope and principal remain caller-asserted and authenticated unscoped callers still get global indexes.
 - `P1-03` is `OPEN`: the chat executor still writes `local_sqlite` mutations directly through MCP state helpers instead of one canonical operation boundary.
-- `P1-01`, `P1-02`, `P1-04`, `P1-06`, `P1-07`, and `P1-08` are still `PARTIAL`, so the server/runtime is not acceptance-safe.
+- `P1-02`, `P1-04`, `P1-06`, `P1-07`, and `P1-08` are still `PARTIAL`, so the server/runtime is not acceptance-safe.
 - Release proof is still blocked: `npm run phase8:check:release-readiness` reports missing/stale signed mobile artifacts, and repo proof docs are stale at `8b2cb9a`, not `61cb98b`.
 
 ## Status snapshot at `61cb98b`
 
 Summary:
 
-- P0: `0 RESOLVED`, `1 PARTIAL`, `0 OPEN`
-- P1: `1 RESOLVED`, `6 PARTIAL`, `1 OPEN`
+- P0: `1 RESOLVED`, `0 PARTIAL`, `0 OPEN`
+- P1: `2 RESOLVED`, `5 PARTIAL`, `1 OPEN`
 - P2: `4 RESOLVED`, `6 PARTIAL`, `3 OPEN`
 
 | ID | Status | Owner lane | Why it still matters |
 |---|---|---|---|
-| `P0-01` | `PARTIAL` | `A` | MCP reads are authenticated now, but scope/principal are still header-driven and global indexes are still exposed to authenticated unscoped callers. |
-| `P1-01` | `PARTIAL` | `A` | Requests fail closed, but startup still allows external bind and `LIFEOS_LOCAL_DEV` bypass is not loopback-bound. |
+| `P0-01` | `RESOLVED` | `A` | Official MCP bearer tokens now bind trusted principal/domain scope from server config, forged caller scope headers are denied, and unscoped tokens cannot read private global indexes. |
+| `P1-01` | `RESOLVED` | `A` | Startup now refuses non-loopback bind without configured bearer auth and rejects `LIFEOS_LOCAL_DEV=true` off loopback. |
 | `P1-02` | `PARTIAL` | `B` | Durable review approval now blocks writes, but policy is still boolean/meta instead of one exhaustive decision union. |
 | `P1-03` | `OPEN` | `B` | Default `local_sqlite` chat mutations still bypass the canonical app operation engine. |
 | `P1-04` | `PARTIAL` | `D` | Provider undo readback exists, but undo still mutates MCP JSON state directly and still overloads `cancelled` as the terminal state. |
@@ -48,54 +47,46 @@ Summary:
 
 ## Highest-risk current seams
 
-1. MCP confidentiality is improved but not finished.
-   Source: `server/src/mcp/official-server.ts:302-317,408-417`, `server/src/mcp/auth.ts:127-138`, `server/src/mcp/resources.ts:207-248`
-
-2. Default chat mutation still has a parallel writer.
+1. Default chat mutation still has a parallel writer.
    Source: `server/src/agents/executor.ts:606-684,756-808,879-931`
 
-3. Undo truth improved, but lifecycle semantics are still muddy.
+2. Undo truth improved, but lifecycle semantics are still muddy.
    Source: `server/src/mcp/state.ts:1493-1527,1574-1698,1705-1836`
 
-4. Reactive proposals can persist forever without a worker lifecycle.
+3. Reactive proposals can persist forever without a worker lifecycle.
    Source: `server/src/kernel/install-reactive-runtime.ts:89-146`, `server/src/index.ts:121-126`
 
-5. Release evidence is still not store-grade proof.
+4. Release evidence is still not store-grade proof.
    Source: `android/app/build.gradle:89-132`, `scripts/quality/check-android-release-artifacts.sh:18-33,36-93`, `scripts/quality/check-release-readiness.mjs:53-75`
 
 ## Next-wave task queue
 
-1. `A` auth and MCP containment
-   Files: `server/src/mcp/{auth,official-server,resources}.ts`, `server/src/index.ts`, `server/test/{mcp-official-security,ingress-security}.ts`
-   Deliverables: bind MCP domain/principal scope to authenticated server state, hide global private indexes by default, fail startup on non-loopback bind without auth, force `LIFEOS_LOCAL_DEV` to loopback-only.
-   Checks: existing MCP/ingress suites plus a new self-asserted-scope denial test and non-loopback boot-refusal test.
-
-2. `B` one policy machine and one writer
+1. `B` one policy machine and one writer
    Files: `server/src/agents/executor.ts`, `server/src/mcp/policy.ts`, `server/src/mcp/tools.ts`, shared policy/receipt contracts
    Deliverables: remove direct `createRecord`/`updateRecord`/`archiveRecord` paths from chat executor, route local authority through one canonical operation boundary, collapse boolean/meta policy into `deny | clarify | review | execute`.
    Checks: static import boundary for server ingresses, chat/MCP/app ingress parity suite, review-zero-write tests.
 
-3. `C` durability, idempotency, and HTTP bounds
+2. `C` durability, idempotency, and HTTP bounds
    Files: `server/src/{index,conversations}.ts`, `server/src/kernel/install-reactive-runtime.ts`, shared persistence modules
    Deliverables: restart-durable idempotency store, shared atomic/quarantine pattern for every server-side state file or SQLite migration, request timeout/header limit handling.
    Checks: restart replay, corrupt-file, concurrent-writer, chunked slow-body, and crash-recovery tests.
 
-4. `D` truthful undo and lifecycle states
+3. `D` truthful undo and lifecycle states
    Files: `server/src/mcp/state.ts`, `server/src/providers/undo.ts`, workflow compensation paths
    Deliverables: canonical undo state machine (`undo_pending`, `undone`, `undo_failed`), no overloaded `cancelled`, and no direct local rollback after a provider action without canonical receipt.
    Checks: Notion/Sheets create/update/archive undo contract suite, workflow compensation truth table, replay/idempotency suite.
 
-5. `E` reactive runtime lifecycle
+4. `E` reactive runtime lifecycle
    Files: `server/src/kernel/{install-reactive-runtime,reactive-outbox,reactive-proposal-executor,operation-observer}.ts`
    Deliverables: startup drain, periodic/event wake, lease, retry/backoff, dead-letter, and approval resume path.
    Checks: restart/eventual-drain proof, one-active-lease proof, review-resume proof, degraded-health proof.
 
-6. `F` retrieval privacy and provider load controls
+5. `F` retrieval privacy and provider load controls
    Files: `server/src/agents/retrieval.ts`, provider pull clients
    Deliverables: timeout/circuit/cache/source-budget rules, explicit freshness semantics, and larger dataset/load tests.
    Checks: `server/test/retrieval-contract.ts` expansion, provider timeout tests, large-row pagination/load tests.
 
-7. `H` repo truth, release truth, and dependency hygiene
+6. `H` repo truth, release truth, and dependency hygiene
    Files: `README.md`, `FEATURES.md`, `docs/REPOSITORY-AUDIT.md`, `scripts/quality/check-lifeos-completion-audit.mjs`, `scripts/quality/check-android-release-artifacts.sh`, `tests/helpers/memory-db.ts`, `tsconfig.json`, `spikes/**`
    Deliverables: regenerate current docs from `61cb98b`, make completion audit fail on open P0/P1, isolate or exclude broken spikes from repo typecheck, move persistence-sensitive tests to real SQLite, require release signing by default in release-proof lanes, and address current production `npm audit` findings.
    Checks: `npm run typecheck`, `npm run phase9:check:completion-audit`, `npm run phase8:check:android-release-signed`, `npm audit --omit=dev --json`.

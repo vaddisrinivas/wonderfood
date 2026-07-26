@@ -4,7 +4,7 @@
 
 Security fixes target the current `main` branch until tagged releases begin.
 
-Current security claims below reflect source snapshot `fd8e2e6`; older device and release evidence stays historical unless repeated here.
+Current security claims below reflect the current source snapshot; older device and release evidence stays historical unless repeated here.
 
 ## Reporting a vulnerability
 
@@ -24,7 +24,11 @@ Do not include real user food, receipt, account, health, or provider data.
 - Android automatic backup is disabled. Explicit Google Drive archives are encrypted.
 - Cleartext networking is restricted to local-development loopback hosts.
 - Hosted server and official MCP ingress fail closed unless a bearer token is
-  configured, or authless access is explicitly enabled with `LIFEOS_LOCAL_DEV=true`.
+  configured, or authless access is explicitly enabled with `LIFEOS_LOCAL_DEV=true`
+  on loopback only.
+- Non-loopback server bind must have configured bearer auth before boot.
+- Official MCP principal and domain scope are server-trusted from configured
+  bearer tokens; caller `x-lifeos-*scope` and principal headers cannot widen access.
 - Backend switching creates a local rollback snapshot before the new active backend
   is committed.
 - Google Sheets sync requires Google authorization; a public Sheet link alone is not

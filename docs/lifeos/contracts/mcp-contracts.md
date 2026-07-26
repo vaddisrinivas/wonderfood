@@ -3,9 +3,18 @@
 ## MCP JSON-RPC request shape
 
 - URL: `/mcp` (POST)
-- Envelope: `{ jsonrpc: '2.0', id: <number|string>, method: 'initialize' | 'tools/list' | 'tools/call', params: {...} }`
+- Envelope: `{ jsonrpc: '2.0', id: <number|string>, method: 'initialize' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read', params: {...} }`
 - `tools/call` input: `{ name: 'tool_name', arguments: { ... } }`
+- `resources/read` input: `{ uri: 'wonderfood://...' }`
 - `id` is echoed on all JSON-RPC responses; response and replay requests must keep idempotent `action_id` + `idempotency_key`.
+
+## MCP auth and scope
+
+- Official MCP bearer tokens are trusted server configuration, not caller-declared identity.
+- Configure either one trusted token with `LIFEOS_MCP_TOKEN` / `LIFEOS_SERVER_TOKEN` plus `LIFEOS_MCP_TRUSTED_PRINCIPAL` and `LIFEOS_MCP_TRUSTED_DOMAINS`, or multiple tokens with `LIFEOS_MCP_TRUSTED_TOKENS_JSON`.
+- `domains: ["*"]` grants full MCP resource scope; otherwise the token can read only its trusted domains plus safe global schemas/contracts.
+- Caller `x-lifeos-domain-scope`, `x-lifeos-tenant-scope`, `x-lifeos-principal`, and `x-lifeos-principal-scope` headers may narrow nothing and must never widen access; forged scope/principal claims are rejected.
+- Unscoped trusted tokens do not receive global `wonderfood://records`, `wonderfood://actions`, `wonderfood://workflows`, or `wonderfood://conversations` indexes.
 
 ## Error behavior
 
