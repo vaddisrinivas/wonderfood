@@ -655,7 +655,7 @@ export default function FoodScreen() {
       case 'manifest':
         return active === 'Overview' && foodConfig.showManifestBlocks && manifestBlocks.length ? (
           <View key={section}>
-            <SectionTitle title={`${domainLabel} dashboard`} action="Tune layout" href="/config" />
+            <SectionTitle title="Kitchen at a glance" action="Customize" href="/config" />
             <View style={[styles.manifestGrid, compact && styles.boardCompact]}>
               {manifestBlocks.map((block) => (
                 <ManifestDashboardBlock

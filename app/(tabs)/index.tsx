@@ -210,16 +210,16 @@ export default function TodayScreen() {
       case 'sourceTrust':
         return homeConfig.showSourceTrust ? (
           <View key={section}>
-            <SectionTitle title="Source trust" />
+            <SectionTitle title="Connections" />
             <View style={sharedStyles.grid}>
               <Card tone="blue" style={styles.trustCard}>
-                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>Notion and Sheets are optional homes</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Run local-first, or add Notion and Sheets as richer data homes. Same records, citations and actions.</Text>
-                <Link href="/sources" style={[styles.cardLink, { color: theme.colors.ink }]}>Open trust center →</Link>
+                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>Your kitchen works locally first</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Add Notion or Sheets when you want them. Day-to-day food planning stays simple.</Text>
+                <Link href="/sources" style={[styles.cardLink, { color: theme.colors.ink }]}>Manage connections →</Link>
               </Card>
               <Card tone="amber" style={styles.trustCard}>
-                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>{secondRecord?.title ?? 'Chat needs citations'}</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{secondRecord?.meta ?? 'Assistant answers should show tables, records and exact source cards.'}</Text>
+                <Text style={[styles.trustTitle, { color: theme.colors.ink }]}>{secondRecord?.title ?? 'Ask about dinner'}</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>{secondRecord?.meta ?? 'The assistant can use meals, pantry, and shopping without making you manage internals.'}</Text>
                 <Link href="/chat" style={[styles.cardLink, { color: theme.colors.ink }]}>Open Chat →</Link>
               </Card>
             </View>

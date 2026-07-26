@@ -279,14 +279,14 @@ export default function CollectionScreen() {
                     </View>
                     {activeManifest.rich_detail_schema ? <Text style={[styles.schemaLink, { color: theme.colors.moss }]}>{activeManifest.rich_detail_schema}</Text> : null}
                   </Card>
-                  <SectionTitle title="Source trust" action="Sources" href="/sources" />
+                  <SectionTitle title="Connected items" action="Sources" href="/sources" />
                   <Card style={styles.sourceCard}>
                     {Object.entries(sourceCounts).length ? Object.entries(sourceCounts).map(([source, count], index) => (
                       <View key={source} style={[styles.sourceRow, { borderBottomColor: theme.colors.line }]}>
                         <Pill tone={pillToneForVisual(visualIdentity.sources?.[source], index)}>{visualGlyph(visualIdentity.sources?.[source], String(count))} {count}</Pill>
                         <View style={styles.relationCopy}>
                           <Text style={[styles.relationTitle, { color: theme.colors.ink }]}>{source}</Text>
-                          <Text style={[styles.relationDetail, { color: theme.colors.muted }]}>Citable records in this collection</Text>
+                          <Text style={[styles.relationDetail, { color: theme.colors.muted }]}>Items linked to this collection</Text>
                         </View>
                       </View>
                     )) : <Text style={[styles.emptyBody, { color: theme.colors.muted }]}>No source-backed rows yet.</Text>}
