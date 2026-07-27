@@ -10,7 +10,7 @@ const healthToken = 'mcp-official-health-token';
 const unscopedToken = 'mcp-official-unscoped-token';
 const stateDir = mkdtempSync(join(tmpdir(), 'wonderfood-mcp-security-'));
 
-process.env.LIFEOS_MCP_STATE_PATH = join(stateDir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(stateDir, 'wonder-runtime.json');
 delete process.env.LIFEOS_LOCAL_DEV;
 delete process.env.LIFEOS_SERVER_TOKEN;
 delete process.env.LIFEOS_MCP_TOKEN;

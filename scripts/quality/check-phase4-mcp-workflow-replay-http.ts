@@ -56,7 +56,7 @@ const outDir = join(root, 'app', 'build', 'evidence', 'phase4-mcp-workflow-repla
 mkdirSync(outDir, { recursive: true });
 
 const stateDir = mkdtempSync(join(tmpdir(), `wf-http-${randomBytes(4).toString('hex')}-`));
-const mcpRuntimePath = join(stateDir, 'mcp-runtime.json');
+const runtimeStatePath = join(stateDir, 'wonder-runtime.json');
 const checkpointPath = join(stateDir, 'workflow-runs.json');
 const port = 19123;
 const base = `http://127.0.0.1:${port}`;
@@ -64,7 +64,7 @@ const token = 'phase4-http-proof-token';
 
 process.env = {
   ...process.env,
-  LIFEOS_MCP_STATE_PATH: mcpRuntimePath,
+  WONDER_RUNTIME_STATE_PATH: runtimeStatePath,
   LIFEOS_WORKFLOW_CHECKPOINT_PATH: checkpointPath,
   LIFEOS_SERVER_TOKEN: token,
 };
@@ -609,7 +609,7 @@ function createHashDigest(value: unknown) {
         },
       },
       state_files: {
-        mcp_runtime_path: mcpRuntimePath,
+        runtime_state_path: runtimeStatePath,
         checkpoint_path: checkpointPath,
       },
       local_action: actionLog ? { id: actionLog.id, status: actionLog.status } : null,

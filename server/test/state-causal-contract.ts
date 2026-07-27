@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const dir = mkdtempSync(join(tmpdir(), 'lifeos-causal-'));
-process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(dir, 'wonder-runtime.json');
 const state = await import('../src/runtime/state');
 
 const record = state.createRecord({

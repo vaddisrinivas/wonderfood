@@ -11,7 +11,7 @@ import type { OperationCommitEvent } from '../src/kernel/operation-observer';
 import { createOperationProposalIdempotencyKey } from '../src/kernel/rules';
 
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-proposal-'));
-process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(dir, 'wonder-runtime.json');
 const { executeReactiveProposal, executeReactiveProposalLive } = await import('../src/kernel/reactive-proposal-executor');
 const { attachActionVerification, createRecord, findActionByIdempotencyKey, findRecord, getActionEvent, updateRecord } = await import('../src/runtime/state');
 const proposalEvent = { kind: 'query_transition' as const, id: 'review:enter', queryId: 'review', transition: 'enter' as const };

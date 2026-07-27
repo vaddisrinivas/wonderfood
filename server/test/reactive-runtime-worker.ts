@@ -12,7 +12,7 @@ const dir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-worker-'));
 const runtimePath = join(dir, 'runtime.json');
 const leasePath = `${runtimePath}.lease`;
 process.env.LIFEOS_REACTIVE_RUNTIME_PATH = runtimePath;
-process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(dir, 'wonder-runtime.json');
 
 const {
   createReactiveOutboxStore,

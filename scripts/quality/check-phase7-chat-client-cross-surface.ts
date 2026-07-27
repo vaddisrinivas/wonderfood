@@ -8,7 +8,7 @@ const root = process.cwd();
 const port = 19125;
 const token = 'phase7-cross-surface-token';
 const stateDir = mkdtempSync(join(tmpdir(), `wf-phase7-${randomBytes(4).toString('hex')}-`));
-const mcpRuntimePath = join(stateDir, 'mcp-runtime.json');
+const runtimeStatePath = join(stateDir, 'wonder-runtime.json');
 const conversationPath = join(stateDir, 'conversations.json');
 const baseUrl = `http://127.0.0.1:${port}`;
 const tsxBinary = join(root, 'server', 'node_modules', '.bin', 'tsx');
@@ -19,7 +19,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 function readRuntime() {
-  return JSON.parse(readFileSync(mcpRuntimePath, 'utf8')) as {
+  return JSON.parse(readFileSync(runtimeStatePath, 'utf8')) as {
     records?: Record<string, unknown>;
   };
 }
@@ -43,7 +43,7 @@ async function waitForServer() {
       ...process.env,
       PORT: String(port),
       LIFEOS_SERVER_TOKEN: token,
-      LIFEOS_MCP_STATE_PATH: mcpRuntimePath,
+      WONDER_RUNTIME_STATE_PATH: runtimeStatePath,
       LIFEOS_CHAT_CONVERSATIONS_PATH: conversationPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],

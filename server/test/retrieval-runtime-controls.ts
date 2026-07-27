@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-retrieval-controls-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-retrieval-controls-')), 'wonder-runtime.json');
 process.env.NOTION_TOKEN = 'retrieval-controls-token';
 process.env.NOTION_DATA_SOURCE_ID = 'retrieval-controls-source';
 process.env.LIFEOS_RETRIEVAL_CACHE_TTL_MS = '60000';

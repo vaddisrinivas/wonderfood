@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-observer-failure-state-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-observer-failure-state-')), 'wonder-runtime.json');
 process.env.LIFEOS_REACTIVE_RUNTIME_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-observer-failure-runtime-')), 'reactive-runtime.json');
 process.env.LIFEOS_PACKAGE_REGISTRY_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-observer-failure-registry-')), 'package-registry.json');
 

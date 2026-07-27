@@ -80,7 +80,7 @@ const outDir = join(root, 'app', 'build', 'evidence', 'phase4-mcp-tool-contract'
 mkdirSync(outDir, { recursive: true });
 
 const stateDir = mkdtempSync(join(tmpdir(), `wf-tool-${randomBytes(4).toString('hex')}-`));
-process.env.LIFEOS_MCP_STATE_PATH = join(stateDir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(stateDir, 'wonder-runtime.json');
 process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH = join(stateDir, 'workflow-runs.json');
 
 function fail(message: string): never {
@@ -563,7 +563,7 @@ function expectFailure(action: () => Promise<unknown>, label: string) {
       action_log_found: !!actionLog,
     },
     state_files: {
-      mcp_runtime_path: process.env.LIFEOS_MCP_STATE_PATH,
+      runtime_state_path: process.env.WONDER_RUNTIME_STATE_PATH,
       checkpoint_path: process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH,
     },
     all_passed: true,

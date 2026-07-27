@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 const writerCount = 8;
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-canonical-writers-'));
-const statePath = join(dir, 'mcp-runtime.json');
+const statePath = join(dir, 'wonder-runtime.json');
 const tsxPath = join(process.cwd(), 'server', 'node_modules', '.bin', 'tsx');
 const fixturePath = join(process.cwd(), 'server', 'test', 'fixtures', 'canonical-writer-process.ts');
 
@@ -15,7 +15,7 @@ await Promise.all(Array.from({ length: writerCount }, (_, writer) => new Promise
     cwd: process.cwd(),
     env: {
       ...process.env,
-      LIFEOS_MCP_STATE_PATH: statePath,
+      WONDER_RUNTIME_STATE_PATH: statePath,
       LIFEOS_CANONICAL_WRITER_INDEX: String(writer),
     },
     stdio: ['ignore', 'pipe', 'pipe'],

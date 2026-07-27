@@ -122,7 +122,7 @@ export type WorkflowDocument = {
   [key: string]: unknown;
 };
 
-const MCP_STATE_PATH = process.env.LIFEOS_MCP_STATE_PATH ?? join(process.cwd(), 'server-data', 'mcp-runtime.json');
+const RUNTIME_STATE_PATH = process.env.WONDER_RUNTIME_STATE_PATH ?? join(process.cwd(), 'server-data', 'wonder-runtime.json');
 const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKFLOW_DIR = join(process.cwd(), 'packages', 'domain-config', 'workflows');
 
@@ -269,11 +269,11 @@ function normalizeStore(parsed: PersistedStore): PersistedStore {
 }
 
 function loadStore(): PersistedStore {
-  if (!existsSync(MCP_STATE_PATH)) {
+  if (!existsSync(RUNTIME_STATE_PATH)) {
     return createEmptyStore();
   }
-  return normalizeStore(readJsonStateFile(MCP_STATE_PATH, {
-    label: 'MCP runtime state',
+  return normalizeStore(readJsonStateFile(RUNTIME_STATE_PATH, {
+    label: 'Wonder runtime state',
     validate: isValidStore,
   }));
 }
@@ -288,7 +288,7 @@ function persistStore() {
   if (storeMutationDepth > 0) {
     return;
   }
-  writeJsonStateFileAtomic(MCP_STATE_PATH, store);
+  writeJsonStateFileAtomic(RUNTIME_STATE_PATH, store);
 }
 
 /**
@@ -306,8 +306,8 @@ function mutateCanonicalStore<T>(mutate: () => T): T {
   const deliveryStart = deferredOperationCommitIds.length;
   let committed: PersistedStore;
   try {
-    committed = mutateJsonStateFile(MCP_STATE_PATH, {
-      label: 'MCP runtime state',
+    committed = mutateJsonStateFile(RUNTIME_STATE_PATH, {
+      label: 'Wonder runtime state',
       validate: isValidStore,
       createDefault: createEmptyStore,
       mutate: (current) => {

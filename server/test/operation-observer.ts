@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-operation-observer-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-operation-observer-')), 'wonder-runtime.json');
 
 const { setOperationCommitFailureObserver, setOperationCommitObserver } = await import('../src/kernel/operation-observer');
 const {

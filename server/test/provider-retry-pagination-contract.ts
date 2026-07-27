@@ -17,7 +17,7 @@ const previousEnv = {
   sheetsSpreadsheet: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
   sheetsSource: process.env.GOOGLE_SHEETS_DATA_SOURCE_ID,
   authority: process.env.LIFEOS_AUTHORITY_PROVIDER,
-  mcpState: process.env.LIFEOS_MCP_STATE_PATH,
+  runtimeState: process.env.WONDER_RUNTIME_STATE_PATH,
 };
 
 process.env.NOTION_TOKEN = 'retry-pagination-token';
@@ -26,7 +26,7 @@ process.env.GOOGLE_SHEETS_ACCESS_TOKEN = 'retry-pagination-sheets-token';
 process.env.GOOGLE_SHEETS_SPREADSHEET_ID = 'retry-pagination-sheet';
 process.env.GOOGLE_SHEETS_DATA_SOURCE_ID = 'retry-pagination-data-source';
 process.env.LIFEOS_AUTHORITY_PROVIDER = 'notion';
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'lifeos-provider-revision-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'lifeos-provider-revision-')), 'wonder-runtime.json');
 
 const { notionFetch } = await import('../src/providers/notion/client');
 const { pullNotionRecordsLive } = await import('../src/providers/notion/pull');
@@ -203,6 +203,6 @@ if (previousEnv.sheetsToken === undefined) delete process.env.GOOGLE_SHEETS_ACCE
 if (previousEnv.sheetsSpreadsheet === undefined) delete process.env.GOOGLE_SHEETS_SPREADSHEET_ID; else process.env.GOOGLE_SHEETS_SPREADSHEET_ID = previousEnv.sheetsSpreadsheet;
 if (previousEnv.sheetsSource === undefined) delete process.env.GOOGLE_SHEETS_DATA_SOURCE_ID; else process.env.GOOGLE_SHEETS_DATA_SOURCE_ID = previousEnv.sheetsSource;
 if (previousEnv.authority === undefined) delete process.env.LIFEOS_AUTHORITY_PROVIDER; else process.env.LIFEOS_AUTHORITY_PROVIDER = previousEnv.authority;
-if (previousEnv.mcpState === undefined) delete process.env.LIFEOS_MCP_STATE_PATH; else process.env.LIFEOS_MCP_STATE_PATH = previousEnv.mcpState;
+if (previousEnv.runtimeState === undefined) delete process.env.WONDER_RUNTIME_STATE_PATH; else process.env.WONDER_RUNTIME_STATE_PATH = previousEnv.runtimeState;
 
 console.log('PASS server/test/provider-retry-pagination-contract.ts');

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppPackageV2 } from '../src/kernel/package';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-reactive-observer-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-reactive-observer-')), 'wonder-runtime.json');
 
 const { createReactiveCycleObserver } = await import('../src/kernel/reactive-observer');
 const { createReactiveReceiptStore } = await import('../src/kernel/reactive-receipts');

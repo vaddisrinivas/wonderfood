@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const dir = mkdtempSync(join(tmpdir(), 'wonderfood-operation-outbox-'));
-const statePath = join(dir, 'mcp-runtime.json');
+const statePath = join(dir, 'wonder-runtime.json');
 const tsxPath = join(process.cwd(), 'server', 'node_modules', '.bin', 'tsx');
 const fixturePath = join(process.cwd(), 'server', 'test', 'fixtures', 'operation-commit-outbox-process.ts');
 
@@ -14,7 +14,7 @@ function runPhase(phase: 'commit' | 'recover' | 'verify-empty') {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      LIFEOS_MCP_STATE_PATH: statePath,
+      WONDER_RUNTIME_STATE_PATH: statePath,
       LIFEOS_OUTBOX_TEST_PHASE: phase,
     },
     stdio: 'pipe',

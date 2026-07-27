@@ -84,7 +84,7 @@ type ChatRunResponse = {
     ]),
     LIFEOS_CHAT_CONVERSATIONS_PATH: join(stateDir, 'conversations.json'),
     LIFEOS_CHAT_RUNTIME_STATE_PATH: join(stateDir, 'chat-runtime-state.json'),
-    LIFEOS_MCP_STATE_PATH: join(stateDir, 'mcp-runtime.json'),
+    WONDER_RUNTIME_STATE_PATH: join(stateDir, 'wonder-runtime.json'),
     LIFEOS_WORKFLOW_CHECKPOINT_PATH: join(stateDir, 'workflow-runs.json'),
   };
   delete env.LIFEOS_SERVER_TOKEN;

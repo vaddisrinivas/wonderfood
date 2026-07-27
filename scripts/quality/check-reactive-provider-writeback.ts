@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { ProviderWritebackInput } from '../../server/src/kernel/reactive-proposal-executor';
 
 const stateDir = mkdtempSync(join(tmpdir(), 'wonderfood-reactive-provider-writeback-'));
-process.env.LIFEOS_MCP_STATE_PATH = join(stateDir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(stateDir, 'wonder-runtime.json');
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -185,7 +185,7 @@ assert(receipt.providerWriteback.reason === 'provider_writeback_verified', 'prov
 console.log(JSON.stringify({
   ok: true,
   proof: 'reactive_provider_writeback_verifier',
-  mcp_runtime_path: process.env.LIFEOS_MCP_STATE_PATH,
+  runtime_state_path: process.env.WONDER_RUNTIME_STATE_PATH,
   provider_verifier_called: verifierCalled,
   action_id: verified.receipt!.actionId,
   verification_reason: verified.receipt!.verification?.reason,

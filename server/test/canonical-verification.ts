@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-canonical-verification-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-canonical-verification-')), 'wonder-runtime.json');
 
 const { verifyResult } = await import('../src/agents/verifier');
 const { createActionEvent, createRecordWithAction, deleteRecord, markActionFailed } = await import('../src/runtime/state');

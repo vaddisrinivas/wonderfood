@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-chat-runtime-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-chat-runtime-')), 'wonder-runtime.json');
 
 const { normalizeChatSendRequest } = await import('../src/chat');
 const { runChatRuntime } = await import('../src/chat-runtime');

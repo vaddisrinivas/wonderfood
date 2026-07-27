@@ -12,17 +12,17 @@ writeJsonStateFileAtomic(atomicPath, { ok: true, nested: { value: 1 } });
 assert.deepEqual(JSON.parse(readFileSync(atomicPath, 'utf-8')), { ok: true, nested: { value: 1 } });
 assert.equal(readdirSync(tempDir).some((name) => name.includes('.tmp-')), false, 'atomic write should not leave temp files behind');
 
-const mcpPath = join(tempDir, 'mcp-runtime.json');
-writeFileSync(mcpPath, '{"broken":', 'utf-8');
+const runtimePath = join(tempDir, 'wonder-runtime.json');
+writeFileSync(runtimePath, '{"broken":', 'utf-8');
 assert.throws(
-  () => readJsonStateFile(mcpPath, {
-    label: 'MCP runtime state',
+  () => readJsonStateFile(runtimePath, {
+    label: 'Wonder runtime state',
     validate: (value): value is { version: 1 } => typeof value === 'object' && value !== null && (value as { version?: unknown }).version === 1,
   }),
-  /Corrupt MCP runtime state/,
-  'MCP corruption error should be explicit',
+  /Corrupt Wonder runtime state/,
+  'runtime corruption error should be explicit',
 );
-assert.equal(readdirSync(tempDir).some((name) => /^mcp-runtime\.corrupt-/.test(name)), true, 'corrupt MCP state should be quarantined');
+assert.equal(readdirSync(tempDir).some((name) => /^wonder-runtime\.corrupt-/.test(name)), true, 'corrupt runtime state should be quarantined');
 
 const workflowPath = join(tempDir, 'workflow-runs.json');
 writeFileSync(workflowPath, '{"runs":', 'utf-8');

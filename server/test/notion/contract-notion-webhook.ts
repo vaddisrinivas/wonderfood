@@ -142,9 +142,9 @@ function buildOperationHash(value: unknown): string {
   process.env.NOTION_DATA_SOURCE_ID = 'notion-source-1';
 
   // MCP path: create / update / archive with notion data_home
-  const mcpStatePath = join(mkdtempSync(join(tmpdir(), 'mcp-notion-contract-')), 'mcp-runtime.json');
-  const previousMcpStatePath = process.env.LIFEOS_MCP_STATE_PATH;
-  process.env.LIFEOS_MCP_STATE_PATH = mcpStatePath;
+  const runtimeStatePath = join(mkdtempSync(join(tmpdir(), 'mcp-notion-contract-')), 'wonder-runtime.json');
+  const previousRuntimeStatePath = process.env.WONDER_RUNTIME_STATE_PATH;
+  process.env.WONDER_RUNTIME_STATE_PATH = runtimeStatePath;
 
   const notionStateDir = join(mkdtempSync(join(tmpdir(), 'notion-contract-')), 'notion-state.json');
   process.env.NOTION_WEBHOOK_REPLAY_PATH = notionStateDir;
@@ -346,10 +346,10 @@ function buildOperationHash(value: unknown): string {
     throw error;
   } finally {
     mock.restore();
-    if (previousMcpStatePath === undefined) {
-      delete process.env.LIFEOS_MCP_STATE_PATH;
+    if (previousRuntimeStatePath === undefined) {
+      delete process.env.WONDER_RUNTIME_STATE_PATH;
     } else {
-      process.env.LIFEOS_MCP_STATE_PATH = previousMcpStatePath;
+      process.env.WONDER_RUNTIME_STATE_PATH = previousRuntimeStatePath;
     }
     rmSync(process.env.NOTION_WEBHOOK_REPLAY_PATH!, { force: true });
     delete process.env.NOTION_WEBHOOK_REPLAY_PATH;

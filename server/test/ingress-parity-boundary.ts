@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-ingress-parity-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-ingress-parity-')), 'wonder-runtime.json');
 
 const executorSource = readFileSync(resolve(process.cwd(), 'server/src/agents/executor.ts'), 'utf8');
 const executorStateImport = executorSource.match(/import\s*\{([\s\S]*?)\}\s*from '\.\.\/runtime\/state';/);

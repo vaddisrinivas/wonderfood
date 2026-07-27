@@ -47,7 +47,7 @@ const outDir = join(root, 'app', 'build', 'evidence', 'phase3-chat-send');
 mkdirSync(outDir, { recursive: true });
 
 const stateDir = mkdtempSync(join(tmpdir(), `wf-chat-send-${randomBytes(4).toString('hex')}-`));
-const mcpRuntimePath = join(stateDir, 'mcp-runtime.json');
+const runtimeStatePath = join(stateDir, 'wonder-runtime.json');
 const conversationPath = join(stateDir, 'conversations.json');
 const token = 'chat-send-test-token';
 const port = 19125;
@@ -164,7 +164,7 @@ async function openStream(path: string, body: unknown): Promise<StreamEvent[]> {
     ...process.env,
     PORT: String(port),
     LIFEOS_SERVER_TOKEN: token,
-    LIFEOS_MCP_STATE_PATH: mcpRuntimePath,
+    WONDER_RUNTIME_STATE_PATH: runtimeStatePath,
     LIFEOS_CHAT_CONVERSATIONS_PATH: conversationPath,
   };
 

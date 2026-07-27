@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-mcp-review-')), 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-mcp-review-')), 'wonder-runtime.json');
 
 const { callMcpTool } = await import('../src/tools/catalog');
 const { createRecord, findRecord } = await import('../src/runtime/state');

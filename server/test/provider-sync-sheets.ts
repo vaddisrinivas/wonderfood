@@ -73,9 +73,9 @@ function setupMockSheetsFetch() {
   process.env.LIFEOS_AUTHORITY_PROVIDER = 'google_sheets';
 
   const replayPath = join(mkdtempSync(join(tmpdir(), 'sheets-webhook-sync-')), 'sheets-webhook-state.json');
-  const canonicalPath = join(mkdtempSync(join(tmpdir(), 'sheets-canonical-sync-')), 'mcp-runtime.json');
-  const previousCanonicalPath = process.env.LIFEOS_MCP_STATE_PATH;
-  process.env.LIFEOS_MCP_STATE_PATH = canonicalPath;
+  const canonicalPath = join(mkdtempSync(join(tmpdir(), 'sheets-canonical-sync-')), 'wonder-runtime.json');
+  const previousCanonicalPath = process.env.WONDER_RUNTIME_STATE_PATH;
+  process.env.WONDER_RUNTIME_STATE_PATH = canonicalPath;
   const originalReplayPath = process.env.SHEETS_WEBHOOK_REPLAY_PATH;
   process.env.SHEETS_WEBHOOK_REPLAY_PATH = replayPath;
   writeFileSync(replayPath, JSON.stringify({ events: [] }, null, 2), 'utf-8');
@@ -196,9 +196,9 @@ function setupMockSheetsFetch() {
   clearWebhookReplayState(replayPath);
   rmSync(replayPath);
   if (previousCanonicalPath === undefined) {
-    delete process.env.LIFEOS_MCP_STATE_PATH;
+    delete process.env.WONDER_RUNTIME_STATE_PATH;
   } else {
-    process.env.LIFEOS_MCP_STATE_PATH = previousCanonicalPath;
+    process.env.WONDER_RUNTIME_STATE_PATH = previousCanonicalPath;
   }
   rmSync(canonicalPath, { force: true });
   if (previousAuthority === undefined) {

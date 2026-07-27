@@ -39,7 +39,7 @@ const outDir = join(root, 'app', 'build', 'evidence', 'phase3-chat-undo');
 mkdirSync(outDir, { recursive: true });
 
 const stateDir = mkdtempSync(join(tmpdir(), `wf-chat-undo-${randomBytes(4).toString('hex')}-`));
-const mcpRuntimePath = join(stateDir, 'mcp-runtime.json');
+const runtimeStatePath = join(stateDir, 'wonder-runtime.json');
 const conversationPath = join(stateDir, 'conversations.json');
 const token = 'chat-undo-test-token';
 const port = 19124;
@@ -107,7 +107,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = false): Pr
     ...process.env,
     PORT: String(port),
     LIFEOS_SERVER_TOKEN: token,
-    LIFEOS_MCP_STATE_PATH: mcpRuntimePath,
+    WONDER_RUNTIME_STATE_PATH: runtimeStatePath,
     LIFEOS_CHAT_CONVERSATIONS_PATH: conversationPath,
   };
 
@@ -150,7 +150,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = false): Pr
     const createdRecords = actionReceipt.record_ids ?? [];
     assert(createdRecords.length > 0, 'chat/send action did not record changed record ids');
 
-    const runtimeBefore = readRuntime(mcpRuntimePath);
+    const runtimeBefore = readRuntime(runtimeStatePath);
     for (const recordId of createdRecords) {
       assert(
         typeof recordId === 'string' && recordId.length > 0,
@@ -168,7 +168,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = false): Pr
     assert(undoResult.status === 'completed', `chat/undo returned status ${String(undoResult.status)}`);
     assert(undoResult.undo_result?.success === true, `chat/undo reported failure: ${undoResult.undo_result?.message || 'no details'}`);
 
-    const runtimeAfter = readRuntime(mcpRuntimePath);
+    const runtimeAfter = readRuntime(runtimeStatePath);
     for (const recordId of createdRecords) {
       assert(!(recordId in (runtimeAfter.records ?? {})), `record ${recordId} still present after undo`);
     }
@@ -183,7 +183,7 @@ async function postJson<T>(path: string, body: unknown, includeAuth = false): Pr
         action_replayed: undoResult.undo_result?.replayed === true,
       },
       paths: {
-        mcp_runtime: mcpRuntimePath,
+        mcp_runtime: runtimeStatePath,
         conversations: conversationPath,
       },
       all_passed: true,

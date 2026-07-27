@@ -123,7 +123,7 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
     ...process.env,
     PORT: String(port),
     LIFEOS_SERVER_TOKEN: token,
-    LIFEOS_MCP_STATE_PATH: join(stateDir, 'mcp-runtime.json'),
+    WONDER_RUNTIME_STATE_PATH: join(stateDir, 'wonder-runtime.json'),
     LIFEOS_CHAT_CONVERSATIONS_PATH: join(stateDir, 'conversations.json'),
     LIFEOS_PACKAGE_REGISTRY_PATH: join(stateDir, 'package-registry.json'),
     LIFEOS_REACTIVE_RUNTIME_PATH: join(stateDir, 'reactive-runtime.json'),

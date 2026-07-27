@@ -8,7 +8,7 @@ const runtimePath = join(dir, 'runtime.json');
 const registryPath = join(dir, 'package-registry.json');
 process.env.LIFEOS_REACTIVE_RUNTIME_PATH = runtimePath;
 process.env.LIFEOS_PACKAGE_REGISTRY_PATH = registryPath;
-process.env.LIFEOS_MCP_STATE_PATH = join(dir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(dir, 'wonder-runtime.json');
 
 const { PackageRegistry } = await import('../src/kernel/package-registry');
 const { installReactiveRuntime } = await import('../src/kernel/install-reactive-runtime');

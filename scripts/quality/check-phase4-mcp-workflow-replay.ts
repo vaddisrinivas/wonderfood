@@ -8,7 +8,7 @@ const outDir = join(root, 'app', 'build', 'evidence', 'phase4-mcp-workflow-repla
 mkdirSync(outDir, { recursive: true });
 
 const stateDir = mkdtempSync(join(tmpdir(), `wf-replay-${randomBytes(4).toString('hex')}-`));
-process.env.LIFEOS_MCP_STATE_PATH = join(stateDir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(stateDir, 'wonder-runtime.json');
 process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH = join(stateDir, 'workflow-runs.json');
 
 type ToolResult = {
@@ -269,7 +269,7 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
       },
     },
     state_files: {
-      mcp_runtime_path: process.env.LIFEOS_MCP_STATE_PATH,
+      runtime_state_path: process.env.WONDER_RUNTIME_STATE_PATH,
       checkpoint_path: process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH,
     },
     all_passed: true,

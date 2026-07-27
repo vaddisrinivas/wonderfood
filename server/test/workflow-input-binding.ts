@@ -9,7 +9,7 @@ function ensure(condition: boolean, message: string) {
 }
 
 const tempDir = mkdtempSync(join(tmpdir(), 'lifeos-workflow-binding-'));
-process.env.LIFEOS_MCP_STATE_PATH = join(tempDir, 'mcp-runtime.json');
+process.env.WONDER_RUNTIME_STATE_PATH = join(tempDir, 'wonder-runtime.json');
 process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH = join(tempDir, 'workflow-runs.json');
 
 const { bindWorkflowStepInput, runWorkflow } = await import('../src/tools/catalog');
