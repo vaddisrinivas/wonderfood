@@ -12,7 +12,7 @@ import {
 } from './chat';
 import { type NormalizedChatSend } from './chat';
 import { assertServerStartupSecurity, authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './mcp/auth';
-import { handleMcpRequest } from './mcp/official-server';
+import { handleMcpRequest } from './mcp/server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
 import { readNotionConfig } from './providers/notion/client';

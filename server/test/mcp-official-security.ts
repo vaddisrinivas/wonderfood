@@ -18,7 +18,7 @@ delete process.env.LIFEOS_MCP_TRUSTED_TOKENS_JSON;
 delete process.env.LIFEOS_MCP_TRUSTED_PRINCIPAL;
 delete process.env.LIFEOS_MCP_TRUSTED_DOMAINS;
 
-const { handleMcpRequest } = await import('../src/mcp/official-server');
+const { handleMcpRequest } = await import('../src/mcp/server');
 const { createActionEvent, createRecord, findRecord } = await import('../src/mcp/state');
 
 function ensure(condition: boolean, message: string): asserts condition {
