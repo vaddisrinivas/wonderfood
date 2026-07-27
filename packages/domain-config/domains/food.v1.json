@@ -1334,14 +1334,14 @@
         ]
       },
       "system": {
-        "title": "Behind the curtain",
-        "subtitle": "Diagnostics only. Daily food UX stays clean.",
+        "title": "Settings",
+        "subtitle": "Connections, sync, package edits, and diagnostics live here.",
         "components": [
           {
             "kind": "text",
             "id": "system_hidden",
-            "title": "Debug tools are tucked away",
-            "subtitle": "Provider receipts, package locks, sync checks, and native diagnostics stay here instead of every food card.",
+            "title": "Quiet by default",
+            "subtitle": "Source checks, package locks, sync health, and native permissions stay here instead of every food card.",
             "tone": "amber"
           },
           {

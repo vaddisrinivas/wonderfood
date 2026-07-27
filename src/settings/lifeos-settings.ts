@@ -164,7 +164,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
     enabled: false,
     token: '',
     workbookId: '',
-    sheetName: 'LifeOS Canonical',
+    sheetName: 'WonderFood',
   },
   postgres: {
     enabled: false,
@@ -208,7 +208,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         promptRail: true,
         promptPresets: 'What can I cook tonight from what I already have?\nShow a table of available vs missing ingredients.\nWhat should I buy for green dal and tandoori chicken?\nSummarize nutrition and previous cooking notes.',
         showContextCard: true,
-        contextNote: 'Answers from the active life space first, cites source cards, and uses provider keys only when you enable them.',
+        contextNote: 'Answers from selected food sources first, cites source cards, and uses provider keys only when you enable them.',
       },
       record: {
         sectionOrder: 'hero,nutrition,ingredients,instructions,history,editableNote,properties,relations,provenance',
@@ -231,7 +231,7 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showQuickActions: true,
         showResults: true,
         resultLimit: '8',
-        emptyHint: 'Ask LifeOS to search connected sources or the web.',
+        emptyHint: 'Ask WonderFood to search connected sources or the web.',
       },
       capture: {
         sectionOrder: 'hero,typePicker,editor,routeCard',
@@ -313,7 +313,7 @@ function normalizeSettings(input: Partial<LifeOSSettings> | null): LifeOSSetting
       enabled: Boolean(input?.sheets?.enabled),
       token: typeof input?.sheets?.token === 'string' ? input.sheets.token.trim() : '',
       workbookId: typeof input?.sheets?.workbookId === 'string' ? input.sheets.workbookId.trim() : '',
-      sheetName: typeof input?.sheets?.sheetName === 'string' ? input.sheets.sheetName.trim() : 'LifeOS Canonical',
+      sheetName: typeof input?.sheets?.sheetName === 'string' ? input.sheets.sheetName.trim() : 'WonderFood',
     },
     postgres: {
       enabled: Boolean(input?.postgres?.enabled),

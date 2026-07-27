@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "WonderFood LifeOS",
+    "name": "WonderFood",
     "slug": "wonderfood-lifeos",
-    "description": "A local-first life workspace for food, planning, and reviewable AI.",
+    "description": "A local-first AI food workspace for pantry, meals, recipes, shopping, and trusted source sync.",
     "version": "1.0.0",
     "platforms": [
       "web",
@@ -39,7 +39,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow WonderFood to attach meal, receipt, pantry, and cooking photos to your LifeOS graph.",
+          "photosPermission": "Allow WonderFood to attach meal, receipt, pantry, and cooking photos to your kitchen notes.",
           "cameraPermission": "Allow WonderFood to capture meal, receipt, pantry, and cooking photos."
         }
       ],
