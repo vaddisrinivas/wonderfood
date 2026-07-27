@@ -268,6 +268,16 @@ describe('app package SQLite registry', () => {
     expect(chart.status).toBe('valid');
     expect(chart.package?.views.ai_spending.mode).toBe('chart');
     expect(chart.package?.presentation?.ui?.screens?.ai_spending.components?.[0].widget).toBe('chartBlock');
+
+    const native = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add camera permission and voice shortcut'));
+    expect(native.status).toBe('valid');
+    if (native.package?.schemaVersion !== 'wonder.app-package.v3') throw new Error('expected V3 package');
+    expect(native.package.nativeCapabilities.permissions?.some((permission) => (
+      typeof permission !== 'string' && permission.id === 'camera-capture'
+    ))).toBe(true);
+    expect(native.package.nativeCapabilities.intents?.some((intent) => intent.id === 'voice-command')).toBe(true);
+    expect(native.package.contractLock.nativeCapabilities).toEqual(native.package.nativeCapabilities);
+    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.[0].widget).toBe('permissionCard');
   });
 });
 

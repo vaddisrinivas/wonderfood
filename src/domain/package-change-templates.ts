@@ -1,4 +1,13 @@
-import type { AppPackage, A2UiComponent, PackagePresentationSpec } from '@/packages/shared/contracts/package';
+import { sha256 } from 'js-sha256';
+
+import type {
+  A2UiComponent,
+  AppPackage,
+  AppPackageNativeCapability,
+  AppPackagePermissionDeclaration,
+  AppPackageV3,
+  PackagePresentationSpec,
+} from '@/packages/shared/contracts/package';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
@@ -17,6 +26,7 @@ type PackageChangeIntent =
   | 'link'
   | 'map'
   | 'chart'
+  | 'native'
   | 'screen';
 
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
@@ -27,6 +37,7 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
 
   if (intent === 'theme') return buildThemeChange(active, presentation, name);
   if (intent === 'workflow') return buildWorkflowChange(active, presentation, name);
+  if (intent === 'native') return buildNativeCapabilityChange(active, presentation, name, prompt);
   if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
 }
@@ -181,6 +192,65 @@ function buildWorkflowChange(
   };
 }
 
+function buildNativeCapabilityChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+  name: PackageChangeName,
+  prompt: string,
+): AppPackageChangeRequest {
+  if (active.schemaVersion !== 'wonder.app-package.v3') {
+    throw new Error('Native capability changes require AppPackage V3 contract locks.');
+  }
+
+  const nativeCapabilities = mergeNativeCapabilityRequest(active.nativeCapabilities, prompt);
+  const pinnedAt = new Date().toISOString();
+  const nextLock: AppPackageV3['contractLock'] = {
+    ...active.contractLock,
+    pinnedAt,
+    nativeCapabilities,
+    checksum: '',
+  };
+  nextLock.checksum = hashValue({
+    schemaVersion: nextLock.schemaVersion,
+    algorithm: nextLock.algorithm,
+    pinnedAt: nextLock.pinnedAt,
+    dependencyPins: nextLock.dependencyPins,
+    nativeCapabilities: nextLock.nativeCapabilities,
+  });
+
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      { op: 'replace', path: '/nativeCapabilities', value: nativeCapabilities },
+      { op: 'replace', path: '/contractLock/nativeCapabilities', value: nativeCapabilities },
+      { op: 'replace', path: '/contractLock/pinnedAt', value: pinnedAt },
+      { op: 'replace', path: '/contractLock/checksum', value: nextLock.checksum },
+      ...buildUiScreenPatches(presentation, { ...name, screenId: `${name.screenId}_permissions`, surfaceId: `${name.surfaceId}_permissions` }, [
+        {
+          kind: 'widget',
+          widget: 'permissionCard',
+          id: `${name.screenId}_permission_review`,
+          title: `${name.label} capability`,
+          subtitle: 'Native permissions and app intents are declared in package config before the shell can request them.',
+          props: {
+            permissions: nativeCapabilities.permissions ?? [],
+            intents: nativeCapabilities.intents ?? [],
+          },
+          tone: 'amber',
+        },
+        {
+          kind: 'text',
+          id: `${name.screenId}_permission_note`,
+          title: 'Locked package diff',
+          subtitle: 'This changes the native capability envelope and contract checksum; runtime code still cannot grant OS permissions by itself.',
+        },
+      ]),
+    ],
+  };
+}
+
 function buildUiScreenPatches(
   presentation: PackagePresentationSpec,
   name: PackageChangeName,
@@ -212,6 +282,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   const value = prompt.toLowerCase();
   if (/\b(theme|color|style|visual|design|cute|density|card|cards)\b/.test(value)) return 'theme';
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
+  if (/\b(permission|permissions|capability|capabilities|camera|photo library|photos?|voice|okay google|google assistant|shortcut|deep[- ]?link|background|file open|open file|health connect|share sheet|share intent)\b/.test(value)) return 'native';
   if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
   if (/\b(board|kanban|pipeline|status board|columns?)\b/.test(value)) return 'board';
   if (/\b(feed|posts?|updates?|social|comments?)\b/.test(value)) return 'feed';
@@ -349,8 +420,8 @@ function toneForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 
 
 function derivePackageChangeName(prompt: string) {
   const clean = prompt
-    .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
-    .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page)\b/gi, ' ')
+    .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the|and|or|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
+    .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page|permission|permissions|capability|capabilities|intent|intents|native)\b/gi, ' ')
     .replace(/[^a-z0-9 ]/gi, ' ')
     .trim()
     .split(/\s+/)
@@ -377,4 +448,181 @@ function titleCase(value: string) {
 
 function nextRuntimeVersion(version: string) {
   return `${version.replace(/\+ai\.[a-z0-9]+$/i, '')}+ai.${Date.now().toString(36)}`;
+}
+
+function mergeNativeCapabilityRequest(
+  current: AppPackageNativeCapability,
+  prompt: string,
+): AppPackageNativeCapability {
+  const lower = prompt.toLowerCase();
+  const permissions = [...(current.permissions ?? [])];
+  const intents = [...(current.intents ?? [])];
+
+  if (/\b(camera|receipt|scan|photo)\b/.test(lower)) {
+    upsertPermission(permissions, {
+      id: 'camera-capture',
+      platform: 'expo',
+      permission: 'expo-image-picker:camera',
+      reason: 'Capture receipts, labels, pantry photos, meal images, and visual evidence for package records.',
+      required: false,
+      prompt: 'Allow camera access when you capture food evidence.',
+    });
+  }
+  if (/\b(photo library|photos?|gallery|album)\b/.test(lower)) {
+    upsertPermission(permissions, {
+      id: 'photo-library',
+      platform: 'expo',
+      permission: 'expo-image-picker:media-library',
+      reason: 'Attach existing food photos, receipts, labels, and screenshots to package records.',
+      required: false,
+      prompt: 'Allow photo-library access when you attach food evidence.',
+    });
+  }
+  if (/\b(health connect|nutrition|steps|sleep|body|exercise)\b/.test(lower)) {
+    upsertPermission(permissions, {
+      id: 'health-connect-read-nutrition',
+      platform: 'android',
+      permission: 'android.permission.health.READ_NUTRITION',
+      reason: 'Use Health Connect nutrition records as optional food context after user approval.',
+      required: false,
+      prompt: 'Allow WonderFood to read nutrition records for food context.',
+    });
+  }
+  if (/\b(share sheet|share intent|share|send to app)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'receive-shared-content',
+      platform: 'expo',
+      kind: 'share',
+      reason: 'Receive links, recipes, photos, videos, notes, and files shared into the active package.',
+      required: false,
+    });
+  }
+  if (/\b(deep[- ]?link|url open|open url|link into app)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'open-package-link',
+      platform: 'expo',
+      kind: 'deep_link',
+      reason: 'Open specific package screens, records, and actions from trusted links.',
+      required: false,
+    });
+  }
+  if (/\b(shortcut|launcher|quick action)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'package-shortcut',
+      platform: 'android',
+      kind: 'shortcut',
+      reason: 'Expose common package actions as app shortcuts.',
+      required: false,
+    });
+  }
+  if (/\b(voice|okay google|google assistant|assistant)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'voice-command',
+      platform: 'android',
+      kind: 'voice',
+      reason: 'Let supported assistants route approved package commands into WonderFood.',
+      required: false,
+    });
+  }
+  if (/\b(background|scheduled|periodic|sync|reminder)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'background-package-task',
+      platform: 'expo',
+      kind: 'background_task',
+      reason: 'Run package-approved reminders, refreshes, and provider checks in the background where supported.',
+      required: false,
+    });
+  }
+  if (/\b(file open|open file|document|pdf|csv|import file)\b/.test(lower)) {
+    upsertIntent(intents, {
+      id: 'open-package-file',
+      platform: 'expo',
+      kind: 'file_open',
+      reason: 'Open package-supported files such as PDFs, CSVs, images, audio, and video as records.',
+      required: false,
+    });
+  }
+  if (intents.length === (current.intents ?? []).length && permissions.length === (current.permissions ?? []).length) {
+    upsertIntent(intents, {
+      id: 'package-capability-request',
+      platform: current.platform,
+      kind: 'url_open',
+      reason: 'Generic package capability request captured from an AI package-edit prompt.',
+      required: false,
+    });
+  }
+
+  return cleanJson({
+    ...current,
+    permissions: sortById(permissions),
+    intents: sortById(intents),
+  }) as AppPackageNativeCapability;
+}
+
+function upsertPermission(
+  permissions: Array<string | AppPackagePermissionDeclaration>,
+  next: AppPackagePermissionDeclaration,
+) {
+  const index = permissions.findIndex((permission) => {
+    if (typeof permission === 'string') return permission === next.permission || permission === next.id;
+    return permission.id === next.id || permission.permission === next.permission;
+  });
+  if (index >= 0) {
+    permissions[index] = typeof permissions[index] === 'string' ? next : { ...(permissions[index] as AppPackagePermissionDeclaration), ...next };
+    return;
+  }
+  permissions.push(next);
+}
+
+function upsertIntent(
+  intents: NonNullable<AppPackageNativeCapability['intents']>,
+  next: NonNullable<AppPackageNativeCapability['intents']>[number],
+) {
+  const index = intents.findIndex((intent) => intent.id === next.id || intent.kind === next.kind);
+  if (index >= 0) {
+    intents[index] = { ...intents[index], ...next };
+    return;
+  }
+  intents.push(next);
+}
+
+function sortById<T>(items: T[]): T[] {
+  return [...items].sort((left, right) => labelForSort(left).localeCompare(labelForSort(right)));
+}
+
+function labelForSort(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const record = value as { id?: unknown; permission?: unknown; kind?: unknown };
+    return String(record.id ?? record.permission ?? record.kind ?? '');
+  }
+  return '';
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${sha256(stableJson(value))}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+function cleanJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cleanJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, child]) => child !== undefined)
+        .map(([key, child]) => [key, cleanJson(child)]),
+    );
+  }
+  return value;
 }
