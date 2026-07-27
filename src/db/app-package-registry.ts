@@ -6,6 +6,7 @@ import { sha256 } from 'js-sha256';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
 import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
+import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
 
 type AppPackageRow = {
   package_key: string;
@@ -380,7 +381,7 @@ function assertAppPackageShapeV3(input: unknown): asserts input is AppPackageV3 
   if (!isAppPackageNativeCapability(value.nativeCapabilities)) {
     errors.push('nativeCapabilities is required');
   } else {
-    errors.push(...unsupportedNativeCapabilityErrors(value.nativeCapabilities));
+    errors.push(...nativeCapabilitySupportErrors(value.nativeCapabilities));
   }
   if (!isAppPackageContractLock(value.contractLock)) {
     errors.push('contractLock is required');
@@ -502,38 +503,6 @@ function isAppPackageContractLock(input: unknown): input is AppPackageContractLo
     && Array.isArray(lock.dependencyPins)
     && lock.dependencyPins.every((pin) => isAppPackageDependencyPin(pin))
     && isAppPackageNativeCapability(lock.nativeCapabilities);
-}
-
-const SUPPORTED_NATIVE_INTENTS = new Set(['share', 'deep_link', 'url_open']);
-const SUPPORTED_EXPO_PERMISSIONS = new Set(['expo-image-picker:camera', 'expo-image-picker:media-library', 'expo-sharing']);
-const SUPPORTED_ANDROID_PERMISSIONS = new Set([
-  'android.permission.health.READ_NUTRITION',
-  'android.permission.health.READ_HYDRATION',
-  'android.permission.health.READ_STEPS',
-  'android.permission.health.READ_ACTIVE_CALORIES_BURNED',
-  'android.permission.health.READ_WEIGHT',
-  'android.permission.health.WRITE_HYDRATION',
-]);
-
-function unsupportedNativeCapabilityErrors(capability: AppPackageNativeCapability): string[] {
-  const errors: string[] = [];
-  for (const permission of capability.permissions ?? []) {
-    const raw = typeof permission === 'string'
-      ? { platform: permission.startsWith('android.') ? 'android' : 'expo', permission }
-      : permission;
-    if (raw.platform === 'android' && !SUPPORTED_ANDROID_PERMISSIONS.has(raw.permission)) {
-      errors.push(`unsupported native permission:${raw.permission}`);
-    }
-    if (raw.platform === 'expo' && !SUPPORTED_EXPO_PERMISSIONS.has(raw.permission)) {
-      errors.push(`unsupported native permission:${raw.permission}`);
-    }
-  }
-  for (const intent of capability.intents ?? []) {
-    if (!SUPPORTED_NATIVE_INTENTS.has(intent.kind)) {
-      errors.push(`unsupported native intent:${intent.kind}`);
-    }
-  }
-  return errors;
 }
 
 function sameDependencyPins(left: readonly AppPackageV3['dependencyPins'][number][], right: readonly AppPackageV3['dependencyPins'][number][]): boolean {
