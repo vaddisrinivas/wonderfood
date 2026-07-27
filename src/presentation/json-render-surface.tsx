@@ -175,6 +175,338 @@ function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: A
   });
 }
 
+function widgetText(value: unknown, fallback = '') {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function widgetRows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+}
+
+function widgetLabel(value: unknown, fallback = 'Item') {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const raw = value as Record<string, unknown>;
+    return widgetText(raw.title, widgetText(raw.label, widgetText(raw.name, widgetText(raw.permission, widgetText(raw.id, fallback)))));
+  }
+  return fallback;
+}
+
+function widgetDetail(value: unknown, fallback = '') {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const raw = value as Record<string, unknown>;
+    return widgetText(raw.subtitle, widgetText(raw.body, widgetText(raw.detail, widgetText(raw.reason, fallback))));
+  }
+  return fallback;
+}
+
+function widgetNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function widgetActionRoute(value: Record<string, unknown>): string | null {
+  const route = widgetText(value.route, widgetText(value.path));
+  return route.startsWith('/') ? route : null;
+}
+
+function widgetActionUrl(value: Record<string, unknown>): string | null {
+  const url = widgetText(value.url, widgetText(value.href, widgetText(value.deeplink)));
+  return url ? url : null;
+}
+
+function widgetPressBinding(target: Record<string, unknown>): Record<string, unknown> | null {
+  const route = widgetActionRoute(target);
+  if (route) {
+    return { action: 'navigate', params: { screen: route } };
+  }
+  const url = widgetActionUrl(target);
+  if (url) {
+    return { action: 'openURL', params: { url } };
+  }
+  return null;
+}
+
+function addWidgetActionButtons(
+  add: ReturnType<typeof createBuilder>['add'],
+  actions: Record<string, unknown>[],
+) {
+  const actionButtons = actions.slice(0, 3).flatMap((item) => {
+    const press = widgetPressBinding(item);
+    if (!press) return [];
+    return [add('Button', { label: widgetLabel(item), variant: 'secondary', size: 'sm' }, [], { on: { press } })];
+  });
+  if (!actionButtons.length) {
+    return null;
+  }
+  return add('Row', { gap: 8, flexWrap: 'wrap' }, actionButtons);
+}
+
+function addStandardWidgetCard(
+  add: ReturnType<typeof createBuilder>['add'],
+  component: A2UiComponent,
+  palette: Palette,
+  children: string[],
+) {
+  return add('Card', {
+    title: component.title ?? null,
+    subtitle: component.subtitle ?? null,
+    padding: 18,
+    backgroundColor: toneColor(component.tone, palette),
+    borderRadius: 18,
+    elevated: false,
+  }, children);
+}
+
+function addStandardDisplayWidget(
+  add: ReturnType<typeof createBuilder>['add'],
+  component: A2UiComponent,
+  palette: Palette,
+) {
+  const props = component.props ?? {};
+  switch (component.widget) {
+    case 'widgetCatalog': {
+      const itemLabels = [
+        ...widgetRows(props.items).map((item) => widgetLabel(item)).filter(Boolean),
+        ...((Array.isArray(props.widgets) ? props.widgets : []).filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .map((item) => item.replace(/([a-z0-9])([A-Z])/g, '$1 $2'))),
+      ];
+      const labels = (itemLabels.length ? itemLabels : [
+        'Assistant chat',
+        'Health connect',
+        'Schema editor',
+        'Widget catalog',
+        'Post card',
+        'Poll card',
+        'Link preview',
+        'Feed list',
+        'Kanban board',
+        'Chart block',
+        'Media block',
+        'Map block',
+        'Form card',
+        'Checklist card',
+        'Calendar block',
+        'Timeline block',
+        'Gallery grid',
+        'Data table',
+        'Permission card',
+        'Provider status',
+        'Theme preview',
+      ]).slice(0, 32);
+      return addStandardWidgetCard(
+        add,
+        component,
+        palette,
+        [add('Row', { gap: 8, flexWrap: 'wrap' }, labels.map((item) => add('Chip', { label: item })))],
+      );
+    }
+    case 'postCard': {
+      const children: string[] = [];
+      const badge = widgetText(props.badge);
+      if (badge) children.push(add('Badge', { label: badge, variant: 'warning' }));
+      const imageUrl = widgetText(props.imageUrl);
+      if (imageUrl) {
+        children.push(add('Image', { src: imageUrl, alt: component.title ?? 'Post image', height: 180, borderRadius: 14, resizeMode: 'cover' }));
+      }
+      const body = widgetText(props.body, 'A package-defined post, note, update, or announcement.');
+      children.push(add('Paragraph', { text: body, color: palette.ink, fontSize: 15 }));
+      const url = widgetText(props.url);
+      if (url) children.push(add('Label', { text: url, color: palette.moss, size: 'sm' }));
+      const actions = addWidgetActionButtons(add, widgetRows(props.actions));
+      if (actions) children.push(actions);
+      return addStandardWidgetCard(add, component, palette, children);
+    }
+    case 'linkPreview': {
+      const target: Record<string, unknown> = { ...props };
+      const url = widgetActionUrl(target);
+      const host = (() => {
+        try {
+          return url ? new URL(url).hostname.replace(/^www\./, '') : 'link';
+        } catch {
+          return 'link';
+        }
+      })();
+      const heroChildren = [
+        add('Badge', { label: host, variant: 'info' }),
+        add('Paragraph', {
+          text: widgetText(props.body, component.subtitle ?? 'A safe preview surface for recipes, docs, posts, and references.'),
+          color: palette.ink,
+          fontSize: 15,
+        }),
+        ...(url ? [add('Label', { text: url, color: palette.moss, size: 'sm' })] : []),
+      ];
+      const hero = add('Container', {
+        padding: 16,
+        backgroundColor: palette.blueSoft,
+        borderRadius: 16,
+      }, heroChildren);
+      return addStandardWidgetCard(add, component, palette, [
+        widgetPressBinding(target)
+          ? add('Pressable', {}, [hero], { on: { press: widgetPressBinding(target) ?? undefined } })
+          : hero,
+      ]);
+    }
+    case 'feedList': {
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8);
+      return addStandardWidgetCard(add, component, palette, items.map((item) => {
+        const meta = widgetText(item.badge, widgetText(item.status, widgetText(item.date, widgetText(item.when))));
+        const subtitle = [meta, widgetDetail(item)].filter(Boolean).join(' · ') || null;
+        const press = widgetPressBinding(item);
+        return add('ListItem', {
+          title: widgetLabel(item),
+          subtitle,
+          leading: '•',
+          showChevron: Boolean(press),
+        }, [], press ? { on: { press } } : {});
+      }));
+    }
+    case 'chartBlock': {
+      const points = (widgetRows(props.points).length ? widgetRows(props.points) : [{ label: 'A', value: 6 }, { label: 'B', value: 10 }, { label: 'C', value: 4 }])
+        .map((point) => ({ label: widgetLabel(point), value: widgetNumber(point.value) }))
+        .filter((point) => Number.isFinite(point.value));
+      const max = Math.max(1, ...points.map((point) => point.value));
+      return addStandardWidgetCard(add, component, palette, points.slice(0, 8).map((point) => add('Column', { gap: 6 }, [
+        add('Row', { gap: 10, justifyContent: 'space-between', alignItems: 'center' }, [
+          add('Label', { text: point.label, color: palette.ink, bold: true, size: 'sm' }),
+          add('Label', { text: String(point.value), color: palette.muted, size: 'sm' }),
+        ]),
+        add('ProgressBar', { progress: point.value / max, color: palette.moss, trackColor: palette.paper, height: 8 }),
+      ])));
+    }
+    case 'mediaBlock': {
+      const target: Record<string, unknown> = { ...props };
+      const children: string[] = [];
+      const imageUrl = widgetText(props.imageUrl);
+      if (imageUrl) {
+        children.push(add('Image', { src: imageUrl, alt: component.title ?? 'Media', height: 180, borderRadius: 14, resizeMode: 'cover' }));
+      } else {
+        children.push(add('Badge', { label: 'Media', variant: 'info' }));
+      }
+      children.push(add('Paragraph', {
+        text: widgetText(props.body, 'Attach or preview media here.'),
+        color: palette.ink,
+        fontSize: 15,
+      }));
+      const url = widgetActionUrl(target);
+      if (url) children.push(add('Label', { text: url, color: palette.moss, size: 'sm' }));
+      const press = widgetPressBinding(target);
+      if (press) children.push(add('Button', { label: widgetText(props.cta, 'Open media'), variant: 'secondary', size: 'sm' }, [], { on: { press } }));
+      return addStandardWidgetCard(add, component, palette, children);
+    }
+    case 'mapBlock': {
+      const target: Record<string, unknown> = { ...props };
+      const children: string[] = [
+        add('Badge', { label: widgetText((props as Record<string, unknown>).address, 'Map'), variant: 'info' }),
+        add('Paragraph', {
+          text: widgetText(props.body, 'Map provider hooks can render stores, trips, homes, routes, or field work.'),
+          color: palette.ink,
+          fontSize: 15,
+        }),
+      ];
+      const press = widgetPressBinding(target);
+      if (press) children.push(add('Button', { label: widgetText(props.cta, 'Open map'), variant: 'secondary', size: 'sm' }, [], { on: { press } }));
+      return addStandardWidgetCard(add, component, palette, children);
+    }
+    case 'calendarBlock': {
+      const events = (widgetRows(props.events).length ? widgetRows(props.events) : [{ title: 'Dinner plan', subtitle: 'Tonight' }, { title: 'Shopping', subtitle: 'Tomorrow' }]).slice(0, 7);
+      return addStandardWidgetCard(add, component, palette, events.map((event) => add('ListItem', {
+        title: widgetLabel(event),
+        subtitle: [widgetText(event.date, widgetText(event.when)), widgetDetail(event)].filter(Boolean).join(' · ') || null,
+        leading: '📅',
+      })));
+    }
+    case 'timelineBlock': {
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'Started', subtitle: 'Created from package config' }, { title: 'Next', subtitle: 'Ask Wonder to add events' }]).slice(0, 10);
+      return addStandardWidgetCard(add, component, palette, items.map((item) => add('ListItem', {
+        title: widgetLabel(item),
+        subtitle: widgetDetail(item, widgetText(item.time)),
+        leading: '•',
+      })));
+    }
+    case 'galleryGrid': {
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'Image' }, { title: 'Clip' }, { title: 'Doc' }, { title: 'Audio' }]).slice(0, 8);
+      return addStandardWidgetCard(add, component, palette, [
+        add('Row', { gap: 10, flexWrap: 'wrap' }, items.map((item, index) => {
+          const imageUrl = widgetText(item.imageUrl, widgetText(item.url));
+          const tileChildren = imageUrl
+            ? [
+                add('Image', { src: imageUrl, alt: widgetLabel(item), height: 96, borderRadius: 12, resizeMode: 'cover' }),
+                add('Label', { text: widgetLabel(item), color: palette.ink, bold: true, size: 'sm' }),
+              ]
+            : [add('Chip', { label: `${widgetText(item.emoji, '◼︎')} ${widgetLabel(item)}`, backgroundColor: index % 2 === 0 ? palette.plumSoft : palette.blueSoft })];
+          const press = widgetPressBinding(item);
+          const tile = add('Container', { padding: 6, backgroundColor: palette.paper, borderRadius: 14 }, tileChildren);
+          return press ? add('Pressable', {}, [tile], { on: { press } }) : tile;
+        })),
+      ]);
+    }
+    case 'dataTable': {
+      const columns = (widgetRows(props.columns).length ? widgetRows(props.columns) : [
+        { key: 'name', label: 'Name' },
+        { key: 'status', label: 'Status' },
+        { key: 'owner', label: 'Owner' },
+      ]).slice(0, 5).map((column, index) => ({
+        key: widgetText(column.key, widgetText(column.field, widgetText(column.id, widgetText(column.name, `column_${index}`)))).toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+        title: widgetLabel(column, `Column ${index + 1}`),
+      }));
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ name: 'Sample', status: 'Ready', owner: 'Wonder' }]).slice(0, 6);
+      const header = add('Row', { gap: 8 }, columns.map((column) => add('Container', { flex: 1 }, [
+        add('Label', { text: column.title, color: palette.muted, bold: true, size: 'xs' }),
+      ])));
+      const rows = items.map((item, index) => {
+        const press = widgetPressBinding(item);
+        const row = add('Container', { paddingVertical: 10 }, [
+          add('Row', { gap: 8 }, columns.map((column, columnIndex) => add('Container', { flex: 1 }, [
+            add('Paragraph', {
+              text: widgetText(item[column.key], columnIndex === 0 ? widgetLabel(item) : '—'),
+              color: palette.ink,
+              fontSize: 14,
+              numberOfLines: 3,
+            }),
+          ]))),
+        ]);
+        return press ? add('Pressable', {}, [row], { on: { press } }) : add('Container', { margin: 0 }, [row], { visible: true });
+      });
+      const tableChildren: string[] = [header];
+      rows.forEach((row, index) => {
+        tableChildren.push(add('Divider', { color: palette.blueSoft, margin: 0 }));
+        tableChildren.push(row);
+        if (index === rows.length - 1) {
+          tableChildren.push(add('Divider', { color: palette.blueSoft, margin: 0 }));
+        }
+      });
+      return addStandardWidgetCard(add, component, palette, tableChildren);
+    }
+    case 'themePreview': {
+      const colorSource = props.colors && typeof props.colors === 'object' && !Array.isArray(props.colors)
+        ? Object.entries(props.colors as Record<string, unknown>).filter(([, value]) => typeof value === 'string' && value.trim())
+        : [];
+      const swatches = (colorSource.length ? colorSource : [
+        ['primary', '#2F7448'],
+        ['accent', '#F3B15E'],
+        ['calm', '#B9DCE8'],
+        ['ink', '#241C16'],
+      ]) as Array<[string, string]>;
+      const children: string[] = [
+        add('Row', { gap: 8, flexWrap: 'wrap' }, swatches.map(([name, value]) => add('Chip', {
+          label: `${name}: ${value}`,
+          backgroundColor: value,
+        }))),
+      ];
+      const mood = widgetText(props.mood);
+      if (mood) children.push(add('Paragraph', { text: mood, color: palette.muted, fontSize: 14 }));
+      const density = widgetText(props.density);
+      if (density) children.push(add('Badge', { label: density, variant: 'success' }));
+      return addStandardWidgetCard(add, component, palette, children);
+    }
+    default:
+      return null;
+  }
+}
+
 function addTextBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, palette: Palette) {
   const children = [
     add('Heading', { text: component.title ?? 'Section', level: 'h3', color: palette.ink }),
@@ -268,28 +600,34 @@ function addSurfaceComponent(
   providerSync?: ProviderSyncSummary | null,
 ) {
   if (component.kind === 'widget') {
+    const standardWidgetKinds = new Set<string>([
+      'widgetCatalog',
+      'postCard',
+      'linkPreview',
+      'feedList',
+      'chartBlock',
+      'mediaBlock',
+      'mapBlock',
+      'calendarBlock',
+      'timelineBlock',
+      'galleryGrid',
+      'dataTable',
+      'themePreview',
+    ]);
+    if (component.widget && standardWidgetKinds.has(component.widget)) {
+      const rendered = addStandardDisplayWidget(add, component, palette);
+      if (rendered) return rendered;
+    }
     const typeByWidget: Record<string, string> = {
       assistantChat: 'AssistantChatWidget',
       healthConnect: 'HealthConnectWidget',
       schemaEditor: 'SchemaEditorWidget',
-      widgetCatalog: 'WidgetCatalogWidget',
-      postCard: 'PostCardWidget',
       pollCard: 'PollCardWidget',
-      linkPreview: 'LinkPreviewWidget',
-      feedList: 'FeedListWidget',
       kanbanBoard: 'KanbanBoardWidget',
-      chartBlock: 'ChartBlockWidget',
-      mediaBlock: 'MediaBlockWidget',
-      mapBlock: 'MapBlockWidget',
       formCard: 'FormCardWidget',
       checklistCard: 'ChecklistCardWidget',
-      calendarBlock: 'CalendarBlockWidget',
-      timelineBlock: 'TimelineBlockWidget',
-      galleryGrid: 'GalleryGridWidget',
-      dataTable: 'DataTableWidget',
       permissionCard: 'PermissionCardWidget',
       providerStatus: 'ProviderStatusWidget',
-      themePreview: 'ThemePreviewWidget',
     };
     const widgetType = component.widget ? typeByWidget[component.widget] : null;
     if (widgetType) {

@@ -135,18 +135,6 @@ function fieldKey(value: Record<string, unknown>, index: number): string {
   return text(value.id, text(value.name, label(value, `field_${index}`))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
 
-function tableColumnKey(value: Record<string, unknown>, fallback: string): string {
-  return text(value.key, text(value.field, text(value.id, text(value.name, fallback)))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
-}
-
-function cellText(value: unknown, fallback = '—'): string {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return value.map((item) => cellText(item, '')).filter(Boolean).join(', ') || fallback;
-  if (value && typeof value === 'object') return text((value as Record<string, unknown>).label, text((value as Record<string, unknown>).title, fallback));
-  return fallback;
-}
-
 function numberValue(value: unknown, fallback = 0): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -419,70 +407,6 @@ function shortHash(value: string) {
   return value.length > 18 ? `${value.slice(0, 14)}…${value.slice(-4)}` : value;
 }
 
-function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  const widgets = rows(props.items).map((item) => label(item)).filter(Boolean);
-  const defaultWidgets = [
-    'Assistant chat',
-    'Post cards',
-    'Polls',
-    'Link previews',
-    'Feeds',
-    'Kanban boards',
-    'Charts',
-    'Media',
-    'Maps',
-    'Forms',
-    'Checklists',
-    'Calendars',
-    'Timelines',
-    'Galleries',
-    'Data tables',
-    'Permissions',
-    'Provider status',
-    'Theme preview',
-    'Health Connect',
-    'Record lists',
-    'Metrics',
-    'Actions',
-    'Text cards',
-    'Package editor',
-  ];
-  return (
-    <WidgetShell title={text(props.title, 'Widget catalog')} subtitle={text(props.subtitle, 'The safe building blocks JSON Render can place on screens today.')}>
-      <View style={styles.catalogGrid}>
-        {(widgets.length ? widgets : defaultWidgets).map((item) => (
-          <View key={item} style={styles.catalogItem}>
-            <Text style={styles.catalogText}>{item}</Text>
-          </View>
-        ))}
-      </View>
-    </WidgetShell>
-  );
-}
-
-function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const actions = rows(props.actions);
-  return (
-    <WidgetShell title={text(props.title, 'Post')} subtitle={text(props.subtitle, text(props.author, 'Wonder'))}>
-      {props.badge ? <Text style={styles.softBadge}>{text(props.badge)}</Text> : null}
-      <Text style={styles.bodyText}>{text(props.body, 'A package-defined post, note, update, or announcement.')}</Text>
-      {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
-      {actions.length ? (
-        <View style={styles.buttonRow}>
-          {actions.slice(0, 3).map((action) => (
-            <Pressable key={label(action)} style={styles.miniAction} onPress={() => openWidgetTarget(router, action)}>
-              <Text style={styles.miniActionText}>{label(action)}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-    </WidgetShell>
-  );
-}
-
 function PollCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const router = useRouter();
   const props = element.props ?? {};
@@ -525,49 +449,6 @@ function PollCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
-function LinkPreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const url = text(props.url);
-  const host = (() => {
-    try {
-      return url ? new URL(url).hostname.replace(/^www\./, '') : 'link';
-    } catch {
-      return 'link';
-    }
-  })();
-  return (
-    <WidgetShell title={text(props.title, 'Link preview')} subtitle={host}>
-      <Pressable style={styles.previewHero} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
-        <Text style={styles.previewGlyph}>↗</Text>
-        <Text style={styles.previewHost}>{host}</Text>
-      </Pressable>
-      <Text style={styles.bodyText}>{text(props.body, text(props.subtitle, 'A safe preview surface for YouTube, docs, recipes, posts, and references.'))}</Text>
-      {url ? <Text style={styles.linkText}>{url}</Text> : null}
-    </WidgetShell>
-  );
-}
-
-function FeedListWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const items = rows(props.items);
-  return (
-    <WidgetShell title={text(props.title, 'Feed')} subtitle={text(props.subtitle, 'Posts, links, updates, and activity in one stream.')}>
-      {(items.length ? items : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8).map((item) => (
-        <Pressable key={label(item)} style={styles.feedItem} onPress={() => openWidgetTarget(router, item)} disabled={!actionRoute(item) && !actionUrl(item)}>
-          <View style={styles.feedDot} />
-          <View style={styles.feedCopy}>
-            {text(item.badge, text(item.status, text(item.date, text(item.when)))) ? <Text style={styles.feedMeta}>{text(item.badge, text(item.status, text(item.date, text(item.when))))}</Text> : null}
-            <Text style={styles.feedTitle}>{label(item)}</Text>
-            <Text style={styles.feedDetail}>{detail(item)}</Text>
-          </View>
-        </Pressable>
-      ))}
-    </WidgetShell>
-  );
-}
-
 function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const router = useRouter();
   const props = element.props ?? {};
@@ -587,57 +468,6 @@ function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
           </View>
         ))}
       </ScrollView>
-    </WidgetShell>
-  );
-}
-
-function ChartBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  const points = rows(props.points);
-  const values = (points.length ? points : [{ label: 'A', value: 6 }, { label: 'B', value: 10 }, { label: 'C', value: 4 }])
-    .map((point) => ({ label: label(point), value: typeof point.value === 'number' ? point.value : Number(point.value ?? 0) }))
-    .filter((point) => Number.isFinite(point.value));
-  const max = Math.max(1, ...values.map((point) => point.value));
-  return (
-    <WidgetShell title={text(props.title, 'Chart')} subtitle={text(props.subtitle, 'Config-driven bars for budgets, habits, inventory, or signals.')}>
-      <View style={styles.chart}>
-        {values.slice(0, 8).map((point) => (
-          <View key={point.label} style={styles.chartRow}>
-            <Text style={styles.chartLabel}>{point.label}</Text>
-            <View style={styles.chartTrack}><View style={[styles.chartFill, { width: `${Math.max(8, (point.value / max) * 100)}%` }]} /></View>
-          </View>
-        ))}
-      </View>
-    </WidgetShell>
-  );
-}
-
-function MediaBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const url = text(props.url);
-  return (
-    <WidgetShell title={text(props.title, 'Media')} subtitle={text(props.subtitle, 'Image, audio, and video slots declared by package config.')}>
-      <Pressable style={styles.mediaBox} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
-        <Text style={styles.mediaGlyph}>▶︎</Text>
-        <Text style={styles.bodyText}>{text(props.body, 'Attach or preview media here.')}</Text>
-      </Pressable>
-      {url ? <Text style={styles.linkText}>{url}</Text> : null}
-    </WidgetShell>
-  );
-}
-
-function MapBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const url = text(props.url);
-  return (
-    <WidgetShell title={text(props.title, 'Map')} subtitle={text(props.subtitle, 'Location-aware surfaces without custom app code.')}>
-      <Pressable style={styles.mapBox} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
-        <Text style={styles.mapPin}>⌖</Text>
-        <Text style={styles.bodyText}>{text(props.body, 'Map provider hooks can render stores, trips, homes, routes, or field work.')}</Text>
-      </Pressable>
-      {url ? <Text style={styles.linkText}>{url}</Text> : null}
     </WidgetShell>
   );
 }
@@ -703,93 +533,6 @@ function ChecklistCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
           </Pressable>
         );
       })}
-    </WidgetShell>
-  );
-}
-
-function CalendarBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  const events = rows(props.events);
-  return (
-    <WidgetShell title={text(props.title, 'Calendar')} subtitle={text(props.subtitle, 'Plans, bookings, reminders, routines, and schedules.')}>
-      {(events.length ? events : [{ title: 'Dinner plan', subtitle: 'Tonight' }, { title: 'Shopping', subtitle: 'Tomorrow' }]).slice(0, 7).map((event) => (
-        <View key={label(event)} style={styles.calendarRow}>
-          <Text style={styles.calendarDate}>{text(event.date, text(event.when, 'Soon'))}</Text>
-          <View style={styles.calendarCopy}>
-            <Text style={styles.feedTitle}>{label(event)}</Text>
-            <Text style={styles.feedDetail}>{detail(event)}</Text>
-          </View>
-        </View>
-      ))}
-    </WidgetShell>
-  );
-}
-
-function TimelineBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  const items = rows(props.items);
-  return (
-    <WidgetShell title={text(props.title, 'Timeline')} subtitle={text(props.subtitle, 'History, provenance, milestones, trips, cases, or change logs.')}>
-      {(items.length ? items : [{ title: 'Started', subtitle: 'Created from package config' }, { title: 'Next', subtitle: 'Ask Wonder to add events' }]).slice(0, 10).map((item) => (
-        <View key={label(item)} style={styles.timelineRow}>
-          <View style={styles.timelineDot} />
-          <View style={styles.timelineCopy}>
-            <Text style={styles.feedTitle}>{label(item)}</Text>
-            <Text style={styles.feedDetail}>{detail(item, text(item.time, ''))}</Text>
-          </View>
-        </View>
-      ))}
-    </WidgetShell>
-  );
-}
-
-function GalleryGridWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  const items = rows(props.items);
-  return (
-    <WidgetShell title={text(props.title, 'Gallery')} subtitle={text(props.subtitle, 'Photos, media, assets, places, products, recipes, or memories.')}>
-      <View style={styles.galleryGrid}>
-        {(items.length ? items : [{ title: 'Image' }, { title: 'Clip' }, { title: 'Doc' }, { title: 'Audio' }]).slice(0, 8).map((item) => (
-          <View key={label(item)} style={styles.galleryTile}>
-            <Text style={styles.galleryGlyph}>{text(item.emoji, '◼︎')}</Text>
-            <Text style={styles.galleryText}>{label(item)}</Text>
-          </View>
-        ))}
-      </View>
-    </WidgetShell>
-  );
-}
-
-function DataTableWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const router = useRouter();
-  const props = element.props ?? {};
-  const columns = rows(props.columns);
-  const items = rows(props.items);
-  const tableColumns = (columns.length ? columns : [
-    { key: 'name', label: 'Name' },
-    { key: 'status', label: 'Status' },
-    { key: 'owner', label: 'Owner' },
-  ]).slice(0, 5).map((column, index) => ({
-    key: tableColumnKey(column, `column_${index}`),
-    title: label(column, `Column ${index + 1}`),
-  }));
-  const tableRows = (items.length ? items : [{ name: 'Sample', status: 'Ready', owner: 'Wonder' }]).slice(0, 6);
-  return (
-    <WidgetShell title={text(props.title, 'Table')} subtitle={text(props.subtitle, 'Compact structured records without a custom screen.')}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.table}>
-          <View style={styles.tableRow}>
-            {tableColumns.map((column) => <Text key={column.key} style={styles.tableHeader}>{column.title}</Text>)}
-          </View>
-          {tableRows.map((row, index) => (
-            <Pressable key={`${label(row)}-${index}`} style={styles.tableRow} onPress={() => openWidgetTarget(router, row)} disabled={!actionRoute(row) && !actionUrl(row)}>
-              {tableColumns.map((column) => (
-                <Text key={column.key} style={styles.tableCell}>{cellText(row[column.key], index === 0 && column.key === tableColumns[0]?.key ? label(row) : '—')}</Text>
-              ))}
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
     </WidgetShell>
   );
 }
@@ -878,41 +621,16 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
-function ThemePreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
-  const props = element.props ?? {};
-  return (
-    <WidgetShell title={text(props.title, 'Theme')} subtitle={text(props.subtitle, 'Package-level design tokens for generated apps.')}>
-      <View style={styles.swatches}>
-        {['#2F7448', '#F3B15E', '#7B4E8A', '#B9DCE8', '#241C16'].map((color) => (
-          <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
-        ))}
-      </View>
-    </WidgetShell>
-  );
-}
-
 export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   AssistantChatWidget,
   HealthConnectWidget,
   SchemaEditorWidget,
-  WidgetCatalogWidget,
-  PostCardWidget,
   PollCardWidget,
-  LinkPreviewWidget,
-  FeedListWidget,
   KanbanBoardWidget,
-  ChartBlockWidget,
-  MediaBlockWidget,
-  MapBlockWidget,
   FormCardWidget,
   ChecklistCardWidget,
-  CalendarBlockWidget,
-  TimelineBlockWidget,
-  GalleryGridWidget,
-  DataTableWidget,
   PermissionCardWidget,
   ProviderStatusWidget,
-  ThemePreviewWidget,
 };
 
 const styles = StyleSheet.create({
