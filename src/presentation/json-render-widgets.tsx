@@ -147,6 +147,11 @@ function cellText(value: unknown, fallback = '—'): string {
   return fallback;
 }
 
+function numberValue(value: unknown, fallback = 0): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
@@ -479,20 +484,43 @@ function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function PollCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const [selected, setSelected] = useState<string | null>(null);
   const options = rows(props.options);
+  const actions = rows(props.actions);
+  const visibleOptions = (options.length ? options : [{ label: 'Yes' }, { label: 'No' }]).slice(0, 8);
+  const totalVotes = Math.max(0, visibleOptions.reduce((sum, option) => sum + numberValue(option.votes, numberValue(option.count)), 0));
   return (
     <WidgetShell title={text(props.title, 'Poll')} subtitle={text(props.subtitle, 'Choose one. Stored action wiring comes from package proposals.')}>
-      {(options.length ? options : [{ label: 'Yes' }, { label: 'No' }]).map((option) => {
+      {visibleOptions.map((option) => {
         const optionLabel = label(option);
+        const votes = numberValue(option.votes, numberValue(option.count));
+        const percent = Math.max(0, Math.min(100, numberValue(option.percent, totalVotes > 0 ? (votes / totalVotes) * 100 : 0)));
         return (
           <Pressable key={optionLabel} style={[styles.pollOption, selected === optionLabel ? styles.pollSelected : null]} onPress={() => setSelected(optionLabel)}>
-            <Text style={styles.pollText}>{optionLabel}</Text>
+            <View style={styles.pollHeading}>
+              <Text style={styles.pollText}>{optionLabel}</Text>
+              {totalVotes || option.percent !== undefined ? <Text style={styles.pollMeta}>{Math.round(percent)}%</Text> : null}
+            </View>
             <Text style={styles.pollMeta}>{selected === optionLabel ? 'Selected' : detail(option, 'Tap to choose')}</Text>
+            {totalVotes || option.percent !== undefined ? (
+              <View style={styles.pollTrack}>
+                <View style={[styles.pollFill, { width: `${Math.max(4, percent)}%` }]} />
+              </View>
+            ) : null}
           </Pressable>
         );
       })}
+      {selected && actions.length ? (
+        <View style={styles.buttonRow}>
+          {actions.slice(0, 3).map((action) => (
+            <Pressable key={label(action)} style={styles.miniAction} onPress={() => openWidgetTarget(router, action)}>
+              <Text style={styles.miniActionText}>{label(action)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </WidgetShell>
   );
 }
@@ -991,8 +1019,11 @@ const styles = StyleSheet.create({
   linkText: { color: '#2F7448', fontSize: 13, fontWeight: '800' },
   pollOption: { borderRadius: 16, padding: 12, backgroundColor: '#F6F1E8', gap: 3 },
   pollSelected: { backgroundColor: '#E4F1E8', borderWidth: 1, borderColor: '#2F7448' },
+  pollHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   pollText: { color: '#241C16', fontSize: 15, fontWeight: '800' },
   pollMeta: { color: '#6D6257', fontSize: 12 },
+  pollTrack: { height: 8, backgroundColor: '#FFFFFF', borderRadius: 999, overflow: 'hidden', marginTop: 4 },
+  pollFill: { height: 8, backgroundColor: '#2F7448', borderRadius: 999 },
   feedItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E3DACB' },
   feedDot: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#E4F1E8', marginTop: 2 },
   feedCopy: { flex: 1, gap: 3 },

@@ -506,16 +506,23 @@
               "options": [
                 {
                   "label": "Quick dal bowl",
-                  "subtitle": "Use spinach and yogurt first."
+                  "subtitle": "Use spinach and yogurt first.",
+                  "votes": 4
                 },
                 {
                   "label": "Tandoori sheet pan",
-                  "subtitle": "Best if chicken is already thawed."
+                  "subtitle": "Best if chicken is already thawed.",
+                  "votes": 7
                 },
                 {
                   "label": "Leftovers remix",
-                  "subtitle": "Fastest and lowest waste."
+                  "subtitle": "Fastest and lowest waste.",
+                  "votes": 2
                 }
+              ],
+              "actions": [
+                { "title": "Plan winner", "route": "/chat" },
+                { "title": "Add missing items", "route": "/capture" }
               ]
             }
           },
@@ -1249,6 +1256,25 @@
             "props": {
               "url": "https://www.youtube.com",
               "body": "Tap opens the target URL. Apps can use this for recipes, lessons, posts, evidence, or media references."
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "pollCard",
+            "id": "config_poll_demo",
+            "title": "Poll primitive",
+            "subtitle": "Votes, percentages, and follow-up actions from JSON.",
+            "tone": "amber",
+            "props": {
+              "options": [
+                { "label": "Build food app", "subtitle": "Great polished vertical.", "votes": 8 },
+                { "label": "Build CRM", "subtitle": "Small-company ops.", "votes": 5 },
+                { "label": "Build trip planner", "subtitle": "Maps, checklists, calendar.", "votes": 3 }
+              ],
+              "actions": [
+                { "title": "Open config", "route": "/config" },
+                { "title": "Ask Wonder", "route": "/chat" }
+              ]
             }
           },
           {
