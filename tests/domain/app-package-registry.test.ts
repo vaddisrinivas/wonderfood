@@ -250,6 +250,16 @@ describe('app package SQLite registry', () => {
     });
     expect(recipeBoardView.package?.presentation?.ui?.screens?.ai_recipe_recipe_board_screen.components?.[0].widget).toBe('kanbanBoard');
 
+    const overviewEdit = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'make overview smaller less dense'));
+    expect(overviewEdit.status).toBe('valid');
+    expect(overviewEdit.package?.collections.ai_overview).toBeUndefined();
+    expect(overviewEdit.package?.presentation?.ui?.screens?.overview.subtitle).toContain('Compact by default');
+    expect(overviewEdit.package?.presentation?.ui?.screens?.overview.components?.length).toBeLessThanOrEqual(5);
+    expect(overviewEdit.package?.presentation?.ui?.screens?.overview.components?.[0].props).toMatchObject({
+      density: 'compact',
+      summaryFirst: true,
+    });
+
     const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
     expect(form.status).toBe('valid');
     expect(form.package?.collections.ai_vendor_intake.fields.answers.type).toBe('json');

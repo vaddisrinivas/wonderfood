@@ -14,6 +14,7 @@ import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
 type PackageChangeIntent =
+  | 'edit'
   | 'field'
   | 'view'
   | 'table'
@@ -32,6 +33,8 @@ type PackageChangeIntent =
   | 'chart'
   | 'native'
   | 'screen';
+type WidgetScreenIntent = Exclude<PackageChangeIntent, 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
+type UiScreenSpec = NonNullable<NonNullable<PackagePresentationSpec['ui']>['screens']>[string];
 
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
@@ -39,6 +42,7 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   const presentation = active.presentation;
   if (!presentation) throw new Error('Active package has no presentation section.');
 
+  if (intent === 'edit') return buildScreenEditChange(active, presentation, prompt);
   if (intent === 'field') return buildFieldChange(active, presentation, prompt);
   if (intent === 'view') return buildQueryViewChange(active, presentation, name, prompt);
   if (intent === 'theme') return buildThemeChange(active, presentation, name);
@@ -46,6 +50,26 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   if (intent === 'native') return buildNativeCapabilityChange(active, presentation, name, prompt);
   if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
+}
+
+function buildScreenEditChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+  prompt: string,
+): AppPackageChangeRequest {
+  const target = deriveScreenEditChange(presentation, prompt);
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      {
+        op: 'replace',
+        path: `/presentation/ui/screens/${escapeJsonPointer(target.screenId)}`,
+        value: target.screen,
+      },
+    ],
+  };
 }
 
 function buildQueryViewChange(
@@ -256,7 +280,7 @@ function buildWidgetScreenChange(
   active: AppPackage,
   presentation: PackagePresentationSpec,
   name: PackageChangeName,
-  intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>,
+  intent: WidgetScreenIntent,
 ): AppPackageChangeRequest {
   const collectionIntent = intent === 'screen' ? 'table' : intent;
   if (active.collections[name.collectionId]) throw new Error(`Collection already exists: ${name.collectionId}`);
@@ -441,6 +465,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   if (/\b(theme|color|style|visual|design|cute|density|card|cards)\b/.test(value)) return 'theme';
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
   if (/\b(permission|permissions|capability|capabilities|camera|photo library|photos?|voice|okay google|google assistant|shortcut|deep[- ]?link|background|file open|open file|health connect|share sheet|share intent)\b/.test(value)) return 'native';
+  if (/\b(edit|update|rename|change|rewrite|revise|shorten|shorter|smaller|compact|less dense|simplify|polish|clean up|tune|tighten)\b/.test(value)) return 'edit';
   if (/\bfield\b/.test(value) && !/\b(form|survey)\b/.test(value)) return 'field';
   if (/\b(view|views|show|filter|filtered|list of|board of|calendar of|timeline of|chart of|dashboard for|report for)\b/.test(value)) return 'view';
   if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
@@ -458,7 +483,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   return 'table';
 }
 
-function widgetForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): NonNullable<A2UiComponent['widget']> {
+function widgetForIntent(intent: WidgetScreenIntent): NonNullable<A2UiComponent['widget']> {
   if (intent === 'form') return 'formCard';
   if (intent === 'board') return 'kanbanBoard';
   if (intent === 'feed') return 'feedList';
@@ -504,7 +529,7 @@ function fieldsForIntent(intent: PackageChangeIntent) {
 
 function componentsForIntent(
   name: PackageChangeName,
-  intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>,
+  intent: WidgetScreenIntent,
   collectionIntent: PackageChangeIntent,
   widget: NonNullable<A2UiComponent['widget']>,
 ): A2UiComponent[] {
@@ -540,7 +565,7 @@ function componentsForIntent(
   ];
 }
 
-function propsForIntent(name: PackageChangeName, intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): Record<string, unknown> {
+function propsForIntent(name: PackageChangeName, intent: WidgetScreenIntent): Record<string, unknown> {
   if (intent === 'form') return { fields: [{ label: 'Title', subtitle: 'Short text' }, { label: 'Status', subtitle: 'Choice' }, { label: 'Notes', subtitle: 'Long text' }] };
   if (intent === 'board') return { columns: [{ title: 'Ideas', items: [{ title: `Plan ${name.label}` }] }, { title: 'Doing', items: [] }, { title: 'Done', items: [] }] };
   if (intent === 'poll') return { options: [{ label: 'Yes' }, { label: 'No' }, { label: 'Maybe' }] };
@@ -555,7 +580,7 @@ function propsForIntent(name: PackageChangeName, intent: Exclude<PackageChangeIn
   return {};
 }
 
-function subtitleForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>) {
+function subtitleForIntent(intent: WidgetScreenIntent) {
   if (intent === 'form') return 'Collect structured data without hand-built screens.';
   if (intent === 'board') return 'Kanban-quality grouped records from config.';
   if (intent === 'feed') return 'Posts, updates, links, comments, and activity.';
@@ -570,7 +595,7 @@ function subtitleForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme
   return 'A generated JSON-render screen.';
 }
 
-function toneForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): A2UiComponent['tone'] {
+function toneForIntent(intent: WidgetScreenIntent): A2UiComponent['tone'] {
   if (intent === 'board' || intent === 'calendar') return 'blue';
   if (intent === 'poll' || intent === 'timeline') return 'amber';
   if (intent === 'media' || intent === 'gallery') return 'plum';
@@ -618,6 +643,39 @@ type FieldChangeTarget = {
   fieldType: FieldType;
   indexed: boolean;
 };
+
+type ScreenEditChangeTarget = {
+  screenId: string;
+  screen: UiScreenSpec;
+};
+
+function deriveScreenEditChange(
+  presentation: PackagePresentationSpec,
+  prompt: string,
+): ScreenEditChangeTarget {
+  const screens = presentation.ui?.screens;
+  if (!screens || Object.keys(screens).length === 0) {
+    throw new Error('No JSON-render screens available to edit.');
+  }
+  const lower = prompt.toLowerCase();
+  const screenId = findTargetScreenId(screens, lower, presentation.ui?.defaultScreen);
+  const existing = screens[screenId];
+  const compact = /\b(shorten|shorter|smaller|compact|less dense|simplify|tighten)\b/.test(lower);
+  const title = deriveEditedScreenTitle(existing.title, screenId, prompt);
+  const subtitle = deriveEditedScreenSubtitle(existing.subtitle, compact, lower);
+  const components = existing.components
+    ? tuneScreenComponents(existing.components, lower, compact)
+    : undefined;
+  return {
+    screenId,
+    screen: cleanJson({
+      ...existing,
+      title,
+      subtitle,
+      ...(components ? { components } : {}),
+    }) as UiScreenSpec,
+  };
+}
 
 type QueryViewChangeTarget = {
   collectionId: string;
@@ -772,6 +830,88 @@ function preferredExistingField(
   preferred: string[],
 ): string | undefined {
   return preferred.find((field) => Object.hasOwn(fields, field));
+}
+
+function findTargetScreenId(
+  screens: Record<string, UiScreenSpec>,
+  lowerPrompt: string,
+  defaultScreen?: string,
+): string {
+  const entries = Object.entries(screens);
+  const byId = entries.find(([screenId]) => lowerPrompt.includes(screenId.toLowerCase()));
+  if (byId) return byId[0];
+  const byTitle = entries.find(([, screen]) => (
+    typeof screen.title === 'string'
+      && screen.title.trim().length > 0
+      && lowerPrompt.includes(screen.title.toLowerCase())
+  ));
+  if (byTitle) return byTitle[0];
+  if (defaultScreen && screens[defaultScreen]) return defaultScreen;
+  const first = entries[0]?.[0];
+  if (!first) throw new Error('No JSON-render screens available to edit.');
+  return first;
+}
+
+function deriveEditedScreenTitle(current: unknown, screenId: string, prompt: string): string {
+  const quoted = prompt.match(/["“]([^"”]{2,48})["”]/)?.[1]?.trim();
+  if (quoted) return quoted;
+  return typeof current === 'string' && current.trim()
+    ? current
+    : titleCase(screenId.replace(/[_:-]+/g, ' '));
+}
+
+function deriveEditedScreenSubtitle(current: unknown, compact: boolean, lowerPrompt: string): string {
+  if (compact) {
+    return 'Compact by default: best next action first, details nested behind records and actions.';
+  }
+  if (/\b(polish|clean up|tune)\b/.test(lowerPrompt)) {
+    return 'Polished by AI through a reviewable package diff; core data and actions stay unchanged.';
+  }
+  return typeof current === 'string' && current.trim()
+    ? current
+    : 'AI-edited JSON-render screen.';
+}
+
+function tuneScreenComponents(
+  components: A2UiComponent[],
+  lowerPrompt: string,
+  compact: boolean,
+): A2UiComponent[] {
+  const tuned = components.map((component, index) => tuneScreenComponent(component, index, lowerPrompt, compact));
+  return compact ? tuned.slice(0, Math.min(5, tuned.length)) : tuned;
+}
+
+function tuneScreenComponent(
+  component: A2UiComponent,
+  index: number,
+  lowerPrompt: string,
+  compact: boolean,
+): A2UiComponent {
+  const tuned: A2UiComponent = {
+    ...component,
+    subtitle: trimComponentSubtitle(component.subtitle, compact),
+  };
+  if (compact && tuned.query?.limit) {
+    tuned.query = { ...tuned.query, limit: Math.min(tuned.query.limit, index === 0 ? 3 : 2) };
+  }
+  if (compact && tuned.kind === 'widget') {
+    tuned.props = {
+      ...(tuned.props ?? {}),
+      density: 'compact',
+      summaryFirst: true,
+    };
+  }
+  if (/\b(cute|warm|friendly)\b/.test(lowerPrompt) && tuned.tone === undefined) {
+    tuned.tone = 'moss';
+  }
+  return tuned;
+}
+
+function trimComponentSubtitle(subtitle: unknown, compact: boolean): string | undefined {
+  if (typeof subtitle !== 'string' || !subtitle.trim()) return undefined;
+  if (!compact) return subtitle;
+  const clean = subtitle.trim();
+  return clean.length <= 72 ? clean : `${clean.slice(0, 69).trimEnd()}…`;
 }
 
 function queryTargetsCollection(
