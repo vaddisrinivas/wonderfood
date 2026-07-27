@@ -23,6 +23,7 @@ const food = JSON.parse(fs.readFileSync(foodPath, 'utf8'));
 const contractWidgets = extractContractWidgets(widgetContract);
 const schemaWidgets = new Set(schema.$defs.package_ui_component.properties.widget.enum);
 const surfaceWidgets = extractSurfaceWidgetMap(surface);
+const standardSurfaceWidgets = extractStandardSurfaceWidgets(surface);
 const registeredComponents = extractRegisteredComponents(widgetsSource);
 const catalogLabels = extractFoodCatalogLabels(food);
 const primitiveContractValues = {
@@ -42,13 +43,14 @@ const serverSchemaValues = {
 };
 
 const problems = [];
-const allWidgets = new Set([...contractWidgets, ...schemaWidgets, ...surfaceWidgets.keys()]);
+const allWidgets = new Set([...contractWidgets, ...schemaWidgets, ...surfaceWidgets.keys(), ...standardSurfaceWidgets]);
 
 for (const widget of allWidgets) {
   if (!contractWidgets.has(widget)) problems.push(`${widget}: missing from AppPackage TypeScript contract`);
   if (!schemaWidgets.has(widget)) problems.push(`${widget}: missing from domain JSON Schema`);
   const component = surfaceWidgets.get(widget);
-  if (!component) problems.push(`${widget}: missing from JSON Render surface widget map`);
+  const standardHandled = standardSurfaceWidgets.has(widget);
+  if (!component && !standardHandled) problems.push(`${widget}: missing from JSON Render surface widget handling`);
   if (component && !registeredComponents.has(component)) problems.push(`${widget}: mapped to ${component}, but component is not registered`);
   if (!catalogLabels.has(labelize(widget))) problems.push(`${widget}: missing from food config widget catalog`);
 }
@@ -104,6 +106,12 @@ function extractSurfaceWidgetMap(source) {
   const mapBlock = source.match(/const typeByWidget:\s*Record<string,\s*string>\s*=\s*{([\s\S]*?)};/);
   if (!mapBlock) throw new Error('Unable to find JSON Render widget map.');
   return new Map([...mapBlock[1].matchAll(/(\w+):\s*'([^']+)'/g)].map((match) => [match[1], match[2]]));
+}
+
+function extractStandardSurfaceWidgets(source) {
+  const block = source.match(/const standardWidgetKinds = new Set<string>\(\[([\s\S]*?)\]\)/);
+  if (!block) throw new Error('Unable to find JSON Render standard widget set.');
+  return new Set([...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]));
 }
 
 function extractRegisteredComponents(source) {
