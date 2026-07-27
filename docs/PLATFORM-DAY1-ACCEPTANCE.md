@@ -2,7 +2,7 @@
 
 ## Final Commit
 
-TBD
+`7be941e1b59ad2009a6122607197f0063dcea6d2`
 
 ## Base Commit
 
@@ -20,7 +20,11 @@ TBD
 
 ## Checks Run
 
-- TBD
+- `npm run check:platform-day1`
+- `npm run config:validate`
+- `npm run typecheck`
+
+Result: blocked on missing Lane A/B/C outputs and missing compiled reference-app artifacts.
 
 ## Checks Not Run
 
