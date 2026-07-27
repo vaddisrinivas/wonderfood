@@ -1,4 +1,4 @@
-import { listMcpTools } from './tools';
+import { listMcpTools } from '../mcp/tools';
 
 type JsonSchema = {
   type?: string;

@@ -17,7 +17,7 @@ assert.equal(
 const { executeCommand } = await import('../src/agents/executor');
 const { callMcpTool } = await import('../src/mcp/tools');
 const { findRecord, getActionEvent } = await import('../src/mcp/state');
-const { evaluateMcpPolicy } = await import('../src/mcp/policy');
+const { evaluateMcpPolicy } = await import('../src/security/policy');
 
 function requireAction(id: string) {
   const action = getActionEvent(id);

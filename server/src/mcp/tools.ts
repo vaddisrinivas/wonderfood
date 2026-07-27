@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { evaluateMcpPolicy } from './policy';
+import { evaluateMcpPolicy } from '../security/policy';
 import { readMcpResource } from './resources';
 import {
   WorkflowDocument,

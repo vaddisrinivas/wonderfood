@@ -1,4 +1,4 @@
-import { assertServerStartupSecurity } from '../src/mcp/auth';
+import { assertServerStartupSecurity } from '../src/security/auth';
 
 function ensure(condition: boolean, message: string): asserts condition {
   if (!condition) {

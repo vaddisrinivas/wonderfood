@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { listMcpResources, readMcpResource } from './resources';
 import { callMcpTool, listMcpTools } from './tools';
-import type { McpScope } from './auth';
+import type { McpScope } from '../security/auth';
 
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
 const MCP_SERVER_VERSION = '1.0.0';

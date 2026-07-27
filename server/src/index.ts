@@ -11,7 +11,7 @@ import {
   type ChatSendRequest,
 } from './chat';
 import { type NormalizedChatSend } from './chat';
-import { assertServerStartupSecurity, authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './mcp/auth';
+import { assertServerStartupSecurity, authorizeServerRequest, canExposeProviderStatusIds, type RequestAuthorizationResult } from './security/auth';
 import { handleMcpRequest } from './mcp/server';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';

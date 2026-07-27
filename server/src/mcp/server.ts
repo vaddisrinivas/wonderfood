@@ -2,4 +2,4 @@
 // MCP request path; keeping a second JSON-RPC implementation would duplicate
 // authentication and scope enforcement.
 export { handleMcpRequest } from './official-server';
-export { validateArgsForTool } from './tool-validation';
+export { validateArgsForTool } from '../tools/tool-validation';
