@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { activateAppPackage, bootstrapAppPackageRegistry, getActiveAppPackage, rollbackAppPackage } from '@/src/db/app-package-registry';
+import {
+  activateAppPackage,
+  activateApprovedAppPackageChange,
+  bootstrapAppPackageRegistry,
+  getActiveAppPackage,
+  previewAppPackageChange,
+  rollbackAppPackage,
+  type AppPackageChangeRequest,
+} from '@/src/db/app-package-registry';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
 import { MemoryDb } from '@/tests/helpers/memory-db';
@@ -97,6 +105,78 @@ describe('app package SQLite registry', () => {
     expect(catalog.activeDomainId).toBe('chef-lab');
     expect(catalog.activeManifest.label).toBe('Chef Lab');
     expect(catalog.activeManifest.surfaces.length).toBeGreaterThan(0);
+  });
+
+  it('previews and applies hash-bound package diffs through durable approval receipts', async () => {
+    setActivePackageOverride(null);
+    const db = new MemoryDb() as any;
+    const bootstrapped = await bootstrapAppPackageRegistry(db);
+    const request: AppPackageChangeRequest = {
+      basePackageKey: `${bootstrapped.id}@${bootstrapped.version}`,
+      requestedBy: 'test-package-editor',
+      patch: [
+        { op: 'replace', path: '/version', value: `${bootstrapped.version}+ai.test` },
+        {
+          op: 'add',
+          path: '/collections/ai_notes',
+          value: {
+            id: 'ai_notes',
+            fields: {
+              id: { type: 'text', required: true, indexed: true },
+              title: { type: 'text', required: true, indexed: true },
+              body: { type: 'text' },
+              updated_at: { type: 'timestamp', indexed: true },
+            },
+          },
+        },
+        { op: 'add', path: '/queries/ai_notes', value: { from: 'ai_notes', limit: 12 } },
+        { op: 'add', path: '/views/ai_notes', value: { id: 'ai_notes', query: 'ai_notes', mode: 'list', fields: ['title', 'body'] } },
+        { op: 'add', path: '/presentation/surfaces/-', value: { id: 'ai_notes', label: 'AI Notes', collections: ['ai_notes'], views: ['ai_notes'] } },
+      ],
+    };
+
+    const preview = await previewAppPackageChange(db, request);
+    expect(preview.status).toBe('valid');
+    expect(preview.requestHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(preview.packageHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(preview.package?.collections.ai_notes.id).toBe('ai_notes');
+
+    await expect(activateApprovedAppPackageChange(db, request, {
+      schemaVersion: 'wonder.package-change-approval.v1',
+      approved: true,
+      requestHash: preview.requestHash,
+      packageHash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+      approvedBy: 'tester',
+      approvedAt: '2026-07-27T00:00:00.000Z',
+    })).rejects.toThrow(/package_change_approval_mismatch/);
+
+    const applied = await activateApprovedAppPackageChange(db, request, {
+      schemaVersion: 'wonder.package-change-approval.v1',
+      approved: true,
+      requestHash: preview.requestHash,
+      packageHash: preview.packageHash!,
+      approvedBy: 'tester',
+      approvedAt: '2026-07-27T00:00:00.000Z',
+    });
+
+    expect(applied.collections.ai_notes.id).toBe('ai_notes');
+    expect(db.appPackageReceipts.at(-1)).toMatchObject({
+      action: 'activate',
+      request_hash: preview.requestHash,
+      package_hash: preview.packageHash,
+      approved_by: 'tester',
+    });
+  });
+
+  it('blocks package diffs that try to change native dependency pins', async () => {
+    setActivePackageOverride(null);
+    const db = new MemoryDb() as any;
+    await bootstrapAppPackageRegistry(db);
+
+    await expect(previewAppPackageChange(db, {
+      patch: [{ op: 'add', path: '/dependencyPins/-', value: { package: 'unsafe-native-package', version: '*' } }],
+      requestedBy: 'test-package-editor',
+    })).rejects.toThrow(/package_change_path_forbidden/);
   });
 });
 

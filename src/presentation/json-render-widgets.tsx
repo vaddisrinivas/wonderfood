@@ -4,6 +4,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { sendChatMessage } from '@/src/chat/client';
 import type { ChatMessage, ChatThread } from '@/src/chat/types';
+import {
+  activateApprovedAppPackageChange,
+  getActiveAppPackage,
+  previewAppPackageChange,
+  type AppPackageChangePreview,
+  type AppPackageChangeRequest,
+} from '@/src/db/app-package-registry';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import {
   getLifeOSHealthStatus,
@@ -11,6 +18,7 @@ import {
   requestLifeOSHealthPermissions,
   type HealthConnectStatus,
 } from '@/src/health/connect';
+import type { AppPackage, A2UiComponent, PackagePresentationSpec } from '@/packages/shared/contracts/package';
 
 type WidgetProps = {
   widget?: string;
@@ -221,15 +229,224 @@ function HealthConnectWidget({ element }: ComponentRenderProps<WidgetProps>) {
 
 function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
+  const db = useLifeOSDatabase();
+  const [prompt, setPrompt] = useState(text(props.prompt, 'Add a notes table with a cute card list'));
+  const [preview, setPreview] = useState<AppPackageChangePreview | null>(null);
+  const [request, setRequest] = useState<AppPackageChangeRequest | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const buildPreview = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      if (!db) throw new Error('Database is not ready yet.');
+      const active = await getActiveAppPackage(db);
+      if (!active) throw new Error('No active app package yet.');
+      const nextRequest = buildSafePackageChangeRequest(active, prompt);
+      const nextPreview = await previewAppPackageChange(db, nextRequest);
+      setRequest(nextRequest);
+      setPreview(nextPreview);
+      setMessage(nextPreview.status === 'valid' ? 'Preview ready. Review, then approve.' : 'Preview blocked. Nothing changed.');
+    } catch (err) {
+      setPreview(null);
+      setRequest(null);
+      setError(err instanceof Error ? err.message : 'Package preview failed.');
+    } finally {
+      setBusy(false);
+    }
+  }, [db, prompt]);
+
+  const applyPreview = useCallback(async () => {
+    if (!request || !preview?.packageHash || preview.status !== 'valid') return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      if (!db) throw new Error('Database is not ready yet.');
+      const applied = await activateApprovedAppPackageChange(db, request, {
+        schemaVersion: 'wonder.package-change-approval.v1',
+        approved: true,
+        requestHash: preview.requestHash,
+        packageHash: preview.packageHash,
+        approvedBy: 'mobile-package-editor',
+        approvedAt: new Date().toISOString(),
+      });
+      setMessage(`Applied ${applied.id}@${applied.version}. Reopen this screen if it does not refresh immediately.`);
+      setPreview(null);
+      setRequest(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Package apply failed.');
+    } finally {
+      setBusy(false);
+    }
+  }, [db, preview, request]);
+
   return (
     <WidgetShell
       title={text(props.title, 'AI package editor')}
-      subtitle={text(props.subtitle, 'Describe table, screen, theme, or workflow changes. Wonder should produce a reviewable package diff.')}
+      subtitle={text(props.subtitle, 'Describe a table or screen change. Wonder previews a safe package diff before it can apply.')}
     >
-      <Text style={styles.bodyText}>Current production rule: no hidden edits. Package changes should go through proposal, validation, approval, then apply.</Text>
-      <Text style={styles.bodyText}>Supported targets: collections, fields, views, screens, theme tokens, rules, provider settings, and widget choices.</Text>
+      <TextInput
+        value={prompt}
+        onChangeText={setPrompt}
+        placeholder="Example: add a family recipes table"
+        placeholderTextColor="#8A8172"
+        style={styles.editorInput}
+        multiline
+      />
+      <View style={styles.buttonRow}>
+        <Pressable style={[styles.primaryButton, busy ? styles.disabled : null]} onPress={buildPreview} disabled={busy}>
+          <Text style={styles.primaryButtonText}>{busy ? 'Checking…' : 'Preview change'}</Text>
+        </Pressable>
+        {preview?.status === 'valid' ? (
+          <Pressable style={[styles.secondaryButton, busy ? styles.disabled : null]} onPress={applyPreview} disabled={busy}>
+            <Text style={styles.secondaryButtonText}>Approve & apply</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {message ? <Text style={styles.success}>{message}</Text> : null}
+      {error ? <Text style={styles.warning}>{error}</Text> : null}
+      {preview ? (
+        <View style={styles.previewBox}>
+          <Text style={styles.previewTitle}>{preview.status === 'valid' ? 'Safe package diff' : 'Blocked diff'}</Text>
+          <Text style={styles.previewText}>Request {shortHash(preview.requestHash)}</Text>
+          {preview.packageHash ? <Text style={styles.previewText}>Package {shortHash(preview.packageHash)}</Text> : null}
+          {request ? <Text style={styles.previewText}>{request.patch.length} patch steps · hidden writes: no</Text> : null}
+          {preview.errors.map((item) => <Text key={item} style={styles.warning}>• {item}</Text>)}
+        </View>
+      ) : (
+        <Text style={styles.bodyText}>V1 supports safe app-package patches for new tables, views, and JSON-render screens. Native packages and dependency pins stay locked.</Text>
+      )}
     </WidgetShell>
   );
+}
+
+function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
+  const name = derivePackageChangeName(prompt);
+  if (active.collections[name.collectionId]) throw new Error(`Collection already exists: ${name.collectionId}`);
+  const presentation = active.presentation;
+  if (!presentation) throw new Error('Active package has no presentation section.');
+
+  const patch: AppPackageChangeRequest['patch'] = [
+    { op: 'replace', path: '/version', value: nextRuntimeVersion(active.version) },
+    {
+      op: 'add',
+      path: `/collections/${name.collectionId}`,
+      value: {
+        id: name.collectionId,
+        fields: {
+          id: { type: 'text', required: true, indexed: true },
+          title: { type: 'text', required: true, indexed: true },
+          body: { type: 'text' },
+          status: { type: 'text', indexed: true },
+          tags: { type: 'json' },
+          updated_at: { type: 'timestamp', indexed: true },
+          properties: { type: 'json' },
+        },
+      },
+    },
+    {
+      op: 'add',
+      path: `/queries/${name.collectionId}`,
+      value: { from: name.collectionId, orderBy: [{ field: 'updated_at', direction: 'desc' }], limit: 24 },
+    },
+    {
+      op: 'add',
+      path: `/views/${name.collectionId}`,
+      value: { id: name.collectionId, query: name.collectionId, mode: 'list', fields: ['title', 'status', 'body', 'tags'] },
+    },
+    {
+      op: 'add',
+      path: '/presentation/surfaces/-',
+      value: { id: name.surfaceId, label: name.label, collections: [name.collectionId], views: [name.collectionId] },
+    },
+  ];
+
+  const uiPatches = buildUiScreenPatches(presentation, name);
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [...patch, ...uiPatches],
+  };
+}
+
+function buildUiScreenPatches(
+  presentation: PackagePresentationSpec,
+  name: ReturnType<typeof derivePackageChangeName>,
+): AppPackageChangeRequest['patch'] {
+  const screen = {
+    title: name.label,
+    subtitle: 'AI-created surface. Edit its package JSON or ask Wonder for another change.',
+    components: [
+      {
+        kind: 'widget',
+        widget: 'postCard',
+        id: `${name.collectionId}_hero`,
+        title: `New ${name.label}`,
+        subtitle: 'Ready for records, links, posts, and workflows.',
+        props: {
+          body: 'This screen was added through a reviewable AppPackage diff.',
+        },
+        tone: 'moss',
+      },
+      {
+        kind: 'recordList',
+        id: `${name.collectionId}_records`,
+        title: `${name.label} records`,
+        subtitle: 'Data comes from the new collection.',
+        query: { collections: [name.collectionId], limit: 12 },
+      },
+    ] satisfies A2UiComponent[],
+  };
+  if (!presentation.ui) {
+    return [{
+      op: 'add',
+      path: '/presentation/ui',
+      value: { schemaVersion: 'a2ui.v0_9', defaultScreen: name.screenId, screens: { [name.screenId]: screen }, components: [] },
+    }];
+  }
+  if (!presentation.ui.screens) {
+    return [
+      { op: 'add', path: '/presentation/ui/screens', value: {} },
+      { op: 'add', path: `/presentation/ui/screens/${name.screenId}`, value: screen },
+    ];
+  }
+  if (presentation.ui.screens[name.screenId]) throw new Error(`Screen already exists: ${name.screenId}`);
+  return [{ op: 'add', path: `/presentation/ui/screens/${name.screenId}`, value: screen }];
+}
+
+function derivePackageChangeName(prompt: string) {
+  const clean = prompt
+    .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the)\b/gi, ' ')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' ');
+  const label = titleCase(clean || 'Notes');
+  const slug = (clean || 'notes').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'notes';
+  return {
+    label,
+    collectionId: `ai_${slug}`,
+    screenId: `ai_${slug}`,
+    surfaceId: `ai_${slug}`,
+  };
+}
+
+function titleCase(value: string) {
+  return value.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
+function nextRuntimeVersion(version: string) {
+  return `${version.replace(/\+ai\.[a-z0-9]+$/i, '')}+ai.${Date.now().toString(36)}`;
+}
+
+function shortHash(value: string) {
+  return value.length > 18 ? `${value.slice(0, 14)}…${value.slice(-4)}` : value;
 }
 
 function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
@@ -480,6 +697,20 @@ const styles = StyleSheet.create({
   sources: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2', paddingTop: 8, gap: 4 },
   sourceText: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
   warning: { color: '#9A4B2E', fontSize: 12 },
+  success: { color: '#2F7448', fontSize: 12, fontWeight: '800' },
+  editorInput: {
+    minHeight: 84,
+    borderRadius: 18,
+    backgroundColor: '#F6F1E8',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#241C16',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  previewBox: { borderRadius: 18, backgroundColor: '#F6F1E8', padding: 14, gap: 6 },
+  previewTitle: { color: '#241C16', fontSize: 16, fontWeight: '900' },
+  previewText: { color: '#6D6257', fontSize: 12, fontWeight: '700' },
   suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   suggestion: { backgroundColor: '#E4F1E8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   suggestionText: { color: '#2F7448', fontSize: 12, fontWeight: '700' },

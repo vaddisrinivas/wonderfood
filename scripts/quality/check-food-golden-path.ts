@@ -410,9 +410,10 @@ function checksum(db: FoodGoldenDb) {
   const restoredProof = restoredDb as FoodGoldenDb;
   await importRecoverySnapshot(restoredDb, snapshot);
   const afterChecksum = checksum(restoredProof);
+  const expectedPackageKey = `${appPackage.id}@${appPackage.version}`;
   assert(beforeChecksum === afterChecksum, `backup restore mismatch ${beforeChecksum}/${afterChecksum}`);
   assert(restoredProof.tables.get('app_packages')!.length === 1, 'app package not exported/restored');
-  assert(restoredProof.tables.get('app_package_state')![0]?.active_package_key === 'food@1.0.0', 'active package state not restored');
+  assert(restoredProof.tables.get('app_package_state')![0]?.active_package_key === expectedPackageKey, 'active package state not restored');
   assert(restoredProof.tables.get('workflow_runs')!.length === 1, 'workflow run not exported/restored');
 
   const outDir = join(process.cwd(), 'app', 'build', 'evidence', 'food');

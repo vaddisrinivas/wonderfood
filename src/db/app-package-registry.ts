@@ -1,4 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import jsonPatch from 'fast-json-patch';
+import type { Operation as JsonPatchOperation } from 'fast-json-patch';
+import { sha256 } from 'js-sha256';
 
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
@@ -22,6 +25,30 @@ export type AppPackageReceiptEvidence = {
   approvalHash?: string;
   approvedBy?: string;
 };
+
+export type AppPackageChangeRequest = Readonly<{
+  patch: readonly JsonPatchOperation[];
+  basePackageKey?: string | null;
+  requestedBy?: string;
+}>;
+
+export type AppPackageChangeApprovalReceipt = Readonly<{
+  schemaVersion: 'wonder.package-change-approval.v1';
+  approved: true;
+  requestHash: string;
+  packageHash: string;
+  approvedBy: string;
+  approvedAt: string;
+}>;
+
+export type AppPackageChangePreview = Readonly<{
+  status: 'valid' | 'invalid';
+  requestHash: string;
+  packageHash: string | null;
+  basePackageKey: string | null;
+  package: AppPackage | null;
+  errors: string[];
+}>;
 
 export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
   const manifest = getBundledDomainManifest();
@@ -94,6 +121,66 @@ export async function activateAppPackage(
   return appPackage;
 }
 
+export async function previewAppPackageChange(
+  db: SQLiteDatabase,
+  request: AppPackageChangeRequest,
+): Promise<AppPackageChangePreview> {
+  const active = await getActiveAppPackage(db);
+  if (!active) throw new Error('package_change_no_active_package');
+  validatePackageChangeRequest(request, active);
+
+  const requestHash = hashValue(normalizePackageChangeRequest(request));
+  const basePackageKey = packageKey(active);
+  try {
+    const next = applyPackagePatch(active, request.patch);
+    assertAppPackageShape(next);
+    return {
+      status: 'valid',
+      requestHash,
+      packageHash: hashValue(next),
+      basePackageKey,
+      package: next,
+      errors: [],
+    };
+  } catch (error) {
+    return {
+      status: 'invalid',
+      requestHash,
+      packageHash: null,
+      basePackageKey,
+      package: null,
+      errors: [error instanceof Error ? error.message : 'package_change_invalid'],
+    };
+  }
+}
+
+export async function activateApprovedAppPackageChange(
+  db: SQLiteDatabase,
+  request: AppPackageChangeRequest,
+  approval: AppPackageChangeApprovalReceipt,
+): Promise<AppPackage> {
+  const preview = await previewAppPackageChange(db, request);
+  if (preview.status !== 'valid' || !preview.packageHash || !preview.package) {
+    throw new Error(`package_change_invalid:${preview.errors.join('|') || 'package_change_invalid'}`);
+  }
+  if (
+    approval.schemaVersion !== 'wonder.package-change-approval.v1'
+    || approval.approved !== true
+    || approval.requestHash !== preview.requestHash
+    || approval.packageHash !== preview.packageHash
+    || !approval.approvedBy?.trim()
+    || Number.isNaN(Date.parse(approval.approvedAt))
+  ) {
+    throw new Error('package_change_approval_mismatch');
+  }
+  return activateAppPackage(db, preview.package, 'activate', {
+    requestHash: preview.requestHash,
+    packageHash: preview.packageHash,
+    approvalHash: hashValue(approval),
+    approvedBy: approval.approvedBy.trim(),
+  });
+}
+
 export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
   const state = await getPackageState(db);
   if (!state?.previous_package_key) return null;
@@ -128,6 +215,77 @@ function shouldRefreshBundledPackage(active: AppPackage, bundledPackage: AppPack
   if (active.version === bundledPackage.version) return false;
   const sourceSchemaVersion = active.presentation?.sourceSchemaVersion;
   return typeof sourceSchemaVersion === 'string' && sourceSchemaVersion.length > 0;
+}
+
+function normalizePackageChangeRequest(request: AppPackageChangeRequest): AppPackageChangeRequest {
+  return {
+    basePackageKey: request.basePackageKey ?? null,
+    requestedBy: request.requestedBy?.trim() || 'mobile-package-builder',
+    patch: request.patch,
+  };
+}
+
+function validatePackageChangeRequest(request: AppPackageChangeRequest, active: AppPackage): void {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('package_change_request_invalid');
+  if (request.basePackageKey && request.basePackageKey !== packageKey(active)) throw new Error('package_change_base_mismatch');
+  if (!Array.isArray(request.patch) || request.patch.length < 1 || request.patch.length > 64) throw new Error('package_change_patch_invalid');
+  for (const operation of request.patch) {
+    if (!operation || typeof operation !== 'object' || typeof operation.path !== 'string') throw new Error('package_change_patch_invalid');
+    if (!['add', 'replace', 'remove', 'move', 'copy', 'test'].includes(operation.op)) throw new Error('package_change_patch_op_invalid');
+    if (!isAllowedPackagePatchPath(operation.path)) throw new Error(`package_change_path_forbidden:${operation.path}`);
+    if ((operation.op === 'move' || operation.op === 'copy') && (!operation.from || !isAllowedPackagePatchPath(operation.from))) {
+      throw new Error(`package_change_path_forbidden:${operation.from ?? '<missing>'}`);
+    }
+  }
+}
+
+function isAllowedPackagePatchPath(path: string): boolean {
+  return path === '/version'
+    || path === '/collections'
+    || path.startsWith('/collections/')
+    || path === '/presentation'
+    || path.startsWith('/presentation/')
+    || path === '/queries'
+    || path.startsWith('/queries/')
+    || path === '/views'
+    || path.startsWith('/views/')
+    || path === '/rules'
+    || path.startsWith('/rules/')
+    || path === '/computedFields'
+    || path.startsWith('/computedFields/')
+    || path === '/capabilities'
+    || path.startsWith('/capabilities/')
+    || path === '/acceptanceTests'
+    || path.startsWith('/acceptanceTests/')
+    || path === '/nativeCapabilities'
+    || path.startsWith('/nativeCapabilities/')
+    || path === '/contractLock/checksum'
+    || path === '/contractLock/pinnedAt'
+    || path === '/contractLock/nativeCapabilities'
+    || path.startsWith('/contractLock/nativeCapabilities/');
+}
+
+function applyPackagePatch(base: AppPackage, patch: readonly JsonPatchOperation[]): AppPackage {
+  const clone = JSON.parse(JSON.stringify(base)) as AppPackage;
+  const result = jsonPatch.applyPatch(clone, [...patch], true, false);
+  return result.newDocument as AppPackage;
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${sha256(stableJson(value))}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const row = value as Record<string, unknown>;
+    return `{${Object.keys(row)
+      .filter((key) => row[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(row[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 async function getPackageState(db: SQLiteDatabase): Promise<AppPackageStateRow | null> {
