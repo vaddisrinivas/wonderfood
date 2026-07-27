@@ -10,6 +10,7 @@ import type {
   PackagePresentationSpec,
 } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
+import { APP_PACKAGE_WIDGET_KINDS } from '@/packages/shared/contracts/ui-widgets';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
@@ -37,30 +38,6 @@ type PackageChangeIntent =
   | 'screen';
 type WidgetScreenIntent = Exclude<PackageChangeIntent, 'control' | 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
 type UiScreenSpec = NonNullable<NonNullable<PackagePresentationSpec['ui']>['screens']>[string];
-const SUPPORTED_A2UI_WIDGETS = [
-  'assistantChat',
-  'healthConnect',
-  'schemaEditor',
-  'widgetCatalog',
-  'postCard',
-  'pollCard',
-  'linkPreview',
-  'feedList',
-  'kanbanBoard',
-  'chartBlock',
-  'mediaBlock',
-  'mapBlock',
-  'formCard',
-  'checklistCard',
-  'calendarBlock',
-  'timelineBlock',
-  'galleryGrid',
-  'dataTable',
-  'permissionCard',
-  'providerStatus',
-  'themePreview',
-];
-
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
   const name = derivePackageChangeName(prompt);
@@ -165,7 +142,7 @@ function buildControlRoomChange(
           subtitle: 'Supported JSON-render widgets for generated apps.',
           tone: 'moss',
           props: {
-            widgets: SUPPORTED_A2UI_WIDGETS,
+            widgets: APP_PACKAGE_WIDGET_KINDS,
           },
         },
         {

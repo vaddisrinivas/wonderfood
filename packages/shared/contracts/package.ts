@@ -1,4 +1,5 @@
 import type { QueryPredicate, QuerySort } from './query';
+import type { AppPackageWidgetKind } from './ui-widgets';
 
 export type FieldType = 'text' | 'number' | 'boolean' | 'timestamp' | 'json';
 
@@ -46,28 +47,7 @@ export type A2UiComponent = {
   id?: string;
   title?: string;
   subtitle?: string;
-  widget?:
-    | 'assistantChat'
-    | 'healthConnect'
-    | 'schemaEditor'
-    | 'widgetCatalog'
-    | 'postCard'
-    | 'pollCard'
-    | 'linkPreview'
-    | 'feedList'
-    | 'kanbanBoard'
-    | 'chartBlock'
-    | 'mediaBlock'
-    | 'mapBlock'
-    | 'formCard'
-    | 'checklistCard'
-    | 'calendarBlock'
-    | 'timelineBlock'
-    | 'galleryGrid'
-    | 'dataTable'
-    | 'permissionCard'
-    | 'providerStatus'
-    | 'themePreview';
+  widget?: AppPackageWidgetKind;
   props?: Record<string, unknown>;
   view?: string;
   tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';

@@ -4,6 +4,7 @@ export * from './operation';
 export * from './query';
 export * from './package';
 export * from './package-change';
+export * from './ui-widgets';
 export * from './native-capabilities';
 export * from './rules';
 export * from './receipts';

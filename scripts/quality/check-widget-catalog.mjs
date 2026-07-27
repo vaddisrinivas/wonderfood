@@ -3,20 +3,20 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const root = process.cwd();
-const contractPath = path.join(root, 'packages/shared/contracts/package.ts');
+const widgetContractPath = path.join(root, 'packages/shared/contracts/ui-widgets.ts');
 const schemaPath = path.join(root, 'packages/domain-config/schemas/domain.v1.schema.json');
 const surfacePath = path.join(root, 'src/presentation/json-render-surface.tsx');
 const widgetsPath = path.join(root, 'src/presentation/json-render-widgets.tsx');
 const foodPath = path.join(root, 'packages/domain-config/domains/food.v1.json');
 const evidencePath = path.join(root, 'app/build/evidence/widget-catalog.json');
 
-const contract = fs.readFileSync(contractPath, 'utf8');
+const widgetContract = fs.readFileSync(widgetContractPath, 'utf8');
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const surface = fs.readFileSync(surfacePath, 'utf8');
 const widgetsSource = fs.readFileSync(widgetsPath, 'utf8');
 const food = JSON.parse(fs.readFileSync(foodPath, 'utf8'));
 
-const contractWidgets = extractContractWidgets(contract);
+const contractWidgets = extractContractWidgets(widgetContract);
 const schemaWidgets = new Set(schema.$defs.package_ui_component.properties.widget.enum);
 const surfaceWidgets = extractSurfaceWidgetMap(surface);
 const registeredComponents = extractRegisteredComponents(widgetsSource);
@@ -56,8 +56,8 @@ fs.writeFileSync(evidencePath, `${JSON.stringify({
 console.log(`Widget catalog check: PASS (${allWidgets.size} widgets, evidence: ${path.relative(root, evidencePath)})`);
 
 function extractContractWidgets(source) {
-  const widgetBlock = source.match(/widget\?:\s*([\s\S]*?);/);
-  if (!widgetBlock) throw new Error('Unable to find AppPackage widget union.');
+  const widgetBlock = source.match(/APP_PACKAGE_WIDGET_KINDS\s*=\s*\[([\s\S]*?)\]\s*as const/);
+  if (!widgetBlock) throw new Error('Unable to find shared widget catalog.');
   return new Set([...widgetBlock[1].matchAll(/'([^']+)'/g)].map((match) => match[1]));
 }
 

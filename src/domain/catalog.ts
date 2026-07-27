@@ -3,6 +3,7 @@ import foodManifestJson from '../../packages/domain-config/domains/food.v1.json'
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
 import type { AppPackage, AppPackageDependencyPin, AppPackageNativeCapability, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
+import { isAppPackageWidgetKind } from '../../packages/shared/contracts/ui-widgets';
 
 type ParsedUiScreen = {
   title?: string;
@@ -400,27 +401,7 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
   }
   if (kind === 'widget') {
     assertCondition(
-      raw.widget === 'assistantChat'
-        || raw.widget === 'healthConnect'
-        || raw.widget === 'schemaEditor'
-        || raw.widget === 'widgetCatalog'
-        || raw.widget === 'postCard'
-        || raw.widget === 'pollCard'
-        || raw.widget === 'linkPreview'
-        || raw.widget === 'feedList'
-        || raw.widget === 'kanbanBoard'
-        || raw.widget === 'chartBlock'
-        || raw.widget === 'mediaBlock'
-        || raw.widget === 'mapBlock'
-        || raw.widget === 'formCard'
-        || raw.widget === 'checklistCard'
-        || raw.widget === 'calendarBlock'
-        || raw.widget === 'timelineBlock'
-        || raw.widget === 'galleryGrid'
-        || raw.widget === 'dataTable'
-        || raw.widget === 'permissionCard'
-        || raw.widget === 'providerStatus'
-        || raw.widget === 'themePreview',
+      isAppPackageWidgetKind(raw.widget),
       `${path}.widget must be a supported A2UI widget`,
     );
     if (raw.props !== undefined) {

@@ -21,6 +21,7 @@ import type {
 } from '@/packages/shared/contracts/package';
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
+import { APP_PACKAGE_WIDGET_KIND_SET } from '@/packages/shared/contracts/ui-widgets';
 
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -45,29 +46,6 @@ function hasExecutableCode(value: unknown): boolean {
 }
 
 const UI_COMPONENT_KINDS = new Set(['recordList', 'metric', 'action', 'text', 'widget']);
-const UI_WIDGET_KINDS = new Set([
-  'assistantChat',
-  'healthConnect',
-  'schemaEditor',
-  'widgetCatalog',
-  'postCard',
-  'pollCard',
-  'linkPreview',
-  'feedList',
-  'kanbanBoard',
-  'chartBlock',
-  'mediaBlock',
-  'mapBlock',
-  'formCard',
-  'checklistCard',
-  'calendarBlock',
-  'timelineBlock',
-  'galleryGrid',
-  'dataTable',
-  'permissionCard',
-  'providerStatus',
-  'themePreview',
-]);
 const UI_ACTION_KINDS = new Set(['open_url', 'propose']);
 const UI_ACTION_TOOL_PATTERN = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 
@@ -102,7 +80,7 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
   if (!text(component.kind) || !UI_COMPONENT_KINDS.has(component.kind)) throw new Error(`${path}.kind is invalid`);
   if (component.kind === 'action' && !text(component.id)) throw new Error(`${path}.id required for action components`);
   if (component.kind === 'widget') {
-    if (!text(component.widget) || !UI_WIDGET_KINDS.has(component.widget)) throw new Error(`${path}.widget is invalid`);
+    if (!text(component.widget) || !APP_PACKAGE_WIDGET_KIND_SET.has(component.widget)) throw new Error(`${path}.widget is invalid`);
     if (component.props !== undefined && !object(component.props)) throw new Error(`${path}.props must be an object`);
   }
 
