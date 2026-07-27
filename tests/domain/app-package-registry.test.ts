@@ -229,6 +229,12 @@ describe('app package SQLite registry', () => {
     expect(workflow.status).toBe('valid');
     expect(workflow.package?.rules.some((rule) => rule.id === 'ai_pantry_expires_dinner_workflow_rule')).toBe(true);
 
+    const field = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add spice level number field to recipe'));
+    expect(field.status).toBe('valid');
+    expect(field.package?.collections.recipe.fields.spice_level.type).toBe('number');
+    expect(Object.values(field.package?.views ?? {}).some((view) => view.fields.includes('spice_level'))).toBe(true);
+    expect(field.package?.presentation?.ui?.screens?.ai_recipe_spice_level_schema.components?.[0].widget).toBe('schemaEditor');
+
     const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
     expect(form.status).toBe('valid');
     expect(form.package?.collections.ai_vendor_intake.fields.answers.type).toBe('json');

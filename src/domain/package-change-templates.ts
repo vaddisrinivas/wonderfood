@@ -6,12 +6,14 @@ import type {
   AppPackageNativeCapability,
   AppPackagePermissionDeclaration,
   AppPackageV3,
+  FieldType,
   PackagePresentationSpec,
 } from '@/packages/shared/contracts/package';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
 type PackageChangeIntent =
+  | 'field'
   | 'table'
   | 'theme'
   | 'workflow'
@@ -35,11 +37,89 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   const presentation = active.presentation;
   if (!presentation) throw new Error('Active package has no presentation section.');
 
+  if (intent === 'field') return buildFieldChange(active, presentation, prompt);
   if (intent === 'theme') return buildThemeChange(active, presentation, name);
   if (intent === 'workflow') return buildWorkflowChange(active, presentation, name);
   if (intent === 'native') return buildNativeCapabilityChange(active, presentation, name, prompt);
   if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
+}
+
+function buildFieldChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+  prompt: string,
+): AppPackageChangeRequest {
+  const target = deriveFieldChange(active, prompt);
+  if (active.collections[target.collectionId].fields[target.fieldId]) {
+    throw new Error(`Field already exists: ${target.collectionId}.${target.fieldId}`);
+  }
+  const queryEntries = Object.entries(active.queries);
+  const affectedViewIds = Object.entries(active.views)
+    .filter(([, view]) => {
+      const query = active.queries[view.query];
+      return Boolean(query && queryTargetsCollection(query, target.collectionId) && !view.fields.includes(target.fieldId));
+    })
+    .map(([viewId]) => viewId);
+
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      {
+        op: 'add',
+        path: `/collections/${escapeJsonPointer(target.collectionId)}/fields/${escapeJsonPointer(target.fieldId)}`,
+        value: {
+          type: target.fieldType,
+          ...(target.indexed ? { indexed: true } : {}),
+        },
+      },
+      ...affectedViewIds.map((viewId) => ({
+        op: 'add' as const,
+        path: `/views/${escapeJsonPointer(viewId)}/fields/-`,
+        value: target.fieldId,
+      })),
+      ...buildUiScreenPatches(presentation, {
+        label: `${target.collectionLabel} Schema`,
+        collectionId: target.collectionId,
+        screenId: `ai_${target.collectionId}_${target.fieldId}_schema`,
+        surfaceId: `ai_${target.collectionId}_${target.fieldId}_schema`,
+      }, [
+        {
+          kind: 'widget',
+          widget: 'schemaEditor',
+          id: `${target.collectionId}_${target.fieldId}_schema_editor`,
+          title: `${target.fieldLabel} field`,
+          subtitle: `Added ${target.fieldType} field to ${target.collectionLabel}.`,
+          props: {
+            collection: target.collectionId,
+            field: target.fieldId,
+            type: target.fieldType,
+            affectedViews: affectedViewIds,
+            matchingQueries: queryEntries
+              .filter(([, query]) => queryTargetsCollection(query, target.collectionId))
+              .map(([queryId]) => queryId),
+          },
+          tone: 'blue',
+        },
+        {
+          kind: 'widget',
+          widget: 'dataTable',
+          id: `${target.collectionId}_${target.fieldId}_data_preview`,
+          title: `${target.collectionLabel} fields`,
+          subtitle: 'Schema change is package-config only and reviewable before activation.',
+          props: {
+            columns: Object.keys({
+              ...active.collections[target.collectionId].fields,
+              [target.fieldId]: { type: target.fieldType },
+            }).map((label) => ({ label })),
+          },
+          tone: 'moss',
+        },
+      ]),
+    ],
+  };
 }
 
 function buildTableScreenChange(
@@ -283,6 +363,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   if (/\b(theme|color|style|visual|design|cute|density|card|cards)\b/.test(value)) return 'theme';
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
   if (/\b(permission|permissions|capability|capabilities|camera|photo library|photos?|voice|okay google|google assistant|shortcut|deep[- ]?link|background|file open|open file|health connect|share sheet|share intent)\b/.test(value)) return 'native';
+  if (/\bfield\b/.test(value) && !/\b(form|survey)\b/.test(value)) return 'field';
   if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
   if (/\b(board|kanban|pipeline|status board|columns?)\b/.test(value)) return 'board';
   if (/\b(feed|posts?|updates?|social|comments?)\b/.test(value)) return 'feed';
@@ -448,6 +529,87 @@ function titleCase(value: string) {
 
 function nextRuntimeVersion(version: string) {
   return `${version.replace(/\+ai\.[a-z0-9]+$/i, '')}+ai.${Date.now().toString(36)}`;
+}
+
+type FieldChangeTarget = {
+  collectionId: string;
+  collectionLabel: string;
+  fieldId: string;
+  fieldLabel: string;
+  fieldType: FieldType;
+  indexed: boolean;
+};
+
+function deriveFieldChange(active: AppPackage, prompt: string): FieldChangeTarget {
+  const lower = prompt.toLowerCase();
+  const collectionId = findTargetCollection(active, lower);
+  const collectionLabel = titleCase(collectionId.replace(/[_:-]+/g, ' '));
+  const collectionWords = new Set(collectionId.toLowerCase().split(/[_:-]+/).filter(Boolean));
+  const clean = prompt
+    .replace(/\b(add|create|make|new|field|column|property|attribute|to|in|on|for|a|an|the|and|or|with|into)\b/gi, ' ')
+    .replace(new RegExp(`\\b(${[...collectionWords].map(escapeRegExp).join('|')})\\b`, 'gi'), ' ')
+    .replace(/\b(text|number|numeric|amount|price|cost|count|quantity|score|rating|date|time|timestamp|due|expires|boolean|checkbox|yes|no|flag|json|object|tags|list|options)\b/gi, ' ')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' ');
+  const fieldLabel = titleCase(clean || 'Notes');
+  const fieldId = (clean || 'notes').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'notes';
+  const fieldType = inferFieldType(lower);
+  return {
+    collectionId,
+    collectionLabel,
+    fieldId,
+    fieldLabel,
+    fieldType,
+    indexed: fieldType !== 'json',
+  };
+}
+
+function findTargetCollection(active: AppPackage, lowerPrompt: string): string {
+  const entries = Object.keys(active.collections);
+  const direct = entries.find((id) => lowerPrompt.includes(id.toLowerCase()));
+  if (direct) return direct;
+  const byWords = entries.find((id) => id.toLowerCase().split(/[_:-]+/).some((word) => word.length > 2 && lowerPrompt.includes(word)));
+  if (byWords) return byWords;
+  if (Object.hasOwn(active.collections, 'inventory')) return 'inventory';
+  if (Object.hasOwn(active.collections, 'records')) return 'records';
+  const first = entries.sort()[0];
+  if (!first) throw new Error('No collections available for field change.');
+  return first;
+}
+
+function inferFieldType(lowerPrompt: string): FieldType {
+  if (/\b(number|numeric|amount|price|cost|count|quantity|score|rating|calorie|calories|grams?|servings?)\b/.test(lowerPrompt)) return 'number';
+  if (/\b(date|time|timestamp|due|expires|expiry|scheduled|starts?|ends?)\b/.test(lowerPrompt)) return 'timestamp';
+  if (/\b(boolean|checkbox|yes\/no|yes no|flag|done|enabled)\b/.test(lowerPrompt)) return 'boolean';
+  if (/\b(json|object|tags|list|options|array|metadata)\b/.test(lowerPrompt)) return 'json';
+  return 'text';
+}
+
+function queryTargetsCollection(
+  query: AppPackage['queries'][string],
+  collectionId: string,
+): boolean {
+  return query.from === collectionId || predicateTargetsCollection(query.where, collectionId);
+}
+
+function predicateTargetsCollection(predicate: AppPackage['queries'][string]['where'], collectionId: string): boolean {
+  if (!predicate) return false;
+  if (predicate.op === 'eq' && predicate.field === 'collection' && predicate.value === collectionId) return true;
+  if ((predicate.op === 'and' || predicate.op === 'or')) return predicate.args.some((arg) => predicateTargetsCollection(arg, collectionId));
+  if (predicate.op === 'not') return predicateTargetsCollection(predicate.arg, collectionId);
+  return false;
+}
+
+function escapeJsonPointer(value: string): string {
+  return value.replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function mergeNativeCapabilityRequest(
