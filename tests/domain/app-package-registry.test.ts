@@ -260,6 +260,34 @@ describe('app package SQLite registry', () => {
       summaryFirst: true,
     });
 
+    const movedWidget = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'move dinner vote first on overview'));
+    expect(movedWidget.status).toBe('valid');
+    expect(movedWidget.package?.collections.ai_dinner_vote).toBeUndefined();
+    expect(movedWidget.package?.presentation?.ui?.screens?.overview.components?.[0].id).toBe('dinner_vote');
+    expect(movedWidget.package?.presentation?.ui?.screens?.overview.components?.length)
+      .toBe(active.presentation?.ui?.screens?.overview.components?.length);
+
+    const renamedWidget = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'rename dinner vote to "Family vote"'));
+    expect(renamedWidget.status).toBe('valid');
+    const dinnerVote = renamedWidget.package?.presentation?.ui?.screens?.overview.components?.find((component) => component.id === 'dinner_vote');
+    expect(dinnerVote?.title).toBe('Family vote');
+
+    const controlRoom = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add settings control room'));
+    expect(controlRoom.status).toBe('valid');
+    expect(controlRoom.package?.collections.ai_settings_control).toBeUndefined();
+    expect(controlRoom.package?.presentation?.surfaces.some((surface) => surface.id === 'ai_control_room')).toBe(true);
+    const controlWidgets = controlRoom.package?.presentation?.ui?.screens?.ai_control_room.components?.map((component) => component.widget ?? component.id);
+    expect(controlWidgets).toEqual(expect.arrayContaining([
+      'assistantChat',
+      'providerStatus',
+      'control_connect_source',
+      'control_verify_sync',
+      'widgetCatalog',
+      'schemaEditor',
+      'permissionCard',
+      'themePreview',
+    ]));
+
     const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
     expect(form.status).toBe('valid');
     expect(form.package?.collections.ai_vendor_intake.fields.answers.type).toBe('json');
@@ -309,6 +337,8 @@ describe('app package SQLite registry', () => {
     expect(native.package.nativeCapabilities.intents?.some((intent) => intent.id === 'voice-command')).toBe(true);
     expect(native.package.contractLock.nativeCapabilities).toEqual(native.package.nativeCapabilities);
     expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.[0].widget).toBe('permissionCard');
+    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.some((component) => component.id === 'ai_camera_voice_shortcut_open_permissions')).toBe(true);
+    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.some((component) => component.id === 'ai_camera_voice_shortcut_test_intents')).toBe(true);
   });
 });
 

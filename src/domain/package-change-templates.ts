@@ -14,6 +14,7 @@ import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
 type PackageChangeIntent =
+  | 'control'
   | 'edit'
   | 'field'
   | 'view'
@@ -33,7 +34,7 @@ type PackageChangeIntent =
   | 'chart'
   | 'native'
   | 'screen';
-type WidgetScreenIntent = Exclude<PackageChangeIntent, 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
+type WidgetScreenIntent = Exclude<PackageChangeIntent, 'control' | 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
 type UiScreenSpec = NonNullable<NonNullable<PackagePresentationSpec['ui']>['screens']>[string];
 
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
@@ -42,6 +43,7 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   const presentation = active.presentation;
   if (!presentation) throw new Error('Active package has no presentation section.');
 
+  if (intent === 'control') return buildControlRoomChange(active, presentation);
   if (intent === 'edit') return buildScreenEditChange(active, presentation, prompt);
   if (intent === 'field') return buildFieldChange(active, presentation, prompt);
   if (intent === 'view') return buildQueryViewChange(active, presentation, name, prompt);
@@ -50,6 +52,133 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   if (intent === 'native') return buildNativeCapabilityChange(active, presentation, name, prompt);
   if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
+}
+
+function buildControlRoomChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+): AppPackageChangeRequest {
+  const collections = selectControlRoomCollections(active);
+  const screenName = {
+    label: 'Control Room',
+    collectionId: collections[0] ?? Object.keys(active.collections).sort()[0] ?? 'records',
+    screenId: 'ai_control_room',
+    surfaceId: 'ai_control_room',
+  };
+  if (presentation.surfaces.some((surface) => surface.id === screenName.surfaceId)) {
+    throw new Error(`Surface already exists: ${screenName.surfaceId}`);
+  }
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      {
+        op: 'add',
+        path: '/presentation/surfaces/-',
+        value: {
+          id: screenName.surfaceId,
+          label: screenName.label,
+          collections,
+        },
+      },
+      ...buildUiScreenPatches(presentation, screenName, [
+        {
+          kind: 'widget',
+          widget: 'assistantChat',
+          id: 'control_ai_editor',
+          title: 'Ask Wonder to change this app',
+          subtitle: 'Add fields, tune screens, create views, change workflows, or request native capabilities.',
+          tone: 'plum',
+          props: {
+            mode: 'packageEditor',
+            safeDiffsOnly: true,
+            approvalRequired: true,
+          },
+        },
+        {
+          kind: 'widget',
+          widget: 'providerStatus',
+          id: 'control_provider_status',
+          title: 'Connected sources',
+          subtitle: 'Notion, Sheets, Drive, and local records stay behind provider verification.',
+          tone: 'blue',
+          props: {
+            providers: ['local', 'notion', 'sheets', 'drive'],
+          },
+        },
+        {
+          kind: 'action',
+          id: 'control_connect_source',
+          title: 'Connect a source',
+          subtitle: 'Pick Notion, Sheets, or Drive; Wonder creates the provider binding and keeps writes approval-backed.',
+          tone: 'blue',
+          action: {
+            kind: 'propose',
+            label: 'Connect',
+            command: 'open_provider_connection_flow',
+            payload: { providers: ['notion', 'google_sheets', 'google_drive'] },
+          },
+        },
+        {
+          kind: 'action',
+          id: 'control_verify_sync',
+          title: 'Verify sync',
+          subtitle: 'Run a safe reread check before trusting any provider writeback.',
+          tone: 'moss',
+          action: {
+            kind: 'propose',
+            label: 'Verify',
+            command: 'run_provider_verification',
+            payload: { providers: ['notion', 'google_sheets', 'google_drive'] },
+          },
+        },
+        {
+          kind: 'widget',
+          widget: 'widgetCatalog',
+          id: 'control_widget_catalog',
+          title: 'Building blocks',
+          subtitle: 'Supported JSON-render widgets for generated apps.',
+          tone: 'moss',
+          props: {
+            widgets: ['postCard', 'pollCard', 'linkPreview', 'feedList', 'kanbanBoard', 'chartBlock', 'mediaBlock', 'mapBlock', 'formCard', 'calendarBlock', 'timelineBlock', 'galleryGrid', 'dataTable'],
+          },
+        },
+        {
+          kind: 'widget',
+          widget: 'schemaEditor',
+          id: 'control_schema_editor',
+          title: 'Data model',
+          subtitle: 'Schema changes are package diffs with approval receipts.',
+          tone: 'amber',
+          props: {
+            collections,
+            editable: true,
+          },
+        },
+        {
+          kind: 'widget',
+          widget: 'permissionCard',
+          id: 'control_permissions',
+          title: 'Native capabilities',
+          subtitle: 'Camera, share, shortcuts, files, voice, and Health Connect are declared before use.',
+          tone: 'amber',
+          props: active.schemaVersion === 'wonder.app-package.v3'
+            ? active.nativeCapabilities
+            : { permissions: [], intents: [] },
+        },
+        {
+          kind: 'widget',
+          widget: 'themePreview',
+          id: 'control_theme',
+          title: 'Theme',
+          subtitle: 'Theme tokens live in package config.',
+          tone: 'moss',
+          props: presentation.visualIdentity ?? {},
+        },
+      ]),
+    ],
+  };
 }
 
 function buildScreenEditChange(
@@ -423,10 +552,36 @@ function buildNativeCapabilityChange(
           tone: 'amber',
         },
         {
+          kind: 'action',
+          id: `${name.screenId}_open_permissions`,
+          title: 'Open permission setup',
+          subtitle: 'Route users to the native permission request/status flow for this package.',
+          tone: 'blue',
+          action: {
+            kind: 'propose',
+            label: 'Open setup',
+            command: 'open_native_permission_setup',
+            payload: { surface: `${name.screenId}_permissions` },
+          },
+        },
+        {
+          kind: 'action',
+          id: `${name.screenId}_test_intents`,
+          title: 'Test app intents',
+          subtitle: 'Verify share, shortcut, deep-link, voice, background, and file-open hooks before relying on them.',
+          tone: 'moss',
+          action: {
+            kind: 'propose',
+            label: 'Test intents',
+            command: 'test_native_intents',
+            payload: { surface: `${name.screenId}_permissions` },
+          },
+        },
+        {
           kind: 'text',
           id: `${name.screenId}_permission_note`,
-          title: 'Locked package diff',
-          subtitle: 'This changes the native capability envelope and contract checksum; runtime code still cannot grant OS permissions by itself.',
+          title: 'Permission contract',
+          subtitle: 'Package config declares what the shell may ask for; the user still grants OS permission in the native flow.',
         },
       ]),
     ],
@@ -462,10 +617,11 @@ function buildUiScreenPatches(
 
 function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   const value = prompt.toLowerCase();
+  if (/\b(settings?|control room|config room|package editor|app editor|control center|admin|setup)\b/.test(value)) return 'control';
   if (/\b(theme|color|style|visual|design|cute|density|card|cards)\b/.test(value)) return 'theme';
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
   if (/\b(permission|permissions|capability|capabilities|camera|photo library|photos?|voice|okay google|google assistant|shortcut|deep[- ]?link|background|file open|open file|health connect|share sheet|share intent)\b/.test(value)) return 'native';
-  if (/\b(edit|update|rename|change|rewrite|revise|shorten|shorter|smaller|compact|less dense|simplify|polish|clean up|tune|tighten)\b/.test(value)) return 'edit';
+  if (/\b(edit|update|rename|change|rewrite|revise|move|reorder|bring|promote|shorten|shorter|smaller|compact|less dense|simplify|polish|clean up|tune|tighten)\b/.test(value)) return 'edit';
   if (/\bfield\b/.test(value) && !/\b(form|survey)\b/.test(value)) return 'field';
   if (/\b(view|views|show|filter|filtered|list of|board of|calendar of|timeline of|chart of|dashboard for|report for)\b/.test(value)) return 'view';
   if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
@@ -661,10 +817,12 @@ function deriveScreenEditChange(
   const screenId = findTargetScreenId(screens, lower, presentation.ui?.defaultScreen);
   const existing = screens[screenId];
   const compact = /\b(shorten|shorter|smaller|compact|less dense|simplify|tighten)\b/.test(lower);
-  const title = deriveEditedScreenTitle(existing.title, screenId, prompt);
-  const subtitle = deriveEditedScreenSubtitle(existing.subtitle, compact, lower);
+  const componentIndex = existing.components ? findTargetComponentIndex(existing.components, lower) : -1;
+  const editsComponent = componentIndex >= 0;
+  const title = editsComponent ? existing.title : deriveEditedScreenTitle(existing.title, screenId, prompt);
+  const subtitle = editsComponent ? existing.subtitle : deriveEditedScreenSubtitle(existing.subtitle, compact, lower);
   const components = existing.components
-    ? tuneScreenComponents(existing.components, lower, compact)
+    ? tuneScreenComponents(existing.components, lower, prompt, compact, componentIndex)
     : undefined;
   return {
     screenId,
@@ -763,6 +921,19 @@ function findTargetCollection(active: AppPackage, lowerPrompt: string): string {
   const first = entries.sort()[0];
   if (!first) throw new Error('No collections available for field change.');
   return first;
+}
+
+function selectControlRoomCollections(active: AppPackage): string[] {
+  const preferred = ['inventory', 'recipe', 'meal_plan', 'shopping_item', 'provider_connection'];
+  const selected = preferred.filter((collection) => Object.hasOwn(active.collections, collection));
+  for (const collection of Object.keys(active.collections).sort()) {
+    if (selected.length >= 5) break;
+    if (!selected.includes(collection)) selected.push(collection);
+  }
+  if (selected.length === 0) {
+    throw new Error('No collections available for control room.');
+  }
+  return selected;
 }
 
 function inferFieldType(lowerPrompt: string): FieldType {
@@ -875,20 +1046,34 @@ function deriveEditedScreenSubtitle(current: unknown, compact: boolean, lowerPro
 function tuneScreenComponents(
   components: A2UiComponent[],
   lowerPrompt: string,
+  prompt: string,
   compact: boolean,
+  targetIndex: number,
 ): A2UiComponent[] {
-  const tuned = components.map((component, index) => tuneScreenComponent(component, index, lowerPrompt, compact));
-  return compact ? tuned.slice(0, Math.min(5, tuned.length)) : tuned;
+  const tuned = components.map((component, index) => (
+    targetIndex === -1 || targetIndex === index
+      ? tuneScreenComponent(component, index, lowerPrompt, prompt, compact, targetIndex === index)
+      : component
+  ));
+  if (targetIndex >= 0 && shouldMoveComponentFirst(lowerPrompt)) {
+    const [target] = tuned.splice(targetIndex, 1);
+    if (target) tuned.unshift(target);
+  }
+  return compact && targetIndex === -1 ? tuned.slice(0, Math.min(5, tuned.length)) : tuned;
 }
 
 function tuneScreenComponent(
   component: A2UiComponent,
   index: number,
   lowerPrompt: string,
+  prompt: string,
   compact: boolean,
+  targetMatched: boolean,
 ): A2UiComponent {
+  const renamedTitle = targetMatched ? quotedPromptValue(prompt) : undefined;
   const tuned: A2UiComponent = {
     ...component,
+    ...(renamedTitle ? { title: renamedTitle } : {}),
     subtitle: trimComponentSubtitle(component.subtitle, compact),
   };
   if (compact && tuned.query?.limit) {
@@ -905,6 +1090,26 @@ function tuneScreenComponent(
     tuned.tone = 'moss';
   }
   return tuned;
+}
+
+function findTargetComponentIndex(components: A2UiComponent[], lowerPrompt: string): number {
+  return components.findIndex((component) => {
+    const ids = [
+      component.id,
+      component.id?.replace(/[_:-]+/g, ' '),
+      component.title,
+      component.widget,
+    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    return ids.some((value) => lowerPrompt.includes(value.toLowerCase()));
+  });
+}
+
+function shouldMoveComponentFirst(lowerPrompt: string): boolean {
+  return /\b(first|top|above|front|start)\b/.test(lowerPrompt);
+}
+
+function quotedPromptValue(prompt: string): string | undefined {
+  return prompt.match(/["“]([^"”]{2,48})["”]/)?.[1]?.trim();
 }
 
 function trimComponentSubtitle(subtitle: unknown, compact: boolean): string | undefined {

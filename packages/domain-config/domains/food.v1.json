@@ -434,66 +434,20 @@
     "screens": {
       "overview": {
         "title": "Today",
-        "subtitle": "A living kitchen cockpit: decide dinner, use what matters, keep shopping tiny.",
+        "subtitle": "Dinner, use-first food, and tiny shopping. No kitchen wall of rows.",
         "components": [
           {
             "kind": "widget",
             "widget": "postCard",
             "id": "food_ai_brief",
-            "title": "Wonder brief",
-            "subtitle": "Tonight’s kitchen read",
+            "title": "Tonight looks easy",
+            "subtitle": "One useful read, not a dashboard.",
             "tone": "plum",
             "props": {
-              "body": "Cook from what is already open, pick one dinner path, and buy only the missing garnish.",
-              "author": "Wonder"
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "pollCard",
-            "id": "dinner_vote",
-            "title": "Dinner direction",
-            "subtitle": "One-tap family choice. Approval-backed writes come next.",
-            "tone": "moss",
-            "props": {
-              "options": [
-                {
-                  "label": "Quick dal bowl",
-                  "subtitle": "Use spinach and yogurt first."
-                },
-                {
-                  "label": "Tandoori sheet pan",
-                  "subtitle": "Best if chicken is already thawed."
-                },
-                {
-                  "label": "Leftovers remix",
-                  "subtitle": "Fastest and lowest waste."
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "chartBlock",
-            "id": "food_signal_chart",
-            "title": "Kitchen signal",
-            "subtitle": "Tiny overview instead of a wall of rows.",
-            "tone": "blue",
-            "props": {
-              "points": [
-                {
-                  "label": "Ready",
-                  "value": 8
-                },
-                {
-                  "label": "Use first",
-                  "value": 3
-                },
-                {
-                  "label": "Buy",
-                  "value": 2
-                }
-              ]
+              "body": "Use the open spinach and yogurt, pick dinner once, and only buy the missing garnish.",
+              "author": "Wonder",
+              "density": "compact",
+              "summaryFirst": true
             }
           },
           {
@@ -524,7 +478,7 @@
             "id": "use_first",
             "title": "Use first",
             "tone": "amber",
-            "subtitle": "Waste less by using what should expire soon.",
+            "subtitle": "Open, expiring, or too-good-to-waste food.",
             "query": {
               "collections": [
                 "inventory",
@@ -532,7 +486,7 @@
                 "ingredient"
               ],
               "match": "use in|use soon|expire|best by|use by|open",
-              "limit": 5
+              "limit": 3
             },
             "action": {
               "kind": "propose",
@@ -544,11 +498,37 @@
             }
           },
           {
+            "kind": "widget",
+            "widget": "pollCard",
+            "id": "dinner_vote",
+            "title": "Family dinner vote",
+            "subtitle": "Pick the vibe. Wonder turns it into a plan.",
+            "tone": "moss",
+            "props": {
+              "density": "compact",
+              "summaryFirst": true,
+              "options": [
+                {
+                  "label": "Quick dal bowl",
+                  "subtitle": "Use spinach and yogurt first."
+                },
+                {
+                  "label": "Tandoori sheet pan",
+                  "subtitle": "Best if chicken is already thawed."
+                },
+                {
+                  "label": "Leftovers remix",
+                  "subtitle": "Fastest and lowest waste."
+                }
+              ]
+            }
+          },
+          {
             "kind": "recordList",
             "id": "shopping_preview",
-            "title": "Still needed",
+            "title": "Tiny shop",
             "tone": "neutral",
-            "subtitle": "Your kitchen covers what you need.",
+            "subtitle": "Only what dinner actually needs.",
             "query": {
               "collections": [
                 "shopping_item",
@@ -568,37 +548,15 @@
             }
           },
           {
-            "kind": "recordList",
-            "id": "review_queue",
-            "title": "Review queue",
-            "tone": "moss",
-            "subtitle": "Uncertain changes awaiting review.",
-            "query": {
-              "collections": [
-                "purchase",
-                "shopping_demand",
-                "audit_event"
-              ],
-              "match": "review|needs|draft|pending",
-              "limit": 3
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Review with Wonder",
-              "command": "review_food_queue",
-              "payload": {
-                "route": "/chat"
-              }
-            }
-          },
-          {
             "kind": "widget",
             "widget": "kanbanBoard",
             "id": "food_flow_board",
-            "title": "Food flow",
-            "subtitle": "Meal work as a soft board: decide, prep, buy, done.",
+            "title": "Dinner flow",
+            "subtitle": "A soft board for tonight only.",
             "tone": "amber",
             "props": {
+              "density": "compact",
+              "summaryFirst": true,
               "columns": [
                 {
                   "title": "Decide",
@@ -623,6 +581,32 @@
                       "title": "Only missing garnish"
                     }
                   ]
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "chartBlock",
+            "id": "food_signal_chart",
+            "title": "Kitchen signal",
+            "subtitle": "Tiny status at a glance.",
+            "tone": "blue",
+            "props": {
+              "density": "compact",
+              "summaryFirst": true,
+              "points": [
+                {
+                  "label": "Ready",
+                  "value": 8
+                },
+                {
+                  "label": "Use first",
+                  "value": 3
+                },
+                {
+                  "label": "Buy",
+                  "value": 2
                 }
               ]
             }
