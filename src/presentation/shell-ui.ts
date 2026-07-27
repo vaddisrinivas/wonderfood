@@ -83,3 +83,92 @@ export const SETTINGS_SHELL_UI: PackagePresentationUi = {
     },
   },
 };
+
+export const ROUTE_SHELL_UI: PackagePresentationUi = {
+  schemaVersion: 'wonder.ui.v1',
+  defaultScreen: 'home',
+  screens: {
+    ...HOME_SHELL_UI.screens,
+    ...SETTINGS_SHELL_UI.screens,
+    chat: {
+      title: 'Ask Wonder',
+      subtitle: 'Ask, plan, and change the app from one AI surface. Advanced receipts stay behind the curtain.',
+      components: [
+        { kind: 'text', id: 'chat_prompt', title: 'What should we do?', subtitle: 'Try: plan dinner from expiring pantry, add a shopping item, create a new food table, or redesign this page.', tone: 'plum' },
+        { kind: 'action', id: 'chat_start', title: 'Start with AI', subtitle: 'Open the assistant workflow for this package.', tone: 'moss', action: { kind: 'propose', label: 'Ask Wonder', command: 'open_chat', payload: { route: '/chat' } } },
+        { kind: 'recordList', id: 'chat_context', title: 'Context it can use', subtitle: 'Food records available for grounded answers.', tone: 'blue', query: { limit: 4 } },
+      ],
+    },
+    sources: {
+      title: 'Sources',
+      subtitle: 'Local, Notion, and Sheets stay invisible until you need control.',
+      components: [
+        { kind: 'text', id: 'sources_default', title: 'Local first', subtitle: 'The app works on-device. External homes are optional and verified before writeback.', tone: 'moss' },
+        { kind: 'action', id: 'sources_connect', title: 'Connect or verify', subtitle: 'Open provider setup only when needed.', tone: 'blue', action: { kind: 'propose', label: 'Open settings', command: 'open_settings', payload: { route: '/settings' } } },
+      ],
+    },
+    capture: {
+      title: 'Add food',
+      subtitle: 'Capture now. Wonder can organize it later.',
+      components: [
+        { kind: 'text', id: 'capture_note', title: 'Quick add', subtitle: 'Add a meal, pantry item, recipe, shopping need, or note by asking Wonder.', tone: 'amber' },
+        { kind: 'action', id: 'capture_ask', title: 'Tell Wonder what to add', tone: 'moss', action: { kind: 'propose', label: 'Add with AI', command: 'capture_with_ai', payload: { route: '/chat' } } },
+      ],
+    },
+    search: {
+      title: 'Search',
+      subtitle: 'Find food records first; ask Wonder when search is not enough.',
+      components: [
+        { kind: 'recordList', id: 'search_records', title: 'Recent food records', tone: 'blue', query: { limit: 6 } },
+        { kind: 'action', id: 'search_ask', title: 'Ask instead', tone: 'plum', action: { kind: 'propose', label: 'Ask Wonder', command: 'ask_search', payload: { route: '/chat' } } },
+      ],
+    },
+    record: {
+      title: 'Record',
+      subtitle: 'A source-backed item from your food graph.',
+      components: [
+        { kind: 'recordList', id: 'record_current', title: 'Selected item', tone: 'moss', query: { limit: 1 } },
+        { kind: 'action', id: 'record_ask', title: 'Work with this item', tone: 'plum', action: { kind: 'propose', label: 'Ask Wonder', command: 'ask_record', payload: { route: '/chat' } } },
+      ],
+    },
+    collection: {
+      title: 'Collection',
+      subtitle: 'A package-defined table rendered from config.',
+      components: [
+        { kind: 'recordList', id: 'collection_records', title: 'Records', tone: 'blue', query: { limit: 8 } },
+        { kind: 'action', id: 'collection_edit', title: 'Change this table', tone: 'plum', action: { kind: 'propose', label: 'Ask Wonder', command: 'edit_collection', payload: { route: '/chat' } } },
+      ],
+    },
+    config: {
+      title: 'Customize',
+      subtitle: 'Ask AI to change tables, package config, screens, theme, and defaults safely.',
+      components: [
+        { kind: 'text', id: 'config_ai_first', title: 'AI edits. You approve.', subtitle: 'Describe the app change you want. Wonder should propose a package diff, not make hidden edits.', tone: 'plum' },
+        { kind: 'action', id: 'config_ask', title: 'Change the app', tone: 'moss', action: { kind: 'propose', label: 'Ask Wonder', command: 'change_app_config', payload: { route: '/chat' } } },
+      ],
+    },
+    system: {
+      title: 'System',
+      subtitle: 'Hidden machinery. Open only for troubleshooting.',
+      components: [
+        { kind: 'text', id: 'system_hidden', title: 'Behind the curtain', subtitle: 'Provider receipts, debug checks, and platform controls are not daily UX.', tone: 'amber' },
+        { kind: 'action', id: 'system_health', title: 'Diagnostics', tone: 'blue', action: { kind: 'propose', label: 'Open health', command: 'open_health', payload: { route: '/health-diagnostics' } } },
+      ],
+    },
+    health: {
+      title: 'Health',
+      subtitle: 'Runtime checks for when something feels wrong.',
+      components: [
+        { kind: 'text', id: 'health_status', title: 'Debug surface', subtitle: 'This should stay quiet unless the app needs attention.', tone: 'blue' },
+        { kind: 'action', id: 'health_home', title: 'Back to food', tone: 'moss', action: { kind: 'propose', label: 'Open food', command: 'open_food', payload: { route: '/food' } } },
+      ],
+    },
+    notFound: {
+      title: 'This moved',
+      subtitle: 'Your data is safe. Return to the generated app.',
+      components: [
+        { kind: 'action', id: 'not_found_home', title: 'Go home', tone: 'moss', action: { kind: 'propose', label: 'Open home', command: 'open_home', payload: { route: '/' } } },
+      ],
+    },
+  },
+};

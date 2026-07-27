@@ -61,6 +61,7 @@
     "typecheck": "tsc --noEmit",
     "audit:production": "npm audit --omit=dev --json",
     "config:validate": "node scripts/validate-domain-config.mjs",
+    "check:json-render-only-ui": "node scripts/quality/check-json-render-only-ui.mjs",
     "check:food-schema-depth": "node scripts/quality/check-food-schema-depth.mjs",
     "check:evidence-provenance": "node scripts/quality/test-evidence-provenance.mjs",
     "generate:data-plane-template": "node scripts/quality/generate-data-plane-artifacts.mjs",
