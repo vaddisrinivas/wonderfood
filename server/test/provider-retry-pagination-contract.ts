@@ -30,7 +30,9 @@ process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'lifeos-
 
 const { notionFetch } = await import('../src/providers/notion/client');
 const { pullNotionRecordsLive } = await import('../src/providers/notion/pull');
+const { setNotionPortForTests } = await import('../src/providers/notion/port');
 const { pullSheetsRecordsLive } = await import('../src/providers/sheets/pull');
+const { setSheetsPortForTests } = await import('../src/providers/sheets/port');
 const { upsertProviderCanonicalRecord } = await import('../src/runtime/state');
 
 const originalFetch = globalThis.fetch;
@@ -76,13 +78,16 @@ assert.equal(timerDurations.filter((value) => value === 15000).length, 2, 'each 
 assert.equal(timerCleared, 2, 'each retry attempt should clear its timeout');
 
 let notionQueryCalls = 0;
-globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
-  const url = String(input);
-  if (url.includes('/data_sources/retry-pagination-source/query')) {
+setNotionPortForTests({
+  async queryDataSource(input) {
     notionQueryCalls += 1;
-    const body = init.body ? JSON.parse(String(init.body)) as { start_cursor?: string } : {};
-    if (!body.start_cursor) {
-      return jsonResponse(200, {
+    assert.equal(input.dataSourceId, 'retry-pagination-source', 'notion port should receive configured data_source_id');
+    assert.equal(input.pageSize, 1, 'notion port should honor limit for targeted pull');
+    if (!input.startCursor) {
+      return {
+        ok: true,
+        status: 200,
+        data: {
         results: [{
           object: 'page',
           id: 'page-before-target',
@@ -99,9 +104,13 @@ globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
         }],
         has_more: true,
         next_cursor: 'cursor-2',
-      });
+        },
+      };
     }
-    return jsonResponse(200, {
+    return {
+      ok: true,
+      status: 200,
+      data: {
       results: [{
         object: 'page',
         id: 'page-target',
@@ -118,10 +127,16 @@ globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
       }],
       has_more: false,
       next_cursor: null,
-    });
-  }
-  return jsonResponse(500, { error: `unexpected pagination endpoint ${url}` });
-}) as typeof globalThis.fetch;
+      },
+    };
+  },
+  async createPage() {
+    throw new Error('notion createPage should not run in pagination contract');
+  },
+  async updatePage() {
+    throw new Error('notion updatePage should not run in pagination contract');
+  },
+});
 
 const targetedPull = await pullNotionRecordsLive({
   domain: 'food',
@@ -134,18 +149,30 @@ assert.equal(targetedPull.status, 'ready', 'targeted notion pull should succeed'
 assert.equal(notionQueryCalls, 2, 'targeted notion pull should paginate past the first page');
 assert.equal(targetedPull.records.some((record) => record.id === 'page-target'), true, 'targeted notion pull should include the requested page');
 
-globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
-  const url = String(input);
-  const method = (init.method || 'GET').toUpperCase();
-  if (method === 'GET' && /\/spreadsheets\/[^/]+\/?$/.test(url)) {
-    return jsonResponse(200, {
+let sheetsMetadataCalls = 0;
+let sheetsBatchGetCalls = 0;
+setSheetsPortForTests({
+  async getSpreadsheet(input) {
+    sheetsMetadataCalls += 1;
+    assert.equal(input.spreadsheetId, 'retry-pagination-sheet', 'sheets port should receive configured spreadsheet id');
+    return {
+      ok: true,
+      status: 200,
+      data: {
       spreadsheetId: 'retry-pagination-sheet',
       properties: { title: 'LifeOS Runtime Workbook' },
       sheets: [{ properties: { title: 'LifeOS Runtime', gridProperties: { columnCount: 26, rowCount: 32 } } }],
-    });
-  }
-  if (method === 'GET' && url.includes('/values:batchGet')) {
-    return jsonResponse(200, {
+      },
+    };
+  },
+  async batchGetValues(input) {
+    sheetsBatchGetCalls += 1;
+    assert.equal(input.majorDimension, 'ROWS', 'sheets port should request row-major reads');
+    assert.deepEqual(input.ranges, ['LifeOS Runtime!A:Z'], 'sheets port should request runtime range');
+    return {
+      ok: true,
+      status: 200,
+      data: {
       valueRanges: [{
         range: 'LifeOS Runtime!A:Z',
         values: [
@@ -154,15 +181,20 @@ globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
           ['sheet-limit-b', 'Beta', 'food', 'recipe', '{"ready":true}', 'false', '1', '2026-01-01T00:00:00.000Z', '{}', 'sheet-limit-b'],
         ],
       }],
-    });
-  }
-  return jsonResponse(500, { error: `unexpected sheets endpoint ${url}` });
-}) as typeof globalThis.fetch;
+      },
+    };
+  },
+  async batchUpdateValues() {
+    throw new Error('sheets batchUpdateValues should not run in pagination contract');
+  },
+});
 
 const limitedSheetsPull = await pullSheetsRecordsLive({ limit: 1 });
 assert.equal(limitedSheetsPull.status, 'ready', 'sheets pull should succeed');
 assert.equal(limitedSheetsPull.records.length, 1, 'sheets pull should enforce the requested limit');
 assert.equal(limitedSheetsPull.source_snapshots.length, 1, 'sheets source snapshots should respect the requested limit');
+assert.equal(sheetsMetadataCalls, 1, 'sheets pull should read metadata once');
+assert.equal(sheetsBatchGetCalls, 1, 'sheets pull should read values once');
 
 const firstUpsert = upsertProviderCanonicalRecord({
   provider: 'notion',
@@ -196,6 +228,8 @@ assert.equal(secondUpsert.record?.archived_at, firstUpsert.record?.archived_at, 
 globalThis.fetch = originalFetch;
 globalThis.setTimeout = originalSetTimeout;
 globalThis.clearTimeout = originalClearTimeout;
+setNotionPortForTests(null);
+setSheetsPortForTests(null);
 
 if (previousEnv.notionToken === undefined) delete process.env.NOTION_TOKEN; else process.env.NOTION_TOKEN = previousEnv.notionToken;
 if (previousEnv.notionSource === undefined) delete process.env.NOTION_DATA_SOURCE_ID; else process.env.NOTION_DATA_SOURCE_ID = previousEnv.notionSource;

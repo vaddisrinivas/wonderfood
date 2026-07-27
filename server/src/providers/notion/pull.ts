@@ -1,7 +1,6 @@
 import { toNotionCanonicalProjection } from './projection';
 import { readNotionConfig } from './client';
-import { notionApiPath, notionFetch, NOTION_DATA_SOURCE_QUERY_PATH } from './client';
-import type { NotionApiResponse } from './client';
+import { getNotionPort, type NotionQueryResponse } from './port';
 import { queryNotionDataSourceRecords } from './push';
 
 export type NotionPullInput = {
@@ -24,12 +23,6 @@ export type NotionPullResult = {
 export type NotionLivePullResult = NotionPullResult & {
   status_code?: number;
   error?: string | null;
-};
-
-type NotionQueryResponse = {
-  results?: unknown[];
-  has_more?: boolean;
-  next_cursor?: string | null;
 };
 
 type NotionRecordLike = {
@@ -288,7 +281,18 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
     };
   }
 
-  const path = notionApiPath(NOTION_DATA_SOURCE_QUERY_PATH, { data_source_id: config.dataSourceId });
+  const port = getNotionPort(config);
+  if (!port) {
+    return {
+      status: 'disabled',
+      configured: true,
+      records: [],
+      source_snapshots: [],
+      message: 'Notion SDK port is unavailable.',
+      error: 'Notion SDK port is unavailable.',
+      status_code: 0,
+    };
+  }
   const pageSize = Math.max(1, Math.min(input.limit ?? 50, 100));
   const targetPageId = input.pageId?.trim() || input.externalId?.trim() || '';
   let cursor: string | null = null;
@@ -296,12 +300,10 @@ export async function pullNotionRecordsLive(input: NotionPullInput = {}): Promis
   const rows: Array<{ projection: ReturnType<typeof toNotionCanonicalProjection>; source: NotionSourceSnapshot }> = [];
   let hasMore = true;
   while (hasMore) {
-    const response: NotionApiResponse<NotionQueryResponse> = await notionFetch<NotionQueryResponse>(path, {
-      method: 'POST',
-      body: JSON.stringify({
-        page_size: pageSize,
-        ...(cursor ? { start_cursor: cursor } : {}),
-      }),
+    const response = await port.queryDataSource({
+      dataSourceId: config.dataSourceId,
+      pageSize,
+      ...(cursor ? { startCursor: cursor } : {}),
       signal: input.signal,
     });
 
