@@ -770,6 +770,418 @@
             }
           }
         ]
+      },
+      "home": {
+        "title": "Today",
+        "subtitle": "Dinner, pantry, shopping, and Wonder in one calm food cockpit.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "home_tonight",
+            "title": "Tonight",
+            "subtitle": "Best next meal from plans and recipes.",
+            "tone": "moss",
+            "query": {
+              "collections": [
+                "meal_plan",
+                "recipe"
+              ],
+              "match": "planned|tonight|dinner",
+              "limit": 1
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Ask Wonder",
+              "command": "ask_today",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "home_use_first",
+            "title": "Use first",
+            "subtitle": "Open, expiring, or too-good-to-waste food.",
+            "tone": "amber",
+            "query": {
+              "collections": [
+                "inventory",
+                "inventory_lot",
+                "ingredient"
+              ],
+              "match": "use soon|expire|best by|open",
+              "limit": 3
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Plan around it",
+              "command": "plan_around_expiry",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "home_shopping",
+            "title": "Tiny shop",
+            "subtitle": "Only what dinner actually needs.",
+            "tone": "blue",
+            "query": {
+              "collections": [
+                "shopping_item",
+                "shopping_demand",
+                "shopping_list"
+              ],
+              "match": "to buy|needed|shopping|cart",
+              "limit": 3
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Add item",
+              "command": "add_shopping_item",
+              "payload": {
+                "route": "/capture"
+              }
+            }
+          },
+          {
+            "kind": "action",
+            "id": "home_chat",
+            "title": "Ask Wonder",
+            "subtitle": "Plan dinner, add food, or change this app by asking.",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Chat",
+              "command": "open_chat",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          }
+        ]
+      },
+      "settings": {
+        "title": "Control room",
+        "subtitle": "Beautiful defaults first. Sources, theme, Health Connect, and app config stay here.",
+        "components": [
+          {
+            "kind": "text",
+            "id": "settings_defaults",
+            "title": "Best by default",
+            "subtitle": "Food stays useful without exposing provenance, packages, or sync machinery on every screen.",
+            "tone": "moss"
+          },
+          {
+            "kind": "widget",
+            "widget": "providerStatus",
+            "id": "settings_sync_status",
+            "title": "Sources are quietly ready",
+            "subtitle": "Local works first. Notion and Sheets appear only when they need attention.",
+            "tone": "blue",
+            "props": {
+              "provider": "summary"
+            }
+          },
+          {
+            "kind": "action",
+            "id": "settings_sources",
+            "title": "Connected homes",
+            "subtitle": "Review Notion, Sheets, Drive, and local data homes.",
+            "tone": "blue",
+            "action": {
+              "kind": "propose",
+              "label": "Open sources",
+              "command": "open_sources",
+              "payload": {
+                "route": "/sources"
+              }
+            }
+          },
+          {
+            "kind": "action",
+            "id": "settings_health",
+            "title": "Health Connect",
+            "subtitle": "Android permission and status flow for food-health context.",
+            "tone": "amber",
+            "action": {
+              "kind": "propose",
+              "label": "Open",
+              "command": "open_health",
+              "payload": {
+                "route": "/health-diagnostics"
+              }
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "themePreview",
+            "id": "settings_theme_preview",
+            "title": "Look and feel",
+            "subtitle": "Theme tokens live in this package config.",
+            "tone": "moss"
+          },
+          {
+            "kind": "action",
+            "id": "settings_config",
+            "title": "App config",
+            "subtitle": "Open the JSON-render widget catalog and package controls.",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Customize",
+              "command": "open_config",
+              "payload": {
+                "route": "/config"
+              }
+            }
+          }
+        ]
+      },
+      "chat": {
+        "title": "Ask Wonder",
+        "subtitle": "Food assistant first. App changes stay reviewable when you ask for them.",
+        "components": [
+          {
+            "kind": "widget",
+            "widget": "assistantChat",
+            "id": "chat_assistant",
+            "title": "Ask Wonder",
+            "subtitle": "Dinner, pantry, shopping, sources, and safe app changes.",
+            "tone": "plum",
+            "props": {
+              "prompt": "Ask about dinner, pantry, shopping, or app changes…"
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "chat_context",
+            "title": "Food context",
+            "subtitle": "Grounding records Wonder can use.",
+            "tone": "blue",
+            "query": {
+              "limit": 4
+            }
+          }
+        ]
+      },
+      "sources": {
+        "title": "Connected homes",
+        "subtitle": "Your food data can live locally, in Notion, or in Sheets. Wonder keeps the work invisible until it needs you.",
+        "components": [
+          {
+            "kind": "widget",
+            "widget": "providerStatus",
+            "id": "sources_local",
+            "title": "On-device",
+            "subtitle": "Always available. Fast, private, and good enough to start.",
+            "tone": "moss",
+            "props": {
+              "provider": "local"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "providerStatus",
+            "id": "sources_notion",
+            "title": "Notion",
+            "subtitle": "Use your existing workspace when it is the better home.",
+            "tone": "blue",
+            "props": {
+              "provider": "notion"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "providerStatus",
+            "id": "sources_sheets",
+            "title": "Sheets",
+            "subtitle": "Simple shared data for family or small-team apps.",
+            "tone": "amber",
+            "props": {
+              "provider": "google_sheets"
+            }
+          },
+          {
+            "kind": "action",
+            "id": "sources_verify",
+            "title": "Verify sources",
+            "subtitle": "Run a safe reread before trusting external writes.",
+            "tone": "moss",
+            "action": {
+              "kind": "propose",
+              "label": "Verify",
+              "command": "run_provider_verification",
+              "payload": {
+                "providers": [
+                  "notion",
+                  "google_sheets"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "capture": {
+        "title": "Add food",
+        "subtitle": "Capture now. Wonder can organize it later.",
+        "components": [
+          {
+            "kind": "text",
+            "id": "capture_note",
+            "title": "Quick add",
+            "subtitle": "Add a meal, pantry item, recipe, shopping need, or note by asking Wonder.",
+            "tone": "amber"
+          },
+          {
+            "kind": "action",
+            "id": "capture_ask",
+            "title": "Tell Wonder what to add",
+            "tone": "moss",
+            "action": {
+              "kind": "propose",
+              "label": "Add with AI",
+              "command": "capture_with_ai",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          }
+        ]
+      },
+      "search": {
+        "title": "Search",
+        "subtitle": "Find records first; ask Wonder when search is not enough.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "search_records",
+            "title": "Recent food records",
+            "tone": "blue",
+            "query": {
+              "limit": 6
+            }
+          },
+          {
+            "kind": "action",
+            "id": "search_ask",
+            "title": "Ask instead",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Ask Wonder",
+              "command": "ask_search",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          }
+        ]
+      },
+      "config": {
+        "title": "Customize",
+        "subtitle": "JSON-render controls for app packages, widgets, permissions, and theme.",
+        "components": [
+          {
+            "kind": "widget",
+            "widget": "widgetCatalog",
+            "id": "config_widgets",
+            "title": "Widget registry",
+            "subtitle": "Posts, polls, feeds, boards, charts, media, maps, permissions, sources, and AI.",
+            "tone": "blue"
+          },
+          {
+            "kind": "widget",
+            "widget": "formCard",
+            "id": "config_form_demo",
+            "title": "Form primitive",
+            "subtitle": "Any app can collect structured input through config.",
+            "tone": "moss",
+            "props": {
+              "fields": [
+                {
+                  "label": "Name",
+                  "subtitle": "Short text"
+                },
+                {
+                  "label": "Type",
+                  "subtitle": "Choice"
+                },
+                {
+                  "label": "Notes",
+                  "subtitle": "Long text"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "checklistCard",
+            "id": "config_checklist_demo",
+            "title": "Checklist primitive",
+            "subtitle": "Recipes, onboarding, QA, routines, field work, packing, chores.",
+            "tone": "amber",
+            "props": {
+              "items": [
+                {
+                  "title": "Capture"
+                },
+                {
+                  "title": "Review"
+                },
+                {
+                  "title": "Approve"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "permissionCard",
+            "id": "config_permissions",
+            "title": "Native capabilities",
+            "subtitle": "Rendered from the active package before the app asks the OS.",
+            "tone": "amber"
+          },
+          {
+            "kind": "widget",
+            "widget": "themePreview",
+            "id": "config_theme",
+            "title": "Theme tokens",
+            "subtitle": "Beautiful defaults without per-screen hand work.",
+            "tone": "moss"
+          }
+        ]
+      },
+      "health": {
+        "title": "Health Connect",
+        "subtitle": "Android permission status and food-health context. Native access remains explicitly granted by you.",
+        "components": [
+          {
+            "kind": "widget",
+            "widget": "healthConnect",
+            "id": "health_status",
+            "title": "Health Connect status",
+            "subtitle": "Live Android permission status and controls rendered as a JSON widget.",
+            "tone": "blue"
+          },
+          {
+            "kind": "action",
+            "id": "health_settings",
+            "title": "Back to control room",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Settings",
+              "command": "open_settings",
+              "payload": {
+                "route": "/settings"
+              }
+            }
+          }
+        ]
       }
     }
   },

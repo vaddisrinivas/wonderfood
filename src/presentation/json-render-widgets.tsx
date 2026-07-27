@@ -210,22 +210,22 @@ function HealthConnectWidget({ element }: ComponentRenderProps<WidgetProps>) {
   return (
     <WidgetShell
       title={text(props.title, 'Health Connect')}
-      subtitle={text(props.subtitle, 'Android health permissions and food-health context.')}
+      subtitle={text(props.subtitle, 'Optional Android health context for food decisions. You choose what is shared.')}
     >
       <View style={styles.statusPill}>
         <Text style={styles.statusText}>{status?.availability ?? 'checking'}</Text>
       </View>
       <Text style={styles.bodyText}>{status?.message ?? 'Checking Health Connect on this device…'}</Text>
-      <Text style={styles.bodyText}>{status?.granted.length ? `${status.granted.length} permissions granted` : 'No granted permissions detected yet.'}</Text>
+      <Text style={styles.bodyText}>{status?.granted.length ? `${status.granted.length} permissions ready` : 'No health permissions enabled yet.'}</Text>
       <View style={styles.buttonRow}>
         <Pressable style={styles.secondaryButton} onPress={refresh} disabled={busy}>
-          <Text style={styles.secondaryButtonText}>Refresh</Text>
+          <Text style={styles.secondaryButtonText}>Check again</Text>
         </Pressable>
         <Pressable style={styles.primaryButton} onPress={askPermission} disabled={busy}>
-          <Text style={styles.primaryButtonText}>Allow access</Text>
+          <Text style={styles.primaryButtonText}>Choose access</Text>
         </Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => void openLifeOSHealthSettings()}>
-          <Text style={styles.secondaryButtonText}>System</Text>
+          <Text style={styles.secondaryButtonText}>Android settings</Text>
         </Pressable>
       </View>
     </WidgetShell>
@@ -630,11 +630,11 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const permissions = rows(props.permissions);
   return (
-    <WidgetShell title={text(props.title, 'Permissions')} subtitle={text(props.subtitle, 'Native capabilities explained before request.')}>
-      {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Used only for food-health context.' }]).map((permission) => (
+    <WidgetShell title={text(props.title, 'Permissions')} subtitle={text(props.subtitle, 'This app asks only when a package feature needs native access.')}>
+      {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Optional food-health context; you stay in control.' }]).map((permission) => (
         <View key={label(permission)} style={styles.permissionRow}>
           <Text style={styles.permissionTitle}>{label(permission)}</Text>
-          <Text style={styles.permissionDetail}>{detail(permission, 'Required by this package feature.')}</Text>
+          <Text style={styles.permissionDetail}>{detail(permission, 'Used only for this package feature.')}</Text>
         </View>
       ))}
     </WidgetShell>
@@ -644,21 +644,21 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
 function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const summary = props.providerStatus;
-  const status = summary?.headline ?? text(props.status, 'Ready');
-  const body = summary?.detail ?? text(props.body, 'Local data is primary. Notion and Sheets writes require verification before success.');
+  const status = summary?.headline ?? text(props.status, 'Quietly ready');
+  const body = summary?.detail ?? text(props.body, 'Local works first. Notion and Sheets stay invisible unless they need attention.');
   const attention = summary?.status === 'attention';
   const connected = summary?.connected ?? false;
   return (
-    <WidgetShell title={text(props.title, 'Sync')} subtitle={text(props.subtitle, 'Provider sync should feel invisible until attention is needed.')}>
+    <WidgetShell title={text(props.title, 'Sources')} subtitle={text(props.subtitle, 'Your data homes stay quiet until there is something useful to do.')}>
       <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
         <Text style={[styles.statusText, attention ? styles.statusTextAttention : null]}>{status}</Text>
       </View>
       <Text style={styles.bodyText}>{body}</Text>
       {summary ? (
         <View style={styles.providerStats}>
-          <Text style={styles.providerStat}>{connected ? `${summary.linkCount} linked` : 'not connected'}</Text>
-          <Text style={styles.providerStat}>{summary.pendingWrites + summary.inflightWrites} queued</Text>
-          <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites} failed</Text>
+          <Text style={styles.providerStat}>{connected ? `${summary.linkCount} linked` : 'local only'}</Text>
+          <Text style={styles.providerStat}>{summary.pendingWrites + summary.inflightWrites ? `${summary.pendingWrites + summary.inflightWrites} syncing` : 'caught up'}</Text>
+          <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites ? `${summary.failedWrites} need help` : 'no issues'}</Text>
         </View>
       ) : null}
     </WidgetShell>

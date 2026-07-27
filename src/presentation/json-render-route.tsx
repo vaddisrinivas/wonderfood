@@ -50,13 +50,14 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
       cancelled = true;
     };
   }, [db, screen, settings.runtime.activeDomain]);
+  const activeUi = activeManifest.ui?.screens?.[screen] ? activeManifest.ui : ROUTE_SHELL_UI;
 
   return (
     <JsonRenderSurface
       eyebrow={eyebrow ?? activeManifest.label.toUpperCase()}
       title={title ?? activeManifest.label}
       subtitle={subtitle}
-      ui={useDomainUi ? activeManifest.ui : ROUTE_SHELL_UI}
+      ui={useDomainUi ? activeManifest.ui : activeUi}
       screen={screen}
       records={records}
       nativePermissions={activeManifest.native_capabilities?.permissions}
