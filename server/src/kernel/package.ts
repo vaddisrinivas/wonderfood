@@ -1,6 +1,10 @@
 import { validateJsonSchema } from './validation';
 import { appPackageSchemaV2, appPackageSchemaV3 } from './package-schema';
-import type { 
+import {
+  collectAppPackageValidationIssues,
+  formatAppPackageValidationIssues,
+} from '@/packages/shared/contracts/package';
+import type {
   AppPackage,
   AppPackageContractLock,
   AppPackageDependencyPin,
@@ -161,40 +165,10 @@ export function validateAppPackage(input: unknown): PackageValidation {
   const schemaResult = validateJsonSchema(schema, input);
   if (!schemaResult.valid) errors.push(...schemaResult.errors.map((error) => `schema:${error}`));
   const value = input as Partial<AppPackage>;
-  if (value.schemaVersion === 'wonder.app-package.v2') {
-    // legacy contract.
-  } else if (value.schemaVersion === 'wonder.app-package.v3') {
-    validateAppPackageV3(value as Partial<AppPackageV3>, errors);
-  } else {
-    errors.push('schemaVersion must be wonder.app-package.v2 or wonder.app-package.v3');
-  }
-  if (!text(value.id)) errors.push('id is required');
-  if (!text(value.version)) errors.push('version is required');
-  if (!value.collections || typeof value.collections !== 'object') errors.push('collections are required');
-  if (!value.queries || typeof value.queries !== 'object') errors.push('queries are required');
-  if (!value.views || typeof value.views !== 'object') errors.push('views are required');
-  if (!Array.isArray(value.rules)) errors.push('rules must be an array');
+  errors.push(...formatAppPackageValidationIssues(collectAppPackageValidationIssues(input)));
   if (value.presentation !== undefined && !object(value.presentation)) errors.push('presentation must be an object');
   if (value.computedFields !== undefined && !Array.isArray(value.computedFields)) errors.push('computedFields must be an array');
-  if (!Array.isArray(value.capabilities)) errors.push('capabilities must be an array');
-  if (!Array.isArray(value.acceptanceTests)) errors.push('acceptanceTests must be an array');
   if (hasExecutableCode(input)) errors.push('executable package code is forbidden');
-
-  for (const [id, collection] of Object.entries(value.collections ?? {})) {
-    if (!text(collection?.id) || collection.id !== id) errors.push(`collection ${id} must have matching id`);
-    if (!collection?.fields || typeof collection.fields !== 'object') errors.push(`collection ${id} fields are required`);
-  }
-  for (const [id, query] of Object.entries(value.queries ?? {})) {
-    if (!text(query?.from)) errors.push(`query ${id} must declare from`);
-    else if (query.from !== 'records' && !value.collections?.[query.from]) {
-      errors.push(`query ${id} references missing collection ${query.from}`);
-    }
-  }
-  for (const [id, view] of Object.entries(value.views ?? {})) {
-    if (!text(view?.id) || view.id !== id) errors.push(`view ${id} must have matching id`);
-    if (!text(view?.query)) errors.push(`view ${id} must reference a query`);
-    else if (!value.queries?.[view.query]) errors.push(`view ${id} references missing query ${view.query}`);
-  }
 
   const presentation = value.presentation as Partial<PackagePresentationSpec> | undefined;
   if (presentation) {
@@ -374,53 +348,6 @@ function validateOperationTemplate(input: unknown, pkg: Partial<AppPackage>): { 
     return { valid: true };
   }
   return { valid: false };
-}
-
-function validateAppPackageV3(value: Partial<AppPackageV3>, errors: string[]): void {
-  if (!Array.isArray(value.dependencyPins)) {
-    errors.push('dependencyPins must be an array');
-    return;
-  }
-  const seenPins = new Set<string>();
-  for (const [index, pin] of value.dependencyPins.entries()) {
-    if (!isDependencyPin(pin, index, errors, seenPins)) {
-      continue;
-    }
-  }
-
-  const nativeCapabilities = value.nativeCapabilities;
-  if (!isNativeCapability(nativeCapabilities)) {
-    errors.push('nativeCapabilities is required');
-  } else {
-    errors.push(...nativeCapabilitySupportErrors(nativeCapabilities));
-  }
-
-  const contractLock = value.contractLock;
-  if (!isContractLock(contractLock)) {
-    errors.push('contractLock is required');
-    return;
-  }
-  if (contractLock.schemaVersion !== 'wonder.package-contract-lock.v1') {
-    errors.push('contractLock.schemaVersion must be wonder.package-contract-lock.v1');
-  }
-  if (contractLock.algorithm !== 'sha256') {
-    errors.push('contractLock.algorithm must be sha256');
-  }
-  if (!text(contractLock.checksum) || /^sha256:[a-f0-9]{64}$/.test(contractLock.checksum) === false) {
-    errors.push('contractLock.checksum must be sha256:<hex>');
-  }
-  if (!text(contractLock.pinnedAt) || Number.isNaN(Date.parse(contractLock.pinnedAt))) {
-    errors.push('contractLock.pinnedAt must be an ISO date');
-  }
-  if (!isDependencyPinMatch(value.dependencyPins, contractLock.dependencyPins)) {
-    errors.push('contractLock.dependencyPins must match package dependencyPins');
-  }
-  if (nativeCapabilities && !isNativeCapabilityMatch(nativeCapabilities, contractLock.nativeCapabilities)) {
-    errors.push('contractLock.nativeCapabilities must match top-level nativeCapabilities');
-  }
-  if (contractLock.checksum !== expectedContractLockChecksum(contractLock)) {
-    errors.push('contractLock.checksum mismatch');
-  }
 }
 
 function isDependencyPin(value: unknown, index: number, errors: string[], seen?: Set<string>): value is AppPackageDependencyPin {
