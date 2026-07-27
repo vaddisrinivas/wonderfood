@@ -70,6 +70,7 @@
     "check:native-capability-contract": "node scripts/quality/check-native-capability-contract.mjs",
     "check:package-owned-routes": "node scripts/quality/check-package-owned-routes.mjs",
     "check:json-render-only-ui": "node scripts/quality/check-json-render-only-ui.mjs",
+    "check:platform-day1": "node scripts/quality/run-platform-day1.mjs",
     "check:food-schema-depth": "node scripts/quality/check-food-schema-depth.mjs",
     "check:evidence-provenance": "node scripts/quality/test-evidence-provenance.mjs",
     "generate:data-plane-template": "node scripts/quality/generate-data-plane-artifacts.mjs",

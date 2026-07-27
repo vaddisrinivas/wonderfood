@@ -40,6 +40,10 @@ jobs:
       - name: Validate domain package
         run: npm run config:validate
 
+      - name: Day 1 acceptance gate
+        continue-on-error: true
+        run: npm run check:platform-day1
+
       - name: Validate Expo dependencies
         run: npm run doctor
 
