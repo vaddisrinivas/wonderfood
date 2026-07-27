@@ -18,7 +18,7 @@ delete process.env.LIFEOS_MCP_TRUSTED_TOKENS_JSON;
 delete process.env.LIFEOS_MCP_TRUSTED_PRINCIPAL;
 delete process.env.LIFEOS_MCP_TRUSTED_DOMAINS;
 
-const { handleMcpRequest } = await import('../src/mcp/server');
+const { handleMcpRequest } = await import('../src/mcp/official-server');
 const { createActionEvent, createRecord, findRecord } = await import('../src/runtime/state');
 
 function ensure(condition: boolean, message: string): asserts condition {
@@ -40,7 +40,7 @@ async function postMcp(body: unknown, headers: Record<string, string> = {}) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      accept: 'application/json',
+      accept: 'application/json, text/event-stream',
       ...headers,
     },
     body: JSON.stringify(body),
@@ -388,7 +388,7 @@ try {
     headers: {
       authorization: `Bearer ${foodToken}`,
       'content-type': 'application/json',
-      accept: 'application/json',
+      accept: 'application/json, text/event-stream',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
