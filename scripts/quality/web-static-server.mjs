@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -52,6 +53,18 @@ function createStaticServer(webRoot) {
   });
 }
 
+function ensureWebExport(root, webRoot) {
+  if (existsSync(join(webRoot, 'index.html'))) return;
+  const result = spawnSync('npm', ['run', 'export:web'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0 || !existsSync(join(webRoot, 'index.html'))) {
+    throw new Error('npm run export:web completed without dist/web/index.html. Treat this as a web product/export failure until the static export emits HTML again.');
+  }
+}
+
 export async function ensureWebBaseUrl({ root, baseUrl }) {
   const sitemapUrl = `${baseUrl.replace(/\/$/, '')}/_sitemap`;
   if (await canReach(sitemapUrl)) {
@@ -62,9 +75,7 @@ export async function ensureWebBaseUrl({ root, baseUrl }) {
   }
   const parsed = new URL(baseUrl);
   const webRoot = join(root, 'dist', 'web');
-  if (!existsSync(join(webRoot, 'index.html'))) {
-    throw new Error('dist/web is missing. Run npm run export:web before web visual checks.');
-  }
+  ensureWebExport(root, webRoot);
   const server = createStaticServer(webRoot);
   await new Promise((resolve, reject) => {
     server.once('error', reject);
