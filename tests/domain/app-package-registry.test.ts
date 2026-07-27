@@ -235,6 +235,21 @@ describe('app package SQLite registry', () => {
     expect(Object.values(field.package?.views ?? {}).some((view) => view.fields.includes('spice_level'))).toBe(true);
     expect(field.package?.presentation?.ui?.screens?.ai_recipe_spice_level_schema.components?.[0].widget).toBe('schemaEditor');
 
+    const recipeBoardView = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'show recipe board view'));
+    expect(recipeBoardView.status).toBe('valid');
+    expect(recipeBoardView.package?.collections.ai_recipe).toBeUndefined();
+    expect(recipeBoardView.package?.queries.ai_recipe_recipe_board_query).toMatchObject({
+      from: 'records',
+      where: { op: 'eq', field: 'collection', value: 'recipe' },
+      limit: 24,
+    });
+    expect(recipeBoardView.package?.views.ai_recipe_recipe_board_view).toMatchObject({
+      id: 'ai_recipe_recipe_board_view',
+      query: 'ai_recipe_recipe_board_query',
+      mode: 'board',
+    });
+    expect(recipeBoardView.package?.presentation?.ui?.screens?.ai_recipe_recipe_board_screen.components?.[0].widget).toBe('kanbanBoard');
+
     const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
     expect(form.status).toBe('valid');
     expect(form.package?.collections.ai_vendor_intake.fields.answers.type).toBe('json');

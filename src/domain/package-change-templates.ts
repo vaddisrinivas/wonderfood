@@ -9,11 +9,13 @@ import type {
   FieldType,
   PackagePresentationSpec,
 } from '@/packages/shared/contracts/package';
+import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
 type PackageChangeIntent =
   | 'field'
+  | 'view'
   | 'table'
   | 'theme'
   | 'workflow'
@@ -38,11 +40,87 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
   if (!presentation) throw new Error('Active package has no presentation section.');
 
   if (intent === 'field') return buildFieldChange(active, presentation, prompt);
+  if (intent === 'view') return buildQueryViewChange(active, presentation, name, prompt);
   if (intent === 'theme') return buildThemeChange(active, presentation, name);
   if (intent === 'workflow') return buildWorkflowChange(active, presentation, name);
   if (intent === 'native') return buildNativeCapabilityChange(active, presentation, name, prompt);
   if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
+}
+
+function buildQueryViewChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+  name: PackageChangeName,
+  prompt: string,
+): AppPackageChangeRequest {
+  const target = deriveQueryViewChange(active, name, prompt);
+  if (active.queries[target.queryId]) throw new Error(`Query already exists: ${target.queryId}`);
+  if (active.views[target.viewId]) throw new Error(`View already exists: ${target.viewId}`);
+  if (presentation.ui?.screens?.[target.screenId]) throw new Error(`Screen already exists: ${target.screenId}`);
+
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      {
+        op: 'add',
+        path: `/queries/${escapeJsonPointer(target.queryId)}`,
+        value: {
+          from: 'records',
+          where: target.where,
+          orderBy: [{ field: 'updated_at', direction: 'desc' }],
+          limit: 24,
+        },
+      },
+      {
+        op: 'add',
+        path: `/views/${escapeJsonPointer(target.viewId)}`,
+        value: {
+          id: target.viewId,
+          query: target.queryId,
+          mode: target.mode,
+          fields: target.fields,
+          ...(target.groupBy ? { groupBy: target.groupBy } : {}),
+        },
+      },
+      {
+        op: 'add',
+        path: '/presentation/surfaces/-',
+        value: {
+          id: target.surfaceId,
+          label: target.label,
+          collections: [target.collectionId],
+          views: [target.viewId],
+        },
+      },
+      ...buildUiScreenPatches(presentation, {
+        label: target.label,
+        collectionId: target.collectionId,
+        screenId: target.screenId,
+        surfaceId: target.surfaceId,
+      }, [
+        {
+          kind: 'widget',
+          widget: widgetForViewMode(target.mode),
+          id: `${target.screenId}_${target.mode}`,
+          title: target.label,
+          subtitle: `Filtered ${target.collectionLabel} view powered by AppPackage query ${target.queryId}.`,
+          view: target.viewId,
+          props: propsForViewMode(target.mode, target.label),
+          tone: toneForViewMode(target.mode),
+        },
+        {
+          kind: 'recordList',
+          id: `${target.screenId}_records`,
+          title: `${target.collectionLabel} records`,
+          subtitle: 'Same source data; different package-config view.',
+          query: { collections: [target.collectionId], limit: 12 },
+        },
+      ]),
+    ],
+  };
 }
 
 function buildFieldChange(
@@ -364,6 +442,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
   if (/\b(permission|permissions|capability|capabilities|camera|photo library|photos?|voice|okay google|google assistant|shortcut|deep[- ]?link|background|file open|open file|health connect|share sheet|share intent)\b/.test(value)) return 'native';
   if (/\bfield\b/.test(value) && !/\b(form|survey)\b/.test(value)) return 'field';
+  if (/\b(view|views|show|filter|filtered|list of|board of|calendar of|timeline of|chart of|dashboard for|report for)\b/.test(value)) return 'view';
   if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
   if (/\b(board|kanban|pipeline|status board|columns?)\b/.test(value)) return 'board';
   if (/\b(feed|posts?|updates?|social|comments?)\b/.test(value)) return 'feed';
@@ -501,7 +580,7 @@ function toneForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 
 
 function derivePackageChangeName(prompt: string) {
   const clean = prompt
-    .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the|and|or|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
+    .replace(/\b(add|create|make|new|show|view|views|filter|filtered|list|report|table|screen|surface|collection|with|for|a|an|the|and|or|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
     .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page|permission|permissions|capability|capabilities|intent|intents|native)\b/gi, ' ')
     .replace(/[^a-z0-9 ]/gi, ' ')
     .trim()
@@ -539,6 +618,53 @@ type FieldChangeTarget = {
   fieldType: FieldType;
   indexed: boolean;
 };
+
+type QueryViewChangeTarget = {
+  collectionId: string;
+  collectionLabel: string;
+  queryId: string;
+  viewId: string;
+  screenId: string;
+  surfaceId: string;
+  label: string;
+  where: QueryPredicate;
+  mode: 'list' | 'board' | 'table' | 'calendar' | 'timeline' | 'chart';
+  fields: string[];
+  groupBy?: string;
+};
+
+function deriveQueryViewChange(
+  active: AppPackage,
+  name: PackageChangeName,
+  prompt: string,
+): QueryViewChangeTarget {
+  const lower = prompt.toLowerCase();
+  const collectionId = findTargetCollection(active, lower);
+  const collection = active.collections[collectionId];
+  const collectionLabel = titleCase(collectionId.replace(/[_:-]+/g, ' '));
+  const mode = viewModeForViewPrompt(lower);
+  const slug = name.screenId.replace(/^ai_/, '') || collectionId;
+  const baseId = `ai_${collectionId}_${slug}_${mode}`.replace(/_+/g, '_');
+  const fields = selectViewFields(collection.fields, mode);
+  const where: QueryPredicate = { op: 'eq', field: 'collection', value: collectionId };
+  const groupBy = mode === 'board'
+    ? preferredExistingField(collection.fields, ['status', 'state', 'stage', 'priority'])
+    : undefined;
+  const label = `${name.label === 'Notes' ? collectionLabel : name.label} ${titleCase(mode)}`;
+  return {
+    collectionId,
+    collectionLabel,
+    queryId: `${baseId}_query`,
+    viewId: `${baseId}_view`,
+    screenId: `${baseId}_screen`,
+    surfaceId: `${baseId}_surface`,
+    label,
+    where,
+    mode,
+    fields,
+    ...(groupBy ? { groupBy } : {}),
+  };
+}
 
 function deriveFieldChange(active: AppPackage, prompt: string): FieldChangeTarget {
   const lower = prompt.toLowerCase();
@@ -587,6 +713,65 @@ function inferFieldType(lowerPrompt: string): FieldType {
   if (/\b(boolean|checkbox|yes\/no|yes no|flag|done|enabled)\b/.test(lowerPrompt)) return 'boolean';
   if (/\b(json|object|tags|list|options|array|metadata)\b/.test(lowerPrompt)) return 'json';
   return 'text';
+}
+
+function viewModeForViewPrompt(lowerPrompt: string): QueryViewChangeTarget['mode'] {
+  if (/\b(board|kanban|pipeline|columns?)\b/.test(lowerPrompt)) return 'board';
+  if (/\b(calendar|schedule|events?|agenda)\b/.test(lowerPrompt)) return 'calendar';
+  if (/\b(timeline|history|milestone|journey|log)\b/.test(lowerPrompt)) return 'timeline';
+  if (/\b(chart|graph|analytics|trend|report)\b/.test(lowerPrompt)) return 'chart';
+  if (/\b(table|spreadsheet|grid)\b/.test(lowerPrompt)) return 'table';
+  return 'list';
+}
+
+function widgetForViewMode(mode: QueryViewChangeTarget['mode']): NonNullable<A2UiComponent['widget']> {
+  if (mode === 'board') return 'kanbanBoard';
+  if (mode === 'calendar') return 'calendarBlock';
+  if (mode === 'timeline') return 'timelineBlock';
+  if (mode === 'chart') return 'chartBlock';
+  if (mode === 'table') return 'dataTable';
+  return 'feedList';
+}
+
+function toneForViewMode(mode: QueryViewChangeTarget['mode']): A2UiComponent['tone'] {
+  if (mode === 'board' || mode === 'calendar' || mode === 'chart') return 'blue';
+  if (mode === 'timeline') return 'amber';
+  return 'moss';
+}
+
+function propsForViewMode(mode: QueryViewChangeTarget['mode'], label: string): Record<string, unknown> {
+  if (mode === 'board') return { columns: [{ title: 'Open', items: [{ title: label }] }, { title: 'Next', items: [] }, { title: 'Done', items: [] }] };
+  if (mode === 'calendar') return { events: [{ title: label, when: 'From package query' }] };
+  if (mode === 'timeline') return { items: [{ title: label, subtitle: 'Filtered package view' }] };
+  if (mode === 'chart') return { points: [{ label: 'Now', value: 1 }] };
+  if (mode === 'table') return { columns: [{ label: 'title' }, { label: 'updated_at' }] };
+  return { items: [{ title: label, subtitle: 'Filtered package view' }] };
+}
+
+function selectViewFields(
+  fields: AppPackage['collections'][string]['fields'],
+  mode: QueryViewChangeTarget['mode'],
+): string[] {
+  const preferred = mode === 'chart'
+    ? ['title', 'value', 'score', 'amount', 'count', 'updated_at']
+    : mode === 'calendar'
+      ? ['title', 'starts_at', 'ends_at', 'updated_at']
+      : mode === 'timeline'
+        ? ['title', 'happened_at', 'updated_at']
+        : ['title', 'status', 'state', 'stage', 'body', 'updated_at'];
+  const selected = preferred.filter((field) => Object.hasOwn(fields, field));
+  for (const field of Object.keys(fields)) {
+    if (selected.length >= 6) break;
+    if (!selected.includes(field)) selected.push(field);
+  }
+  return selected.length ? selected : ['title'];
+}
+
+function preferredExistingField(
+  fields: AppPackage['collections'][string]['fields'],
+  preferred: string[],
+): string | undefined {
+  return preferred.find((field) => Object.hasOwn(fields, field));
 }
 
 function queryTargetsCollection(
