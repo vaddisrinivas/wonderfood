@@ -2,7 +2,13 @@ import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
-import type { AppPackageV2, PackagePresentationUi } from '../../packages/shared/contracts/package';
+import type { AppPackageV2, PackagePresentationUi, PackageUiComponent } from '../../packages/shared/contracts/package';
+
+type ParsedUiScreen = {
+  title?: string;
+  subtitle?: string;
+  components?: PackageUiComponent[];
+};
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
 export type DomainSchemaVersion = 'lifeos.domain.v1';
@@ -211,7 +217,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function assertCondition(condition: boolean, message: string): void {
+function assertCondition(condition: boolean, message: string): asserts condition {
   if (!condition) {
     throw new Error(`[domain-catalog] ${message}`);
   }
@@ -487,7 +493,7 @@ function parseUiAction(value: unknown, path: string): unknown {
   return parseUiValue(raw);
 }
 
-function parseUiComponent(value: unknown, path: string, packageCollections: Set<string>): unknown {
+function parseUiComponent(value: unknown, path: string, packageCollections: Set<string>): PackageUiComponent {
   if (!isObject(value)) {
     throw new Error(`${path} must be an object`);
   }
@@ -512,9 +518,10 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
     }
     if (q.match !== undefined) {
       assertCondition(typeof q.match === 'string', `${path}.query.match must be a string`);
-      if (q.match.trim()) {
+      const match = q.match;
+      if (match.trim()) {
         try {
-          new RegExp(q.match, 'i');
+          new RegExp(match, 'i');
         } catch {
           throw new Error(`${path}.query.match is invalid regular expression`);
         }
@@ -524,21 +531,39 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
       assertCondition(typeof q.limit === 'number' && Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 20, `${path}.query.limit must be 1..20`);
     }
   }
-  return parseUiValue(raw);
+  return parseUiValue(raw) as PackageUiComponent;
 }
 
-function parseUiScreen(value: unknown, path: string, packageCollections: Set<string>): Record<string, unknown> {
+function parseUiScreen(value: unknown, path: string, packageCollections: Set<string>): ParsedUiScreen {
   if (!isObject(value)) {
     throw new Error(`${path} must be an object`);
   }
   const screen = value as Record<string, unknown>;
-  if (screen.components !== undefined) {
-    assertCondition(Array.isArray(screen.components), `${path}.components must be an array`);
-    screen.components.forEach((component, index) => parseUiComponent(component, `${path}.components[${index}]`, packageCollections));
+  if (screen.components === undefined) {
+    return parseUiValue(screen) as ParsedUiScreen;
   }
-  return {
-    ...parseUiValue(screen),
+
+  const components = screen.components;
+  if (!Array.isArray(components)) {
+    throw new Error(`${path}.components must be an array`);
+  }
+  const parsedScreen: ParsedUiScreen = {
+    ...(parseUiValue(screen) as ParsedUiScreen),
+    components: components.map((component, index) => parseUiComponent(component, `${path}.components[${index}]`, packageCollections)),
   };
+  return parsedScreen;
+}
+
+function parseUiScreens(value: unknown, path: string, packageCollections: Set<string>): Record<string, ParsedUiScreen> {
+  const screens: Record<string, ParsedUiScreen> = {};
+  if (!isObject(value)) {
+    throw new Error(`${path} must be an object`);
+  }
+  for (const [screenId, screen] of Object.entries(value)) {
+    const parsedScreen = parseUiScreen(screen, `${path}.${screenId}`, packageCollections);
+    screens[screenId] = parsedScreen;
+  }
+  return screens;
 }
 
 function parseUi(value: unknown, path: string, packageCollections: Set<string>): PackagePresentationUi | undefined {
@@ -556,22 +581,21 @@ function parseUi(value: unknown, path: string, packageCollections: Set<string>):
   };
 
   if (raw.components !== undefined) {
-    assertCondition(Array.isArray(raw.components), `${path}.components must be an array`);
-    if (raw.components.length === 0) {
+    const components = raw.components;
+    if (!Array.isArray(components)) {
+      throw new Error(`${path}.components must be an array`);
+    }
+    if (components.length === 0) {
       throw new Error(`${path}.components must not be empty`);
     }
-    parsed.components = raw.components.map((component, index) => {
+    parsed.components = components.map((component, index) => {
       parseUiComponent(component, `${path}.components[${index}]`, packageCollections);
-      return parseUiValue(component) as Record<string, unknown>;
+      return parseUiValue(component) as PackageUiComponent;
     });
   }
 
   if (raw.screens !== undefined) {
-    assertCondition(isObject(raw.screens), `${path}.screens must be an object`);
-    const screens: Record<string, unknown> = {};
-    for (const [screenId, screen] of Object.entries(raw.screens)) {
-      screens[screenId] = parseUiScreen(screen, `${path}.screens.${screenId}`, packageCollections);
-    }
+    const screens = parseUiScreens(raw.screens, `${path}.screens`, packageCollections);
     parsed.screens = screens;
   }
 
