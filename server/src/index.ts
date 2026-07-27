@@ -1,6 +1,5 @@
 import { createServer } from 'http';
 import { randomUUID } from 'node:crypto';
-import { pipeAgentUIStreamToResponse, safeValidateUIMessages, type UIMessage } from 'ai';
 import {
   buildChatOperationFingerprint,
   handleServerChat,
@@ -45,7 +44,6 @@ import {
 import { ChatStreamEvent } from './responses';
 import { createActionEvent, getActionEvent, runUndo } from './runtime/state';
 import { installReactiveRuntime } from './kernel/install-reactive-runtime';
-import { chatAgent, localQuery } from './agents/chat-agent';
 import { PackageRegistry } from './kernel/package-registry';
 import {
   findRunningConversationRun,
@@ -65,7 +63,6 @@ const port = Number(process.env.PORT ?? '8787');
 const host = process.env.LIFEOS_SERVER_HOST?.trim() || '127.0.0.1';
 assertServerStartupSecurity(host);
 const CHAT_SEND_BODY_LIMIT_BYTES = 256 * 1024;
-const CHAT_AGENT_BODY_LIMIT_BYTES = 512 * 1024;
 const CHAT_CONTROL_BODY_LIMIT_BYTES = 64 * 1024;
 const PROVIDER_BODY_LIMIT_BYTES = 1024 * 1024;
 const PACKAGE_BODY_LIMIT_BYTES = 512 * 1024;
@@ -258,27 +255,6 @@ async function readJsonBody(req: any, maxBytes: number): Promise<Record<string, 
     return {};
   }
   return JSON.parse(raw) as Record<string, unknown>;
-}
-
-function latestUiMessageText(messages: unknown[]): string {
-  const latest = [...messages].reverse().find((message) => {
-    return Boolean(message && typeof message === 'object' && (message as { role?: unknown }).role === 'user');
-  }) as { content?: unknown; parts?: unknown } | undefined;
-  if (!latest) return '';
-  if (typeof latest.content === 'string') return latest.content;
-  if (Array.isArray(latest.parts)) {
-    return latest.parts.map((part) => {
-      if (!part || typeof part !== 'object') return '';
-      const value = part as { type?: unknown; text?: unknown };
-      return value.type === 'text' && typeof value.text === 'string' ? value.text : '';
-    }).join('\n').trim();
-  }
-  return '';
-}
-
-function shouldUseWebSearch(text: string): boolean {
-  if (process.env.OPENAI_WEB_SEARCH_ENABLED?.trim().toLowerCase() === 'false') return false;
-  return /\b(today|latest|current|recent|web|internet|news|price|weather|search|look up)\b/i.test(text);
 }
 
 function packageRegistry() {
@@ -1442,59 +1418,6 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
             : 'Invalid chat request',
       );
     }
-    return;
-  }
-
-  if (req.method === 'POST' && path === '/chat/agent') {
-    if (!assertAuth(req, res)) {
-      return;
-    }
-    let payload: { messages?: unknown[]; previousResponseId?: string };
-    try {
-      payload = (await readJsonBody(req, CHAT_AGENT_BODY_LIMIT_BYTES)) as typeof payload;
-    } catch (error) {
-      if (handleBodyReadError(res, error)) return;
-      badRequest(res, 'Invalid JSON');
-      return;
-    }
-
-    const messages = Array.isArray(payload.messages) ? payload.messages : [];
-    if (messages.length === 0) {
-      badRequest(res, 'messages required');
-      return;
-    }
-
-    if (!process.env.OPENAI_API_KEY?.trim()) {
-      setJson(res, 503, {
-        status: 'disabled',
-        message: 'Live model unavailable: OPENAI_API_KEY is not configured.',
-      });
-      return;
-    }
-
-    const validated = await safeValidateUIMessages<UIMessage>({
-      messages,
-      tools: { localQuery } as never,
-    });
-    if (!validated.success) {
-      badRequest(res, 'Invalid UI messages');
-      return;
-    }
-
-    const latestText = latestUiMessageText(messages);
-    await pipeAgentUIStreamToResponse({
-      response: res,
-      agent: chatAgent,
-      uiMessages: validated.data,
-      options: {
-        enableLocalQuery: true,
-        enableWebSearch: shouldUseWebSearch(latestText),
-        previousResponseId: undefined,
-      },
-      headers: {
-        'cache-control': 'no-cache',
-      },
-    });
     return;
   }
 
