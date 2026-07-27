@@ -89,6 +89,28 @@ function detail(value: unknown, fallback = '') {
   return fallback;
 }
 
+function permissionLabel(value: Record<string, unknown>): string {
+  const explicit = text(value.title, text(value.label, text(value.name)));
+  if (explicit) return explicit;
+  const rawPermission = text(value.permission, text(value.id));
+  const normalized = rawPermission
+    .replace(/^android\.permission\.health\./, '')
+    .replace(/^expo-image-picker:/, '')
+    .replace(/^expo-/, '')
+    .replace(/^health-connect-/, '')
+    .replace(/_/g, ' ')
+    .replace(/-/g, ' ')
+    .toLowerCase();
+  if (!normalized) return 'Permission';
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function permissionMeta(value: Record<string, unknown>): string {
+  const platform = text(value.platform, 'app');
+  const required = value.required === true ? 'required' : 'optional';
+  return `${platform} · ${required}`;
+}
+
 function actionRoute(value: Record<string, unknown>): string {
   return text(value.route, text(value.path));
 }
@@ -682,9 +704,12 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   return (
     <WidgetShell title={text(props.title, 'Permissions')} subtitle={text(props.subtitle, 'This app asks only when a package feature needs native access.')}>
       {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Optional food-health context; you stay in control.' }]).map((permission) => (
-        <View key={label(permission)} style={styles.permissionRow}>
-          <Text style={styles.permissionTitle}>{label(permission)}</Text>
-          <Text style={styles.permissionDetail}>{detail(permission, 'Used only for this package feature.')}</Text>
+        <View key={text(permission.id, permissionLabel(permission))} style={styles.permissionRow}>
+          <View style={styles.permissionHeading}>
+            <Text style={styles.permissionTitle}>{permissionLabel(permission)}</Text>
+            <Text style={styles.permissionMeta}>{permissionMeta(permission)}</Text>
+          </View>
+          <Text style={styles.permissionDetail}>{text(permission.prompt, detail(permission, 'Used only for this package feature.'))}</Text>
         </View>
       ))}
     </WidgetShell>
@@ -954,7 +979,9 @@ const styles = StyleSheet.create({
   tableHeader: { width: 104, padding: 10, backgroundColor: '#E4F1E8', color: '#2F7448', fontSize: 12, fontWeight: '900' },
   tableCell: { width: 104, padding: 10, backgroundColor: '#FFFFFF', color: '#4E463E', fontSize: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2' },
   permissionRow: { borderRadius: 16, backgroundColor: '#F6F1E8', padding: 12, gap: 4 },
+  permissionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   permissionTitle: { color: '#241C16', fontWeight: '900' },
+  permissionMeta: { color: '#2F7448', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   permissionDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
   swatches: { flexDirection: 'row', gap: 8 },
   swatch: { width: 42, height: 42, borderRadius: 14 },

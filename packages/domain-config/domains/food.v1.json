@@ -832,7 +832,7 @@
             "kind": "action",
             "id": "settings_health",
             "title": "Health Connect",
-            "subtitle": "Android permission and status flow for food-health context.",
+            "subtitle": "Optional health context for food decisions. Ask only when you want it.",
             "tone": "amber",
             "action": {
               "kind": "propose",
@@ -1260,22 +1260,22 @@
       },
       "health": {
         "title": "Health Connect",
-        "subtitle": "Android permission status and food-health context. Native access remains explicitly granted by you.",
+        "subtitle": "Optional Android context for nutrition, hydration, activity, and weight. Nothing is used until you grant it.",
         "components": [
           {
             "kind": "widget",
             "widget": "healthConnect",
             "id": "health_status",
-            "title": "Health Connect status",
-            "subtitle": "Live Android permission status and controls rendered as a JSON widget.",
+            "title": "Connect health context",
+            "subtitle": "Check access, ask Android for permission, or open system settings.",
             "tone": "blue"
           },
           {
             "kind": "widget",
             "widget": "permissionCard",
             "id": "health_declared_permissions",
-            "title": "Declared native access",
-            "subtitle": "The package declares what it may ask Android for before any prompt appears.",
+            "title": "What Wonder may ask for",
+            "subtitle": "These permissions come from the app package, not hardcoded screen copy.",
             "tone": "amber"
           },
           {
@@ -1409,7 +1409,7 @@
           {
             "kind": "action",
             "id": "system_health",
-            "title": "Native diagnostics",
+            "title": "Native permissions",
             "tone": "moss",
             "action": {
               "kind": "propose",
