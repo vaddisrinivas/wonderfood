@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -13,6 +14,7 @@ import { undoOperation } from '@/src/ops/undo';
 import { MemoryDb } from '../helpers/memory-db';
 import { compileQueryToSql } from '@/server/src/kernel/query-sql';
 import { runReactiveCycle } from '@/server/src/kernel/reactive-cycle';
+import { validateAppPackage } from '@/server/src/kernel/package';
 import {
   createReactiveReceiptStore,
   parseReactiveReceiptStore,
@@ -42,6 +44,13 @@ type BoundaryFixture = {
     update: Record<string, unknown>;
   };
   reactive: {
+    package: Record<string, unknown>;
+    eventId: string;
+    causeId: string;
+    beforeRows: Array<Record<string, unknown>>;
+    afterRows: Array<Record<string, unknown>>;
+  };
+  reactiveV3: {
     package: Record<string, unknown>;
     eventId: string;
     causeId: string;
@@ -265,4 +274,58 @@ describe('W1-KERNEL kernel contracts', () => {
     expect(replayRecord.newProposalIds).toHaveLength(0);
     expect(replayRecord.duplicateProposalIds).toEqual([proposal.id]);
   });
+
+  it('accepts AppPackage v3 contract lock contracts', () => {
+    const validation = validateAppPackage(fixture.reactiveV3.package);
+    expect(validation.valid).toBe(true);
+
+    const packageV3 = fixture.reactiveV3.package as {
+      dependencyPins: Array<{ package: string; version: string; source?: string }>;
+      nativeCapabilities: { schemaVersion: string; platform: string; packages: string[] };
+      contractLock: {
+        schemaVersion: string;
+        algorithm: string;
+        checksum: string;
+        pinnedAt: string;
+        dependencyPins: Array<{ package: string; version: string; source?: string }>;
+        nativeCapabilities: { schemaVersion: string; platform: string; packages: string[] };
+      };
+    };
+    expect(packageV3.contractLock.checksum).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const expectedChecksum = `sha256:${createHash('sha256').update(stableJson({
+      schemaVersion: packageV3.contractLock.schemaVersion,
+      algorithm: packageV3.contractLock.algorithm,
+      pinnedAt: packageV3.contractLock.pinnedAt,
+      dependencyPins: packageV3.dependencyPins,
+      nativeCapabilities: packageV3.nativeCapabilities,
+    })).digest('hex')}`;
+    expect(packageV3.contractLock.checksum).toBe(expectedChecksum);
+
+    const seenPins = new Set(packageV3.dependencyPins.map((pin) => `${pin.package}@${pin.version}`));
+    const contractPins = new Set(packageV3.contractLock.dependencyPins.map((pin) => `${pin.package}@${pin.version}`));
+    expect(seenPins).toEqual(contractPins);
+
+    const cycle = runReactiveCycle({
+      package: fixture.reactiveV3.package as never,
+      beforeRows: fixture.reactiveV3.beforeRows,
+      afterRows: fixture.reactiveV3.afterRows,
+      event: { kind: 'operation', id: fixture.reactiveV3.eventId },
+      causeId: fixture.reactiveV3.causeId,
+    });
+    expect(cycle.transitions.length).toBe(1);
+    expect(cycle.proposals).toHaveLength(1);
+  });
 });
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}

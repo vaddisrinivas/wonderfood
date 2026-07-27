@@ -1,4 +1,4 @@
-import type { AppPackageV2, CollectionSpec } from '@/packages/shared/contracts/package';
+import type { AppPackage, CollectionSpec } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import type { DomainManifest } from '@/src/domain/catalog';
 
@@ -13,7 +13,7 @@ const CORE_FIELDS: CollectionSpec['fields'] = {
 const DEFAULT_VIEW_FIELDS = ['id', 'title', 'collection', 'updated_at'];
 
 export type AppPackageBridgeResult = {
-  package: AppPackageV2;
+  package: AppPackage;
   warnings: string[];
 };
 
@@ -40,8 +40,8 @@ export function buildAppPackageFromManifest(
     ]),
   );
 
-  const queries: AppPackageV2['queries'] = {};
-  const views: AppPackageV2['views'] = {};
+  const queries: AppPackage['queries'] = {};
+  const views: AppPackage['views'] = {};
 
   for (const surface of manifest.surfaces) {
     const queryId = `surface:${surface.id}`;

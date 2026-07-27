@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { validateAppPackage } from '../src/kernel/package';
 
 const pkg = {
@@ -174,4 +175,53 @@ assert.equal(validateAppPackage({
   ...pkg,
   acceptanceTests: ['bad test name'],
 }).valid, false);
+const pkgV3 = (() => {
+  const dependencyPins = [{ package: '@a2ui/web_core/v0_9', version: '0.9.0', source: 'npm' }];
+  const nativeCapabilities = {
+    schemaVersion: 'wonder.app-package-native-capabilities.v1',
+    platform: 'expo',
+    packages: ['@a2ui/web_core/v0_9'],
+  };
+  return {
+    ...pkg,
+    schemaVersion: 'wonder.app-package.v3',
+    dependencyPins,
+    nativeCapabilities,
+    contractLock: {
+      schemaVersion: 'wonder.package-contract-lock.v1',
+      algorithm: 'sha256',
+      checksum: 'sha256:placeholder',
+      pinnedAt: '2026-07-24T00:00:00.000Z',
+      dependencyPins,
+      nativeCapabilities,
+    },
+  };
+})();
+pkgV3.contractLock.checksum = `sha256:${createHash('sha256').update(stableJson({
+  schemaVersion: pkgV3.contractLock.schemaVersion,
+  algorithm: pkgV3.contractLock.algorithm,
+  pinnedAt: pkgV3.contractLock.pinnedAt,
+  dependencyPins: pkgV3.dependencyPins,
+  nativeCapabilities: pkgV3.nativeCapabilities,
+})).digest('hex')}`;
+assert.equal(validateAppPackage(pkgV3).valid, true);
+assert.equal(validateAppPackage({
+  ...pkgV3,
+  contractLock: {
+    ...pkgV3.contractLock,
+    checksum: 'sha256:0',
+  },
+}).valid, false);
 console.log('package-contract: passed');
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}

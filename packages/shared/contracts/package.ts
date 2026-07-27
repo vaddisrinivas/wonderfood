@@ -113,4 +113,45 @@ export type AppPackageV2 = {
   acceptanceTests: string[];
 };
 
-export type PackageValidation = { valid: true; package: AppPackageV2 } | { valid: false; errors: string[] };
+export type AppPackageDependencyPin = {
+  package: string;
+  version: string;
+  source?: 'npm' | 'maven' | 'gradle' | 'cocoapods' | 'other';
+};
+
+export type AppPackageNativeCapability = {
+  schemaVersion: 'wonder.app-package-native-capabilities.v1';
+  platform: 'expo' | 'android' | 'ios' | 'web';
+  packages: string[];
+  permissions?: string[];
+};
+
+export type AppPackageContractLock = {
+  schemaVersion: 'wonder.package-contract-lock.v1';
+  algorithm: 'sha256';
+  checksum: string;
+  pinnedAt: string;
+  dependencyPins: AppPackageDependencyPin[];
+  nativeCapabilities: AppPackageNativeCapability;
+};
+
+export type AppPackageV3 = {
+  schemaVersion: 'wonder.app-package.v3';
+  id: string;
+  version: string;
+  collections: Record<string, CollectionSpec>;
+  queries: Record<string, { from: string; where?: QueryPredicate; orderBy?: QuerySort[]; limit?: number }>;
+  views: Record<string, ViewSpec>;
+  presentation?: PackagePresentationSpec;
+  computedFields?: ComputedFieldSpec[];
+  rules: RuleSpec[];
+  capabilities: string[];
+  acceptanceTests: string[];
+  dependencyPins: AppPackageDependencyPin[];
+  nativeCapabilities: AppPackageNativeCapability;
+  contractLock: AppPackageContractLock;
+};
+
+export type AppPackage = AppPackageV2 | AppPackageV3;
+
+export type PackageValidation = { valid: true; package: AppPackage } | { valid: false; errors: string[] };

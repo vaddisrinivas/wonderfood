@@ -2,7 +2,7 @@ import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
-import type { AppPackageV2, PackagePresentationUi, PackageUiComponent } from '../../packages/shared/contracts/package';
+import type { AppPackage, PackagePresentationUi, PackageUiComponent } from '../../packages/shared/contracts/package';
 
 type ParsedUiScreen = {
   title?: string;
@@ -130,7 +130,7 @@ export interface ParsedCatalog {
 
 let parsedCatalogCache: ParsedCatalog | null = null;
 let activeDomainOverride: string | null = null;
-let activePackageOverride: AppPackageV2 | null = null;
+let activePackageOverride: AppPackage | null = null;
 
 export function setActiveDomainOverride(domainId: string | null): void {
   const next = domainId?.trim() || null;
@@ -141,7 +141,7 @@ export function setActiveDomainOverride(domainId: string | null): void {
   parsedCatalogCache = null;
 }
 
-export function setActivePackageOverride(pkg: AppPackageV2 | null): void {
+export function setActivePackageOverride(pkg: AppPackage | null): void {
   activePackageOverride = pkg;
   parsedCatalogCache = null;
 }
@@ -610,7 +610,7 @@ export function loadCatalog(): ParsedCatalog {
   return parsedCatalogCache;
 }
 
-function domainManifestFromPackage(pkg: AppPackageV2, bundledFallback?: DomainManifest): DomainManifest {
+function domainManifestFromPackage(pkg: AppPackage, bundledFallback?: DomainManifest): DomainManifest {
   const presentation = pkg.presentation;
   const collections = Object.keys(pkg.collections);
   const surfaces = presentation?.surfaces?.length

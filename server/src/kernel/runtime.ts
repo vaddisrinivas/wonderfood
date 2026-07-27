@@ -1,10 +1,10 @@
-import { AppPackageV2, ViewSpec } from './package';
+import { AppPackage, ViewSpec } from './package';
 import { executeQuery, QueryResult } from './query';
 import { renderView, ViewModel } from './view';
 import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 
 export type PackageRuntimeInput = {
-  package: AppPackageV2;
+  package: AppPackage;
   collections: Record<string, readonly Record<string, unknown>[]>;
 };
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AppPackageV2 } from './package';
+import type { AppPackage } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
 import { createOperationProposalIdempotencyKey, evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
@@ -7,7 +7,7 @@ import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from 
 import { dryRunReactiveProposal, evaluateReactiveProposalPolicy } from './reactive-proposal-policy';
 
 export type ReactiveCycleInput = {
-  package: AppPackageV2;
+  package: AppPackage;
   beforeRows: readonly Record<string, unknown>[];
   afterRows: readonly Record<string, unknown>[];
   event: { kind: 'operation' | 'schedule'; id: string };
@@ -185,7 +185,7 @@ export function runReactiveCycle(input: ReactiveCycleInput): ReactiveCycleResult
 function createProposalEnvelope(input: {
   proposalId: string;
   proposal: OperationProposal & { eventId: string };
-  package: AppPackageV2;
+  package: AppPackage;
   eventId: string;
   queryHashes: ReactiveCycleResult['queryHashes'];
   rows: readonly Record<string, unknown>[];
@@ -261,7 +261,7 @@ function createProposalEnvelope(input: {
 function executePackageQuery(
   rows: readonly Record<string, unknown>[],
   queryId: string,
-  query: AppPackageV2['queries'][string],
+  query: AppPackage['queries'][string],
 ) {
   const stableRows = [...rows].sort((left, right) => rowKey(left).localeCompare(rowKey(right)));
   const scopedRows = query.from === 'records'
