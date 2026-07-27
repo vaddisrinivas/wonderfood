@@ -1,5 +1,11 @@
 import type { NotionApiResponse, NotionClientConfig } from './client';
-import { createOfficialNotionClient, readNotionConfig } from './client';
+import {
+  createOfficialNotionClient,
+  notionApiPath,
+  notionFetch,
+  NOTION_DATA_SOURCE_QUERY_PATH,
+  readNotionConfig,
+} from './client';
 
 export type NotionQueryResponse = {
   results?: unknown[];
@@ -36,6 +42,7 @@ export type NotionPort = {
 };
 
 let notionPortOverride: NotionPort | null = null;
+const DEFAULT_NOTION_BASE_URL = 'https://api.notion.com/v1';
 
 function normalizeNotionError(error: unknown): NotionApiResponse<never> {
   const status = typeof (error as { status?: unknown })?.status === 'number'
@@ -106,8 +113,63 @@ export function createSdkNotionPort(config?: NotionClientConfig): NotionPort | n
   };
 }
 
+function shouldUseFetchNotionPort() {
+  const override = process.env.NOTION_BASE_URL?.trim();
+  return Boolean(override && override !== DEFAULT_NOTION_BASE_URL);
+}
+
+function createFetchNotionPort(): NotionPort {
+  return {
+    async queryDataSource(input) {
+      return notionFetch<NotionQueryResponse>(
+        notionApiPath(NOTION_DATA_SOURCE_QUERY_PATH, { data_source_id: input.dataSourceId }),
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            page_size: input.pageSize,
+            ...(input.startCursor ? { start_cursor: input.startCursor } : {}),
+          }),
+          ...(input.signal ? { signal: input.signal } : {}),
+        },
+      );
+    },
+    async createPage(input) {
+      return notionFetch<NotionWriteResponse>(
+        '/pages',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            parent: {
+              type: 'data_source_id',
+              data_source_id: input.dataSourceId,
+            },
+            ...input.payload,
+          }),
+          ...(input.signal ? { signal: input.signal } : {}),
+        },
+      );
+    },
+    async updatePage(input) {
+      return notionFetch<NotionWriteResponse>(
+        `/pages/${encodeURIComponent(input.pageId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input.payload),
+          ...(input.signal ? { signal: input.signal } : {}),
+        },
+      );
+    },
+  };
+}
+
 export function getNotionPort(config?: NotionClientConfig): NotionPort | null {
-  return notionPortOverride ?? createSdkNotionPort(config);
+  if (notionPortOverride) {
+    return notionPortOverride;
+  }
+  if (shouldUseFetchNotionPort()) {
+    return createFetchNotionPort();
+  }
+  return createSdkNotionPort(config);
 }
 
 export function setNotionPortForTests(port: NotionPort | null) {
