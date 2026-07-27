@@ -86,6 +86,7 @@ export function buildAppPackageFromManifest(
         ...(manifest.dashboard_blocks ? { dashboardBlocks: cleanJson(manifest.dashboard_blocks) as Record<string, unknown>[] } : {}),
         ...(manifest.mobile_surface ? { mobileSurface: cleanJson(manifest.mobile_surface) as Record<string, unknown> } : {}),
         ...(manifest.render ? { render: cleanJson(manifest.render) as Record<string, unknown> } : {}),
+        ...(manifest.ui ? { ui: cleanJson(manifest.ui) as Record<string, unknown> } : {}),
         ...(manifest.rich_detail_schema ? { richDetailSchema: manifest.rich_detail_schema } : {}),
         ...(manifest.provider_template_fields ? { providerTemplateFields: cleanJson(manifest.provider_template_fields) as Record<string, unknown> } : {}),
         sourceSchemaVersion: manifest.schema_version,

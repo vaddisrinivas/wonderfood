@@ -32,6 +32,38 @@ export type PackageSurfaceSpec = {
   collections: string[];
 };
 
+export type PackageUiAction = {
+  kind: 'open_url' | 'propose';
+  label?: string;
+  url?: string;
+  command?: string;
+  tool?: string;
+  payload?: Record<string, unknown>;
+};
+
+export type PackageUiComponent = {
+  kind: 'recordList' | 'metric' | 'action' | 'text';
+  id?: string;
+  title?: string;
+  subtitle?: string;
+  view?: string;
+  tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
+  query?: {
+    collections?: string[];
+    match?: string;
+    limit?: number;
+  };
+  action?: PackageUiAction;
+};
+
+export type PackagePresentationUi = {
+  schemaVersion?: 'wonder.ui.v1';
+  openUrlAllowlist?: string[];
+  components?: PackageUiComponent[];
+  screens?: Record<string, { title?: string; subtitle?: string; components?: PackageUiComponent[] }>;
+  defaultScreen?: string;
+};
+
 export type PackagePresentationSpec = {
   label: string;
   homeSurface?: string;
@@ -40,6 +72,7 @@ export type PackagePresentationSpec = {
   dashboardBlocks?: Record<string, unknown>[];
   mobileSurface?: Record<string, unknown>;
   render?: Record<string, unknown>;
+  ui?: PackagePresentationUi;
   richDetailSchema?: string;
   providerTemplateFields?: Record<string, unknown>;
   sourceSchemaVersion?: string;

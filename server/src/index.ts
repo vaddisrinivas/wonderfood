@@ -43,7 +43,7 @@ import {
   setConversationResponseId,
 } from './chat-storage';
 import { ChatStreamEvent } from './responses';
-import { getActionEvent, runUndo } from './mcp/state';
+import { createActionEvent, getActionEvent, runUndo } from './mcp/state';
 import { installReactiveRuntime } from './kernel/install-reactive-runtime';
 import { chatAgent, localQuery } from './agents/chat-agent';
 import { PackageRegistry } from './kernel/package-registry';
@@ -1787,7 +1787,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       return;
     }
 
-    let payload: { conversation_id?: string; action?: string; value?: string; domain_id?: string };
+    let payload: { conversation_id?: string; action?: string; value?: string; domain_id?: string; command?: string; tool?: string; payload?: unknown; idempotency_key?: string; actor?: string };
     try {
       payload = await readJsonBody(req, CHAT_CONTROL_BODY_LIMIT_BYTES);
     } catch (error) {
@@ -1795,7 +1795,8 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       badRequest(res, 'Invalid JSON');
       return;
     }
-    if (!payload?.conversation_id || !payload?.action) {
+    const requestedAction = typeof payload.action === 'string' ? payload.action.trim() : '';
+    if (!payload?.conversation_id || !requestedAction) {
       badRequest(res, 'conversation_id and action required');
       return;
     }
@@ -1807,14 +1808,45 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       return;
     }
 
+    if (requestedAction === 'propose') {
+      const command = typeof payload.command === 'string' ? payload.command.trim() : '';
+      const tool = typeof payload.tool === 'string' ? payload.tool.trim() : '';
+      const normalizedCommand = command || tool;
+      if (!normalizedCommand) {
+        badRequest(res, 'command or tool required for propose');
+        return;
+      }
+
+      const actor = typeof payload.actor === 'string' && payload.actor.trim() ? payload.actor.trim() : 'ui-package';
+      const actionEvent = createActionEvent({
+        id: randomUUID(),
+        actor,
+        domain: payload.domain_id?.trim() || thread.domain,
+        tool: tool || normalizedCommand,
+        risk: 'low',
+        recordIds: [],
+        idempotencyKey: typeof payload.idempotency_key === 'string' ? payload.idempotency_key.trim() : undefined,
+        command: normalizedCommand,
+        before: payload.payload,
+        conversationId: thread.id,
+      });
+
+      ok(res, {
+        action: requestedAction,
+        status: 'ok',
+        action_event: actionEvent,
+      });
+      return;
+    }
+
     const nextTitle =
-      payload.action === 'rename' && typeof payload.value === 'string' && payload.value.trim()
+      requestedAction === 'rename' && typeof payload.value === 'string' && payload.value.trim()
         ? payload.value.slice(0, 80)
         : thread.title;
     const nextDetail =
-      payload.action === 'pin'
+      requestedAction === 'pin'
         ? `${thread.detail} · pinned`
-        : payload.action === 'archive'
+        : requestedAction === 'archive'
           ? `${thread.detail} · archived`
           : thread.detail;
 
@@ -1826,7 +1858,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
     }, principalId);
 
     ok(res, {
-      action: payload.action,
+      action: requestedAction,
       status: 'ok',
       conversation: { id: next.id, title: next.title, detail: next.detail },
     });

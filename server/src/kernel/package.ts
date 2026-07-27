@@ -36,6 +36,85 @@ function hasExecutableCode(value: unknown): boolean {
   return Object.entries(value as Record<string, unknown>).some(([key, child]) => key === 'code' || key === 'javascript' || key === 'script' || hasExecutableCode(child));
 }
 
+const UI_COMPONENT_KINDS = new Set(['recordList', 'metric', 'action', 'text']);
+const UI_ACTION_KINDS = new Set(['open_url', 'propose']);
+const UI_ACTION_TOOL_PATTERN = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
+
+function isTextArray(value: unknown, path: string): string[] {
+  if (!Array.isArray(value)) throw new Error(`${path} must be an array`);
+  const out: string[] = [];
+  for (const [index, item] of value.entries()) {
+    if (!text(item)) throw new Error(`Expected non-empty string at ${path}[${index}]`);
+    out.push(item);
+  }
+  return out;
+}
+
+function isUiAction(value: unknown, path: string): { command: string; tool: string } {
+  if (!object(value)) throw new Error(`${path} must be an object`);
+  const action = value as Record<string, unknown>;
+  if (!text(action.kind) || !UI_ACTION_KINDS.has(action.kind)) throw new Error(`${path}.kind must be one of open_url|propose`);
+  if (action.kind === 'open_url' && !text(action.url)) throw new Error(`${path}.url required for open_url actions`);
+  if (action.kind === 'propose' && !text(action.tool) && !text(action.command)) {
+    throw new Error(`${path}.tool or ${path}.command required for propose actions`);
+  }
+  const command = text(action.command) ? action.command : text(action.tool) ? String(action.tool) : '';
+  return {
+    command,
+    tool: action.kind === 'propose' && text(action.tool) ? String(action.tool) : command,
+  };
+}
+
+function isUiComponent(value: unknown, path: string, packageCollections: Record<string, unknown>, packageViews: Record<string, unknown>): { hasQuery: boolean } {
+  if (!object(value)) throw new Error(`${path} must be an object`);
+  const component = value as Record<string, unknown>;
+  if (!text(component.kind) || !UI_COMPONENT_KINDS.has(component.kind)) throw new Error(`${path}.kind is invalid`);
+  if (component.kind === 'action' && !text(component.id)) throw new Error(`${path}.id required for action components`);
+
+  if (component.view !== undefined && !text(component.view)) throw new Error(`${path}.view must be text`);
+  if (typeof component.view === 'string' && component.view && !Object.hasOwn(packageViews, component.view)) {
+    throw new Error(`${path}.view must reference an existing view`);
+  }
+
+  if (component.tone !== undefined && !['neutral', 'moss', 'amber', 'plum', 'blue'].includes(String(component.tone))) {
+    throw new Error(`${path}.tone is invalid`);
+  }
+  if (component.action !== undefined) {
+    const { tool, command } = isUiAction(component.action, `${path}.action`);
+    if (command && !UI_ACTION_TOOL_PATTERN.test(command)) {
+      throw new Error(`${path}.action.command invalid`);
+    }
+    if (tool && !UI_ACTION_TOOL_PATTERN.test(tool)) {
+      throw new Error(`${path}.action.tool invalid`);
+    }
+  }
+
+  const query = component.query;
+  if (query === undefined) {
+    return { hasQuery: false };
+  }
+  if (!object(query)) throw new Error(`${path}.query must be an object`);
+  const rawQuery = query as Record<string, unknown>;
+  if (rawQuery.collections !== undefined) {
+    const collections = isTextArray(rawQuery.collections, `${path}.query.collections`);
+    for (const collection of collections) {
+      if (!Object.hasOwn(packageCollections, collection)) throw new Error(`${path}.query.collections references missing collection ${collection}`);
+    }
+  }
+  if (rawQuery.limit !== undefined && (!Number.isInteger(rawQuery.limit) || rawQuery.limit < 1 || rawQuery.limit > 20)) {
+    throw new Error(`${path}.query.limit must be 1..20`);
+  }
+  if (rawQuery.match !== undefined && !text(rawQuery.match)) throw new Error(`${path}.query.match must be text`);
+  if (text(rawQuery.match)) {
+    try {
+      new RegExp(rawQuery.match as string);
+    } catch {
+      throw new Error(`${path}.query.match is invalid regular expression`);
+    }
+  }
+  return { hasQuery: true };
+}
+
 export { AppPackageV2, CollectionSpec, ComputedFieldSpec, FieldType, OperationTemplate, PackagePresentationSpec, PackageSurfaceSpec, PackageValidation, RuleSpec, ViewSpec };
 export type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 
@@ -100,6 +179,94 @@ export function validateAppPackage(input: unknown): PackageValidation {
     }
     if (presentation.homeSurface !== undefined && (!text(presentation.homeSurface) || !surfaceIds.has(presentation.homeSurface))) {
       errors.push(`presentation homeSurface references missing surface ${String(presentation.homeSurface)}`);
+    }
+
+    const ui = presentation.ui;
+    if (ui !== undefined) {
+      if (!object(ui)) {
+        errors.push('presentation ui must be an object');
+      } else {
+        if (ui.schemaVersion !== undefined && ui.schemaVersion !== 'wonder.ui.v1') {
+          errors.push('presentation ui.schemaVersion must be wonder.ui.v1');
+        }
+        if (ui.openUrlAllowlist !== undefined && !Array.isArray(ui.openUrlAllowlist)) {
+          errors.push('presentation ui.openUrlAllowlist must be an array');
+        }
+        if (Array.isArray(ui.openUrlAllowlist)) {
+          for (const [index, allowlistItem] of ui.openUrlAllowlist.entries()) {
+            if (!text(allowlistItem)) errors.push(`presentation ui.openUrlAllowlist[${index}] must be a non-empty string`);
+          }
+        }
+        const screens = ui.screens;
+        if (screens !== undefined && !object(screens)) {
+          errors.push('presentation ui.screens must be an object');
+        }
+        const screenIds = new Set<string>();
+        if (object(screens)) {
+          for (const [screenId, screenValue] of Object.entries(screens)) {
+            if (!text(screenId)) {
+              errors.push('presentation ui screen id must be non-empty');
+              continue;
+            }
+            if (screenIds.has(screenId)) {
+              errors.push(`presentation ui screen ${screenId} is duplicated`);
+            } else {
+              screenIds.add(screenId);
+            }
+            if (!object(screenValue)) {
+              errors.push(`presentation ui screen ${screenId} must be an object`);
+            } else {
+              if (screenValue.components !== undefined && !Array.isArray(screenValue.components)) {
+                errors.push(`presentation ui screen ${screenId}.components must be an array`);
+              }
+              if (Array.isArray(screenValue.components)) {
+                for (const [index, rawComponent] of screenValue.components.entries()) {
+                  try {
+                    isUiComponent(rawComponent, `presentation.ui.screens.${screenId}.components[${index}]`, value.collections ?? {}, value.views ?? {});
+                  } catch (error) {
+                    if (error instanceof Error) {
+                      errors.push(error.message);
+                    } else {
+                      errors.push(`presentation.ui.screens.${screenId}.components[${index}] invalid`);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (ui.defaultScreen !== undefined && !text(ui.defaultScreen)) {
+          errors.push('presentation ui.defaultScreen must be a non-empty string');
+        }
+        if (ui.defaultScreen !== undefined) {
+          if (!object(screens)) {
+            errors.push('presentation ui.defaultScreen requires screens');
+          } else if (!Object.hasOwn(screens, ui.defaultScreen)) {
+            errors.push(`presentation ui.defaultScreen references missing screen ${String(ui.defaultScreen)}`);
+          }
+        }
+
+        if (ui.components !== undefined && !Array.isArray(ui.components)) {
+          errors.push('presentation ui.components must be an array');
+        }
+        if (Array.isArray(ui.components)) {
+          for (const [index, rawComponent] of ui.components.entries()) {
+            try {
+              isUiComponent(rawComponent, `presentation.ui.components[${index}]`, value.collections ?? {}, value.views ?? {});
+            } catch (error) {
+              if (error instanceof Error) {
+                errors.push(error.message);
+              } else {
+                errors.push(`presentation.ui.components[${index}] invalid`);
+              }
+            }
+          }
+        }
+
+        if (ui.components === undefined && !screens) {
+          errors.push('presentation ui requires components or screens');
+        }
+      }
     }
   }
   for (const rule of value.rules ?? []) {

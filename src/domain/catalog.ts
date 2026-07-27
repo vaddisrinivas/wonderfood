@@ -2,7 +2,7 @@ import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
-import type { AppPackageV2 } from '../../packages/shared/contracts/package';
+import type { AppPackageV2, PackagePresentationUi } from '../../packages/shared/contracts/package';
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
 export type DomainSchemaVersion = 'lifeos.domain.v1';
@@ -143,6 +143,7 @@ export interface DomainManifest {
   skills: string[];
   workflows: string[];
   data_homes: string[];
+  ui?: PackagePresentationUi;
   dashboard_blocks?: DashboardBlock[];
   mobile_surface?: MobileSurface;
   render?: DomainRenderContract;
@@ -460,6 +461,131 @@ function parseRenderContract(value: unknown): DomainRenderContract | undefined {
   };
 }
 
+function parseUiValue(value: unknown): unknown {
+  if (!isObject(value)) return value === undefined ? undefined : value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, child]) => [key, parseUiValue(child)])
+      .filter(([, child]) => child !== undefined),
+  );
+}
+
+function parseUiAction(value: unknown, path: string): unknown {
+  if (!isObject(value)) {
+    throw new Error(`${path} must be an object`);
+  }
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== 'open_url' && raw.kind !== 'propose') {
+    throw new Error(`${path}.kind must be open_url|propose`);
+  }
+  if (raw.kind === 'open_url') {
+    assertCondition(typeof raw.url === 'string' && raw.url.trim().length > 0, `Expected url at ${path}.url`);
+  } else {
+    assertCondition(typeof raw.command === 'string' && raw.command.trim().length > 0 || typeof raw.tool === 'string' && raw.tool.trim().length > 0,
+      `Expected command or tool at ${path}`);
+  }
+  return parseUiValue(raw);
+}
+
+function parseUiComponent(value: unknown, path: string, packageCollections: Set<string>): unknown {
+  if (!isObject(value)) {
+    throw new Error(`${path} must be an object`);
+  }
+  const raw = value as Record<string, unknown>;
+  const kind = raw.kind;
+  assertCondition(kind === 'recordList' || kind === 'metric' || kind === 'action' || kind === 'text', `${path}.kind must be recordList|metric|action|text`);
+  if (kind === 'action') {
+    assertCondition(typeof raw.id === 'string' && raw.id.trim().length > 0, `${path}.id required for action components`);
+  }
+  if (raw.tone !== undefined && raw.tone !== 'neutral' && raw.tone !== 'moss' && raw.tone !== 'amber' && raw.tone !== 'plum' && raw.tone !== 'blue') {
+    throw new Error(`${path}.tone must be neutral|moss|amber|plum|blue`);
+  }
+  if (raw.action !== undefined) {
+    parseUiAction(raw.action, `${path}.action`);
+  }
+  if (raw.query !== undefined) {
+    assertCondition(isObject(raw.query), `${path}.query must be an object`);
+    const q = raw.query as Record<string, unknown>;
+    const collections = parseOptionalStringArray(q.collections, `${path}.query.collections`) ?? [];
+    for (const collection of collections) {
+      assertCondition(packageCollections.has(collection), `${path}.query.collections references missing collection ${collection}`);
+    }
+    if (q.match !== undefined) {
+      assertCondition(typeof q.match === 'string', `${path}.query.match must be a string`);
+      if (q.match.trim()) {
+        try {
+          new RegExp(q.match, 'i');
+        } catch {
+          throw new Error(`${path}.query.match is invalid regular expression`);
+        }
+      }
+    }
+    if (q.limit !== undefined) {
+      assertCondition(typeof q.limit === 'number' && Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 20, `${path}.query.limit must be 1..20`);
+    }
+  }
+  return parseUiValue(raw);
+}
+
+function parseUiScreen(value: unknown, path: string, packageCollections: Set<string>): Record<string, unknown> {
+  if (!isObject(value)) {
+    throw new Error(`${path} must be an object`);
+  }
+  const screen = value as Record<string, unknown>;
+  if (screen.components !== undefined) {
+    assertCondition(Array.isArray(screen.components), `${path}.components must be an array`);
+    screen.components.forEach((component, index) => parseUiComponent(component, `${path}.components[${index}]`, packageCollections));
+  }
+  return {
+    ...parseUiValue(screen),
+  };
+}
+
+function parseUi(value: unknown, path: string, packageCollections: Set<string>): PackagePresentationUi | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) {
+    throw new Error(`${path} must be an object`);
+  }
+  const raw = value as Record<string, unknown>;
+  const parsed: PackagePresentationUi = {
+    schemaVersion: raw.schemaVersion === 'wonder.ui.v1' ? 'wonder.ui.v1' : undefined,
+    openUrlAllowlist: raw.openUrlAllowlist === undefined ? undefined : parseOptionalStringArray(raw.openUrlAllowlist, `${path}.openUrlAllowlist`),
+    components: undefined,
+    screens: undefined,
+    defaultScreen: raw.defaultScreen === undefined ? undefined : parseString(raw.defaultScreen, `${path}.defaultScreen`),
+  };
+
+  if (raw.components !== undefined) {
+    assertCondition(Array.isArray(raw.components), `${path}.components must be an array`);
+    if (raw.components.length === 0) {
+      throw new Error(`${path}.components must not be empty`);
+    }
+    parsed.components = raw.components.map((component, index) => {
+      parseUiComponent(component, `${path}.components[${index}]`, packageCollections);
+      return parseUiValue(component) as Record<string, unknown>;
+    });
+  }
+
+  if (raw.screens !== undefined) {
+    assertCondition(isObject(raw.screens), `${path}.screens must be an object`);
+    const screens: Record<string, unknown> = {};
+    for (const [screenId, screen] of Object.entries(raw.screens)) {
+      screens[screenId] = parseUiScreen(screen, `${path}.screens.${screenId}`, packageCollections);
+    }
+    parsed.screens = screens;
+  }
+
+  if (!parsed.components && !parsed.screens) {
+    throw new Error(`${path} requires components or screens`);
+  }
+  if (parsed.screens) {
+    const screenIds = Object.keys(parsed.screens);
+    assertCondition(screenIds.length > 0, `${path}.screens must not be empty`);
+    assertCondition(parsed.defaultScreen === undefined || screenIds.includes(parsed.defaultScreen), `${path}.defaultScreen references missing screen ${String(parsed.defaultScreen)}`);
+  }
+  return parsed;
+}
+
 function parseDomainManifest(value: unknown, path: string): DomainManifest {
   assertCondition(isObject(value), `Expected object at ${path}`);
   const raw = value as Record<string, unknown>;
@@ -498,6 +624,9 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     rich_detail_json: Array.isArray(providerTemplateFields.rich_detail_json) ? (providerTemplateFields.rich_detail_json as string[]) : undefined,
     relations_json: Array.isArray(providerTemplateFields.relations_json) ? (providerTemplateFields.relations_json as string[]) : undefined,
   } : undefined;
+  const collections = parseStringArray(raw.collections, `${path}.collections`);
+  const collectionSet = new Set(collections);
+  const ui = parseUi(raw.ui, `${path}.ui`, collectionSet);
 
   return {
     schema_version: 'lifeos.domain.v1',
@@ -505,12 +634,13 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     label: parseString(raw.label, `${path}.label`),
     home_surface: typeof raw.home_surface === 'string' ? raw.home_surface : undefined,
     surfaces: parsedSurfaces,
-    collections: parseStringArray(raw.collections, `${path}.collections`),
+    collections,
     visual_identity: parseVisualIdentity(raw.visual_identity),
     relations: parsedRelations,
     skills: parseStringArray(raw.skills, `${path}.skills`),
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
+    ui,
     dashboard_blocks: parseDashboardBlocks(raw.dashboard_blocks, `${path}.dashboard_blocks`),
     mobile_surface: parseMobileSurface(raw.mobile_surface, `${path}.mobile_surface`),
     render: parseRenderContract(raw.render),
@@ -699,6 +829,7 @@ function domainManifestFromPackage(pkg: AppPackageV2, bundledFallback?: DomainMa
       presentation?.mobileSurface ?? bundledFallback?.mobile_surface,
       `app-package:${pkg.id}.presentation.mobileSurface`,
     ),
+    ui: (presentation?.ui as DomainManifest['ui']) ?? bundledFallback?.ui,
     render: (presentation?.render as DomainRenderContract | undefined) ?? bundledFallback?.render,
     rich_detail_schema: presentation?.richDetailSchema ?? bundledFallback?.rich_detail_schema,
     provider_template_fields: (presentation?.providerTemplateFields as DomainManifest['provider_template_fields']) ?? bundledFallback?.provider_template_fields,
