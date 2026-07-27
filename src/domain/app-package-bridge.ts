@@ -1,4 +1,6 @@
-import type { AppPackage, CollectionSpec } from '@/packages/shared/contracts/package';
+import { sha256 } from 'js-sha256';
+
+import type { AppPackage, AppPackageV3, CollectionSpec } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import type { DomainManifest } from '@/src/domain/catalog';
 
@@ -24,7 +26,7 @@ export type AppPackageBridgeResult = {
  */
 export function buildAppPackageFromManifest(
   manifest: DomainManifest,
-  options: { version?: string } = {},
+  options: { version?: string; pinnedAt?: string } = {},
 ): AppPackageBridgeResult {
   const warnings: string[] = [];
   const collections = Object.fromEntries(
@@ -59,43 +61,75 @@ export function buildAppPackageFromManifest(
     };
   }
 
+  const version = options.version?.trim() || bundledManifestVersion(manifest);
+  const basePackage = {
+    schemaVersion: 'wonder.app-package.v2' as const,
+    id: manifest.id,
+    version,
+    collections,
+    queries,
+    views,
+    presentation: {
+      label: manifest.label,
+      ...(manifest.home_surface ? { homeSurface: manifest.home_surface } : {}),
+      surfaces: manifest.surfaces.map((surface) => ({
+        id: surface.id,
+        label: surface.label,
+        ...(surface.icon ? { icon: surface.icon } : {}),
+        ...(surface.image_url ? { imageUrl: surface.image_url } : {}),
+        ...(surface.views ? { views: surface.views } : {}),
+        collections: [...surface.collections],
+      })),
+      ...(manifest.visual_identity ? { visualIdentity: cleanJson(manifest.visual_identity) as Record<string, unknown> } : {}),
+      ...(manifest.render ? { render: cleanJson(manifest.render) as Record<string, unknown> } : {}),
+      ...(manifest.ui ? { ui: cleanJson(manifest.ui) as Record<string, unknown> } : {}),
+      ...(manifest.rich_detail_schema ? { richDetailSchema: manifest.rich_detail_schema } : {}),
+      ...(manifest.provider_template_fields ? { providerTemplateFields: cleanJson(manifest.provider_template_fields) as Record<string, unknown> } : {}),
+      sourceSchemaVersion: manifest.schema_version,
+    },
+    rules: [],
+    capabilities: [
+      ...manifest.data_homes.map((home) => `data-home:${home}`),
+      ...manifest.mcp.resources.map((resource) => `mcp-resource:${resource}`),
+      ...manifest.mcp.tools.map((tool) => `mcp-tool:${tool}`),
+    ],
+    acceptanceTests: [
+      'manifest-collections-map-to-package',
+      'surface-queries-use-bounded-ast',
+      'views-reference-existing-queries',
+    ],
+  };
+
+  if (!manifest.native_capabilities) {
+    return { package: basePackage, warnings };
+  }
+
+  const dependencyPins = cleanJson(manifest.dependency_pins ?? []) as AppPackageV3['dependencyPins'];
+  const nativeCapabilities = cleanJson(manifest.native_capabilities) as AppPackageV3['nativeCapabilities'];
+  const pinnedAt = options.pinnedAt?.trim() || '1970-01-01T00:00:00.000Z';
+  const contractLock = {
+    schemaVersion: 'wonder.package-contract-lock.v1' as const,
+    algorithm: 'sha256' as const,
+    pinnedAt,
+    dependencyPins,
+    nativeCapabilities,
+    checksum: '',
+  };
+  contractLock.checksum = hashValue({
+    schemaVersion: contractLock.schemaVersion,
+    algorithm: contractLock.algorithm,
+    dependencyPins: contractLock.dependencyPins,
+    nativeCapabilities: contractLock.nativeCapabilities,
+    pinnedAt: contractLock.pinnedAt,
+  });
+
   return {
     package: {
-      schemaVersion: 'wonder.app-package.v2',
-      id: manifest.id,
-      version: options.version?.trim() || bundledManifestVersion(manifest),
-      collections,
-      queries,
-      views,
-      presentation: {
-        label: manifest.label,
-        ...(manifest.home_surface ? { homeSurface: manifest.home_surface } : {}),
-        surfaces: manifest.surfaces.map((surface) => ({
-          id: surface.id,
-          label: surface.label,
-          ...(surface.icon ? { icon: surface.icon } : {}),
-          ...(surface.image_url ? { imageUrl: surface.image_url } : {}),
-          ...(surface.views ? { views: surface.views } : {}),
-          collections: [...surface.collections],
-        })),
-        ...(manifest.visual_identity ? { visualIdentity: cleanJson(manifest.visual_identity) as Record<string, unknown> } : {}),
-        ...(manifest.render ? { render: cleanJson(manifest.render) as Record<string, unknown> } : {}),
-        ...(manifest.ui ? { ui: cleanJson(manifest.ui) as Record<string, unknown> } : {}),
-        ...(manifest.rich_detail_schema ? { richDetailSchema: manifest.rich_detail_schema } : {}),
-        ...(manifest.provider_template_fields ? { providerTemplateFields: cleanJson(manifest.provider_template_fields) as Record<string, unknown> } : {}),
-        sourceSchemaVersion: manifest.schema_version,
-      },
-      rules: [],
-      capabilities: [
-        ...manifest.data_homes.map((home) => `data-home:${home}`),
-        ...manifest.mcp.resources.map((resource) => `mcp-resource:${resource}`),
-        ...manifest.mcp.tools.map((tool) => `mcp-tool:${tool}`),
-      ],
-      acceptanceTests: [
-        'manifest-collections-map-to-package',
-        'surface-queries-use-bounded-ast',
-        'views-reference-existing-queries',
-      ],
+      ...basePackage,
+      schemaVersion: 'wonder.app-package.v3',
+      dependencyPins,
+      nativeCapabilities,
+      contractLock,
     },
     warnings,
   };
@@ -112,6 +146,22 @@ function hashString(value: string): string {
     hash = Math.imul(hash, 0x01000193);
   }
   return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function hashValue(value: unknown): string {
+  return `sha256:${sha256(stableJson(value))}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 function cleanJson(value: unknown): unknown {

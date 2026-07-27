@@ -2,7 +2,7 @@ import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
-import type { AppPackage, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
+import type { AppPackage, AppPackageDependencyPin, AppPackageNativeCapability, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
 
 type ParsedUiScreen = {
   title?: string;
@@ -84,6 +84,8 @@ export interface DomainManifest {
   skills: string[];
   workflows: string[];
   data_homes: string[];
+  dependency_pins?: AppPackageDependencyPin[];
+  native_capabilities?: AppPackageNativeCapability;
   ui?: A2UiSurface;
   render?: DomainRenderContract;
   rich_detail_schema?: string;
@@ -251,6 +253,71 @@ function parseRenderContract(value: unknown): DomainRenderContract | undefined {
     source_exclude_fields: Array.isArray(raw.source_exclude_fields) ? (raw.source_exclude_fields as string[]) : undefined,
     intents: Object.keys(intents).length ? intents : undefined,
   };
+}
+
+function parseNativeCapability(value: unknown, path: string): AppPackageNativeCapability | undefined {
+  if (value === undefined) return undefined;
+  assertCondition(isObject(value), `${path} must be an object`);
+  const raw = value as Record<string, unknown>;
+  assertCondition(raw.schemaVersion === 'wonder.app-package-native-capabilities.v1', `${path}.schemaVersion must be wonder.app-package-native-capabilities.v1`);
+  assertCondition(raw.platform === 'expo' || raw.platform === 'android' || raw.platform === 'ios' || raw.platform === 'web', `${path}.platform must be expo|android|ios|web`);
+  const packages = parseStringArray(raw.packages, `${path}.packages`);
+  assertCondition(packages.length > 0, `${path}.packages must not be empty`);
+  const permissions = raw.permissions === undefined
+    ? undefined
+    : parseNativePermissions(raw.permissions, `${path}.permissions`);
+  return {
+    schemaVersion: 'wonder.app-package-native-capabilities.v1',
+    platform: raw.platform,
+    packages,
+    ...(permissions ? { permissions } : {}),
+  };
+}
+
+function parseDependencyPins(value: unknown, path: string): AppPackageDependencyPin[] | undefined {
+  if (value === undefined) return undefined;
+  assertCondition(Array.isArray(value), `${path} must be an array`);
+  return value.map((item, index) => {
+    assertCondition(isObject(item), `${path}[${index}] must be an object`);
+    const raw = item as Record<string, unknown>;
+    const source = raw.source;
+    if (source !== undefined) {
+      assertCondition(source === 'npm' || source === 'maven' || source === 'gradle' || source === 'cocoapods' || source === 'other', `${path}[${index}].source is invalid`);
+    }
+    return {
+      package: parseString(raw.package, `${path}[${index}].package`),
+      version: parseString(raw.version, `${path}[${index}].version`),
+      ...(source ? { source } : {}),
+    };
+  });
+}
+
+function parseNativePermissions(value: unknown, path: string): AppPackageNativeCapability['permissions'] {
+  assertCondition(Array.isArray(value), `${path} must be an array`);
+  return value.map((item, index) => {
+    if (typeof item === 'string') {
+      assertCondition(item.trim().length > 0, `${path}[${index}] must not be empty`);
+      return item;
+    }
+    assertCondition(isObject(item), `${path}[${index}] must be a string or object`);
+    const raw = item as Record<string, unknown>;
+    const platform = raw.platform;
+    assertCondition(platform === 'expo' || platform === 'android' || platform === 'ios' || platform === 'web', `${path}[${index}].platform must be expo|android|ios|web`);
+    if (raw.required !== undefined) {
+      assertCondition(typeof raw.required === 'boolean', `${path}[${index}].required must be boolean`);
+    }
+    if (raw.prompt !== undefined) {
+      assertCondition(typeof raw.prompt === 'string' && raw.prompt.trim().length > 0, `${path}[${index}].prompt must be a non-empty string`);
+    }
+    return {
+      id: parseString(raw.id, `${path}[${index}].id`),
+      platform,
+      permission: parseString(raw.permission, `${path}[${index}].permission`),
+      reason: parseString(raw.reason, `${path}[${index}].reason`),
+      ...(raw.required === undefined ? {} : { required: raw.required }),
+      ...(typeof raw.prompt === 'string' ? { prompt: raw.prompt } : {}),
+    };
+  });
 }
 
 function parseUiValue(value: unknown): unknown {
@@ -476,6 +543,8 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     skills: parseStringArray(raw.skills, `${path}.skills`),
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
+    dependency_pins: parseDependencyPins(raw.dependency_pins, `${path}.dependency_pins`),
+    native_capabilities: parseNativeCapability(raw.native_capabilities, `${path}.native_capabilities`),
     ui,
     render: parseRenderContract(raw.render),
     rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
@@ -548,6 +617,16 @@ export function getDomainManifestByPath(domains: DomainCatalog['domains'], manif
   const entry = domains.find((domain) => domain.manifest === manifestPath);
   if (!entry) return undefined;
   return getDomainManifest(domains, entry.id);
+}
+
+export function getBundledDomainManifest(id?: string): DomainManifest {
+  const catalog = parseCatalog(catalogJson);
+  const domainId = id?.trim() || catalog.active_domain_id;
+  const entry = catalog.domains.find((domain) => domain.id === domainId);
+  if (!entry) {
+    throw new Error(`[domain-catalog] Bundled domain does not exist: ${domainId}`);
+  }
+  return parseDomainManifest(loadManifestByPath(entry.manifest), `domain-manifest:${entry.id}`);
 }
 
 export function getActiveManifestPath(): string {
@@ -658,6 +737,8 @@ function domainManifestFromPackage(pkg: AppPackage, bundledFallback?: DomainMani
     skills: bundledFallback?.skills ?? [],
     workflows: bundledFallback?.workflows ?? [],
     data_homes: pkg.capabilities.filter((capability) => capability.startsWith('data-home:')).map((capability) => capability.slice('data-home:'.length)),
+    dependency_pins: pkg.schemaVersion === 'wonder.app-package.v3' ? pkg.dependencyPins : bundledFallback?.dependency_pins,
+    native_capabilities: pkg.schemaVersion === 'wonder.app-package.v3' ? pkg.nativeCapabilities : bundledFallback?.native_capabilities,
     ui: (presentation?.ui as DomainManifest['ui']) ?? bundledFallback?.ui,
     render: (presentation?.render as DomainRenderContract | undefined) ?? bundledFallback?.render,
     rich_detail_schema: presentation?.richDetailSchema ?? bundledFallback?.rich_detail_schema,

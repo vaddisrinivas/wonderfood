@@ -93,6 +93,15 @@ export type PackagePresentationSpec = {
   sourceSchemaVersion?: string;
 };
 
+export type AppPackagePermissionDeclaration = {
+  id: string;
+  platform: 'expo' | 'android' | 'ios' | 'web';
+  permission: string;
+  reason: string;
+  required?: boolean;
+  prompt?: string;
+};
+
 export type RuleSpec = {
   id: string;
   trigger: {
@@ -138,14 +147,7 @@ export type AppPackageNativeCapability = {
   schemaVersion: 'wonder.app-package-native-capabilities.v1';
   platform: 'expo' | 'android' | 'ios' | 'web';
   packages: string[];
-  permissions?: Array<string | {
-    id: string;
-    platform: 'expo' | 'android' | 'ios' | 'web';
-    permission: string;
-    reason: string;
-    required?: boolean;
-    prompt?: string;
-  }>;
+  permissions?: Array<string | AppPackagePermissionDeclaration>;
 };
 
 export type AppPackageContractLock = {

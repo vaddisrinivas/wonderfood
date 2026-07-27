@@ -27,6 +27,7 @@
     "expo-web-browser": "~57.0.2",
     "fast-json-patch": "^3.1.1",
     "googleapis": "^173.0.0",
+    "js-sha256": "^1.0.0",
     "json-logic-js": "^2.0.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",

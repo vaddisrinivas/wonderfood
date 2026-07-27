@@ -61,6 +61,18 @@ describe('domain manifest to app package bridge', () => {
     expect(bridged.package.presentation?.ui).toEqual(manifest.ui);
   });
 
+  it('promotes declarative native capabilities into a locked V3 package', () => {
+    const manifest = loadCatalog().activeManifest;
+    const bridged = buildAppPackageFromManifest(manifest, { version: 'native-test' });
+
+    expect(manifest.native_capabilities?.permissions?.length).toBeGreaterThan(0);
+    expect(bridged.package.schemaVersion).toBe('wonder.app-package.v3');
+    if (bridged.package.schemaVersion !== 'wonder.app-package.v3') throw new Error('expected V3 package');
+    expect(bridged.package.nativeCapabilities).toEqual(manifest.native_capabilities);
+    expect(bridged.package.contractLock.nativeCapabilities).toEqual(bridged.package.nativeCapabilities);
+    expect(bridged.package.contractLock.checksum).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   it('does not emit legacy dashboard presentation blocks', () => {
     const manifest = loadCatalog().activeManifest;
     const bridged = buildAppPackageFromManifest(manifest);

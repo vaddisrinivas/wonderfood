@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
-import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
+import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
 import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
 
 type AppPackageRow = {
@@ -24,7 +24,7 @@ export type AppPackageReceiptEvidence = {
 };
 
 export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
-  const manifest = loadCatalog().activeManifest;
+  const manifest = getBundledDomainManifest();
   const bundledPackage = buildAppPackageFromManifest(manifest).package;
   const active = await getActiveAppPackage(db);
   if (active) {
@@ -124,6 +124,7 @@ function packageKey(appPackage: AppPackage): string {
 
 function shouldRefreshBundledPackage(active: AppPackage, bundledPackage: AppPackage): boolean {
   if (active.id !== bundledPackage.id) return false;
+  if (active.presentation?.sourceSchemaVersion === undefined) return false;
   if (active.version === bundledPackage.version) return false;
   const sourceSchemaVersion = active.presentation?.sourceSchemaVersion;
   return typeof sourceSchemaVersion === 'string' && sourceSchemaVersion.length > 0;

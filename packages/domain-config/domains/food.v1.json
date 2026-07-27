@@ -1022,6 +1022,64 @@
     "sqlite",
     "postgres"
   ],
+  "dependency_pins": [
+    {
+      "package": "expo-image-picker",
+      "version": "~57.0.6",
+      "source": "npm"
+    },
+    {
+      "package": "expo-sharing",
+      "version": "~57.0.7",
+      "source": "npm"
+    },
+    {
+      "package": "expo-linking",
+      "version": "~57.0.4",
+      "source": "npm"
+    },
+    {
+      "package": "react-native-health-connect",
+      "version": "^3.5.3",
+      "source": "npm"
+    }
+  ],
+  "native_capabilities": {
+    "schemaVersion": "wonder.app-package-native-capabilities.v1",
+    "platform": "expo",
+    "packages": [
+      "expo-image-picker",
+      "expo-sharing",
+      "expo-linking",
+      "react-native-health-connect"
+    ],
+    "permissions": [
+      {
+        "id": "health-connect-read-nutrition",
+        "platform": "android",
+        "permission": "android.permission.health.READ_NUTRITION",
+        "reason": "Use nutrition and food-health context only when the user enables Health Connect.",
+        "required": false,
+        "prompt": "Allow WonderFood to read nutrition records for food context."
+      },
+      {
+        "id": "camera-photo-library",
+        "platform": "expo",
+        "permission": "expo-image-picker:media-library",
+        "reason": "Attach receipts, pantry photos, food labels, and meal images to food records.",
+        "required": false,
+        "prompt": "Allow WonderFood to choose photos for receipts and food capture."
+      },
+      {
+        "id": "share-intent",
+        "platform": "expo",
+        "permission": "expo-sharing",
+        "reason": "Save food links, recipes, videos, and shopping context into the active package.",
+        "required": false,
+        "prompt": "Allow WonderFood to use the share sheet for food capture."
+      }
+    ]
+  },
   "render": {
     "answer_label": "Food",
     "empty_intro": "No matching local Food records were loaded. Connect Notion/Sheets or add records, then ask again.",
