@@ -1241,6 +1241,38 @@
           },
           {
             "kind": "widget",
+            "widget": "dataTable",
+            "id": "config_table_demo",
+            "title": "Table primitive",
+            "subtitle": "Columns bind by key. Rows can route or open links.",
+            "tone": "neutral",
+            "props": {
+              "columns": [
+                { "key": "name", "label": "Name" },
+                { "key": "kind", "label": "Kind" },
+                { "key": "signals", "label": "Signals" },
+                { "key": "score", "label": "Score" }
+              ],
+              "items": [
+                {
+                  "name": "Dinner poll",
+                  "kind": "Poll",
+                  "signals": ["family", "tonight"],
+                  "score": 92,
+                  "route": "/config"
+                },
+                {
+                  "name": "Recipe link",
+                  "kind": "Link",
+                  "signals": ["youtube", "recipe"],
+                  "score": 86,
+                  "url": "https://www.youtube.com"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
             "widget": "checklistCard",
             "id": "config_checklist_demo",
             "title": "Checklist primitive",

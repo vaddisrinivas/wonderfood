@@ -135,6 +135,18 @@ function fieldKey(value: Record<string, unknown>, index: number): string {
   return text(value.id, text(value.name, label(value, `field_${index}`))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
 
+function tableColumnKey(value: Record<string, unknown>, fallback: string): string {
+  return text(value.key, text(value.field, text(value.id, text(value.name, fallback)))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+function cellText(value: unknown, fallback = '—'): string {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((item) => cellText(item, '')).filter(Boolean).join(', ') || fallback;
+  if (value && typeof value === 'object') return text((value as Record<string, unknown>).label, text((value as Record<string, unknown>).title, fallback));
+  return fallback;
+}
+
 function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
@@ -717,25 +729,32 @@ function GalleryGridWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function DataTableWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const columns = rows(props.columns);
   const items = rows(props.items);
-  const columnLabels = (columns.length ? columns.map((column) => label(column)) : ['Name', 'Status', 'Owner']).slice(0, 4);
+  const tableColumns = (columns.length ? columns : [
+    { key: 'name', label: 'Name' },
+    { key: 'status', label: 'Status' },
+    { key: 'owner', label: 'Owner' },
+  ]).slice(0, 5).map((column, index) => ({
+    key: tableColumnKey(column, `column_${index}`),
+    title: label(column, `Column ${index + 1}`),
+  }));
   const tableRows = (items.length ? items : [{ name: 'Sample', status: 'Ready', owner: 'Wonder' }]).slice(0, 6);
   return (
     <WidgetShell title={text(props.title, 'Table')} subtitle={text(props.subtitle, 'Compact structured records without a custom screen.')}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.table}>
           <View style={styles.tableRow}>
-            {columnLabels.map((column) => <Text key={column} style={styles.tableHeader}>{column}</Text>)}
+            {tableColumns.map((column) => <Text key={column.key} style={styles.tableHeader}>{column.title}</Text>)}
           </View>
           {tableRows.map((row, index) => (
-            <View key={`${label(row)}-${index}`} style={styles.tableRow}>
-              {columnLabels.map((column) => {
-                const key = column.toLowerCase().replace(/\s+/g, '_');
-                return <Text key={column} style={styles.tableCell}>{text(row[key], text(row[column], index === 0 ? label(row) : '—'))}</Text>;
-              })}
-            </View>
+            <Pressable key={`${label(row)}-${index}`} style={styles.tableRow} onPress={() => openWidgetTarget(router, row)} disabled={!actionRoute(row) && !actionUrl(row)}>
+              {tableColumns.map((column) => (
+                <Text key={column.key} style={styles.tableCell}>{cellText(row[column.key], index === 0 && column.key === tableColumns[0]?.key ? label(row) : '—')}</Text>
+              ))}
+            </Pressable>
           ))}
         </View>
       </ScrollView>
