@@ -1,5 +1,6 @@
 import type { QueryPredicate, QuerySort } from './query';
 import type { AppPackageWidgetKind } from './ui-widgets';
+import type { AppPackageNativeIntentKind } from './native-capability-kinds';
 
 export type FieldType = 'text' | 'number' | 'boolean' | 'timestamp' | 'json';
 
@@ -137,7 +138,7 @@ export type AppPackageNativeCapability = {
   intents?: Array<{
     id: string;
     platform: 'expo' | 'android' | 'ios' | 'web';
-    kind: 'share' | 'deep_link' | 'shortcut' | 'voice' | 'background_task' | 'file_open' | 'url_open';
+    kind: AppPackageNativeIntentKind;
     reason: string;
     required?: boolean;
     payload?: Record<string, unknown>;

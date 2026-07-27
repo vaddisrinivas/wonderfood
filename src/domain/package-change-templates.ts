@@ -162,7 +162,7 @@ function buildControlRoomChange(
           widget: 'permissionCard',
           id: 'control_permissions',
           title: 'Native capabilities',
-          subtitle: 'Camera, share, shortcuts, files, voice, and Health Connect are declared before use.',
+          subtitle: 'Camera, photos, share, links, and Health Connect are declared before use.',
           tone: 'amber',
           props: active.schemaVersion === 'wonder.app-package.v3'
             ? active.nativeCapabilities
@@ -569,7 +569,7 @@ function buildNativeCapabilityChange(
           kind: 'action',
           id: `${name.screenId}_test_intents`,
           title: 'Test app intents',
-          subtitle: 'Verify share, shortcut, deep-link, voice, background, and file-open hooks before relying on them.',
+          subtitle: 'Verify share and link hooks before relying on them.',
           tone: 'moss',
           action: {
             kind: 'propose',

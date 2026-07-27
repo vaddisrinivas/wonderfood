@@ -6,7 +6,10 @@ const root = process.cwd();
 const packageJson = readJson('package.json');
 const appJson = readJson('app.json');
 const manifest = fs.readFileSync(path.join(root, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
+const nativeKindContract = fs.readFileSync(path.join(root, 'packages/shared/contracts/native-capability-kinds.ts'), 'utf8');
 const food = readJson('packages/domain-config/domains/food.v1.json');
+const domainSchema = readJson('packages/domain-config/schemas/domain.v1.schema.json');
+const packageSchemaSource = fs.readFileSync(path.join(root, 'server/src/kernel/package-schema.ts'), 'utf8');
 const evidencePath = path.join(root, 'app/build/evidence/native-capability-contract.json');
 
 const deps = { ...(packageJson.dependencies ?? {}), ...(packageJson.devDependencies ?? {}) };
@@ -14,6 +17,15 @@ const plugins = new Set((appJson.expo?.plugins ?? []).map((plugin) => Array.isAr
 const native = food.native_capabilities;
 const pins = food.dependency_pins ?? [];
 const problems = [];
+const contractIntentKinds = extractNativeIntentKinds(nativeKindContract);
+const domainSchemaIntentKinds = new Set(domainSchema.$defs.native_intent.properties.kind.enum);
+const serverSchemaIntentKinds = extractServerPackageSchemaIntentKinds(packageSchemaSource);
+
+for (const kind of new Set([...contractIntentKinds, ...domainSchemaIntentKinds, ...serverSchemaIntentKinds])) {
+  if (!contractIntentKinds.has(kind)) problems.push(`${kind}: missing from shared native intent contract`);
+  if (!domainSchemaIntentKinds.has(kind)) problems.push(`${kind}: missing from domain native intent schema`);
+  if (!serverSchemaIntentKinds.has(kind)) problems.push(`${kind}: missing from server package native intent schema`);
+}
 
 if (!native) problems.push('food.native_capabilities missing');
 if (!Array.isArray(pins) || pins.length === 0) problems.push('food.dependency_pins missing');
@@ -88,6 +100,7 @@ fs.writeFileSync(evidencePath, `${JSON.stringify({
   checkedAt: new Date().toISOString(),
   packages: [...nativePackages].sort(),
   androidPermissions: [...packageHealthPermissions].sort(),
+  intentKinds: [...contractIntentKinds].sort(),
   intents: (native?.intents ?? []).map((intent) => `${intent.kind}:${intent.id}`).sort(),
 }, null, 2)}\n`);
 
@@ -108,6 +121,18 @@ function normalizedPermissions(permissions) {
     }
     return permission;
   });
+}
+
+function extractNativeIntentKinds(source) {
+  const block = source.match(/APP_PACKAGE_NATIVE_INTENT_KINDS\s*=\s*\[([\s\S]*?)\]\s*as const/);
+  if (!block) throw new Error('Unable to find shared native intent kind contract.');
+  return new Set([...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]));
+}
+
+function extractServerPackageSchemaIntentKinds(source) {
+  const block = source.match(/nativeIntent:[\s\S]*?kind:\s*\{\s*enum:\s*\[([^\]]+)\]/);
+  if (!block) throw new Error('Unable to find server native intent schema enum.');
+  return new Set([...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]));
 }
 
 function currentCommit() {

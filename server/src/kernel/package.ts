@@ -21,6 +21,7 @@ import type {
 } from '@/packages/shared/contracts/package';
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
+import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
 import { APP_PACKAGE_WIDGET_KIND_SET } from '@/packages/shared/contracts/ui-widgets';
 
 function text(value: unknown): value is string {
@@ -492,7 +493,7 @@ function isNativeIntents(value: unknown): boolean {
       && text(intent.platform)
       && ['expo', 'android', 'ios', 'web'].includes(intent.platform)
       && text(intent.kind)
-      && ['share', 'deep_link', 'shortcut', 'voice', 'background_task', 'file_open', 'url_open'].includes(intent.kind)
+      && isAppPackageNativeIntentKind(intent.kind)
       && text(intent.reason)
       && (intent.required === undefined || typeof intent.required === 'boolean')
       && (intent.payload === undefined || isPlainObject(intent.payload));

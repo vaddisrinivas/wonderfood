@@ -3,6 +3,7 @@ import foodManifestJson from '../../packages/domain-config/domains/food.v1.json'
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
 import type { AppPackage, AppPackageDependencyPin, AppPackageNativeCapability, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
+import { isAppPackageNativeIntentKind } from '../../packages/shared/contracts/native-capability-kinds';
 import { isAppPackageWidgetKind } from '../../packages/shared/contracts/ui-widgets';
 
 type ParsedUiScreen = {
@@ -334,13 +335,7 @@ function parseNativeIntents(value: unknown, path: string): AppPackageNativeCapab
     assertCondition(platform === 'expo' || platform === 'android' || platform === 'ios' || platform === 'web', `${path}[${index}].platform must be expo|android|ios|web`);
     const kind = raw.kind;
     assertCondition(
-      kind === 'share'
-        || kind === 'deep_link'
-        || kind === 'shortcut'
-        || kind === 'voice'
-        || kind === 'background_task'
-        || kind === 'file_open'
-        || kind === 'url_open',
+      isAppPackageNativeIntentKind(kind),
       `${path}[${index}].kind is invalid`,
     );
     if (raw.required !== undefined) {

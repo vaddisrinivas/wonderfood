@@ -8,6 +8,7 @@ import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain
 import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
 import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
+import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
 
 type AppPackageRow = {
   package_key: string;
@@ -447,15 +448,7 @@ function isAppPackageNativeCapability(input: unknown): input is AppPackageNative
           return typeof intent.id === 'string'
             && intent.id.trim().length > 0
             && (intent.platform === 'expo' || intent.platform === 'android' || intent.platform === 'ios' || intent.platform === 'web')
-            && (
-              intent.kind === 'share'
-              || intent.kind === 'deep_link'
-              || intent.kind === 'shortcut'
-              || intent.kind === 'voice'
-              || intent.kind === 'background_task'
-              || intent.kind === 'file_open'
-              || intent.kind === 'url_open'
-            )
+            && isAppPackageNativeIntentKind(intent.kind)
             && typeof intent.reason === 'string'
             && intent.reason.trim().length > 0
             && (intent.required === undefined || typeof intent.required === 'boolean')
