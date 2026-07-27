@@ -2,6 +2,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Linking, LogBox, Platform } from 'react-native';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { setActiveDomainOverride } from '@/src/domain/catalog';
@@ -54,6 +55,12 @@ export default function RootLayout() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (ready) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [ready]);
 
   if (!ready) return null;
 
