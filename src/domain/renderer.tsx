@@ -1,5 +1,4 @@
 import { CanonicalRecord } from '@/packages/shared/contracts/records';
-import { loadCatalog } from '@/src/domain/catalog';
 
 export type CanonicalTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
 
@@ -12,6 +11,7 @@ export type DomainRecordViewModel = {
   status: string;
   tone: CanonicalTone;
   meta: string;
+  properties: Record<string, unknown>;
 };
 
 function detectTone(value: unknown): CanonicalTone {
@@ -52,14 +52,13 @@ export function toRecordView(record: CanonicalRecord): DomainRecordViewModel {
     status: buildStatus(record),
     tone: detectTone(record.properties.tone),
     meta: buildMeta(record),
+    properties: record.properties,
   };
 }
 
 export function matchRecordText(record: CanonicalRecord, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return false;
-
-  const source = loadCatalog();
   const haystack = [
     record.title,
     record.collection,
@@ -67,7 +66,6 @@ export function matchRecordText(record: CanonicalRecord, query: string): boolean
     String(record.properties.meta ?? ''),
     buildSourceLabel(record),
     record.id,
-    source.activeManifest.label,
   ]
     .join(' ')
     .toLowerCase();

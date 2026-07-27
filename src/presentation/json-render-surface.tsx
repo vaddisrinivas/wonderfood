@@ -91,6 +91,25 @@ function normalize(text: unknown) {
   return String(text ?? '').toLowerCase();
 }
 
+function recordValue(record: DomainRecordViewModel, field: string): string {
+  const trimmed = field.trim();
+  if (!trimmed) return '';
+  const direct = (() => {
+    if (trimmed === 'id') return record.id;
+    if (trimmed === 'collection') return record.collection;
+    if (trimmed === 'title') return record.title;
+    if (trimmed === 'body') return record.body;
+    if (trimmed === 'source') return record.source;
+    if (trimmed === 'status') return record.status;
+    if (trimmed === 'meta') return record.meta;
+    return record.properties[trimmed];
+  })();
+  if (direct === null || direct === undefined) return '';
+  if (typeof direct === 'string') return direct;
+  if (typeof direct === 'number' || typeof direct === 'boolean') return String(direct);
+  return '';
+}
+
 function matchesRecord(record: DomainRecordViewModel, query: NonNullable<A2UiComponent['query']>) {
   if (query.collections?.length && !query.collections.includes(record.collection)) {
     return false;
@@ -100,10 +119,26 @@ function matchesRecord(record: DomainRecordViewModel, query: NonNullable<A2UiCom
   }
   try {
     const pattern = new RegExp(query.match, 'i');
-    return pattern.test([record.title, record.body, record.meta, record.status, record.collection, record.source].join(' '));
+    return pattern.test([
+      record.title,
+      record.body,
+      record.meta,
+      record.status,
+      record.collection,
+      record.source,
+      ...Object.values(record.properties).map((value) => String(value ?? '')),
+    ].join(' '));
   } catch {
     const needle = normalize(query.match);
-    return [record.title, record.body, record.meta, record.status, record.collection, record.source]
+    return [
+      record.title,
+      record.body,
+      record.meta,
+      record.status,
+      record.collection,
+      record.source,
+      ...Object.values(record.properties).map((value) => String(value ?? '')),
+    ]
       .some((value) => normalize(value).includes(needle));
   }
 }
@@ -133,11 +168,21 @@ function rowRoute(record: DomainRecordViewModel) {
   return `/record/${encodeURIComponent(record.id)}`;
 }
 
+function componentProps(component: A2UiComponent): Record<string, unknown> {
+  return component.props && typeof component.props === 'object' && !Array.isArray(component.props)
+    ? component.props
+    : {};
+}
+
 function fallbackFor(component: A2UiComponent) {
-  if (component.query?.collections?.includes('shopping_item')) return 'No shopping blockers.';
-  if (component.query?.collections?.includes('inventory')) return 'No urgent pantry items.';
-  if (component.query?.collections?.includes('meal_plan')) return 'Ask Wonder to build tonight.';
-  return 'Nothing here yet.';
+  const props = componentProps(component);
+  const nested = props.emptyState;
+  if (typeof nested === 'string' && nested.trim()) return nested.trim();
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const message = widgetText((nested as Record<string, unknown>).title, widgetText((nested as Record<string, unknown>).body));
+    if (message) return message;
+  }
+  return widgetText(props.emptyTitle, widgetText(props.emptyText, 'Nothing here yet.'));
 }
 
 function selectScreen(ui?: A2UiSurface, screen?: string): SurfaceScreen | null {
@@ -160,10 +205,7 @@ function createBuilder() {
 }
 
 function recordIcon(record: DomainRecordViewModel) {
-  if (record.collection === 'meal_plan') return '🍽️';
-  if (record.collection.includes('shopping')) return '🛒';
-  if (record.collection.includes('inventory')) return '🥬';
-  return '✨';
+  return widgetText(record.properties.emoji, widgetText(record.properties.icon, '•'));
 }
 
 function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: A2UiAction | undefined, fallback: string) {
@@ -350,7 +392,7 @@ function addStandardDisplayWidget(
       ]);
     }
     case 'feedList': {
-      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8);
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'No feed items yet', subtitle: 'Add posts, links, or updates from package data.' }]).slice(0, 8);
       return addStandardWidgetCard(add, component, palette, items.map((item) => {
         const meta = widgetText(item.badge, widgetText(item.status, widgetText(item.date, widgetText(item.when))));
         const subtitle = [meta, widgetDetail(item)].filter(Boolean).join(' · ') || null;
@@ -411,7 +453,7 @@ function addStandardDisplayWidget(
       return addStandardWidgetCard(add, component, palette, children);
     }
     case 'calendarBlock': {
-      const events = (widgetRows(props.events).length ? widgetRows(props.events) : [{ title: 'Dinner plan', subtitle: 'Tonight' }, { title: 'Shopping', subtitle: 'Tomorrow' }]).slice(0, 7);
+      const events = (widgetRows(props.events).length ? widgetRows(props.events) : [{ title: 'Planning block', subtitle: 'Today' }, { title: 'Review', subtitle: 'Tomorrow' }]).slice(0, 7);
       return addStandardWidgetCard(add, component, palette, events.map((event) => add('ListItem', {
         title: widgetLabel(event),
         subtitle: [widgetText(event.date, widgetText(event.when)), widgetDetail(event)].filter(Boolean).join(' · ') || null,
@@ -419,7 +461,7 @@ function addStandardDisplayWidget(
       })));
     }
     case 'timelineBlock': {
-      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'Started', subtitle: 'Created from package config' }, { title: 'Next', subtitle: 'Ask Wonder to add events' }]).slice(0, 10);
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ title: 'Started', subtitle: 'Created from package config' }, { title: 'Next', subtitle: 'Add more events from package data' }]).slice(0, 10);
       return addStandardWidgetCard(add, component, palette, items.map((item) => add('ListItem', {
         title: widgetLabel(item),
         subtitle: widgetDetail(item, widgetText(item.time)),
@@ -452,7 +494,7 @@ function addStandardDisplayWidget(
         key: widgetText(column.key, widgetText(column.field, widgetText(column.id, widgetText(column.name, `column_${index}`)))).toLowerCase().replace(/[^a-z0-9]+/g, '_'),
         title: widgetLabel(column, `Column ${index + 1}`),
       }));
-      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ name: 'Sample', status: 'Ready', owner: 'Wonder' }]).slice(0, 6);
+      const items = (widgetRows(props.items).length ? widgetRows(props.items) : [{ name: 'Sample', status: 'Ready', owner: 'Team' }]).slice(0, 6);
       const header = add('Row', { gap: 8 }, columns.map((column) => add('Container', { flex: 1 }, [
         add('Label', { text: column.title, color: palette.muted, bold: true, size: 'xs' }),
       ])));
@@ -559,12 +601,30 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   const rows = queryRecords(records, component.query);
   const children: string[] = [];
   const button = addActionButton(add, component.action, '/chat');
+  const props = componentProps(component);
+  const subtitleFields = Array.isArray(props.subtitleFields)
+    ? props.subtitleFields.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : [];
+  const subtitleTemplate = widgetText(props.subtitleTemplate);
+  const iconField = widgetText(props.iconField);
   if (rows.length) {
     for (const row of rows) {
+      const subtitle = (() => {
+        if (subtitleTemplate) {
+          const interpolated = subtitleTemplate.replace(/\{([^}]+)\}/g, (_, field: string) => recordValue(row, field));
+          if (interpolated.trim()) return interpolated;
+        }
+        if (subtitleFields.length) {
+          const values = subtitleFields.map((field) => recordValue(row, field)).filter(Boolean);
+          if (values.length) return values.join(' · ');
+        }
+        return row.body || row.meta || row.status;
+      })();
+      const leading = iconField ? recordValue(row, iconField) || recordIcon(row) : recordIcon(row);
       children.push(add('ListItem', {
         title: row.title,
-        subtitle: row.body || row.meta || row.status,
-        leading: recordIcon(row),
+        subtitle,
+        leading,
         trailing: null,
         showChevron: true,
       }, [], {
@@ -583,6 +643,23 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
     borderRadius: 18,
     elevated: false,
   }, children);
+}
+
+function addUnsupportedWidgetBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, palette: Palette) {
+  return add('Card', {
+    title: component.title ?? 'Unsupported component',
+    subtitle: component.subtitle ?? null,
+    padding: 18,
+    backgroundColor: palette.paper,
+    borderRadius: 18,
+    elevated: false,
+  }, [
+    add('Paragraph', {
+      text: 'This package component is unavailable in this runtime.',
+      color: palette.muted,
+      fontSize: 15,
+    }),
+  ]);
 }
 
 function providerKeyFromComponent(component: A2UiComponent): ProviderStatusKey {
@@ -639,6 +716,7 @@ function addSurfaceComponent(
         ...(component.props ?? {}),
       });
     }
+    return addUnsupportedWidgetBlock(add, component, palette);
   }
   if (component.kind === 'recordList') return addRecordListBlock(add, component, records, palette);
   if (component.kind === 'metric') return addMetricBlock(add, component, records, palette);
@@ -655,7 +733,7 @@ function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette, 
   const contentChildren = [
     add('Spacer', { size: topGap }),
     ...(props.eyebrow ? [add('Label', { text: props.eyebrow, color: palette.moss, bold: true, size: 'md' })] : []),
-    add('Heading', { text: screen?.title ?? props.title ?? 'Wonder', level: 'h1', color: palette.ink }),
+    add('Heading', { text: screen?.title ?? props.title ?? 'App', level: 'h1', color: palette.ink }),
   ];
   const subtitle = screen?.subtitle ?? props.subtitle;
   if (subtitle) {
@@ -668,7 +746,7 @@ function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette, 
   } else {
     contentChildren.push(add('Card', {
       title: props.emptyTitle ?? 'Nothing configured yet.',
-      subtitle: 'Ask Wonder to create or edit this surface.',
+      subtitle: 'Add package components to render this surface.',
       padding: 18,
       backgroundColor: palette.paper,
       borderRadius: 18,
@@ -694,12 +772,22 @@ function assertJsonRenderSpec(spec: Spec): Spec {
   return spec;
 }
 
+export function buildJsonRenderSpec(
+  props: JsonRenderSurfaceProps,
+  options: { dark?: boolean; insets?: Partial<Insets> } = {},
+): Spec {
+  const insets = {
+    top: options.insets?.top ?? 0,
+    bottom: options.insets?.bottom ?? 0,
+  };
+  return assertJsonRenderSpec(composeJsonRenderSpec(props, paletteFor(Boolean(options.dark)), insets));
+}
+
 export function JsonRenderSurface(props: JsonRenderSurfaceProps) {
   const router = useRouter();
   const theme = useLifeOSTheme();
   const insets = useSafeAreaInsets();
-  const palette = paletteFor(theme.dark);
-  const spec = useMemo(() => assertJsonRenderSpec(composeJsonRenderSpec(props, palette, insets)), [insets, palette, props]);
+  const spec = useMemo(() => buildJsonRenderSpec(props, { dark: theme.dark, insets }), [insets, props, theme.dark]);
   const handlers = useMemo(() => createStandardActionHandlers({
     navigate: (screen) => router.push(screen as never),
     goBack: () => router.back(),
