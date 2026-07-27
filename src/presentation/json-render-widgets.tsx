@@ -41,6 +41,11 @@ type WidgetProps = {
   provider?: string;
   providerStatus?: ProviderSyncStatus;
   status?: string;
+  badge?: string;
+  cta?: string;
+  homes?: unknown[];
+  steps?: unknown[];
+  actions?: unknown[];
 };
 
 const DEFAULT_PROMPTS = [
@@ -377,10 +382,21 @@ function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
 
 function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
+  const actions = rows(props.actions);
   return (
     <WidgetShell title={text(props.title, 'Post')} subtitle={text(props.subtitle, text(props.author, 'Wonder'))}>
+      {props.badge ? <Text style={styles.softBadge}>{text(props.badge)}</Text> : null}
       <Text style={styles.bodyText}>{text(props.body, 'A package-defined post, note, update, or announcement.')}</Text>
       {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
+      {actions.length ? (
+        <View style={styles.buttonRow}>
+          {actions.slice(0, 3).map((action) => (
+            <View key={label(action)} style={styles.miniAction}>
+              <Text style={styles.miniActionText}>{label(action)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </WidgetShell>
   );
 }
@@ -415,6 +431,10 @@ function LinkPreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
   })();
   return (
     <WidgetShell title={text(props.title, 'Link preview')} subtitle={host}>
+      <View style={styles.previewHero}>
+        <Text style={styles.previewGlyph}>↗</Text>
+        <Text style={styles.previewHost}>{host}</Text>
+      </View>
       <Text style={styles.bodyText}>{text(props.subtitle, 'A safe preview surface for YouTube, docs, recipes, posts, and references.')}</Text>
       {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
     </WidgetShell>
@@ -652,12 +672,28 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const body = summary?.detail ?? text(props.body, 'Local works first. Notion and Sheets stay invisible unless they need attention.');
   const attention = summary?.status === 'attention';
   const connected = summary?.connected ?? false;
+  const homes = rows(props.homes);
+  const steps = rows(props.steps);
   return (
     <WidgetShell title={text(props.title, 'Sources')} subtitle={text(props.subtitle, 'Your data homes stay quiet until there is something useful to do.')}>
       <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
         <Text style={[styles.statusText, attention ? styles.statusTextAttention : null]}>{status}</Text>
       </View>
       <Text style={styles.bodyText}>{body}</Text>
+      {homes.length ? (
+        <View style={styles.sourceHomes}>
+          {homes.slice(0, 4).map((home) => (
+            <View key={label(home)} style={styles.sourceHome}>
+              <Text style={styles.sourceHomeIcon}>{text(home.icon, '⌁')}</Text>
+              <View style={styles.sourceHomeCopy}>
+                <Text style={styles.sourceHomeTitle}>{label(home)}</Text>
+                <Text style={styles.sourceHomeDetail}>{detail(home)}</Text>
+              </View>
+              <Text style={styles.sourceHomeState}>{text(home.status, 'Ready')}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {summary ? (
         <View style={styles.providerStats}>
           <Text style={styles.providerStat}>{connected ? `${summary.linkCount} connected` : 'On-device'}</Text>
@@ -665,6 +701,20 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
           <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites ? `${summary.failedWrites} need help` : 'Healthy'}</Text>
         </View>
       ) : null}
+      {steps.length ? (
+        <View style={styles.providerSteps}>
+          {steps.slice(0, 4).map((step, index) => (
+            <View key={label(step)} style={styles.providerStep}>
+              <Text style={styles.providerStepNumber}>{index + 1}</Text>
+              <View style={styles.sourceHomeCopy}>
+                <Text style={styles.providerStepTitle}>{label(step)}</Text>
+                <Text style={styles.sourceHomeDetail}>{detail(step)}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {props.cta ? <Text style={styles.providerCta}>{text(props.cta)}</Text> : null}
     </WidgetShell>
   );
 }
@@ -748,6 +798,12 @@ const styles = StyleSheet.create({
   previewBox: { borderRadius: 18, backgroundColor: '#F6F1E8', padding: 14, gap: 6 },
   previewTitle: { color: '#241C16', fontSize: 16, fontWeight: '900' },
   previewText: { color: '#6D6257', fontSize: 12, fontWeight: '700' },
+  softBadge: { alignSelf: 'flex-start', backgroundColor: '#FFF1B8', borderRadius: 999, color: '#7A5B00', fontSize: 12, fontWeight: '900', paddingHorizontal: 10, paddingVertical: 6 },
+  miniAction: { backgroundColor: '#241C16', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  miniActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  previewHero: { minHeight: 76, borderRadius: 18, backgroundColor: '#E4F1E8', padding: 14, justifyContent: 'space-between' },
+  previewGlyph: { color: '#2F7448', fontSize: 24, fontWeight: '900' },
+  previewHost: { color: '#2F7448', fontSize: 12, fontWeight: '900' },
   suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   suggestion: { backgroundColor: '#E4F1E8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   suggestionText: { color: '#2F7448', fontSize: 12, fontWeight: '700' },
@@ -773,6 +829,18 @@ const styles = StyleSheet.create({
   providerStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   providerStat: { backgroundColor: '#F6F1E8', borderRadius: 999, color: '#6D6257', fontSize: 12, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 6 },
   providerStatAttention: { color: '#9A4B2E', backgroundColor: '#F9E7D9' },
+  sourceHomes: { gap: 8 },
+  sourceHome: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, backgroundColor: '#F6F1E8', padding: 12 },
+  sourceHomeIcon: { width: 32, height: 32, borderRadius: 12, backgroundColor: '#E4F1E8', color: '#2F7448', textAlign: 'center', lineHeight: 32, fontSize: 16, fontWeight: '900', overflow: 'hidden' },
+  sourceHomeCopy: { flex: 1, gap: 2 },
+  sourceHomeTitle: { color: '#241C16', fontSize: 14, fontWeight: '900' },
+  sourceHomeDetail: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
+  sourceHomeState: { color: '#2F7448', fontSize: 12, fontWeight: '900' },
+  providerSteps: { gap: 8 },
+  providerStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  providerStepNumber: { width: 24, height: 24, borderRadius: 999, backgroundColor: '#241C16', color: '#FFFFFF', textAlign: 'center', lineHeight: 24, fontSize: 12, fontWeight: '900', overflow: 'hidden' },
+  providerStepTitle: { color: '#241C16', fontSize: 13, fontWeight: '900' },
+  providerCta: { alignSelf: 'flex-start', backgroundColor: '#2F7448', borderRadius: 999, color: '#FFFFFF', fontSize: 13, fontWeight: '900', paddingHorizontal: 14, paddingVertical: 9 },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primaryButton: { backgroundColor: '#2F7448', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },

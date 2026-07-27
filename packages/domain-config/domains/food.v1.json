@@ -915,17 +915,64 @@
       },
       "sources": {
         "title": "Connected homes",
-        "subtitle": "Your food data can live locally, in Notion, or in Sheets. Wonder keeps the work invisible until it needs you.",
+        "subtitle": "Connect once. Share the underlying home. Wonder keeps sync quiet.",
         "components": [
           {
             "kind": "widget",
             "widget": "providerStatus",
-            "id": "sources_local",
-            "title": "On-device",
-            "subtitle": "Always available. Fast, private, and good enough to start.",
+            "id": "sources_magic_homes",
+            "title": "Food homes",
+            "subtitle": "The simplest collaboration model: invite people to the Notion page or Sheet, then share this app package.",
             "tone": "moss",
             "props": {
-              "provider": "local"
+              "provider": "summary",
+              "status": "Ready to connect",
+              "body": "Use the phone by itself, or bind Notion/Sheets when those are already where the family or team works.",
+              "cta": "Connect or invite from here",
+              "homes": [
+                {
+                  "icon": "◌",
+                  "title": "On-device",
+                  "subtitle": "Private fast local graph. No setup.",
+                  "status": "Always on"
+                },
+                {
+                  "icon": "N",
+                  "title": "Notion home",
+                  "subtitle": "Use an existing LifeOS/Food page as the shared source.",
+                  "status": "OAuth"
+                },
+                {
+                  "icon": "S",
+                  "title": "Sheets home",
+                  "subtitle": "Family-friendly rows, receipts, lists, and simple sharing.",
+                  "status": "OAuth"
+                },
+                {
+                  "icon": "↗",
+                  "title": "Invite link",
+                  "subtitle": "Share the provider resource plus the app package.",
+                  "status": "Planned"
+                }
+              ],
+              "steps": [
+                {
+                  "title": "Pick home",
+                  "subtitle": "Local, Notion page, or Google Sheet."
+                },
+                {
+                  "title": "Authorize once",
+                  "subtitle": "OAuth or existing provider credential; no debug token UI."
+                },
+                {
+                  "title": "Invite people",
+                  "subtitle": "Share the same Notion/Sheet/Drive resource with family or team."
+                },
+                {
+                  "title": "Wonder verifies",
+                  "subtitle": "Every external write is reread before it is trusted."
+                }
+              ]
             }
           },
           {
@@ -933,10 +980,25 @@
             "widget": "providerStatus",
             "id": "sources_notion",
             "title": "Notion",
-            "subtitle": "Use your existing workspace when it is the better home.",
+            "subtitle": "A beautiful external home when Notion is where planning already happens.",
             "tone": "blue",
             "props": {
-              "provider": "notion"
+              "provider": "notion",
+              "cta": "Connect Notion",
+              "homes": [
+                {
+                  "icon": "N",
+                  "title": "LifeOS Food page",
+                  "subtitle": "Meals, pantry, receipts, and recipe notes.",
+                  "status": "Bindable"
+                },
+                {
+                  "icon": "✓",
+                  "title": "Verified writeback",
+                  "subtitle": "Wonder rereads changed pages before calling them synced.",
+                  "status": "Safe"
+                }
+              ]
             }
           },
           {
@@ -944,28 +1006,42 @@
             "widget": "providerStatus",
             "id": "sources_sheets",
             "title": "Sheets",
-            "subtitle": "Simple shared data for family or small-team apps.",
+            "subtitle": "The easiest shared database for a family or tiny team.",
             "tone": "amber",
             "props": {
-              "provider": "google_sheets"
+              "provider": "google_sheets",
+              "cta": "Connect Sheet",
+              "homes": [
+                {
+                  "icon": "S",
+                  "title": "Food workbook",
+                  "subtitle": "Rows for pantry, shopping, receipts, and reviews.",
+                  "status": "Shareable"
+                },
+                {
+                  "icon": "↺",
+                  "title": "Invisible sync",
+                  "subtitle": "Pending and failed writes surface only when action is needed.",
+                  "status": "Quiet"
+                }
+              ]
             }
           },
           {
-            "kind": "action",
+            "kind": "widget",
+            "widget": "postCard",
             "id": "sources_verify",
             "title": "Verify sources",
-            "subtitle": "Run a safe reread before trusting external writes.",
+            "subtitle": "Trust without control-room noise",
             "tone": "moss",
-            "action": {
-              "kind": "propose",
-              "label": "Verify",
-              "command": "run_provider_verification",
-              "payload": {
-                "providers": [
-                  "notion",
-                  "google_sheets"
-                ]
-              }
+            "props": {
+              "badge": "Automatic after writes",
+              "body": "Wonder should feel like magic because verification happens behind the curtain: write, reread, confirm, then show only the useful result.",
+              "actions": [
+                { "title": "Run safe reread" },
+                { "title": "View last sync" },
+                { "title": "Invite collaborator" }
+              ]
             }
           }
         ]
