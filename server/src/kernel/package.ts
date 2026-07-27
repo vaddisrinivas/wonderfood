@@ -101,13 +101,23 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
       if (!Object.hasOwn(packageCollections, collection)) throw new Error(`${path}.query.collections references missing collection ${collection}`);
     }
   }
-  if (rawQuery.limit !== undefined && (!Number.isInteger(rawQuery.limit) || rawQuery.limit < 1 || rawQuery.limit > 20)) {
-    throw new Error(`${path}.query.limit must be 1..20`);
+  if (rawQuery.limit !== undefined) {
+    if (
+      rawQuery.limit === null
+      || typeof rawQuery.limit !== 'number'
+      || !Number.isInteger(rawQuery.limit)
+      || rawQuery.limit < 1
+      || rawQuery.limit > 20
+    ) {
+      throw new Error(`${path}.query.limit must be 1..20`);
+    }
   }
-  if (rawQuery.match !== undefined && !text(rawQuery.match)) throw new Error(`${path}.query.match must be text`);
+  if (rawQuery.match !== undefined && !text(rawQuery.match)) {
+    throw new Error(`${path}.query.match must be a non-empty string`);
+  }
   if (text(rawQuery.match)) {
     try {
-      new RegExp(rawQuery.match as string);
+      new RegExp(rawQuery.match);
     } catch {
       throw new Error(`${path}.query.match is invalid regular expression`);
     }
