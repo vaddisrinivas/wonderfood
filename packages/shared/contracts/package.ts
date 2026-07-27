@@ -3,7 +3,7 @@ import type { AppPackageUiActionKind, AppPackageUiComponentKind, AppPackageUiTon
 import type { AppPackageWidgetKind } from './ui-widgets';
 import type { AppPackageNativeIntentKind } from './native-capability-kinds';
 
-import { canonicalJson, sha256Canonical } from '../../../src/domain/canonical-json';
+import { canonicalJson, sha256Canonical } from './canonical-json';
 import { isAppPackageNativeIntentKind } from './native-capability-kinds';
 import { nativeCapabilitySupportErrors } from './native-capabilities';
 

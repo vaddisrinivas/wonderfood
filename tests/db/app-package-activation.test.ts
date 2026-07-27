@@ -8,8 +8,9 @@ import {
   rollbackAppPackage,
 } from '@/src/db/app-package-registry';
 import { runMigrations } from '@/src/db/migrations';
-import { getRecord, upsertRecord } from '@/src/db/records';
+import { getRecord } from '@/src/db/records';
 import { loadAppPackage } from '@/src/domain/package-loader';
+import { applyOperation } from '@/src/ops/apply';
 import { NodeSqliteDb } from '@/tests/helpers/node-sqlite-db';
 
 describe('app package activation', () => {
@@ -43,23 +44,30 @@ describe('app package activation', () => {
     const runtimeV1 = loadAppPackage(referenceV1);
 
     await activateAppPackage(db as any, referenceV1);
-    await upsertRecord(db as any, runtimeV1.activeManifest, {
-      id: 'reference-chore-1',
-      title: 'Wash dishes',
+    const create = await applyOperation(db as any, runtimeV1.activeManifest, {
+      op_id: 'reference-create-chore-1',
+      kind: 'create',
+      domain: 'reference-app',
       collection: 'chore',
-      properties: { status: 'todo' },
-      relations: [],
-      source: {
-        provider: 'sqlite',
-        external_id: 'reference-chore-1',
-        url: null,
-        observed_at: '2026-07-27T00:00:00.000Z',
-        content_hash: null,
+      record_id: 'reference-chore-1',
+      record: {
+        title: 'Wash dishes',
+        properties: { status: 'todo' },
+        relations: [],
+        source: {
+          provider: 'sqlite',
+          external_id: 'reference-chore-1',
+          url: null,
+          observed_at: '2026-07-27T00:00:00.000Z',
+          content_hash: null,
+        },
+        archived_at: null,
       },
-      archived_at: null,
-      created_at: '2026-07-27T00:00:00.000Z',
-      updated_at: '2026-07-27T00:00:00.000Z',
+      actor: 'user',
+      origin: 'manual',
+      idempotency_key: 'reference-create-chore-1',
     });
+    expect(create.status).toBe('applied');
 
     await activateAppPackage(db as any, referenceV2);
     const stateAfterUpgrade = await db.getFirstAsync<{ active_package_key: string; previous_package_key: string | null }>(
