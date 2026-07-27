@@ -59,6 +59,12 @@ export type A2UiComponent = {
     | 'chartBlock'
     | 'mediaBlock'
     | 'mapBlock'
+    | 'formCard'
+    | 'checklistCard'
+    | 'calendarBlock'
+    | 'timelineBlock'
+    | 'galleryGrid'
+    | 'dataTable'
     | 'permissionCard'
     | 'providerStatus'
     | 'themePreview';

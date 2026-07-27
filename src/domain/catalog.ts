@@ -412,6 +412,12 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
         || raw.widget === 'chartBlock'
         || raw.widget === 'mediaBlock'
         || raw.widget === 'mapBlock'
+        || raw.widget === 'formCard'
+        || raw.widget === 'checklistCard'
+        || raw.widget === 'calendarBlock'
+        || raw.widget === 'timelineBlock'
+        || raw.widget === 'galleryGrid'
+        || raw.widget === 'dataTable'
         || raw.widget === 'permissionCard'
         || raw.widget === 'providerStatus'
         || raw.widget === 'themePreview',

@@ -34,6 +34,8 @@ type WidgetProps = {
   items?: unknown[];
   options?: unknown[];
   columns?: unknown[];
+  fields?: unknown[];
+  events?: unknown[];
   points?: unknown[];
   permissions?: unknown[];
   provider?: string;
@@ -343,6 +345,12 @@ function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
     'Charts',
     'Media',
     'Maps',
+    'Forms',
+    'Checklists',
+    'Calendars',
+    'Timelines',
+    'Galleries',
+    'Data tables',
     'Permissions',
     'Provider status',
     'Theme preview',
@@ -493,6 +501,131 @@ function MapBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
+function FormCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const fields = rows(props.fields);
+  const fallback = [
+    { label: 'Title', subtitle: 'Text' },
+    { label: 'Notes', subtitle: 'Long text' },
+    { label: 'Status', subtitle: 'Choice' },
+  ];
+  return (
+    <WidgetShell title={text(props.title, 'Form')} subtitle={text(props.subtitle, 'Config-declared inputs. Writes must still go through proposals/actions.')}>
+      {(fields.length ? fields : fallback).slice(0, 8).map((field) => (
+        <View key={label(field)} style={styles.formField}>
+          <Text style={styles.formLabel}>{label(field)}</Text>
+          <Text style={styles.formHint}>{detail(field, 'Field')}</Text>
+        </View>
+      ))}
+      <Pressable style={styles.primaryButton}>
+        <Text style={styles.primaryButtonText}>{text(props.body, 'Preview action')}</Text>
+      </Pressable>
+    </WidgetShell>
+  );
+}
+
+function ChecklistCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  return (
+    <WidgetShell title={text(props.title, 'Checklist')} subtitle={text(props.subtitle, 'Tasks, packing, QA, habits, recipes, or setup steps.')}>
+      {(items.length ? items : [{ title: 'First step' }, { title: 'Second step' }, { title: 'Done' }]).slice(0, 10).map((item) => {
+        const key = label(item);
+        return (
+          <Pressable key={key} style={styles.checkRow} onPress={() => setChecked((prev) => ({ ...prev, [key]: !prev[key] }))}>
+            <Text style={[styles.checkBox, checked[key] ? styles.checkBoxOn : null]}>{checked[key] ? '✓' : ''}</Text>
+            <View style={styles.checkCopy}>
+              <Text style={styles.checkTitle}>{key}</Text>
+              {detail(item) ? <Text style={styles.checkDetail}>{detail(item)}</Text> : null}
+            </View>
+          </Pressable>
+        );
+      })}
+    </WidgetShell>
+  );
+}
+
+function CalendarBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const events = rows(props.events);
+  return (
+    <WidgetShell title={text(props.title, 'Calendar')} subtitle={text(props.subtitle, 'Plans, bookings, reminders, routines, and schedules.')}>
+      {(events.length ? events : [{ title: 'Dinner plan', subtitle: 'Tonight' }, { title: 'Shopping', subtitle: 'Tomorrow' }]).slice(0, 7).map((event) => (
+        <View key={label(event)} style={styles.calendarRow}>
+          <Text style={styles.calendarDate}>{text(event.date, text(event.when, 'Soon'))}</Text>
+          <View style={styles.calendarCopy}>
+            <Text style={styles.feedTitle}>{label(event)}</Text>
+            <Text style={styles.feedDetail}>{detail(event)}</Text>
+          </View>
+        </View>
+      ))}
+    </WidgetShell>
+  );
+}
+
+function TimelineBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <WidgetShell title={text(props.title, 'Timeline')} subtitle={text(props.subtitle, 'History, provenance, milestones, trips, cases, or change logs.')}>
+      {(items.length ? items : [{ title: 'Started', subtitle: 'Created from package config' }, { title: 'Next', subtitle: 'Ask Wonder to add events' }]).slice(0, 10).map((item) => (
+        <View key={label(item)} style={styles.timelineRow}>
+          <View style={styles.timelineDot} />
+          <View style={styles.timelineCopy}>
+            <Text style={styles.feedTitle}>{label(item)}</Text>
+            <Text style={styles.feedDetail}>{detail(item, text(item.time, ''))}</Text>
+          </View>
+        </View>
+      ))}
+    </WidgetShell>
+  );
+}
+
+function GalleryGridWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <WidgetShell title={text(props.title, 'Gallery')} subtitle={text(props.subtitle, 'Photos, media, assets, places, products, recipes, or memories.')}>
+      <View style={styles.galleryGrid}>
+        {(items.length ? items : [{ title: 'Image' }, { title: 'Clip' }, { title: 'Doc' }, { title: 'Audio' }]).slice(0, 8).map((item) => (
+          <View key={label(item)} style={styles.galleryTile}>
+            <Text style={styles.galleryGlyph}>{text(item.emoji, '◼︎')}</Text>
+            <Text style={styles.galleryText}>{label(item)}</Text>
+          </View>
+        ))}
+      </View>
+    </WidgetShell>
+  );
+}
+
+function DataTableWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const columns = rows(props.columns);
+  const items = rows(props.items);
+  const columnLabels = (columns.length ? columns.map((column) => label(column)) : ['Name', 'Status', 'Owner']).slice(0, 4);
+  const tableRows = (items.length ? items : [{ name: 'Sample', status: 'Ready', owner: 'Wonder' }]).slice(0, 6);
+  return (
+    <WidgetShell title={text(props.title, 'Table')} subtitle={text(props.subtitle, 'Compact structured records without a custom screen.')}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.table}>
+          <View style={styles.tableRow}>
+            {columnLabels.map((column) => <Text key={column} style={styles.tableHeader}>{column}</Text>)}
+          </View>
+          {tableRows.map((row, index) => (
+            <View key={`${label(row)}-${index}`} style={styles.tableRow}>
+              {columnLabels.map((column) => {
+                const key = column.toLowerCase().replace(/\s+/g, '_');
+                return <Text key={column} style={styles.tableCell}>{text(row[key], text(row[column], index === 0 ? label(row) : '—'))}</Text>;
+              })}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </WidgetShell>
+  );
+}
+
 function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const permissions = rows(props.permissions);
@@ -558,6 +691,12 @@ export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   ChartBlockWidget,
   MediaBlockWidget,
   MapBlockWidget,
+  FormCardWidget,
+  ChecklistCardWidget,
+  CalendarBlockWidget,
+  TimelineBlockWidget,
+  GalleryGridWidget,
+  DataTableWidget,
   PermissionCardWidget,
   ProviderStatusWidget,
   ThemePreviewWidget,
@@ -660,6 +799,29 @@ const styles = StyleSheet.create({
   mediaGlyph: { color: '#241C16', fontSize: 32, fontWeight: '900' },
   mapBox: { minHeight: 112, borderRadius: 18, backgroundColor: '#E8F4F5', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
   mapPin: { color: '#2F7448', fontSize: 32, fontWeight: '900' },
+  formField: { borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12, gap: 3 },
+  formLabel: { color: '#241C16', fontWeight: '900', fontSize: 14 },
+  formHint: { color: '#6D6257', fontSize: 12 },
+  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12 },
+  checkBox: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: '#B8AB9A', textAlign: 'center', color: '#FFFFFF', fontWeight: '900', overflow: 'hidden' },
+  checkBoxOn: { backgroundColor: '#2F7448', borderColor: '#2F7448' },
+  checkCopy: { flex: 1, gap: 2 },
+  checkTitle: { color: '#241C16', fontWeight: '900', fontSize: 14 },
+  checkDetail: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
+  calendarRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2' },
+  calendarDate: { minWidth: 68, color: '#2F7448', fontSize: 12, fontWeight: '900' },
+  calendarCopy: { flex: 1, gap: 2 },
+  timelineRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  timelineDot: { width: 12, height: 12, borderRadius: 999, backgroundColor: '#F3B15E', marginTop: 5 },
+  timelineCopy: { flex: 1, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#D8CFC2', paddingBottom: 10 },
+  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  galleryTile: { width: '47%', minHeight: 86, borderRadius: 18, backgroundColor: '#F6F1E8', padding: 12, justifyContent: 'space-between' },
+  galleryGlyph: { color: '#2F7448', fontSize: 24, fontWeight: '900' },
+  galleryText: { color: '#241C16', fontSize: 13, fontWeight: '900' },
+  table: { minWidth: 420, borderRadius: 16, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: '#D8CFC2' },
+  tableRow: { flexDirection: 'row' },
+  tableHeader: { width: 104, padding: 10, backgroundColor: '#E4F1E8', color: '#2F7448', fontSize: 12, fontWeight: '900' },
+  tableCell: { width: 104, padding: 10, backgroundColor: '#FFFFFF', color: '#4E463E', fontSize: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2' },
   permissionRow: { borderRadius: 16, backgroundColor: '#F6F1E8', padding: 12, gap: 4 },
   permissionTitle: { color: '#241C16', fontWeight: '900' },
   permissionDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
