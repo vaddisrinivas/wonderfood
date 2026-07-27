@@ -1,6 +1,7 @@
 import type { ComponentRegistry, ComponentRenderProps } from '@json-render/react-native';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { sendChatMessage } from '@/src/chat/client';
 import type { ChatMessage, ChatThread } from '@/src/chat/types';
@@ -86,6 +87,14 @@ function detail(value: unknown, fallback = '') {
     return text(raw.subtitle, text(raw.body, text(raw.detail, text(raw.reason, fallback))));
   }
   return fallback;
+}
+
+function actionRoute(value: Record<string, unknown>): string {
+  return text(value.route, text(value.path));
+}
+
+function actionUrl(value: Record<string, unknown>): string {
+  return text(value.url, text(value.href, text(value.deeplink)));
 }
 
 function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
@@ -683,6 +692,7 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const summary = props.providerStatus;
   const status = summary?.headline ?? text(props.status, 'Quietly ready');
@@ -692,6 +702,17 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const homes = rows(props.homes);
   const steps = rows(props.steps);
   const actions = rows(props.actions);
+  const runAction = useCallback((action: Record<string, unknown>) => {
+    const route = actionRoute(action);
+    if (route) {
+      router.push(route as never);
+      return;
+    }
+    const url = actionUrl(action);
+    if (url) {
+      void Linking.openURL(url);
+    }
+  }, [router]);
   return (
     <WidgetShell title={text(props.title, 'Sources')} subtitle={text(props.subtitle, 'Your data homes stay quiet until there is something useful to do.')}>
       <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
@@ -735,10 +756,10 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
       {actions.length ? (
         <View style={styles.providerActions}>
           {actions.slice(0, 3).map((action) => (
-            <View key={label(action)} style={styles.providerAction}>
+            <Pressable key={label(action)} style={styles.providerAction} onPress={() => runAction(action)}>
               <Text style={styles.providerActionTitle}>{label(action)}</Text>
               <Text style={styles.providerActionDetail}>{detail(action, 'Ready when you are.')}</Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       ) : null}

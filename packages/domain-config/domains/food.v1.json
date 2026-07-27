@@ -976,15 +976,18 @@
               "actions": [
                 {
                   "title": "Use phone only",
-                  "subtitle": "Skip setup and keep everything local."
+                  "subtitle": "Skip setup and keep everything local.",
+                  "route": "/food"
                 },
                 {
                   "title": "Connect home",
-                  "subtitle": "Bind Notion or Sheets when ready."
+                  "subtitle": "Bind Notion or Sheets when ready.",
+                  "route": "/settings"
                 },
                 {
                   "title": "Invite later",
-                  "subtitle": "Share the source home with family first."
+                  "subtitle": "Share the source home with family first.",
+                  "route": "/sources"
                 }
               ]
             }
@@ -1016,15 +1019,18 @@
               "actions": [
                 {
                   "title": "Paste page",
-                  "subtitle": "Use an existing food page."
+                  "subtitle": "Use an existing food page.",
+                  "route": "/settings"
                 },
                 {
                   "title": "Share page",
-                  "subtitle": "Invite family in Notion."
+                  "subtitle": "Invite family in Notion.",
+                  "url": "https://www.notion.so/help/sharing-and-permissions"
                 },
                 {
                   "title": "Reread",
-                  "subtitle": "Confirm the latest source state."
+                  "subtitle": "Confirm the latest source state.",
+                  "route": "/system"
                 }
               ]
             }
@@ -1056,15 +1062,18 @@
               "actions": [
                 {
                   "title": "Paste Sheet",
-                  "subtitle": "Bind an existing workbook."
+                  "subtitle": "Bind an existing workbook.",
+                  "route": "/settings"
                 },
                 {
                   "title": "Share Sheet",
-                  "subtitle": "Let collaborators edit rows."
+                  "subtitle": "Let collaborators edit rows.",
+                  "url": "https://support.google.com/docs/answer/2494822"
                 },
                 {
                   "title": "Reread",
-                  "subtitle": "Verify synced rows."
+                  "subtitle": "Verify synced rows.",
+                  "route": "/system"
                 }
               ]
             }
