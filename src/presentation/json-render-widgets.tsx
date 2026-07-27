@@ -12,13 +12,13 @@ import {
   type AppPackageChangeRequest,
 } from '@/src/db/app-package-registry';
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { buildSafePackageChangeRequest } from '@/src/domain/package-change-templates';
 import {
   getLifeOSHealthStatus,
   openLifeOSHealthSettings,
   requestLifeOSHealthPermissions,
   type HealthConnectStatus,
 } from '@/src/health/connect';
-import type { AppPackage, A2UiComponent, PackagePresentationSpec } from '@/packages/shared/contracts/package';
 
 type WidgetProps = {
   widget?: string;
@@ -322,127 +322,6 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
       )}
     </WidgetShell>
   );
-}
-
-function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
-  const name = derivePackageChangeName(prompt);
-  if (active.collections[name.collectionId]) throw new Error(`Collection already exists: ${name.collectionId}`);
-  const presentation = active.presentation;
-  if (!presentation) throw new Error('Active package has no presentation section.');
-
-  const patch: AppPackageChangeRequest['patch'] = [
-    { op: 'replace', path: '/version', value: nextRuntimeVersion(active.version) },
-    {
-      op: 'add',
-      path: `/collections/${name.collectionId}`,
-      value: {
-        id: name.collectionId,
-        fields: {
-          id: { type: 'text', required: true, indexed: true },
-          title: { type: 'text', required: true, indexed: true },
-          body: { type: 'text' },
-          status: { type: 'text', indexed: true },
-          tags: { type: 'json' },
-          updated_at: { type: 'timestamp', indexed: true },
-          properties: { type: 'json' },
-        },
-      },
-    },
-    {
-      op: 'add',
-      path: `/queries/${name.collectionId}`,
-      value: { from: name.collectionId, orderBy: [{ field: 'updated_at', direction: 'desc' }], limit: 24 },
-    },
-    {
-      op: 'add',
-      path: `/views/${name.collectionId}`,
-      value: { id: name.collectionId, query: name.collectionId, mode: 'list', fields: ['title', 'status', 'body', 'tags'] },
-    },
-    {
-      op: 'add',
-      path: '/presentation/surfaces/-',
-      value: { id: name.surfaceId, label: name.label, collections: [name.collectionId], views: [name.collectionId] },
-    },
-  ];
-
-  const uiPatches = buildUiScreenPatches(presentation, name);
-  return {
-    basePackageKey: `${active.id}@${active.version}`,
-    requestedBy: 'mobile-package-editor',
-    patch: [...patch, ...uiPatches],
-  };
-}
-
-function buildUiScreenPatches(
-  presentation: PackagePresentationSpec,
-  name: ReturnType<typeof derivePackageChangeName>,
-): AppPackageChangeRequest['patch'] {
-  const screen = {
-    title: name.label,
-    subtitle: 'AI-created surface. Edit its package JSON or ask Wonder for another change.',
-    components: [
-      {
-        kind: 'widget',
-        widget: 'postCard',
-        id: `${name.collectionId}_hero`,
-        title: `New ${name.label}`,
-        subtitle: 'Ready for records, links, posts, and workflows.',
-        props: {
-          body: 'This screen was added through a reviewable AppPackage diff.',
-        },
-        tone: 'moss',
-      },
-      {
-        kind: 'recordList',
-        id: `${name.collectionId}_records`,
-        title: `${name.label} records`,
-        subtitle: 'Data comes from the new collection.',
-        query: { collections: [name.collectionId], limit: 12 },
-      },
-    ] satisfies A2UiComponent[],
-  };
-  if (!presentation.ui) {
-    return [{
-      op: 'add',
-      path: '/presentation/ui',
-      value: { schemaVersion: 'a2ui.v0_9', defaultScreen: name.screenId, screens: { [name.screenId]: screen }, components: [] },
-    }];
-  }
-  if (!presentation.ui.screens) {
-    return [
-      { op: 'add', path: '/presentation/ui/screens', value: {} },
-      { op: 'add', path: `/presentation/ui/screens/${name.screenId}`, value: screen },
-    ];
-  }
-  if (presentation.ui.screens[name.screenId]) throw new Error(`Screen already exists: ${name.screenId}`);
-  return [{ op: 'add', path: `/presentation/ui/screens/${name.screenId}`, value: screen }];
-}
-
-function derivePackageChangeName(prompt: string) {
-  const clean = prompt
-    .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the)\b/gi, ' ')
-    .replace(/[^a-z0-9 ]/gi, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(' ');
-  const label = titleCase(clean || 'Notes');
-  const slug = (clean || 'notes').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'notes';
-  return {
-    label,
-    collectionId: `ai_${slug}`,
-    screenId: `ai_${slug}`,
-    surfaceId: `ai_${slug}`,
-  };
-}
-
-function titleCase(value: string) {
-  return value.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
-}
-
-function nextRuntimeVersion(version: string) {
-  return `${version.replace(/\+ai\.[a-z0-9]+$/i, '')}+ai.${Date.now().toString(36)}`;
 }
 
 function shortHash(value: string) {

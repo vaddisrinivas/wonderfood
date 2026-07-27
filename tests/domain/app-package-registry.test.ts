@@ -11,6 +11,7 @@ import {
 } from '@/src/db/app-package-registry';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
+import { buildSafePackageChangeRequest } from '@/src/domain/package-change-templates';
 import { MemoryDb } from '@/tests/helpers/memory-db';
 import type { AppPackage } from '@/packages/shared/contracts/package';
 
@@ -177,6 +178,25 @@ describe('app package SQLite registry', () => {
       patch: [{ op: 'add', path: '/dependencyPins/-', value: { package: 'unsafe-native-package', version: '*' } }],
       requestedBy: 'test-package-editor',
     })).rejects.toThrow(/package_change_path_forbidden/);
+  });
+
+  it('builds safe package-edit templates for table, theme, and workflow prompts', async () => {
+    setActivePackageOverride(null);
+    const db = new MemoryDb() as any;
+    const active = await bootstrapAppPackageRegistry(db);
+
+    const table = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add freezer ideas table'));
+    expect(table.status).toBe('valid');
+    expect(table.package?.collections.ai_freezer_ideas.id).toBe('ai_freezer_ideas');
+    expect(table.package?.presentation?.ui?.screens?.ai_freezer_ideas.title).toBe('Freezer Ideas');
+
+    const theme = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'make theme cuter cards'));
+    expect(theme.status).toBe('valid');
+    expect(theme.package?.presentation?.visualIdentity?.density).toBe('compact-cute');
+
+    const workflow = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'when pantry expires suggest dinner'));
+    expect(workflow.status).toBe('valid');
+    expect(workflow.package?.rules.some((rule) => rule.id === 'ai_pantry_expires_dinner_workflow_rule')).toBe(true);
   });
 });
 
