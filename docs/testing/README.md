@@ -29,6 +29,10 @@ Production, personal, default, primary, or physical-device targets are rejected.
 The acknowledgement variables grant no credentials; load secrets separately and
 never place secret values in target labels or command output.
 
+Web smoke wrappers export `dist/web` themselves when it is missing. If
+`check:web-product` or `check:accessibility-smoke` still fails after export,
+treat it as a product-smoke failure, not a wrapper precondition issue.
+
 ## Commands
 
 Run the local quality harness:
