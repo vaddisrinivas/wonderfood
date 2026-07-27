@@ -3,6 +3,7 @@ import { validateSpec } from '@json-render/core';
 import { JSONUIProvider, Renderer, createStandardActionHandlers } from '@json-render/react-native';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { A2UiSurface, A2UiAction, A2UiComponent, AppPackageNativeCapability } from '@/packages/shared/contracts/package';
 import type { ProviderSyncSummary, ProviderStatusKey } from '@/src/db/provider-status';
@@ -31,6 +32,7 @@ type JsonRenderElement = {
 };
 
 type SurfaceScreen = NonNullable<A2UiSurface['screens']>[string];
+type Insets = { top: number; bottom: number };
 
 type Palette = {
   canvas: string;
@@ -306,11 +308,14 @@ function addSurfaceComponent(
   return addTextBlock(add, component, palette);
 }
 
-function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette): Spec {
+function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette, insets: Insets): Spec {
   const screen = selectScreen(props.ui, props.screen);
   const components = screen?.components ?? [];
   const { add, elements } = createBuilder();
+  const topGap = Math.max(44, insets.top + 16);
+  const bottomGap = Math.max(42, insets.bottom + 22);
   const contentChildren = [
+    add('Spacer', { size: topGap }),
     ...(props.eyebrow ? [add('Label', { text: props.eyebrow, color: palette.moss, bold: true, size: 'md' })] : []),
     add('Heading', { text: screen?.title ?? props.title ?? 'Wonder', level: 'h1', color: palette.ink }),
   ];
@@ -332,7 +337,12 @@ function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette):
       elevated: false,
     }));
   }
-  const column = add('Column', { gap: 16, padding: 18, flex: 1 }, contentChildren);
+  contentChildren.push(add('Spacer', { size: bottomGap }));
+  const column = add('Column', {
+    gap: 14,
+    padding: 16,
+    flex: 1,
+  }, contentChildren);
   const scroll = add('ScrollContainer', { padding: 0, backgroundColor: palette.canvas, horizontal: false, showsScrollIndicator: true }, [column]);
   const root = add('SafeArea', { backgroundColor: palette.canvas }, [scroll]);
   return { root, elements } as Spec;
@@ -349,8 +359,9 @@ function assertJsonRenderSpec(spec: Spec): Spec {
 export function JsonRenderSurface(props: JsonRenderSurfaceProps) {
   const router = useRouter();
   const theme = useLifeOSTheme();
+  const insets = useSafeAreaInsets();
   const palette = paletteFor(theme.dark);
-  const spec = useMemo(() => assertJsonRenderSpec(composeJsonRenderSpec(props, palette)), [palette, props]);
+  const spec = useMemo(() => assertJsonRenderSpec(composeJsonRenderSpec(props, palette, insets)), [insets, palette, props]);
   const handlers = useMemo(() => createStandardActionHandlers({
     navigate: (screen) => router.push(screen as never),
     goBack: () => router.back(),

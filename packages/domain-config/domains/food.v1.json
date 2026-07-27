@@ -811,55 +811,157 @@
         ]
       },
       "settings": {
-        "title": "Settings",
-        "subtitle": "Beautiful defaults first. Sources, theme, Health Connect, and app config stay here.",
+        "title": "Control room",
+        "subtitle": "Active app, AI, data homes, permissions, and installable packages.",
         "components": [
           {
-            "kind": "text",
-            "id": "settings_defaults",
-            "title": "Best by default",
-            "subtitle": "Food stays useful without putting setup details on every screen.",
-            "tone": "moss"
+            "kind": "widget",
+            "widget": "dataTable",
+            "id": "settings_active_app",
+            "title": "Active app",
+            "subtitle": "What is running on this phone right now.",
+            "tone": "moss",
+            "props": {
+              "columns": [
+                {
+                  "key": "thing",
+                  "label": "Thing"
+                },
+                {
+                  "key": "active",
+                  "label": "Active"
+                },
+                {
+                  "key": "detail",
+                  "label": "Detail"
+                }
+              ],
+              "items": [
+                {
+                  "thing": "Package",
+                  "active": "Food",
+                  "detail": "food.v1 JSON package"
+                },
+                {
+                  "thing": "Renderer",
+                  "active": "JSON Render",
+                  "detail": "screens come from package config"
+                },
+                {
+                  "thing": "Widgets",
+                  "active": "21",
+                  "detail": "cards, forms, polls, boards, media, maps"
+                },
+                {
+                  "thing": "Native",
+                  "active": "Declared",
+                  "detail": "Health, camera, sharing, links"
+                }
+              ]
+            }
           },
           {
             "kind": "widget",
             "widget": "providerStatus",
             "id": "settings_sync_status",
-            "title": "Sources are quietly ready",
-            "subtitle": "Local works first. Notion and Sheets appear only when they need attention.",
+            "title": "Data homes",
+            "subtitle": "Local first. Notion and Sheets are connectable homes, not front-page clutter.",
             "tone": "blue",
             "props": {
-              "provider": "summary"
+              "provider": "summary",
+              "homes": [
+                {
+                  "title": "On-device",
+                  "subtitle": "Fast private food graph.",
+                  "status": "Active",
+                  "icon": "●"
+                },
+                {
+                  "title": "Notion",
+                  "subtitle": "Food pages/databases when connected.",
+                  "status": "Optional",
+                  "icon": "N"
+                },
+                {
+                  "title": "Sheets",
+                  "subtitle": "Family-shareable rows when connected.",
+                  "status": "Optional",
+                  "icon": "S"
+                }
+              ],
+              "actions": [
+                {
+                  "title": "Open Sources",
+                  "subtitle": "Connect or review data homes.",
+                  "route": "/sources"
+                }
+              ]
             }
           },
           {
-            "kind": "action",
-            "id": "settings_sources",
-            "title": "Connected homes",
-            "subtitle": "Review Notion, Sheets, Drive, and local data homes.",
-            "tone": "blue",
-            "action": {
-              "kind": "propose",
-              "label": "Open sources",
-              "command": "open_sources",
-              "payload": {
-                "route": "/sources"
-              }
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "settings_ai_status",
+            "title": "AI",
+            "subtitle": "Food assistant + app editor",
+            "tone": "plum",
+            "props": {
+              "badge": "Configured outside UI",
+              "body": "The app never prints raw AI keys. Keys live in server/agent env; this screen shows capability and routes you to Ask.",
+              "actions": [
+                {
+                  "title": "Open Ask",
+                  "route": "/chat"
+                },
+                {
+                  "title": "Edit app config",
+                  "route": "/config"
+                }
+              ]
             }
           },
           {
-            "kind": "action",
-            "id": "settings_health",
-            "title": "Health Connect",
-            "subtitle": "Optional health context for food decisions. Ask only when you want it.",
+            "kind": "widget",
+            "widget": "dataTable",
+            "id": "settings_installed_apps",
+            "title": "Apps",
+            "subtitle": "What is active and what else this platform can load.",
             "tone": "amber",
-            "action": {
-              "kind": "propose",
-              "label": "Open",
-              "command": "open_health",
-              "payload": {
-                "route": "/health-diagnostics"
-              }
+            "props": {
+              "columns": [
+                {
+                  "key": "app",
+                  "label": "App"
+                },
+                {
+                  "key": "state",
+                  "label": "State"
+                },
+                {
+                  "key": "open",
+                  "label": "Open"
+                }
+              ],
+              "items": [
+                {
+                  "app": "Food",
+                  "state": "Active",
+                  "open": "Food tab",
+                  "route": "/food"
+                },
+                {
+                  "app": "Health",
+                  "state": "Available",
+                  "open": "Health settings",
+                  "route": "/health-diagnostics"
+                },
+                {
+                  "app": "Plants",
+                  "state": "Available",
+                  "open": "Package config",
+                  "route": "/config"
+                }
+              ]
             }
           },
           {
@@ -901,12 +1003,12 @@
           {
             "kind": "action",
             "id": "settings_config",
-            "title": "App config",
-            "subtitle": "Open the JSON-render widget catalog and package controls.",
+            "title": "Customize this app",
+            "subtitle": "Add tables, reorder widgets, change screens, or review the package catalog.",
             "tone": "plum",
             "action": {
               "kind": "propose",
-              "label": "Customize",
+              "label": "Open app config",
               "command": "open_config",
               "payload": {
                 "route": "/config"
