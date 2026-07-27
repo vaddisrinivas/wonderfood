@@ -224,10 +224,21 @@ describe('app package SQLite registry', () => {
     const theme = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'make theme cuter cards'));
     expect(theme.status).toBe('valid');
     expect(theme.package?.presentation?.visualIdentity?.density).toBe('compact-cute');
+    expect(theme.package?.presentation?.ui?.screens?.ai_cuter_cards_theme.components?.[0]).toMatchObject({
+      widget: 'themePreview',
+      id: 'ai_cuter_cards_theme_preview',
+      title: 'Cuter Cards theme',
+    });
 
     const workflow = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'when pantry expires suggest dinner'));
     expect(workflow.status).toBe('valid');
     expect(workflow.package?.rules.some((rule) => rule.id === 'ai_pantry_expires_dinner_workflow_rule')).toBe(true);
+    expect(workflow.package?.rules.find((rule) => rule.id === 'ai_pantry_expires_dinner_workflow_rule')).toMatchObject({
+      trigger: { kind: 'query_transition', query: 'expiring_inventory', transition: 'enter' },
+      effect: { kind: 'propose_operation', operation: { kind: 'custom', tool: 'food.dinner.suggest' } },
+      mode: 'suggest',
+      maxRunsPerEvent: 1,
+    });
 
     const field = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add spice level number field to recipe'));
     expect(field.status).toBe('valid');
