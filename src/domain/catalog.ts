@@ -48,51 +48,6 @@ export type DashboardBlockKind = 'spotlight' | 'metric' | 'list' | 'action';
 export type DashboardBlockTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
 export type DashboardBlockSize = 'compact' | 'standard' | 'wide' | 'feature';
 
-export type MobileSurfaceTone = DashboardBlockTone;
-export type MobileSurfaceCardKind = 'spotlight' | 'list' | 'assistant' | 'review';
-export type MobileSurfaceQuery = {
-  collections: string[];
-  match?: string;
-  limit: number;
-};
-export type MobileSurfaceAction = { label: string; href: string };
-export type MobileSurfaceNested = {
-  id: string;
-  label: string;
-  query: MobileSurfaceQuery;
-  empty: string;
-};
-export type MobileSurfaceCard = {
-  id: string;
-  kind: MobileSurfaceCardKind;
-  label: string;
-  icon: string;
-  tone: MobileSurfaceTone;
-  query: MobileSurfaceQuery;
-  empty: { title: string; detail: string };
-  nested: MobileSurfaceNested[];
-  action?: MobileSurfaceAction;
-};
-export type MobileSurfaceView = {
-  id: string;
-  label: string;
-  icon: string;
-  title: string;
-  subtitle: string;
-  card_order: string[];
-};
-export type MobileSurface = {
-  title: string;
-  subtitle: string;
-  card_density: 'compact' | 'comfortable';
-  card_order: string[];
-  cards: MobileSurfaceCard[];
-  header_action?: MobileSurfaceAction;
-  default_view?: string;
-  views?: MobileSurfaceView[];
-  advanced: { visible: boolean; cards: MobileSurfaceCard[] };
-};
-
 export type DashboardBlock = {
   id: string;
   surface: string;
@@ -151,7 +106,6 @@ export interface DomainManifest {
   data_homes: string[];
   ui?: PackagePresentationUi;
   dashboard_blocks?: DashboardBlock[];
-  mobile_surface?: MobileSurface;
   render?: DomainRenderContract;
   rich_detail_schema?: string;
   provider_template_fields?: {
@@ -325,114 +279,6 @@ function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | 
       href: typeof block.href === 'string' && block.href.trim() ? block.href : '/config',
     };
   });
-}
-
-function parseMobileSurfaceAction(value: unknown, path: string): MobileSurfaceAction | undefined {
-  if (value === undefined) return undefined;
-  assertCondition(isObject(value), `Expected object at ${path}`);
-  const raw = value as Record<string, unknown>;
-  return {
-    label: parseString(raw.label, `${path}.label`),
-    href: parseString(raw.href, `${path}.href`),
-  };
-}
-
-function parseMobileSurfaceQuery(value: unknown, path: string): MobileSurfaceQuery {
-  assertCondition(isObject(value), `Expected object at ${path}`);
-  const raw = value as Record<string, unknown>;
-  const collections = parseStringArray(raw.collections, `${path}.collections`);
-  const limit = raw.limit;
-  assertCondition(typeof limit === 'number' && Number.isInteger(limit) && limit >= 1 && limit <= 20, `Expected limit 1..20 at ${path}.limit`);
-  if (typeof raw.match === 'string') {
-    try {
-      new RegExp(raw.match, 'i');
-    } catch {
-      throw new Error(`[domain-catalog] Invalid regular expression at ${path}.match`);
-    }
-  } else {
-    assertCondition(raw.match === undefined, `Expected string at ${path}.match`);
-  }
-  return { collections, match: typeof raw.match === 'string' ? raw.match : undefined, limit: limit as number };
-}
-
-function parseMobileSurfaceCard(value: unknown, path: string): MobileSurfaceCard {
-  assertCondition(isObject(value), `Expected object at ${path}`);
-  const raw = value as Record<string, unknown>;
-  const kind = raw.kind ?? 'spotlight';
-  const tone = raw.tone;
-  assertCondition(kind === 'spotlight' || kind === 'list' || kind === 'assistant' || kind === 'review', `Invalid kind at ${path}.kind`);
-  assertCondition(tone === 'neutral' || tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue', `Invalid tone at ${path}.tone`);
-  assertCondition(isObject(raw.empty), `Expected object at ${path}.empty`);
-  const empty = raw.empty as Record<string, unknown>;
-  const nested = raw.nested === undefined ? [] : parseObjectArray(raw.nested, `${path}.nested`).map((item, index) => ({
-    id: parseString(item.id, `${path}.nested[${index}].id`),
-    label: parseString(item.label, `${path}.nested[${index}].label`),
-    query: parseMobileSurfaceQuery(item.query, `${path}.nested[${index}].query`),
-    empty: parseString(item.empty, `${path}.nested[${index}].empty`),
-  }));
-  return {
-    id: parseString(raw.id, `${path}.id`),
-    kind: kind as MobileSurfaceCardKind,
-    label: parseString(raw.label, `${path}.label`),
-    icon: parseString(raw.icon, `${path}.icon`),
-    tone: tone as MobileSurfaceTone,
-    query: parseMobileSurfaceQuery(raw.query, `${path}.query`),
-    empty: {
-      title: parseString(empty.title, `${path}.empty.title`),
-      detail: parseString(empty.detail, `${path}.empty.detail`),
-    },
-    nested,
-    action: parseMobileSurfaceAction(raw.action, `${path}.action`),
-  };
-}
-
-function parseMobileSurface(value: unknown, path: string): MobileSurface | undefined {
-  if (value === undefined) return undefined;
-  assertCondition(isObject(value), `Expected object at ${path}`);
-  const raw = value as Record<string, unknown>;
-  const density = raw.card_density;
-  assertCondition(density === 'compact' || density === 'comfortable', `Invalid card_density at ${path}.card_density`);
-  const cards = parseObjectArray(raw.cards, `${path}.cards`).map((card, index) => parseMobileSurfaceCard(card, `${path}.cards[${index}]`));
-  const order = parseStringArray(raw.card_order, `${path}.card_order`);
-  assertCondition(new Set(order).size === order.length, `Duplicate card id at ${path}.card_order`);
-  assertCondition(order.every((id) => cards.some((card) => card.id === id)), `Unknown card id at ${path}.card_order`);
-  const views = raw.views === undefined ? undefined : parseObjectArray(raw.views, `${path}.views`).map((item, index) => ({
-    id: parseString(item.id, `${path}.views[${index}].id`),
-    label: parseString(item.label, `${path}.views[${index}].label`),
-    icon: parseString(item.icon, `${path}.views[${index}].icon`),
-    title: parseString(item.title, `${path}.views[${index}].title`),
-    subtitle: parseString(item.subtitle, `${path}.views[${index}].subtitle`),
-    card_order: parseStringArray(item.card_order, `${path}.views[${index}].card_order`),
-  }));
-  if (views) {
-    assertCondition(views.length > 0, `Expected at least one view at ${path}.views`);
-    assertCondition(new Set(views.map((view) => view.id)).size === views.length, `Duplicate view id at ${path}.views`);
-    for (const view of views) {
-      assertCondition(new Set(view.card_order).size === view.card_order.length, `Duplicate card id in ${path}.views.${view.id}.card_order`);
-      assertCondition(view.card_order.every((id) => cards.some((card) => card.id === id)), `Unknown card id in ${path}.views.${view.id}.card_order`);
-    }
-  } else {
-    assertCondition(order.length === cards.length, `card_order must contain every card exactly once at ${path}`);
-  }
-  const defaultView = raw.default_view === undefined ? undefined : parseString(raw.default_view, `${path}.default_view`);
-  if (defaultView !== undefined) {
-    assertCondition(Boolean(views?.some((view) => view.id === defaultView)), `Unknown default_view at ${path}.default_view`);
-  }
-  assertCondition(isObject(raw.advanced), `Expected object at ${path}.advanced`);
-  const advanced = raw.advanced as Record<string, unknown>;
-  assertCondition(typeof advanced.visible === 'boolean', `Expected boolean at ${path}.advanced.visible`);
-  const advancedCards = parseObjectArray(advanced.cards, `${path}.advanced.cards`).map((card, index) => parseMobileSurfaceCard(card, `${path}.advanced.cards[${index}]`));
-  return {
-    title: parseString(raw.title, `${path}.title`),
-    subtitle: parseString(raw.subtitle, `${path}.subtitle`),
-    card_density: density as MobileSurface['card_density'],
-    card_order: order,
-    cards,
-    header_action: parseMobileSurfaceAction(raw.header_action, `${path}.header_action`),
-    default_view: defaultView,
-    views,
-    advanced: { visible: advanced.visible as boolean, cards: advancedCards },
-  };
 }
 
 function parseRenderContract(value: unknown): DomainRenderContract | undefined {
@@ -666,7 +512,6 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
     ui,
     dashboard_blocks: parseDashboardBlocks(raw.dashboard_blocks, `${path}.dashboard_blocks`),
-    mobile_surface: parseMobileSurface(raw.mobile_surface, `${path}.mobile_surface`),
     render: parseRenderContract(raw.render),
     rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
     provider_template_fields: parsedProviderTemplateFields,
@@ -849,10 +694,6 @@ function domainManifestFromPackage(pkg: AppPackageV2, bundledFallback?: DomainMa
     workflows: bundledFallback?.workflows ?? [],
     data_homes: pkg.capabilities.filter((capability) => capability.startsWith('data-home:')).map((capability) => capability.slice('data-home:'.length)),
     dashboard_blocks: (presentation?.dashboardBlocks as DashboardBlock[] | undefined) ?? bundledFallback?.dashboard_blocks,
-    mobile_surface: parseMobileSurface(
-      presentation?.mobileSurface ?? bundledFallback?.mobile_surface,
-      `app-package:${pkg.id}.presentation.mobileSurface`,
-    ),
     ui: (presentation?.ui as DomainManifest['ui']) ?? bundledFallback?.ui,
     render: (presentation?.render as DomainRenderContract | undefined) ?? bundledFallback?.render,
     rich_detail_schema: presentation?.richDetailSchema ?? bundledFallback?.rich_detail_schema,
