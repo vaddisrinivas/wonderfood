@@ -61,6 +61,29 @@ describe('domain manifest to app package bridge', () => {
     expect(bridged.package.presentation?.ui).toEqual(manifest.ui);
   });
 
+  it('keeps route-facing surfaces package-owned instead of shell-owned', () => {
+    const manifest = loadCatalog().activeManifest;
+    const bridged = buildAppPackageFromManifest(manifest);
+    const screens = bridged.package.presentation?.ui?.screens ?? {};
+
+    expect(Object.keys(screens)).toEqual(expect.arrayContaining([
+      'home',
+      'overview',
+      'chat',
+      'settings',
+      'sources',
+      'capture',
+      'search',
+      'config',
+      'health',
+      'record',
+      'collection',
+      'system',
+      'notFound',
+    ]));
+    expect(screens.chat.components?.some((component) => component.id === 'chat_context')).toBe(false);
+  });
+
   it('promotes declarative native capabilities into a locked V3 package', () => {
     const manifest = loadCatalog().activeManifest;
     const bridged = buildAppPackageFromManifest(manifest, { version: 'native-test' });

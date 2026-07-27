@@ -335,7 +335,8 @@ function shortHash(value: string) {
 
 function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
-  const widgets = [
+  const widgets = rows(props.items).map((item) => label(item)).filter(Boolean);
+  const defaultWidgets = [
     'Assistant chat',
     'Post cards',
     'Polls',
@@ -364,7 +365,7 @@ function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
   return (
     <WidgetShell title={text(props.title, 'Widget catalog')} subtitle={text(props.subtitle, 'The safe building blocks JSON Render can place on screens today.')}>
       <View style={styles.catalogGrid}>
-        {widgets.map((item) => (
+        {(widgets.length ? widgets : defaultWidgets).map((item) => (
           <View key={item} style={styles.catalogItem}>
             <Text style={styles.catalogText}>{item}</Text>
           </View>

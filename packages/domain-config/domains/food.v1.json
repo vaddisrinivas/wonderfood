@@ -1036,7 +1036,34 @@
             "id": "config_widgets",
             "title": "Widget registry",
             "subtitle": "Posts, polls, feeds, boards, charts, media, maps, permissions, sources, and AI.",
-            "tone": "blue"
+            "tone": "blue",
+            "props": {
+              "items": [
+                { "title": "Assistant chat" },
+                { "title": "Post card" },
+                { "title": "Poll card" },
+                { "title": "Link preview" },
+                { "title": "Feed list" },
+                { "title": "Kanban board" },
+                { "title": "Chart block" },
+                { "title": "Media block" },
+                { "title": "Map block" },
+                { "title": "Form card" },
+                { "title": "Checklist card" },
+                { "title": "Calendar block" },
+                { "title": "Timeline block" },
+                { "title": "Gallery grid" },
+                { "title": "Data table" },
+                { "title": "Permission card" },
+                { "title": "Provider status" },
+                { "title": "Theme preview" },
+                { "title": "Record list" },
+                { "title": "Metric" },
+                { "title": "Action" },
+                { "title": "Text card" },
+                { "title": "Package editor" }
+              ]
+            }
           },
           {
             "kind": "widget",
@@ -1114,6 +1141,14 @@
             "tone": "blue"
           },
           {
+            "kind": "widget",
+            "widget": "permissionCard",
+            "id": "health_declared_permissions",
+            "title": "Declared native access",
+            "subtitle": "The package declares what it may ask Android for before any prompt appears.",
+            "tone": "amber"
+          },
+          {
             "kind": "action",
             "id": "health_settings",
             "title": "Back to control room",
@@ -1124,6 +1159,135 @@
               "command": "open_settings",
               "payload": {
                 "route": "/settings"
+              }
+            }
+          }
+        ]
+      },
+      "record": {
+        "title": "Food item",
+        "subtitle": "One source-backed record from the active package.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "record_current",
+            "title": "Selected item",
+            "subtitle": "Details from the local food graph.",
+            "tone": "moss",
+            "query": {
+              "limit": 1
+            }
+          },
+          {
+            "kind": "action",
+            "id": "record_ask",
+            "title": "Ask about this",
+            "subtitle": "Turn this item into dinner, shopping, prep, or a package change.",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Ask Wonder",
+              "command": "ask_record",
+              "payload": {
+                "route": "/chat"
+              }
+            }
+          }
+        ]
+      },
+      "collection": {
+        "title": "Table",
+        "subtitle": "A package-defined collection rendered without a custom screen.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "collection_records",
+            "title": "Records",
+            "subtitle": "Recent rows from this app package.",
+            "tone": "blue",
+            "query": {
+              "limit": 8
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "schemaEditor",
+            "id": "collection_change",
+            "title": "Change this table",
+            "subtitle": "Ask Wonder for a reviewed package diff before schema or UI changes apply.",
+            "tone": "plum"
+          }
+        ]
+      },
+      "system": {
+        "title": "Behind the curtain",
+        "subtitle": "Diagnostics only. Daily food UX stays clean.",
+        "components": [
+          {
+            "kind": "text",
+            "id": "system_hidden",
+            "title": "Debug tools are tucked away",
+            "subtitle": "Provider receipts, package locks, sync checks, and native diagnostics stay here instead of every food card.",
+            "tone": "amber"
+          },
+          {
+            "kind": "widget",
+            "widget": "providerStatus",
+            "id": "system_provider_status",
+            "title": "Source health",
+            "subtitle": "Only open this when something needs attention.",
+            "tone": "blue",
+            "props": {
+              "provider": "summary"
+            }
+          },
+          {
+            "kind": "action",
+            "id": "system_health",
+            "title": "Native diagnostics",
+            "tone": "moss",
+            "action": {
+              "kind": "propose",
+              "label": "Health",
+              "command": "open_health",
+              "payload": {
+                "route": "/health-diagnostics"
+              }
+            }
+          }
+        ]
+      },
+      "notFound": {
+        "title": "This moved",
+        "subtitle": "Wonder can still route you back into the food workspace.",
+        "components": [
+          {
+            "kind": "action",
+            "id": "not_found_home",
+            "title": "Back to Today",
+            "subtitle": "Return to the generated Food home.",
+            "tone": "moss",
+            "action": {
+              "kind": "propose",
+              "label": "Today",
+              "command": "open_home",
+              "payload": {
+                "route": "/"
+              }
+            }
+          },
+          {
+            "kind": "action",
+            "id": "not_found_ask",
+            "title": "Ask Wonder",
+            "subtitle": "Tell Wonder what you were trying to open.",
+            "tone": "plum",
+            "action": {
+              "kind": "propose",
+              "label": "Ask",
+              "command": "open_chat",
+              "payload": {
+                "route": "/chat"
               }
             }
           }
