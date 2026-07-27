@@ -792,14 +792,14 @@
         ]
       },
       "settings": {
-        "title": "Control room",
+        "title": "Settings",
         "subtitle": "Beautiful defaults first. Sources, theme, Health Connect, and app config stay here.",
         "components": [
           {
             "kind": "text",
             "id": "settings_defaults",
             "title": "Best by default",
-            "subtitle": "Food stays useful without exposing provenance, packages, or sync machinery on every screen.",
+            "subtitle": "Food stays useful without putting setup details on every screen.",
             "tone": "moss"
           },
           {
@@ -939,7 +939,7 @@
                 {
                   "icon": "N",
                   "title": "Notion home",
-                  "subtitle": "Use an existing LifeOS/Food page as the shared source.",
+                  "subtitle": "Use an existing WonderFood page as the shared source.",
                   "status": "OAuth"
                 },
                 {
@@ -962,7 +962,7 @@
                 },
                 {
                   "title": "Authorize once",
-                  "subtitle": "OAuth or existing provider credential; no debug token UI."
+                  "subtitle": "Sign in once, then keep cooking."
                 },
                 {
                   "title": "Invite people",
@@ -988,7 +988,7 @@
               "homes": [
                 {
                   "icon": "N",
-                  "title": "LifeOS Food page",
+                  "title": "WonderFood page",
                   "subtitle": "Meals, pantry, receipts, and recipe notes.",
                   "status": "Bindable"
                 },
@@ -1230,7 +1230,7 @@
           {
             "kind": "action",
             "id": "health_settings",
-            "title": "Back to control room",
+            "title": "Back to settings",
             "tone": "plum",
             "action": {
               "kind": "propose",

@@ -10,7 +10,7 @@ export default function Root({ children }: { children: ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: css }} />
-        <title>LifeOS</title>
+        <title>WonderFood</title>
       </head>
       <body>{children}</body>
     </html>
