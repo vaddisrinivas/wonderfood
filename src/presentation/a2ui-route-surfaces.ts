@@ -204,12 +204,7 @@ export const ROUTE_SHELL_UI: A2UiSurface = {
       components: [
         { kind: 'widget', widget: 'schemaEditor', id: 'config_ai_first', title: 'Change anything safely', subtitle: 'Add a table, change a screen, create a workflow, connect a provider, or tune the theme. Wonder must preview and validate the patch first.', tone: 'plum' },
         { kind: 'widget', widget: 'widgetCatalog', id: 'config_widgets', title: 'Widget registry', subtitle: 'The config toolbox for 500 useful apps: posts, polls, feeds, boards, charts, media, maps, permissions, sources, and AI.', tone: 'blue' },
-        { kind: 'widget', widget: 'permissionCard', id: 'config_permissions', title: 'Native capabilities', subtitle: 'Packages declare what they need before the app asks the OS.', tone: 'amber', props: { permissions: [
-          { title: 'Health Connect', subtitle: 'Food-health context when enabled.' },
-          { title: 'Camera / photos', subtitle: 'Receipts, labels, pantry photos, and visual capture.' },
-          { title: 'Location', subtitle: 'Stores, maps, trips, field logs, and local apps.' },
-          { title: 'Share sheet', subtitle: 'Save links, videos, notes, and documents into any generated app.' },
-        ] } },
+        { kind: 'widget', widget: 'permissionCard', id: 'config_permissions', title: 'Native capabilities', subtitle: 'Rendered from the active package declaration before the app asks the OS.', tone: 'amber' },
         { kind: 'widget', widget: 'themePreview', id: 'config_theme', title: 'Theme tokens', subtitle: 'Defaults should be beautiful without per-screen hand work.', tone: 'moss' },
         { kind: 'action', id: 'config_ask', title: 'Change the app', tone: 'moss', action: { kind: 'propose', label: 'Ask Wonder', command: 'change_app_config', payload: { route: '/chat' } } },
         { kind: 'action', id: 'config_settings', title: 'Settings', tone: 'blue', action: { kind: 'propose', label: 'Settings', command: 'open_settings', payload: { route: '/settings' } } },

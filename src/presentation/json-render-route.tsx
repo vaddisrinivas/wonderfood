@@ -45,6 +45,7 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
       ui={useDomainUi ? activeManifest.ui : ROUTE_SHELL_UI}
       screen={screen}
       records={records}
+      nativePermissions={activeManifest.native_capabilities?.permissions}
       emptyTitle={emptyTitle}
     />
   );

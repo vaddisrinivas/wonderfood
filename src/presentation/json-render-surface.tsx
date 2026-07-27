@@ -4,7 +4,7 @@ import { JSONUIProvider, Renderer, createStandardActionHandlers } from '@json-re
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 
-import type { A2UiSurface, A2UiAction, A2UiComponent } from '@/packages/shared/contracts/package';
+import type { A2UiSurface, A2UiAction, A2UiComponent, AppPackageNativeCapability } from '@/packages/shared/contracts/package';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
 import { JSON_RENDER_WIDGET_REGISTRY } from '@/src/presentation/json-render-widgets';
 import { useLifeOSTheme } from '@/src/theme';
@@ -16,6 +16,7 @@ type JsonRenderSurfaceProps = {
   ui?: A2UiSurface;
   screen?: string;
   records?: DomainRecordViewModel[];
+  nativePermissions?: AppPackageNativeCapability['permissions'];
   emptyTitle?: string;
 };
 
@@ -248,7 +249,7 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   }, children);
 }
 
-function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette) {
+function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette, nativePermissions?: AppPackageNativeCapability['permissions']) {
   if (component.kind === 'widget') {
     const typeByWidget: Record<string, string> = {
       assistantChat: 'AssistantChatWidget',
@@ -272,6 +273,7 @@ function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], compo
       return add(widgetType, {
         title: component.title,
         subtitle: component.subtitle,
+        ...(component.widget === 'permissionCard' && component.props?.permissions === undefined && nativePermissions ? { permissions: nativePermissions } : {}),
         ...(component.props ?? {}),
       });
     }
@@ -296,7 +298,7 @@ function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette):
   }
   if (components.length) {
     for (const component of components) {
-      contentChildren.push(addSurfaceComponent(add, component, props.records ?? [], palette));
+      contentChildren.push(addSurfaceComponent(add, component, props.records ?? [], palette, props.nativePermissions));
     }
   } else {
     contentChildren.push(add('Card', {

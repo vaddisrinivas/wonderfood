@@ -55,7 +55,7 @@ function label(value: unknown, fallback = 'Item') {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const raw = value as Record<string, unknown>;
-    return text(raw.title, text(raw.label, text(raw.name, fallback)));
+    return text(raw.title, text(raw.label, text(raw.name, text(raw.permission, text(raw.id, fallback)))));
   }
   return fallback;
 }
