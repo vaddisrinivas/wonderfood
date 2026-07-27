@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { validateJsonSchema } from './validation';
 import { appPackageSchemaV2, appPackageSchemaV3 } from './package-schema';
 import type { 
@@ -24,6 +22,7 @@ import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/nativ
 import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
 import { APP_PACKAGE_UI_ACTION_KIND_SET, APP_PACKAGE_UI_COMPONENT_KIND_SET, APP_PACKAGE_UI_TONE_SET } from '@/packages/shared/contracts/ui-primitives';
 import { APP_PACKAGE_WIDGET_KIND_SET } from '@/packages/shared/contracts/ui-widgets';
+import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -522,23 +521,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function expectedContractLockChecksum(lock: AppPackageContractLock): string {
-  return `sha256:${createHash('sha256').update(stableJson({
+  return sha256Canonical({
     schemaVersion: lock.schemaVersion,
     algorithm: lock.algorithm,
     pinnedAt: lock.pinnedAt,
     dependencyPins: lock.dependencyPins,
     nativeCapabilities: lock.nativeCapabilities,
-  })).digest('hex')}`;
+  });
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }

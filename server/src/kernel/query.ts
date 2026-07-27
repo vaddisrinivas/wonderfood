@@ -1,4 +1,5 @@
 import type { QueryPredicate, QueryResult, QuerySort, QuerySpec } from '@/packages/shared/contracts/query';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 export type { QueryPredicate, QuerySort, QueryResult, QuerySpec } from '@/packages/shared/contracts/query';
 
@@ -47,11 +48,7 @@ export function matches<T extends Record<string, unknown>>(
 }
 
 export function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }
 
 function hashValue(value: string): string {

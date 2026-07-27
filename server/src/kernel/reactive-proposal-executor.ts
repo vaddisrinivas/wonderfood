@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   archiveRecordWithAction,
   attachActionVerification,
@@ -23,6 +21,7 @@ import type {
 } from '@/packages/shared/contracts/receipts';
 import { verifyReactiveProposalPostcondition } from './reactive-proposal-verification';
 import type { ReactiveOutboxExecutionResult, ReactiveOutboxItem } from './reactive-outbox';
+import { sha256Canonical } from '@/src/domain/canonical-json';
 
 export type ReactiveProposalExecutionResult = ReactiveOutboxExecutionResult & Readonly<{
   receipt?: ReactiveProposalExecutionReceipt;
@@ -665,17 +664,5 @@ function isVerificationReceipt(value: unknown): value is ReactiveProposalVerific
 }
 
 function hashValue(value: unknown): string {
-  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return sha256Canonical(value);
 }

@@ -2,6 +2,7 @@ import type { OperationCommitEvent } from './operation-observer';
 import type { ReactiveCycleProposal, ReactiveCycleResult } from './reactive-cycle';
 import { parseOperationProposalEnvelope, parseOperationTemplate, parseProposalEvent } from './reactive-proposal-schema';
 import { createOperationProposalIdempotencyKey } from './rules';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 export const REACTIVE_OUTBOX_SCHEMA_VERSION = 'wonder.reactive-outbox.v1' as const;
 
@@ -432,15 +433,7 @@ function validateEnvelopeEvidence(proposalId: string, envelope: ReactiveCyclePro
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }
 
 function shouldAckExecutionResult(result: ReactiveOutboxExecutionResult): boolean {

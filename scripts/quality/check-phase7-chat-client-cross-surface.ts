@@ -102,7 +102,8 @@ async function waitForServer() {
     console.log(`PASS ${evidencePath}`);
   } finally {
     server.kill('SIGTERM');
-    rmSync(stateDir, { recursive: true, force: true });
+    await new Promise((resolve) => server.once('close', resolve));
+    rmSync(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 })().catch((error) => {
   console.error('FAIL', error instanceof Error ? error.message : String(error));

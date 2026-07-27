@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
 import type { AppPackage } from './package';
 import { executeQuery, type QueryResult, type QuerySpec } from './query';
 import { detectQueryTransitions, type QueryTransitionEvent } from './query-transition';
 import { createOperationProposalIdempotencyKey, evaluateRules, type OperationProposal, type OperationProposalEnvelope } from './rules';
 import { applyComputedFieldsToRows, createComputedFieldEvaluationContext } from './computed-fields';
 import { dryRunReactiveProposal, evaluateReactiveProposalPolicy } from './reactive-proposal-policy';
+import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 
 export type ReactiveCycleInput = {
   package: AppPackage;
@@ -352,16 +352,9 @@ function stableId(value: unknown) {
 }
 
 function stableSha256(value: unknown) {
-  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
+  return sha256Canonical(value);
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }

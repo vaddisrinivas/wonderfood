@@ -1,5 +1,3 @@
-import { sha256 } from 'js-sha256';
-
 import type {
   A2UiComponent,
   AppPackage,
@@ -12,6 +10,7 @@ import type {
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import { APP_PACKAGE_WIDGET_KINDS } from '@/packages/shared/contracts/ui-widgets';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
+import { sha256Canonical } from '@/src/domain/canonical-json';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
 type PackageChangeIntent =
@@ -1319,19 +1318,7 @@ function labelForSort(value: unknown): string {
 }
 
 function hashValue(value: unknown): string {
-  return `sha256:${sha256(stableJson(value))}`;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return sha256Canonical(value);
 }
 
 function cleanJson(value: unknown): unknown {

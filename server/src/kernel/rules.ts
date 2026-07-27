@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { evaluateExpression } from './expression';
 import type { Expression } from './expression';
 import type { ReactiveProposalDryRun, ReactiveProposalPolicyResult } from './reactive-proposal-policy';
@@ -14,6 +12,7 @@ import {
   type OperationTemplate,
   type RuleSpec,
 } from '@/packages/shared/contracts/package';
+import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 
 export type { OperationProposal, OperationProposalEnvelope, OperationTemplate, ProposalEvent, RuleContext, RuleSpec };
 
@@ -26,10 +25,10 @@ export function createOperationProposalIdempotencyKey(input: {
   operationTemplate: OperationTemplate;
   evidence?: OperationProposalEnvelope['evidence'];
 }): string {
-  return `reactive:${createHash('sha256').update(stableJson({
+  return `reactive:${sha256Canonical({
     schemaVersion: 'wonder.operation-proposal.v1',
     ...input,
-  })).digest('hex')}`;
+  }).slice('sha256:'.length)}`;
 }
 
 export function evaluateRules(rules: readonly RuleSpec[], context: RuleContext): OperationProposal[] {
@@ -59,13 +58,5 @@ export function evaluateRules(rules: readonly RuleSpec[], context: RuleContext):
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }

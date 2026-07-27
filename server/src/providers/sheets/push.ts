@@ -3,6 +3,7 @@ import { nowIsoNow, ProviderOperation, ProviderWriteResult } from '../contracts'
 import { readSheetsConfig, sheetsFetch } from './client';
 import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX } from './client';
 import { CANONICAL_RUNTIME_TAB_NAME, WELL_KNOWN_RUNTIME_COLUMNS, parseWorkBookMetadata } from './workbook';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 type SheetsRecord = {
   id: string;
@@ -101,23 +102,7 @@ export type SheetsWriteInput = {
 };
 
 function nowDigest(value: unknown) {
-  return createHash('sha256').update(stableStringify(value)).digest('hex');
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
 }
 
 function toText(value: unknown) {

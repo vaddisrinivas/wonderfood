@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-
 import { QueryPredicate, QuerySort, QuerySpec } from '@/packages/shared/contracts/query';
 import { validateJsonSchema } from '../kernel/validation';
 import { stableJson } from '../kernel/query';
+import { sha256Canonical } from '@/src/domain/canonical-json';
 
 export const LOCAL_QUERY_SCHEMA_VERSION = 'wonder.local-query.v1' as const;
 export const LOCAL_QUERY_RESULT_SCHEMA_VERSION = 'wonder.local-query-result.v1' as const;
@@ -514,8 +513,7 @@ function trimRowsToOutputBudget(rows: LocalQueryResultRow[]): LocalQueryResultRo
 }
 
 function computeStableHash(value: unknown): string {
-  const digest = createHash('sha256').update(stableJson(value)).digest('hex');
-  return `sha256:${digest}`;
+  return sha256Canonical(value);
 }
 
 function schemaErrors(errors: string[]): string[] {

@@ -1,7 +1,7 @@
 import { validateComputedFieldGraph } from './computed-fields';
 import { type AppPackage, type PackageValidation, validateAppPackage } from './package';
 import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
-import { createHash } from 'node:crypto';
+import { sha256Canonical } from '@/src/domain/canonical-json';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import jsonPatch from 'fast-json-patch';
@@ -262,19 +262,7 @@ function applyPackagePatch(base: AppPackage, patch: readonly Operation[]): AppPa
 }
 
 function hashValue(value: unknown): string {
-  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return sha256Canonical(value);
 }
 
 function parsePackageRegistryStore(serialized: string): PackageRegistryStore {

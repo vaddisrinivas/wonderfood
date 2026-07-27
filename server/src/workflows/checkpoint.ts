@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { sha256 } from 'js-sha256';
 import { mutateJsonStateFile, readJsonStateFile } from '../providers/json-state';
 import { transitionWorkflow, WorkflowControlEvent, WorkflowControlState } from './control-machine';
+import { sha256Canonical } from '@/src/domain/canonical-json';
 
 type WorkflowCheckpointStepStatus = 'ok' | 'failed' | 'skipped' | 'cancelled';
 type WorkflowCheckpointRunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'compensating' | 'compensated';
@@ -51,24 +52,8 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
 function hashValue(value: unknown): string {
-  return createHash('sha256').update(stableStringify(value)).digest('hex');
+  return sha256Canonical(value).slice('sha256:'.length);
 }
 
 function deepClone<T>(value: T): T {
@@ -180,7 +165,7 @@ function load() {
 }
 
 function makeRunId(workflowId: string, actor: string, seed?: string) {
-  const seeded = seed ? hashValue({ workflowId, actor, seed }).slice(0, 18) : createHash('sha256').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 18);
+  const seeded = seed ? hashValue({ workflowId, actor, seed }).slice(0, 18) : sha256(`${Date.now()}:${Math.random()}`).slice(0, 18);
   return `${workflowId}:${actor}:${seeded}`;
 }
 

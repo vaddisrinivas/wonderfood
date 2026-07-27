@@ -14,6 +14,7 @@ import {
 } from '../kernel/operation-observer';
 import { mutateJsonStateFile, readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
 import type { ProviderUndoInput, ProviderUndoResult } from '../providers/undo';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
 
@@ -571,19 +572,7 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
 }
 
 function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
+  return canonicalJson(value);
 }
 
 function deleteRecordMutation(id: string, options: PersistOptions = {}) {

@@ -1,8 +1,7 @@
-import { sha256 } from 'js-sha256';
-
 import type { AppPackage, AppPackageV3, CollectionSpec } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import type { DomainManifest } from '@/src/domain/catalog';
+import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 
 const CORE_FIELDS: CollectionSpec['fields'] = {
   id: { type: 'text', required: true, indexed: true },
@@ -136,7 +135,7 @@ export function buildAppPackageFromManifest(
 }
 
 function bundledManifestVersion(manifest: DomainManifest): string {
-  return `1.0.0+bundle.${hashString(JSON.stringify(cleanJson(manifest))).slice(0, 8)}`;
+  return `1.0.0+bundle.${hashString(canonicalJson(cleanJson(manifest))).slice(0, 8)}`;
 }
 
 function hashString(value: string): string {
@@ -149,19 +148,7 @@ function hashString(value: string): string {
 }
 
 function hashValue(value: unknown): string {
-  return `sha256:${sha256(stableJson(value))}`;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return sha256Canonical(value);
 }
 
 function cleanJson(value: unknown): unknown {

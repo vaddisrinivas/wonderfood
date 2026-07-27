@@ -1,9 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import jsonPatch from 'fast-json-patch';
 import type { Operation as JsonPatchOperation } from 'fast-json-patch';
-import { sha256 } from 'js-sha256';
 
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
+import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
 import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
 import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
@@ -249,20 +249,11 @@ function applyPackagePatch(base: AppPackage, patch: readonly JsonPatchOperation[
 }
 
 function hashValue(value: unknown): string {
-  return `sha256:${sha256(stableJson(value))}`;
+  return sha256Canonical(value);
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const row = value as Record<string, unknown>;
-    return `{${Object.keys(row)
-      .filter((key) => row[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(row[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }
 
 async function getPackageState(db: SQLiteDatabase): Promise<AppPackageStateRow | null> {

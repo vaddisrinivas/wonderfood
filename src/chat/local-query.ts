@@ -4,6 +4,7 @@ import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/quer
 import type { CanonicalRecord } from '@/src/domain/runtime';
 import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
 import { listRecordsForDomain } from '@/src/db/records';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 export const LOCAL_QUERY_SCHEMA_VERSION = 'wonder.local-query.v1' as const;
 export const LOCAL_QUERY_RESULT_SCHEMA_VERSION = 'wonder.local-query-result.v1' as const;
@@ -64,11 +65,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (isObject(value)) {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }
 
 async function schemaHash(value: unknown): Promise<string> {

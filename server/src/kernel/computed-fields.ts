@@ -2,6 +2,7 @@ import { evaluateExpression, validateExpressionBudget, type Expression } from '.
 import { executeQuery } from './query';
 import type { AppPackage } from '@/packages/shared/contracts/package';
 import type { ComputedFieldSpec } from '@/packages/shared/contracts/package';
+import { canonicalJson } from '@/src/domain/canonical-json';
 
 export type { ComputedFieldSpec };
 
@@ -314,12 +315,5 @@ function stableId(value: unknown) {
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
+  return canonicalJson(value);
 }
