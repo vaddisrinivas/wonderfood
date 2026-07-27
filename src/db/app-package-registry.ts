@@ -5,6 +5,7 @@ import type { Operation as JsonPatchOperation } from 'fast-json-patch';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
+import { loadAppPackage } from '@/src/domain/package-loader';
 import {
   collectAppPackageValidationIssues,
   formatAppPackageValidationIssues,
@@ -59,7 +60,7 @@ export type AppPackageChangePreview = Readonly<{
 
 export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
   const manifest = getBundledDomainManifest();
-  const bundledPackage = buildAppPackageFromManifest(manifest).package;
+  const bundledPackage = loadAppPackage(buildAppPackageFromManifest(manifest).package).activePackage;
   const active = await getActiveAppPackage(db);
   if (active) {
     if (shouldRefreshBundledPackage(active, bundledPackage)) {
@@ -88,11 +89,11 @@ export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackag
 
 export async function activateAppPackage(
   db: SQLiteDatabase,
-  appPackage: AppPackage,
+  candidate: unknown,
   action: ReceiptAction = 'activate',
   evidence: AppPackageReceiptEvidence = {},
 ): Promise<AppPackage> {
-  assertAppPackageShape(appPackage);
+  const appPackage = loadAppPackage(candidate).activePackage;
   const now = new Date().toISOString();
   const key = packageKey(appPackage);
   const previous = await getPackageState(db);
@@ -139,8 +140,7 @@ export async function previewAppPackageChange(
   const requestHash = hashValue(normalizePackageChangeRequest(request));
   const basePackageKey = packageKey(active);
   try {
-    const next = applyPackagePatch(active, request.patch);
-    assertAppPackageShape(next);
+    const next = loadAppPackage(applyPackagePatch(active, request.patch)).activePackage;
     return {
       status: 'valid',
       requestHash,
@@ -285,11 +285,11 @@ async function getPackageByKey(db: SQLiteDatabase, key: string): Promise<AppPack
   } catch {
     throw new Error(`app_package_invalid_json:${row.package_key}`);
   }
-  assertAppPackageShape(parsed);
-  if (packageKey(parsed) !== row.package_key) {
+  const appPackage = loadAppPackage(parsed).activePackage;
+  if (packageKey(appPackage) !== row.package_key) {
     throw new Error(`app_package_key_mismatch:${row.package_key}`);
   }
-  return parsed;
+  return appPackage;
 }
 
 async function insertReceipt(

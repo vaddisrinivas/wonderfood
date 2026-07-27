@@ -133,6 +133,11 @@ export interface ParsedCatalog {
   domainsById: Record<DomainId, DomainCatalogEntry>;
 }
 
+export type CatalogLoadOptions = {
+  activeDomainId?: string | null;
+  activePackage?: AppPackage | null;
+};
+
 let parsedCatalogCache: ParsedCatalog | null = null;
 let activeDomainOverride: string | null = null;
 let activePackageOverride: AppPackage | null = null;
@@ -659,7 +664,7 @@ export function getActiveManifestPath(): string {
   return activeDomain.manifest;
 }
 
-function loadManifestByPath(manifestPath: string): unknown {
+function loadManifestByPath(manifestPath: string, options: CatalogLoadOptions = {}): unknown {
   const manifestMap: Record<string, unknown> = {
     './domains/food.v1.json': foodManifestJson,
     './domains/health.v1.json': healthManifestJson,
@@ -670,44 +675,46 @@ function loadManifestByPath(manifestPath: string): unknown {
     return manifest;
   }
 
+  const runtimePackage = options.activePackage ?? activePackageOverride;
+  if (runtimePackage && manifestPath === `app-package:${runtimePackage.id}@${runtimePackage.version}`) {
+    return domainManifestFromPackage(runtimePackage);
+  }
+
   throw new Error(`[domain-catalog] Unsupported manifest path: ${manifestPath}`);
 }
 
-export function loadCatalog(): ParsedCatalog {
-  if (parsedCatalogCache) {
-    return parsedCatalogCache;
-  }
-
+function buildParsedCatalog(options: CatalogLoadOptions = {}): ParsedCatalog {
   const catalog = parseCatalog(catalogJson);
   const domainsById = Object.fromEntries(catalog.domains.map((domain) => [domain.id, domain])) as Record<string, DomainCatalogEntry>;
+  const runtimePackage = options.activePackage ?? activePackageOverride;
 
-  if (activePackageOverride) {
+  if (runtimePackage) {
     const activeManifest = domainManifestFromPackage(
-      activePackageOverride,
-      getDomainManifest(catalog.domains, activePackageOverride.id),
+      runtimePackage,
+      getDomainManifest(catalog.domains, runtimePackage.id),
     );
     const activeDomain: DomainCatalogEntry = domainsById[activeManifest.id] ?? {
       id: activeManifest.id,
       label: activeManifest.label,
       icon: activeManifest.visual_identity?.domain?.icon ?? activeManifest.visual_identity?.domain?.emoji ?? 'box',
       status: 'active',
-      manifest: `app-package:${activePackageOverride.id}@${activePackageOverride.version}`,
-      skill: `package:${activePackageOverride.id}`,
+      manifest: `app-package:${runtimePackage.id}@${runtimePackage.version}`,
+      skill: `package:${runtimePackage.id}`,
       summary: `${activeManifest.label} package`,
     };
     const nextDomainsById = { ...domainsById, [activeManifest.id]: activeDomain };
-    parsedCatalogCache = {
+    return {
       catalog: { ...catalog, active_domain_id: activeManifest.id, domains: Object.values(nextDomainsById) },
       activeDomainId: activeManifest.id,
       activeDomain,
       activeManifest,
       domainsById: nextDomainsById,
     };
-    return parsedCatalogCache;
   }
 
-  const activeDomainId = activeDomainOverride && domainsById[activeDomainOverride]
-    ? activeDomainOverride
+  const requestedActiveDomainId = options.activeDomainId ?? activeDomainOverride;
+  const activeDomainId = requestedActiveDomainId && domainsById[requestedActiveDomainId]
+    ? requestedActiveDomainId
     : catalog.active_domain_id;
   const activeDomain = domainsById[activeDomainId];
 
@@ -716,7 +723,7 @@ export function loadCatalog(): ParsedCatalog {
   }
 
   const activeManifest = parseDomainManifest(
-    loadManifestByPath(activeDomain.manifest),
+    loadManifestByPath(activeDomain.manifest, options),
     `domain-manifest:${activeDomain.id}`
   );
 
@@ -724,7 +731,17 @@ export function loadCatalog(): ParsedCatalog {
     throw new Error(`[domain-catalog] Manifest id mismatch: ${activeManifest.id}`);
   }
 
-  parsedCatalogCache = { catalog, activeDomainId, activeDomain, activeManifest, domainsById };
+  return { catalog, activeDomainId, activeDomain, activeManifest, domainsById };
+}
+
+export function loadCatalog(options: CatalogLoadOptions = {}): ParsedCatalog {
+  if (options.activeDomainId !== undefined || options.activePackage !== undefined) {
+    return buildParsedCatalog(options);
+  }
+  if (parsedCatalogCache) {
+    return parsedCatalogCache;
+  }
+  parsedCatalogCache = buildParsedCatalog();
   return parsedCatalogCache;
 }
 
