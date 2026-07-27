@@ -114,7 +114,8 @@
       },
       "additionalProperties": false
     },
-    "mcp": { "type": "object", "required": ["resources", "tools"] }
+    "mcp": { "type": "object", "required": ["resources", "tools"] },
+    "ui": { "$ref": "#/$defs/package_ui" }
   },
   "$defs": {
     "visual_token": {
@@ -130,6 +131,95 @@
     "visual_token_map": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/visual_token" }
+    },
+    "package_ui_action": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["open_url", "propose"] },
+        "label": { "type": "string" },
+        "url": { "type": "string" },
+        "command": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "tool": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "open_url" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["url"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "propose" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["command"] },
+              { "required": ["tool"] }
+            ]
+          }
+        }
+      ]
+    },
+    "package_ui_component": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["recordList", "metric", "action", "text"] },
+        "id": { "type": "string" },
+        "title": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string" },
+        "view": { "type": "string" },
+        "tone": { "enum": ["neutral", "moss", "amber", "plum", "blue"] },
+        "query": {
+          "type": "object",
+          "properties": {
+            "collections": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+            "match": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 20 }
+          },
+          "additionalProperties": false
+        },
+        "action": { "$ref": "#/$defs/package_ui_action" }
+      },
+      "additionalProperties": false
+    },
+    "package_ui_screen": {
+      "type": "object",
+      "required": ["components"],
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/package_ui_component" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "package_ui": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": "wonder.ui.v1" },
+        "openUrlAllowlist": { "type": "array", "items": { "type": "string" } },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/package_ui_component" }
+        },
+        "screens": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/package_ui_screen" }
+        },
+        "defaultScreen": { "type": "string" }
+      },
+      "additionalProperties": false
     },
     "mobile_surface_action": {
       "type": "object",

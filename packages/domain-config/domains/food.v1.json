@@ -235,218 +235,212 @@
       "href": "/sources"
     }
   ],
-  "mobile_surface": {
-    "title": "Food",
-    "subtitle": "Dinner, kitchen and shopping in one place.",
-    "card_density": "compact",
-    "default_view": "today",
-    "views": [
-      {
-        "id": "today",
-        "label": "Today",
-        "icon": "☀",
+  "ui": {
+    "schemaVersion": "wonder.ui.v1",
+    "defaultScreen": "overview",
+    "screens": {
+      "overview": {
         "title": "Today",
         "subtitle": "Dinner first. Waste less. Buy only what you need.",
-        "card_order": ["today_plan", "use_first", "shopping_preview", "review_queue"]
-      },
-      {
-        "id": "kitchen",
-        "label": "Kitchen",
-        "icon": "🥬",
-        "title": "Kitchen",
-        "subtitle": "What you have and what should move first.",
-        "card_order": ["use_first", "pantry"]
-      },
-      {
-        "id": "plan",
-        "label": "Plan",
-        "icon": "▦",
-        "title": "Meal plan",
-        "subtitle": "Meals, recipes and memory in one connected view.",
-        "card_order": ["meal_plan", "cooking_memory"]
-      },
-      {
-        "id": "shop",
-        "label": "Shop",
-        "icon": "🛒",
-        "title": "Shopping",
-        "subtitle": "Buy only what your meals and kitchen need.",
-        "card_order": ["shopping_list", "receipt_review"]
-      }
-    ],
-    "card_order": ["today_plan", "use_first", "shopping_preview", "review_queue"],
-    "cards": [
-      {
-        "id": "today_plan",
-        "kind": "spotlight",
-        "label": "Tonight",
-        "icon": "🍲",
-        "tone": "moss",
-        "query": { "collections": ["meal_plan", "recipe"], "match": "planned|tonight|dinner", "limit": 1 },
-        "empty": { "title": "Choose dinner in a minute", "detail": "Wonder can use what is already in your kitchen." },
-        "nested": [
+        "components": [
           {
-            "id": "tonight_use_first",
-            "label": "Use first",
-            "query": { "collections": ["inventory", "inventory_lot", "ingredient"], "match": "use in|use soon|expire|best by|use by|open", "limit": 1 },
-            "empty": "Nothing urgent"
+            "kind": "recordList",
+            "id": "today_plan",
+            "title": "Tonight",
+            "tone": "moss",
+            "subtitle": "Dinner first. Waste less. Buy only what you need.",
+            "query": {
+              "collections": ["meal_plan", "recipe"],
+              "match": "planned|tonight|dinner",
+              "limit": 1
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Choose dinner",
+              "command": "choose_dinner",
+              "payload": { "route": "/chat" }
+            }
           },
           {
-            "id": "tonight_missing",
-            "label": "Still needed",
-            "query": { "collections": ["shopping_item", "shopping_demand"], "match": "to buy|needed|missing|demand", "limit": 1 },
-            "empty": "Kitchen looks ready"
-          }
-        ],
-        "action": { "label": "Choose dinner", "href": "/chat" }
-      },
-      {
-        "id": "review_queue",
-        "kind": "review",
-        "label": "Review queue",
-        "icon": "✓",
-        "tone": "moss",
-        "query": { "collections": ["purchase", "shopping_demand", "audit_event"], "match": "review|needs|draft|pending", "limit": 3 },
-        "empty": { "title": "Nothing waiting for review", "detail": "Wonder will hold uncertain changes here before saving." },
-        "nested": [],
-        "action": { "label": "Review with Wonder", "href": "/chat" }
-      },
-      {
-        "id": "ai_nudge",
-        "kind": "assistant",
-        "label": "Wonder noticed",
-        "icon": "✦",
-        "tone": "blue",
-        "query": { "collections": ["inventory", "inventory_lot", "shopping_demand"], "match": "use in|use soon|open|best by|needed|demand", "limit": 1 },
-        "empty": { "title": "Your food is in a good place", "detail": "Wonder will surface useful connections, never busywork." },
-        "nested": [
+            "kind": "recordList",
+            "id": "use_first",
+            "title": "Use first",
+            "tone": "amber",
+            "subtitle": "Waste less by using what should expire soon.",
+            "query": {
+              "collections": ["inventory", "inventory_lot", "ingredient"],
+              "match": "use in|use soon|expire|best by|use by|open",
+              "limit": 5
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Plan around it",
+              "command": "plan_around_use_first",
+              "payload": { "route": "/chat" }
+            }
+          },
           {
-            "id": "works_with",
-            "label": "Works with",
-            "query": { "collections": ["recipe", "meal_plan"], "match": "planned|tonight|dinner|recipe", "limit": 1 },
-            "empty": "Ask for an idea"
-          }
-        ],
-        "action": { "label": "Turn this into a meal", "href": "/chat" }
-      },
-      {
-        "id": "use_first",
-        "kind": "spotlight",
-        "label": "Use first",
-        "icon": "⏳",
-        "tone": "amber",
-        "query": { "collections": ["inventory", "inventory_lot", "ingredient"], "match": "use in|use soon|expire|best by|use by|open", "limit": 1 },
-        "empty": { "title": "Nothing needs rescuing", "detail": "Your freshness queue is clear." },
-        "nested": [
+            "kind": "recordList",
+            "id": "shopping_preview",
+            "title": "Still needed",
+            "tone": "neutral",
+            "subtitle": "Your kitchen covers what you need.",
+            "query": {
+              "collections": ["shopping_item", "shopping_demand", "shopping_list"],
+              "match": "to buy|needed|shopping|cart|demand",
+              "limit": 3
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Add an item",
+              "command": "add_shopping_item",
+              "payload": { "route": "/capture" }
+            }
+          },
           {
-            "id": "use_it_in",
-            "label": "Use it in",
-            "query": { "collections": ["recipe", "meal_plan"], "match": "planned|dinner|recipe", "limit": 1 },
-            "empty": "Any easy meal"
+            "kind": "recordList",
+            "id": "review_queue",
+            "title": "Review queue",
+            "tone": "moss",
+            "subtitle": "Uncertain changes awaiting review.",
+            "query": {
+              "collections": ["purchase", "shopping_demand", "audit_event"],
+              "match": "review|needs|draft|pending",
+              "limit": 3
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Review with Wonder",
+              "command": "review_food_queue",
+              "payload": { "route": "/chat" }
+            }
           }
-        ],
-        "action": { "label": "Plan around it", "href": "/chat" }
+        ]
       },
-      {
-        "id": "shopping_preview",
-        "kind": "list",
-        "label": "Still needed",
-        "icon": "🛒",
-        "tone": "neutral",
-        "query": { "collections": ["shopping_item", "shopping_demand", "shopping_list"], "match": "to buy|needed|shopping|cart|demand", "limit": 3 },
-        "empty": { "title": "Nothing to buy", "detail": "Your kitchen covers the plan." },
-        "nested": [],
-        "action": { "label": "Add an item", "href": "/capture" }
-      },
-      {
-        "id": "pantry",
-        "kind": "list",
-        "label": "Pantry and fridge",
-        "icon": "🥬",
-        "tone": "neutral",
-        "query": { "collections": ["inventory", "inventory_lot", "product"], "limit": 8 },
-        "empty": { "title": "Your kitchen is ready to fill", "detail": "Add a food, scan a receipt or connect your existing list." },
-        "nested": [],
-        "action": { "label": "Add food", "href": "/capture" }
-      },
-      {
-        "id": "meal_plan",
-        "kind": "list",
-        "label": "Meals and recipes",
-        "icon": "▦",
-        "tone": "neutral",
-        "query": { "collections": ["meal_plan", "recipe", "recipe_step"], "limit": 8 },
-        "empty": { "title": "No plan yet", "detail": "Wonder can draft a week from your pantry and preferences." },
-        "nested": [],
-        "action": { "label": "Build my week", "href": "/chat" }
-      },
-      {
-        "id": "cooking_memory",
-        "kind": "assistant",
-        "label": "Cook smarter",
-        "icon": "✦",
-        "tone": "plum",
-        "query": { "collections": ["meal_log", "recipe_revision"], "match": "memory|previous|better|note|revision", "limit": 1 },
-        "empty": { "title": "Your kitchen will learn", "detail": "Useful notes from meals you cook appear here." },
-        "nested": [
+      "kitchen": {
+        "title": "Kitchen",
+        "subtitle": "What you have and what should move first.",
+        "components": [
           {
-            "id": "already_home",
-            "label": "At home",
-            "query": { "collections": ["inventory", "inventory_lot"], "match": "available|open|pantry|use in", "limit": 1 },
-            "empty": "Add pantry items"
+            "kind": "recordList",
+            "id": "use_first_kitchen",
+            "title": "Use first",
+            "tone": "amber",
+            "subtitle": "Shelf life and movement-aware priorities.",
+            "query": {
+              "collections": ["inventory", "inventory_lot", "ingredient"],
+              "match": "use in|use soon|expire|best by|use by|open",
+              "limit": 5
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Plan around it",
+              "command": "replan_kitchen_priority",
+              "payload": { "route": "/chat" }
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "pantry",
+            "title": "Pantry and fridge",
+            "tone": "neutral",
+            "subtitle": "Your kitchen is ready to fill.",
+            "query": {
+              "collections": ["inventory", "inventory_lot", "product"],
+              "limit": 8
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Add food",
+              "command": "add_food_item",
+              "payload": { "route": "/capture" }
+            }
           }
-        ],
-        "action": { "label": "Save a note", "href": "/capture" }
+        ]
       },
-      {
-        "id": "shopping_list",
-        "kind": "list",
-        "label": "To buy",
-        "icon": "🛒",
-        "tone": "neutral",
-        "query": { "collections": ["shopping_item", "shopping_demand", "shopping_list"], "match": "to buy|needed|shopping|cart|demand", "limit": 10 },
-        "empty": { "title": "Your list is clear", "detail": "Wonder can compare a meal plan with your kitchen." },
-        "nested": [],
-        "action": { "label": "Add an item", "href": "/capture" }
+      "plan": {
+        "title": "Plan",
+        "subtitle": "Meals, recipes and memory in one view.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "meal_plan",
+            "title": "Meals and recipes",
+            "tone": "neutral",
+            "subtitle": "Use your pantry and preferences to build a week.",
+            "query": {
+              "collections": ["meal_plan", "recipe", "recipe_step"],
+              "limit": 8
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Build my week",
+              "command": "build_week_plan",
+              "payload": { "route": "/chat" }
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "cooking_memory",
+            "title": "Cook smarter",
+            "tone": "plum",
+            "subtitle": "Keep kitchen notes close to your meals.",
+            "query": {
+              "collections": ["meal_log", "recipe_revision"],
+              "match": "memory|previous|better|note|revision",
+              "limit": 2
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Save a note",
+              "command": "save_food_note",
+              "payload": { "route": "/capture" }
+            }
+          }
+        ]
       },
-      {
-        "id": "receipt_review",
-        "kind": "review",
-        "label": "Receipts and put-away",
-        "icon": "🧾",
-        "tone": "blue",
-        "query": { "collections": ["purchase", "purchase_line"], "match": "receipt|review|matched|purchase|line", "limit": 4 },
-        "empty": { "title": "No receipts waiting", "detail": "Captured receipts become reviewable pantry updates." },
-        "nested": [],
-        "action": { "label": "Capture receipt", "href": "/capture" }
+      "shop": {
+        "title": "Shop",
+        "subtitle": "Buy what meals and kitchen need.",
+        "components": [
+          {
+            "kind": "recordList",
+            "id": "shopping_list",
+            "title": "To buy",
+            "tone": "neutral",
+            "subtitle": "Keep your list active and practical.",
+            "query": {
+              "collections": ["shopping_item", "shopping_demand", "shopping_list"],
+              "match": "to buy|needed|shopping|cart|demand",
+              "limit": 10
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Add an item",
+              "command": "add_shopping_list_item",
+              "payload": { "route": "/capture" }
+            }
+          },
+          {
+            "kind": "recordList",
+            "id": "receipt_review",
+            "title": "Receipts and put-away",
+            "tone": "blue",
+            "subtitle": "Track captured receipts and reconciliation.",
+            "query": {
+              "collections": ["purchase", "purchase_line"],
+              "match": "receipt|review|matched|purchase|line",
+              "limit": 4
+            },
+            "action": {
+              "kind": "propose",
+              "label": "Capture receipt",
+              "command": "capture_receipt",
+              "payload": { "route": "/capture" }
+            }
+          }
+        ]
       }
-    ],
-    "advanced": {
-      "visible": false,
-      "cards": [
-        {
-          "id": "source_provenance",
-          "kind": "list",
-          "label": "Source and provenance",
-          "icon": "🔗",
-          "tone": "neutral",
-          "query": { "collections": ["source_record", "audit_event"], "limit": 4 },
-          "empty": { "title": "No source detail loaded", "detail": "Connect or inspect data homes here." },
-          "nested": [],
-          "action": { "label": "Open sources", "href": "/sources" }
-        },
-        {
-          "id": "package_controls",
-          "kind": "spotlight",
-          "label": "Package controls",
-          "icon": "⚙",
-          "tone": "neutral",
-          "query": { "collections": ["audit_event"], "limit": 1 },
-          "empty": { "title": "Advanced setup", "detail": "Package and debug controls stay hidden by default." },
-          "nested": [],
-          "action": { "label": "Open settings", "href": "/settings" }
-        }
-      ]
     }
   },
   "relations": [
