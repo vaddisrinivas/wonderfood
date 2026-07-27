@@ -227,7 +227,7 @@ process.env.NOTION_BASE_URL = `${providerServer.baseUrl}/notion/v1`;
 process.env.GOOGLE_SHEETS_API_BASE_URL = `${providerServer.baseUrl}/sheets/v4`;
 
 try {
-  const stateModule = await import('../src/mcp/state');
+  const stateModule = await import('../src/runtime/state');
   const { executeCommand } = await import('../src/agents/executor');
   const { runWorkflowCompensation } = await import('../src/workflows/compensation');
 

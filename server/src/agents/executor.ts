@@ -19,8 +19,8 @@ import {
   markActionCompleted,
   markActionFailed,
   updateRecordWithAction,
-} from '../mcp/state';
-import { callMcpTool, type ToolResult } from '../mcp/tools';
+} from '../runtime/state';
+import { callMcpTool, type ToolResult } from '../tools/catalog';
 import { readNotionConfig } from '../providers/notion/client';
 import { readSheetsConfig } from '../providers/sheets/client';
 

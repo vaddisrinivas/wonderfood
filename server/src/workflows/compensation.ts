@@ -1,5 +1,5 @@
-import { applyLocalUndoOperation, findRecord, runProviderUndoSync } from '../mcp/state';
-import type { LocalUndoReceipt, McpRecord } from '../mcp/state';
+import { applyLocalUndoOperation, findRecord, runProviderUndoSync } from '../runtime/state';
+import type { LocalUndoReceipt, McpRecord } from '../runtime/state';
 
 export type CompensationAction =
   | {

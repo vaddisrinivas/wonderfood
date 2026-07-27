@@ -3,7 +3,7 @@ if (!Number.isInteger(writer) || writer < 0) {
   throw new Error('LIFEOS_CANONICAL_WRITER_INDEX must be a non-negative integer');
 }
 
-const { createRecordWithAction } = await import('../../src/mcp/state');
+const { createRecordWithAction } = await import('../../src/runtime/state');
 
 const id = `concurrent-record-${writer}`;
 const actionId = `concurrent-action-${writer}`;

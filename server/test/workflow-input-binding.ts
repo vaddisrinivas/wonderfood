@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { WorkflowDependencyResult } from '../src/mcp/tools';
-import type { WorkflowDocument } from '../src/mcp/state';
+import type { WorkflowDependencyResult } from '../src/tools/catalog';
+import type { WorkflowDocument } from '../src/runtime/state';
 
 function ensure(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -12,7 +12,7 @@ const tempDir = mkdtempSync(join(tmpdir(), 'lifeos-workflow-binding-'));
 process.env.LIFEOS_MCP_STATE_PATH = join(tempDir, 'mcp-runtime.json');
 process.env.LIFEOS_WORKFLOW_CHECKPOINT_PATH = join(tempDir, 'workflow-runs.json');
 
-const { bindWorkflowStepInput, runWorkflow } = await import('../src/mcp/tools');
+const { bindWorkflowStepInput, runWorkflow } = await import('../src/tools/catalog');
 
 try {
   const completed: WorkflowDependencyResult[] = [

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { evaluateMcpPolicy } from '../security/policy';
-import { readMcpResource } from './resources';
+import { readMcpResource } from '../resources/catalog';
 import {
   WorkflowDocument,
   createActionEvent,
@@ -18,7 +18,7 @@ import {
   listWorkflows,
   ActionEvent,
   McpRecord,
-} from './state';
+} from '../runtime/state';
 import { buildWorkflowCompensation, runWorkflowCompensation, WorkflowCompensationResult } from '../workflows/compensation';
 import {
   completeWorkflowCheckpoint,

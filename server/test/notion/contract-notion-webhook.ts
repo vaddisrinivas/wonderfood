@@ -152,7 +152,7 @@ function buildOperationHash(value: unknown): string {
   const mock = withMockNotionFetch('notion-page-1', 'notion-source-1');
 
   try {
-    const { callMcpTool } = await import('../../src/mcp/tools');
+    const { callMcpTool } = await import('../../src/tools/catalog');
 
     const create = await callMcpTool('wonderfood.create_record', {
       actor: 'hearth',
@@ -284,7 +284,7 @@ function buildOperationHash(value: unknown): string {
     ensure(firstSync.status === 'synced', 'first sync should be fresh');
     ensure(secondSync.status === 'duplicate', 'second sync should be duplicate');
     ensure(firstSync.eventId === 'external:notion-page-1' || firstSync.eventId === null, 'sync should use external-id-based event id');
-    const { findRecord } = await import('../../src/mcp/state');
+    const { findRecord } = await import('../../src/runtime/state');
     const canonicalNotionRecord = findRecord('notion-page-1');
     ensure(canonicalNotionRecord?.source.provider === 'notion', 'first sync should apply the provider record to canonical state');
 

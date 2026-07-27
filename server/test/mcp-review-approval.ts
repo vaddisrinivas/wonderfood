@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 
 process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-mcp-review-')), 'mcp-runtime.json');
 
-const { callMcpTool } = await import('../src/mcp/tools');
-const { createRecord, findRecord } = await import('../src/mcp/state');
+const { callMcpTool } = await import('../src/tools/catalog');
+const { createRecord, findRecord } = await import('../src/runtime/state');
 
 const seed = createRecord({
   id: 'mcp-review-archive-record',

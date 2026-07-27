@@ -1,4 +1,4 @@
-import { listWorkflows } from '../src/mcp/state';
+import { listWorkflows } from '../src/runtime/state';
 
 function ensure(condition: boolean, message: string) {
   if (!condition) throw new Error(message);

@@ -1,4 +1,4 @@
-import { listRecords } from '../mcp/state';
+import { listRecords } from '../runtime/state';
 import { pullNotionRecordsLive } from '../providers/notion/pull';
 import { pullSheetsRecordsLive } from '../providers/sheets/pull';
 

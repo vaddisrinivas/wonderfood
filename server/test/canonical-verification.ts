@@ -6,7 +6,7 @@ import { join } from 'node:path';
 process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-canonical-verification-')), 'mcp-runtime.json');
 
 const { verifyResult } = await import('../src/agents/verifier');
-const { createActionEvent, createRecordWithAction, deleteRecord, markActionFailed } = await import('../src/mcp/state');
+const { createActionEvent, createRecordWithAction, deleteRecord, markActionFailed } = await import('../src/runtime/state');
 
 const incomplete = await verifyResult({
   actionId: 'a1',

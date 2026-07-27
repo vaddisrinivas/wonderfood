@@ -29,7 +29,7 @@ const {
 const {
   createActionEvent,
   markActionCompleted,
-} = await import('../src/mcp/state');
+} = await import('../src/runtime/state');
 const { createOperationProposalIdempotencyKey } = await import('../src/kernel/rules');
 import type { ReactiveCycleResult } from '../src/kernel/reactive-cycle';
 import type { OperationCommitEvent } from '../src/kernel/operation-observer';

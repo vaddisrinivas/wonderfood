@@ -10,7 +10,7 @@ const {
   deleteRecord,
   getActionEvent,
   runUndo,
-} = await import('../src/mcp/state');
+} = await import('../src/runtime/state');
 
 const success = createRecordWithAction({
   actionId: 'undo-lifecycle-success',

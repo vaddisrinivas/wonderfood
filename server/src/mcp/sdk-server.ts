@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { listMcpResources, readMcpResource } from './resources';
-import { callMcpTool, listMcpTools } from './tools';
+import { listMcpResources, readMcpResource } from '../resources/catalog';
+import { callMcpTool, listMcpTools } from '../tools/catalog';
 import type { McpScope } from '../security/auth';
 
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';

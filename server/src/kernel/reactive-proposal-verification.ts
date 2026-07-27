@@ -1,5 +1,5 @@
 import type { OperationTemplate } from '@/packages/shared/contracts/package';
-import type { McpRecord } from '../mcp/state';
+import type { McpRecord } from '../runtime/state';
 import type { ReactiveProposalVerificationReceipt, ReactiveProviderWritebackReceipt } from '@/packages/shared/contracts/receipts';
 
 export function verifyReactiveProposalPostcondition(input: {

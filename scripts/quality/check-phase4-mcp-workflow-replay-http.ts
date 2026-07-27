@@ -301,7 +301,7 @@ function createHashDigest(value: unknown) {
 
 (async () => {
   const mcpServer = await import('../../server/src/mcp/server');
-  const state = await import('../../server/src/mcp/state');
+  const state = await import('../../server/src/runtime/state');
   const checkpoints = await import('../../server/src/workflows/checkpoint');
 
   const mcpHandler = mcpServer.handleMcpRequest;

@@ -80,7 +80,7 @@ function asUndoResult(input: ToolResult['json']): UndoResult {
   return input as UndoResult;
 }
 
-async function callTool(tools: typeof import('../../server/src/mcp/tools'), name: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function callTool(tools: typeof import('../../server/src/tools/catalog'), name: string, args: Record<string, unknown>): Promise<ToolResult> {
   return (await tools.callMcpTool(name, args)) as ToolResult;
 }
 
@@ -92,8 +92,8 @@ function asAfterJson(value: unknown): WorkflowActionAfter | null {
 }
 
 (async () => {
-  const tools = await import('../../server/src/mcp/tools');
-  const state = await import('../../server/src/mcp/state');
+  const tools = await import('../../server/src/tools/catalog');
+  const state = await import('../../server/src/runtime/state');
   const checkpoints = await import('../../server/src/workflows/checkpoint');
 
   const workflowId = 'phase4_replay_workflow';

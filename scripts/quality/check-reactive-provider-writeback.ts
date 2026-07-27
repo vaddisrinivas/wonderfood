@@ -11,7 +11,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main() {
-const { createRecordWithAction, findRecord, getActionEvent } = await import('../../server/src/mcp/state');
+const { createRecordWithAction, findRecord, getActionEvent } = await import('../../server/src/runtime/state');
 const {
   executeReactiveProposal,
   executeReactiveProposalWithProviderWriteback,

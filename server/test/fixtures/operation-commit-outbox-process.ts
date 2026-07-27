@@ -5,7 +5,7 @@ const {
   createRecordWithAction,
   drainOperationCommitOutbox,
   listOperationCommitOutbox,
-} = await import('../../src/mcp/state');
+} = await import('../../src/runtime/state');
 const {
   setOperationCommitObserver,
 } = await import('../../src/kernel/operation-observer');

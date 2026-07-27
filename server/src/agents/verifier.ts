@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { findRecord, getActionEvent } from '../mcp/state';
+import { findRecord, getActionEvent } from '../runtime/state';
 
 export type VerificationResult = {
   actionId: string;

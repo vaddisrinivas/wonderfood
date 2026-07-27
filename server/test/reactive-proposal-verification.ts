@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { verifyReactiveProposalPostcondition } from '../src/kernel/reactive-proposal-verification';
-import type { McpRecord } from '../src/mcp/state';
+import type { McpRecord } from '../src/runtime/state';
 
 const record: McpRecord = {
   id: 'verify-record',

@@ -43,7 +43,7 @@ import {
   setConversationResponseId,
 } from './chat-storage';
 import { ChatStreamEvent } from './responses';
-import { createActionEvent, getActionEvent, runUndo } from './mcp/state';
+import { createActionEvent, getActionEvent, runUndo } from './runtime/state';
 import { installReactiveRuntime } from './kernel/install-reactive-runtime';
 import { chatAgent, localQuery } from './agents/chat-agent';
 import { PackageRegistry } from './kernel/package-registry';

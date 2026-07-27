@@ -9,7 +9,7 @@ process.env.LIFEOS_PACKAGE_REGISTRY_PATH = join(mkdtempSync(join(tmpdir(), 'wond
 
 const { installReactiveRuntime } = await import('../src/kernel/install-reactive-runtime');
 const { setOperationCommitObserver } = await import('../src/kernel/operation-observer');
-const { createRecordWithAction, deleteRecord, getActionEvent } = await import('../src/mcp/state');
+const { createRecordWithAction, deleteRecord, getActionEvent } = await import('../src/runtime/state');
 
 installReactiveRuntime();
 setOperationCommitObserver(() => {

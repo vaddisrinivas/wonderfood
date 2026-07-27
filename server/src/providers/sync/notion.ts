@@ -126,7 +126,7 @@ export async function syncNotionFromWebhook(input: NotionSyncInput): Promise<Not
   }
 
   const source = pull.source_snapshots[index] as Record<string, unknown> | undefined;
-  const { upsertProviderCanonicalRecord } = await import('../../mcp/state');
+  const { upsertProviderCanonicalRecord } = await import('../../runtime/state');
   const canonical = upsertProviderCanonicalRecord({
     provider: 'notion',
     id: pull.records[index].id,

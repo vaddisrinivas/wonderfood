@@ -6,8 +6,8 @@ import { join, resolve } from 'node:path';
 process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-ingress-parity-')), 'mcp-runtime.json');
 
 const executorSource = readFileSync(resolve(process.cwd(), 'server/src/agents/executor.ts'), 'utf8');
-const executorStateImport = executorSource.match(/import\s*\{([\s\S]*?)\}\s*from '\.\.\/mcp\/state';/);
-assert.equal(Boolean(executorStateImport), true, 'expected executor MCP state import');
+const executorStateImport = executorSource.match(/import\s*\{([\s\S]*?)\}\s*from '\.\.\/runtime\/state';/);
+assert.equal(Boolean(executorStateImport), true, 'expected executor runtime state import');
 assert.equal(
   /\bcreateRecord\b|\bupdateRecord\b|\barchiveRecord\b/.test(executorStateImport?.[1] ?? ''),
   false,
@@ -15,8 +15,8 @@ assert.equal(
 );
 
 const { executeCommand } = await import('../src/agents/executor');
-const { callMcpTool } = await import('../src/mcp/tools');
-const { findRecord, getActionEvent } = await import('../src/mcp/state');
+const { callMcpTool } = await import('../src/tools/catalog');
+const { findRecord, getActionEvent } = await import('../src/runtime/state');
 const { evaluateMcpPolicy } = await import('../src/security/policy');
 
 function requireAction(id: string) {

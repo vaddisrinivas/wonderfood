@@ -1,10 +1,10 @@
 import { authorizeMcpRequest, type HeaderMap, type McpScope } from '../security/auth';
 import { isMcpToolAllowed } from '../security/policy';
-import { describeMcpResourceAuthorization, listMcpResources, readMcpResource, resolveResourceMimeType } from './resources';
-import { callMcpTool, listMcpTools } from './tools';
+import { describeMcpResourceAuthorization, listMcpResources, readMcpResource, resolveResourceMimeType } from '../resources/catalog';
+import { callMcpTool, listMcpTools } from '../tools/catalog';
 import { isAllowedMcpOrigin, isMcpProtocolVersion, negotiateMcpProtocolVersion } from './protocol-compat';
 import { validateArgsForTool } from '../tools/tool-validation';
-import { findRecord, findWorkflow, getActionEvent } from './state';
+import { findRecord, findWorkflow, getActionEvent } from '../runtime/state';
 import { listConversations } from '../conversations';
 
 const MCP_SERVER_NAME = 'wonderfood-lifeos-server';

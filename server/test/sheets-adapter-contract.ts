@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { callMcpTool, } from '../src/mcp/tools';
+import { callMcpTool, } from '../src/tools/catalog';
 import { pullSheetsRecordsLive } from '../src/providers/sheets/pull';
 import { writeSheetsRecord } from '../src/providers/sheets/push';
 

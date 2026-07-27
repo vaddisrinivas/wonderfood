@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadCatalog } from '../../../src/domain/catalog';
-import { findWorkflow, getActionEvent, listActionEvents, listActionUris, listRecordUris, listRecords, listWorkflows } from './state';
+import { findWorkflow, getActionEvent, listActionEvents, listActionUris, listRecordUris, listRecords, listWorkflows } from '../runtime/state';
 import { listConversations } from '../conversations';
 
 export type McpResource = {

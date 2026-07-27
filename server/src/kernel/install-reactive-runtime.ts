@@ -8,7 +8,7 @@ import {
   drainOperationCommitOutbox,
   findActionByIdempotencyKey,
   listRecords,
-} from '../mcp/state';
+} from '../runtime/state';
 import { mutateJsonStateFile, readJsonStateFile } from '../providers/json-state';
 import { setOperationCommitFailureObserver, setOperationCommitObserver, type OperationCommitFailure } from './operation-observer';
 import { createReactiveCycleObserver } from './reactive-observer';

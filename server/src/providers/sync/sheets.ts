@@ -237,7 +237,7 @@ export async function syncSheetsFromWebhook(input: SheetsSyncInput): Promise<She
 
   const foundRecord = pull.records[rowIndex];
   const foundSnapshot = pull.source_snapshots[rowIndex];
-  const { upsertProviderCanonicalRecord } = await import('../../mcp/state');
+  const { upsertProviderCanonicalRecord } = await import('../../runtime/state');
   const canonical = upsertProviderCanonicalRecord({
     provider: 'google_sheets',
     id: foundRecord.id,

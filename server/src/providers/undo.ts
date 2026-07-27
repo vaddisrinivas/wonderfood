@@ -1,4 +1,4 @@
-import type { McpRecord } from '../mcp/state';
+import type { McpRecord } from '../runtime/state';
 import { pullNotionRecordsLive } from './notion/pull';
 import { writeNotionRecord } from './notion/push';
 import { pullSheetsRecordsLive } from './sheets/pull';

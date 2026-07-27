@@ -10,7 +10,7 @@ const { createReactiveCycleObserver } = await import('../src/kernel/reactive-obs
 const { createReactiveReceiptStore } = await import('../src/kernel/reactive-receipts');
 const { createReactiveOutboxStore, enqueueReactiveProposals } = await import('../src/kernel/reactive-outbox');
 const { setOperationCommitFailureObserver, setOperationCommitObserver } = await import('../src/kernel/operation-observer');
-const { createRecordWithAction, deleteRecord, listRecords } = await import('../src/mcp/state');
+const { createRecordWithAction, deleteRecord, listRecords } = await import('../src/runtime/state');
 
 const appPackage: AppPackageV2 = {
   schemaVersion: 'wonder.app-package.v2', id: 'observer-proof', version: '1.0.0',

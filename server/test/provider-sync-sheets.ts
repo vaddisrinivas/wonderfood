@@ -103,7 +103,7 @@ function setupMockSheetsFetch() {
   ensure(first.status === 'synced', 'Expected first sync status to be synced');
   ensure(Boolean(first.sourceSnapshot && first.sourceSnapshot['row'] === 3), 'Expected row 3 source snapshot on synced result');
   ensure(Array.isArray(first.records) && first.records.length === 1, 'Expected one canonical record from sync result');
-  const { findRecord } = await import('../src/mcp/state');
+  const { findRecord } = await import('../src/runtime/state');
   ensure(findRecord('sheet-sync-b')?.source.provider === 'google_sheets', 'Expected provider sync to apply the row to canonical state');
 
   const replayStateBefore = getWebhookReplayState(replayPath);

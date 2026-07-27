@@ -1,4 +1,4 @@
-import { readMcpResource } from '../src/mcp/resources';
+import { readMcpResource } from '../src/resources/catalog';
 
 function ensure(condition: boolean, message: string) {
   if (!condition) throw new Error(message);

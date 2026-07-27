@@ -31,7 +31,7 @@ process.env.LIFEOS_MCP_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'lifeos-prov
 const { notionFetch } = await import('../src/providers/notion/client');
 const { pullNotionRecordsLive } = await import('../src/providers/notion/pull');
 const { pullSheetsRecordsLive } = await import('../src/providers/sheets/pull');
-const { upsertProviderCanonicalRecord } = await import('../src/mcp/state');
+const { upsertProviderCanonicalRecord } = await import('../src/runtime/state');
 
 const originalFetch = globalThis.fetch;
 const originalSetTimeout = globalThis.setTimeout;

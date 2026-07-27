@@ -234,7 +234,7 @@ function assertWorkflowFailure(payload: WorkflowPayload, checkpointStatus: strin
 }
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const tools = await import('../../server/src/mcp/tools');
+  const tools = await import('../../server/src/tools/catalog');
   return (await tools.callMcpTool(name, args)) as ToolResult;
 }
 
@@ -249,7 +249,7 @@ function expectFailure(action: () => Promise<unknown>, label: string) {
 }
 
 (async () => {
-  const state = await import('../../server/src/mcp/state');
+  const state = await import('../../server/src/runtime/state');
   const checkpoints = await import('../../server/src/workflows/checkpoint');
 
   const baseKey = `phase4-tool-contract-${Date.now()}`;

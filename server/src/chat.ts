@@ -3,7 +3,7 @@ import { toCitationsFromSnapshots } from './provenance';
 import { runChatRuntime } from './chat-runtime';
 import { ensureCitations } from '@/src/chat/citations';
 import { getConversation } from './chat-storage';
-import { ActionEvent } from './mcp/state';
+import { ActionEvent } from './runtime/state';
 
 export type ChatCitationTone = 'moss' | 'blue' | 'amber' | 'plum' | 'neutral';
 

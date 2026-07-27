@@ -8,8 +8,8 @@ import {
   findActionByIdempotencyKey,
   findRecord,
   updateRecordWithAction,
-} from '../mcp/state';
-import type { RecordSource } from '../mcp/state';
+} from '../runtime/state';
+import type { RecordSource } from '../runtime/state';
 import { writeNotionRecord } from '../providers/notion/push';
 import { pullNotionRecordsLive } from '../providers/notion/pull';
 import { writeSheetsRecord } from '../providers/sheets/push';
