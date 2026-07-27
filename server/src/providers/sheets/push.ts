@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { nowIsoNow, ProviderOperation, ProviderWriteResult } from '../contracts';
-import { readSheetsConfig, sheetsFetch } from './client';
+import { readSheetsConfig } from './client';
 import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX } from './client';
 import { CANONICAL_RUNTIME_TAB_NAME, WELL_KNOWN_RUNTIME_COLUMNS, parseWorkBookMetadata } from './workbook';
 import { canonicalJson } from '@/src/domain/canonical-json';
+import { getSheetsPort } from './port';
 
 type SheetsRecord = {
   id: string;
@@ -305,8 +306,13 @@ async function readRuntimeState(): Promise<SheetRuntimeState | { ok: false; reas
     return { ok: false, reason: 'GOOGLE_SHEETS_SPREADSHEET_ID is missing.' };
   }
 
-  const metadataResponse = await sheetsFetch<SheetsMetadataResponse>('', {
-    method: 'GET',
+  const port = getSheetsPort(prepared.config);
+  if (!port) {
+    return { ok: false, reason: 'Google Sheets SDK port is unavailable.' };
+  }
+
+  const metadataResponse = await port.getSpreadsheet({
+    spreadsheetId,
   });
   if (!metadataResponse.ok) {
     return { ok: false, reason: metadataResponse.error || 'Unable to read workbook metadata.', status: metadataResponse.status };
@@ -322,12 +328,11 @@ async function readRuntimeState(): Promise<SheetRuntimeState | { ok: false; reas
   }
 
   const range = `${runtimeTab.title}!${SHEETS_WORKBOOK_DEFAULT_RANGE}`;
-  const valuesResponse = await sheetsFetch<SheetsBatchGetResponse>(
-    `/values:batchGet?majorDimension=ROWS&ranges=${encodeURIComponent(range)}`,
-    {
-      method: 'GET',
-    },
-  );
+  const valuesResponse = await port.batchGetValues({
+    spreadsheetId,
+    majorDimension: 'ROWS',
+    ranges: [range],
+  });
   if (!valuesResponse.ok) {
     return { ok: false, reason: valuesResponse.error || 'Unable to read LifeOS Runtime values.', status: valuesResponse.status };
   }
@@ -382,18 +387,21 @@ async function writeRuntimeRows(input: {
   values: string[];
 }): Promise<WriteRuntimeRowResult> {
   const range = buildRange(input.state.tab, input.rowNumber, Math.max(input.state.header.length, input.values.length, 1));
-  const response = await sheetsFetch<SheetsBatchUpdateResponse>('/values:batchUpdate', {
-    method: 'POST',
-    body: JSON.stringify({
-      valueInputOption: VALUE_INPUT_OPTION,
-      data: [
-        {
-          range,
-          majorDimension: VALUE_RANGE_TYPE,
-          values: [input.values],
-        },
-      ],
-    }),
+  const port = getSheetsPort(readSheetsConfig() ?? undefined);
+  if (!port) {
+    return { ok: false, error: 'Google Sheets SDK port is unavailable.' };
+  }
+
+  const response = await port.batchUpdateValues({
+    spreadsheetId: input.state.spreadsheetId,
+    valueInputOption: VALUE_INPUT_OPTION,
+    data: [
+      {
+        range,
+        majorDimension: VALUE_RANGE_TYPE,
+        values: [input.values],
+      },
+    ],
   });
 
   if (!response.ok) {

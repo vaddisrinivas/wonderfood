@@ -1,6 +1,6 @@
 import { nowIsoNow, ProviderWriteResult, ProviderOperation } from '../contracts';
 import { readNotionConfig } from './client';
-import { notionApiPath, notionFetch, NOTION_DATA_SOURCE_QUERY_PATH } from './client';
+import { getNotionPort, type NotionWriteResponse } from './port';
 
 export type NotionWriteInput = {
   operation: ProviderOperation;
@@ -47,15 +47,6 @@ export type NotionWriteResult = {
     source_snapshot: NotionSourceSnapshot;
     provider_record_id: string | null;
   };
-};
-
-type NotionWriteResponse = {
-  id?: string;
-  url?: string;
-  archived?: boolean;
-  parent?: { data_source_id?: string; database_id?: string };
-  created_time?: string;
-  last_edited_time?: string;
 };
 
 export function buildNotionWriteSource(input: NotionWriteInput): ProviderWriteResult {
@@ -397,6 +388,15 @@ export async function writeNotionRecord(input: NotionWriteInputRecord): Promise<
     };
   }
 
+  const port = getNotionPort(config);
+  if (!port) {
+    return {
+      ok: false,
+      success: false,
+      error: 'Notion SDK port is unavailable.',
+    };
+  }
+
   const sourceSnapshot = buildNotionSourceSnapshot({
     operation: input.operation,
     domain: input.domain,
@@ -410,20 +410,13 @@ export async function writeNotionRecord(input: NotionWriteInputRecord): Promise<
   const payload = normalizeNotionRecordPayload(input);
   const unsupported = pickNotionUnsupportedProperties(input.properties);
   if (input.operation === 'create_record') {
-    const response = await notionFetch<NotionWriteResponse>(
-      notionApiPath('/pages', {}),
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          parent: {
-            type: 'data_source_id',
-            data_source_id: config.dataSourceId,
-          },
-          ...payload,
-          ...(Object.keys(unsupported).length > 0 ? { provider_snapshot: unsupported } : {}),
-        }),
+    const response = await port.createPage({
+      dataSourceId: config.dataSourceId,
+      payload: {
+        ...payload,
+        ...(Object.keys(unsupported).length > 0 ? { provider_snapshot: unsupported } : {}),
       },
-    );
+    });
 
     if (!response.ok) {
       return {
@@ -478,14 +471,10 @@ export async function writeNotionRecord(input: NotionWriteInputRecord): Promise<
     };
   }
 
-  const operationPath = notionApiPath('/pages/{page_id}', { page_id: targetPageId });
-  const response = await notionFetch<NotionWriteResponse>(
-    operationPath,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(buildUpdatePayload(input)),
-    },
-  );
+  const response = await port.updatePage({
+    pageId: targetPageId,
+    payload: buildUpdatePayload(input),
+  });
   if (!response.ok) {
     return {
       ok: false,
@@ -541,16 +530,14 @@ export async function queryNotionDataSourceRecords(limit = 50): Promise<{ ok: bo
     return { ok: false, records: [], error: 'NOTION_TOKEN is not configured.' };
   }
 
-  const path = notionApiPath(NOTION_DATA_SOURCE_QUERY_PATH, { data_source_id: config.dataSourceId });
-  const response = await notionFetch<{ results?: unknown[] }>(
-    path,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        page_size: Math.max(1, Math.min(limit, 100)),
-      }),
-    },
-  );
+  const port = getNotionPort(config);
+  if (!port) {
+    return { ok: false, records: [], error: 'Notion SDK port is unavailable.' };
+  }
+  const response = await port.queryDataSource({
+    dataSourceId: config.dataSourceId,
+    pageSize: Math.max(1, Math.min(limit, 100)),
+  });
 
   if (!response.ok) {
     return { ok: false, records: [], error: response.error?.message || 'notion source query failed' };

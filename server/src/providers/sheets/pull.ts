@@ -7,7 +7,8 @@ import {
   WELL_KNOWN_RUNTIME_COLUMNS,
   REQUIRED_RUNTIME_COLUMNS,
 } from './workbook';
-import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX, sheetsFetch } from './client';
+import { SHEETS_WORKBOOK_DEFAULT_RANGE, SHEETS_WORKBOOK_TAB_PREFIX } from './client';
+import { getSheetsPort } from './port';
 
 type SheetsValuesResponse = {
   values?: unknown[];
@@ -305,8 +306,21 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
     };
   }
 
-  const metadataResponse = await sheetsFetch<SheetsMetadataResponse>('', {
-    method: 'GET',
+  const port = getSheetsPort(config);
+  if (!port) {
+    return {
+      status: 'disabled',
+      configured: true,
+      records: [],
+      source_snapshots: [],
+      message: 'Google Sheets SDK port is unavailable.',
+      error: 'Google Sheets SDK port is unavailable.',
+      status_code: 0,
+    };
+  }
+
+  const metadataResponse = await port.getSpreadsheet({
+    spreadsheetId: config.spreadsheetId,
     signal: input.signal,
   });
   if (!metadataResponse.ok) {
@@ -321,7 +335,8 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
     };
   }
 
-  const metadata = parseWorkBookMetadata(metadataResponse.data || {}, config.spreadsheetId);
+  const metadataBody = (metadataResponse.data || {}) as SheetsMetadataResponse;
+  const metadata = parseWorkBookMetadata(metadataBody, config.spreadsheetId);
   const runtimeTab =
     metadata.tabs.find((tab) => tab.title === CANONICAL_RUNTIME_TAB_NAME) ||
     metadata.tabs.find((tab) => tab.title === RUNTIME_TAB_NAME) ||
@@ -339,13 +354,12 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
   }
 
   const range = `${runtimeTab.title}!${SHEETS_WORKBOOK_DEFAULT_RANGE}`;
-  const valuesResponse = await sheetsFetch<{ valueRanges?: Array<{ range?: string; values?: unknown[] }> }>(
-    `/values:batchGet?majorDimension=ROWS&ranges=${encodeURIComponent(range)}`,
-    {
-      method: 'GET',
-      signal: input.signal,
-    },
-  );
+  const valuesResponse = await port.batchGetValues({
+    spreadsheetId: config.spreadsheetId,
+    majorDimension: 'ROWS',
+    ranges: [range],
+    signal: input.signal,
+  });
   if (!valuesResponse.ok) {
     return {
       status: 'disabled',
@@ -412,7 +426,7 @@ export async function pullSheetsRecordsLive(input: SheetsPullInput = {}): Promis
     const rowNumber = rowIndex + 2;
     const source = {
       provider: 'google_sheets' as const,
-      spreadsheet_id: config.spreadsheetId || metadataResponse.data?.spreadsheetId || metadata.spreadsheetId || '',
+      spreadsheet_id: config.spreadsheetId || metadataBody.spreadsheetId || metadata.spreadsheetId || '',
       data_source_id: config.dataSourceId?.trim() || undefined,
       sheet_name: runtimeTab.title,
       range: buildRange(runtimeTab.title, rowNumber, width),

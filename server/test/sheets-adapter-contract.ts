@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { callMcpTool, } from '../src/tools/catalog';
 import { pullSheetsRecordsLive } from '../src/providers/sheets/pull';
 import { writeSheetsRecord } from '../src/providers/sheets/push';
+import { setSheetsPortForTests } from '../src/providers/sheets/port';
 
 type MockCall = {
-  url: string;
-  method: string;
-  body: string;
+  kind: 'getSpreadsheet' | 'batchGetValues' | 'batchUpdateValues';
+  input: Record<string, unknown>;
 };
 
 type LiveSheetsState = {
@@ -28,46 +28,39 @@ function createHashDigest(values: string[]) {
   return createHash('sha256').update(JSON.stringify(values)).digest('hex');
 }
 
-function withMockSheetsFetch(state: LiveSheetsState, onCalls: (calls: MockCall[]) => void) {
+function withMockSheetsPort(state: LiveSheetsState, onCalls: (calls: MockCall[]) => void) {
   const calls: MockCall[] = [];
-  const originalFetch = globalThis.fetch;
-  let nextRequestId = 1;
-
-  globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const method = (init.method || 'GET').toUpperCase();
-    const body = typeof init.body === 'string' ? init.body : '';
-    calls.push({ url, method, body });
-
-    const isMetadata = /\/spreadsheets\/[^/]+\/?$/.test(url);
-    if (method === 'GET' && isMetadata) {
-      return new Response(JSON.stringify({
+  setSheetsPortForTests({
+    async getSpreadsheet(input) {
+      calls.push({ kind: 'getSpreadsheet', input: input as Record<string, unknown> });
+      return {
+        ok: true,
+        status: 200,
+        data: {
         spreadsheetId: state.spreadsheetId,
         properties: { title: 'LifeOS Runtime Workbook' },
         sheets: [{ properties: { title: state.sheetName, gridProperties: { columnCount: 26, rowCount: 100 } } }],
-      }), { status: 200 });
-    }
-
-    if (method === 'GET' && url.includes('/values:batchGet')) {
-      return new Response(JSON.stringify({
+        },
+      };
+    },
+    async batchGetValues(input) {
+      calls.push({ kind: 'batchGetValues', input: input as Record<string, unknown> });
+      return {
+        ok: true,
+        status: 200,
+        data: {
         valueRanges: [{ range: `${state.sheetName}!A:Z`, values: state.rows }],
-      }), { status: 200 });
-    }
-
-    if (method === 'POST' && url.includes('/values:batchUpdate')) {
-      const payload = (() => {
-        try {
-          return JSON.parse(body);
-        } catch {
-          return null;
-        }
-      })();
-      const updates = Array.isArray(payload?.data) ? payload.data : [];
+        },
+      };
+    },
+    async batchUpdateValues(input) {
+      calls.push({ kind: 'batchUpdateValues', input: input as Record<string, unknown> });
+      const updates = Array.isArray(input.data) ? input.data : [];
       for (const update of updates) {
         const range = String(update?.range ?? '');
         const row = parseRangeRow(range);
         if (!row) {
-          return new Response(JSON.stringify({ error: 'invalid range' }), { status: 400 });
+          return { ok: false, status: 400, error: 'invalid range' };
         }
         const values = Array.isArray(update?.values?.[0]) ? update.values[0] : [];
         while (state.rows.length < row) {
@@ -75,17 +68,20 @@ function withMockSheetsFetch(state: LiveSheetsState, onCalls: (calls: MockCall[]
         }
         state.rows[row - 1] = values;
       }
-      return new Response(JSON.stringify({ responses: [{ updatedRange: `${state.sheetName}!A${nextRequestId + 1}` }] }), { status: 200 });
-    }
-
-    return new Response(JSON.stringify({ error: `unexpected endpoint ${method} ${url}` }), { status: 500 });
-  }) as typeof globalThis.fetch;
+      const updatedRange = String(updates[0]?.range ?? `${state.sheetName}!A2`);
+      return {
+        ok: true,
+        status: 200,
+        data: { responses: [{ updatedRange }] },
+      };
+    },
+  });
 
   return {
     calls,
     finalize() {
       onCalls(calls);
-      globalThis.fetch = originalFetch;
+      setSheetsPortForTests(null);
     },
   };
 }
@@ -110,7 +106,7 @@ function ensure(condition: boolean, message: string) {
     ],
   };
 
-  const contract = withMockSheetsFetch(state, () => {});
+  const contract = withMockSheetsPort(state, () => {});
   const pullResult = await pullSheetsRecordsLive();
   ensure(pullResult.status === 'ready', 'Expected pull to be ready');
   ensure(Array.isArray(pullResult.source_snapshots), 'Expected source_snapshots to exist');
@@ -121,7 +117,7 @@ function ensure(condition: boolean, message: string) {
   ensure(firstSnapshot.value_digest === expectedDigest, 'Expected canonical value digest hash to match row digest');
   ensure((firstSnapshot as { data_source_id?: string }).data_source_id === process.env.GOOGLE_SHEETS_DATA_SOURCE_ID, 'Expected pull source snapshot to include data_source_id');
 
-  const batchGetCalls = contract.calls.filter((entry) => entry.method === 'GET' && entry.url.includes('/values:batchGet')).length;
+  const batchGetCalls = contract.calls.filter((entry) => entry.kind === 'batchGetValues').length;
   ensure(batchGetCalls === 1, `Expected one batchGet call, got ${batchGetCalls}`);
 
   const writeResult = await writeSheetsRecord({
@@ -140,7 +136,7 @@ function ensure(condition: boolean, message: string) {
   ensure(writeResult.source_snapshot?.provider_fields?.legacy_note === 'legacy', 'Expected update write to preserve unsupported fields');
   ensure(typeof writeResult.source_snapshot?.range === 'string' && writeResult.source_snapshot.range.includes('!A'), 'Expected update write source snapshot range');
   ensure(!writeResult.noChange, 'Expected write to detect mutation');
-  const batchUpdateCalls = contract.calls.filter((entry) => entry.method === 'POST' && entry.url.includes('/values:batchUpdate')).length;
+  const batchUpdateCalls = contract.calls.filter((entry) => entry.kind === 'batchUpdateValues').length;
   ensure(batchUpdateCalls === 1, `Expected one batchUpdate call, got ${batchUpdateCalls}`);
 
   const staleDigestResult = await writeSheetsRecord({
@@ -174,10 +170,10 @@ function ensure(condition: boolean, message: string) {
   });
   ensure(!staleVersionResult.ok, 'Expected stale version write to fail');
   ensure(staleVersionResult.conflict?.kind === 'version', 'Expected version conflict metadata');
-  const conflictBatchUpdates = contract.calls.filter((entry) => entry.method === 'POST' && entry.url.includes('/values:batchUpdate')).length;
+  const conflictBatchUpdates = contract.calls.filter((entry) => entry.kind === 'batchUpdateValues').length;
   ensure(conflictBatchUpdates === 1, `Expected conflicts to avoid batchUpdate, got ${conflictBatchUpdates}`);
 
-  const noChangeCallState = withMockSheetsFetch(state, () => {});
+  const batchUpdateBeforeNoChange = contract.calls.filter((entry) => entry.kind === 'batchUpdateValues').length;
   const noChangeState = await writeSheetsRecord({
     operation: 'update_record',
     record: {
@@ -193,9 +189,8 @@ function ensure(condition: boolean, message: string) {
   ensure(noChangeState.ok, `Expected no-change write to succeed: ${noChangeState.error}`);
   ensure(noChangeState.noChange === true, 'Expected no-change write branch');
   ensure(noChangeState.source_snapshot?.noChange === true, 'Expected no-change source snapshot marker');
-  const noChangeBatchUpdate = noChangeCallState.calls.filter((entry) => entry.method === 'POST' && entry.url.includes('/values:batchUpdate')).length;
-  ensure(noChangeBatchUpdate === 0, `Expected no batchUpdate on no-change write, got ${noChangeBatchUpdate}`);
-  noChangeCallState.finalize();
+  const noChangeBatchUpdate = contract.calls.filter((entry) => entry.kind === 'batchUpdateValues').length;
+  ensure(noChangeBatchUpdate === batchUpdateBeforeNoChange, `Expected no batchUpdate on no-change write, got delta ${noChangeBatchUpdate - batchUpdateBeforeNoChange}`);
 
   const pullContractIdem = await pullSheetsRecordsLive();
   const rowDigestAfter = createHashDigest(state.rows[1]);
