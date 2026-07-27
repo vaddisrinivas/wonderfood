@@ -30,7 +30,7 @@ export type VisualToken = {
   icon?: string;
   emoji?: string;
   image_url?: string;
-  accent?: DashboardBlockTone;
+  accent?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
 };
 
 export type DomainVisualIdentity = {
@@ -42,26 +42,6 @@ export type DomainVisualIdentity = {
   sources?: Record<string, VisualToken>;
   skills?: Record<string, VisualToken>;
   agents?: Record<string, VisualToken>;
-};
-
-export type DashboardBlockKind = 'spotlight' | 'metric' | 'list' | 'action';
-export type DashboardBlockTone = 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
-export type DashboardBlockSize = 'compact' | 'standard' | 'wide' | 'feature';
-
-export type DashboardBlock = {
-  id: string;
-  surface: string;
-  title: string;
-  subtitle?: string;
-  kind: DashboardBlockKind;
-  tone: DashboardBlockTone;
-  size?: DashboardBlockSize;
-  query: {
-    collections?: string[];
-    match?: string;
-    limit?: number;
-  };
-  href: string;
 };
 
 export type DomainRenderIntent = {
@@ -105,7 +85,6 @@ export interface DomainManifest {
   workflows: string[];
   data_homes: string[];
   ui?: PackagePresentationUi;
-  dashboard_blocks?: DashboardBlock[];
   render?: DomainRenderContract;
   rich_detail_schema?: string;
   provider_template_fields?: {
@@ -242,45 +221,6 @@ function parseVisualIdentity(value: unknown): DomainVisualIdentity | undefined {
   };
 }
 
-function parseDashboardBlocks(value: unknown, path: string): DashboardBlock[] | undefined {
-  if (value === undefined) return undefined;
-  const blocks = parseObjectArray(value, path);
-  return blocks.map((block, index) => {
-    const kind = block.kind;
-    const tone = block.tone;
-    const size = block.size;
-    const query = isObject(block.query) ? block.query : {};
-    assertCondition(
-      kind === 'spotlight' || kind === 'metric' || kind === 'list' || kind === 'action',
-      `Invalid kind at ${path}[${index}].kind`
-    );
-    assertCondition(
-      tone === 'neutral' || tone === 'moss' || tone === 'amber' || tone === 'plum' || tone === 'blue',
-      `Invalid tone at ${path}[${index}].tone`
-    );
-    const parsedKind = kind as DashboardBlockKind;
-    const parsedTone = tone as DashboardBlockTone;
-    const limit = typeof query.limit === 'number' && Number.isFinite(query.limit)
-      ? Math.max(0, Math.min(20, Math.floor(query.limit)))
-      : undefined;
-    return {
-      id: parseString(block.id, `${path}[${index}].id`),
-      surface: parseString(block.surface, `${path}[${index}].surface`),
-      title: parseString(block.title, `${path}[${index}].title`),
-      subtitle: typeof block.subtitle === 'string' ? block.subtitle : undefined,
-      kind: parsedKind,
-      tone: parsedTone,
-      size: size === 'compact' || size === 'standard' || size === 'wide' || size === 'feature' ? size : undefined,
-      query: {
-        collections: parseOptionalStringArray(query.collections, `${path}[${index}].query.collections`),
-        match: typeof query.match === 'string' ? query.match : undefined,
-        limit,
-      },
-      href: typeof block.href === 'string' && block.href.trim() ? block.href : '/config',
-    };
-  });
-}
-
 function parseRenderContract(value: unknown): DomainRenderContract | undefined {
   if (!isObject(value)) return undefined;
   const raw = value as Record<string, unknown>;
@@ -314,6 +254,9 @@ function parseRenderContract(value: unknown): DomainRenderContract | undefined {
 }
 
 function parseUiValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(parseUiValue).filter((child) => child !== undefined);
+  }
   if (!isObject(value)) return value === undefined ? undefined : value;
   return Object.fromEntries(
     Object.entries(value)
@@ -511,7 +454,6 @@ function parseDomainManifest(value: unknown, path: string): DomainManifest {
     workflows: parseStringArray(raw.workflows, `${path}.workflows`),
     data_homes: parseStringArray(raw.data_homes, `${path}.data_homes`),
     ui,
-    dashboard_blocks: parseDashboardBlocks(raw.dashboard_blocks, `${path}.dashboard_blocks`),
     render: parseRenderContract(raw.render),
     rich_detail_schema: typeof raw.rich_detail_schema === 'string' ? raw.rich_detail_schema : undefined,
     provider_template_fields: parsedProviderTemplateFields,
@@ -693,7 +635,6 @@ function domainManifestFromPackage(pkg: AppPackageV2, bundledFallback?: DomainMa
     skills: bundledFallback?.skills ?? [],
     workflows: bundledFallback?.workflows ?? [],
     data_homes: pkg.capabilities.filter((capability) => capability.startsWith('data-home:')).map((capability) => capability.slice('data-home:'.length)),
-    dashboard_blocks: (presentation?.dashboardBlocks as DashboardBlock[] | undefined) ?? bundledFallback?.dashboard_blocks,
     ui: (presentation?.ui as DomainManifest['ui']) ?? bundledFallback?.ui,
     render: (presentation?.render as DomainRenderContract | undefined) ?? bundledFallback?.render,
     rich_detail_schema: presentation?.richDetailSchema ?? bundledFallback?.rich_detail_schema,

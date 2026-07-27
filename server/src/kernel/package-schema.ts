@@ -131,7 +131,6 @@ export const appPackageSchema = {
           },
         },
         visualIdentity: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
-        dashboardBlocks: { type: 'array', items: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } } },
         render: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
         ui: { $ref: '#/$defs/presentationUi' },
         richDetailSchema: { type: 'string', minLength: 1 },

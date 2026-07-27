@@ -426,8 +426,8 @@ export default function ConfigStudioScreen() {
               <View style={[styles.builderStats, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
                 <Text style={[styles.builderStatNumber, { color: theme.colors.ink }]}>{screenBlueprints.length}</Text>
                 <Text style={[styles.builderStatLabel, { color: theme.colors.muted }]}>screens editable</Text>
-                <Text style={[styles.builderStatNumber, { color: theme.colors.ink }]}>{activeManifest?.dashboard_blocks?.length ?? 0}</Text>
-                <Text style={[styles.builderStatLabel, { color: theme.colors.muted }]}>manifest blocks</Text>
+                <Text style={[styles.builderStatNumber, { color: theme.colors.ink }]}>{activeManifest?.ui?.components?.length ?? 0}</Text>
+                <Text style={[styles.builderStatLabel, { color: theme.colors.muted }]}>UI components</Text>
               </View>
             </View>
             <View style={styles.screenGrid}>

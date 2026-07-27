@@ -61,16 +61,12 @@ describe('domain manifest to app package bridge', () => {
     expect(bridged.package.presentation?.ui).toEqual(manifest.ui);
   });
 
-  it('refuses to silently translate legacy regex dashboard matching', () => {
+  it('does not emit legacy dashboard presentation blocks', () => {
     const manifest = loadCatalog().activeManifest;
     const bridged = buildAppPackageFromManifest(manifest);
-    const regexBlocks = (manifest.dashboard_blocks ?? []).filter((block) => block.query.match);
 
-    expect(regexBlocks.length).toBeGreaterThan(0);
-    for (const block of regexBlocks) {
-      expect(bridged.warnings).toContain(`dashboard_block_match_not_translated:${block.id}`);
-      expect(bridged.package.queries[`dashboard:${block.id}`]).toBeUndefined();
-      expect(bridged.package.views[block.id]).toBeUndefined();
-    }
+    const retiredPresentationKey = ['dashboard', 'Blocks'].join('');
+    expect(retiredPresentationKey in (bridged.package.presentation ?? {})).toBe(false);
+    expect(Object.keys(bridged.package.queries).some((id) => id.startsWith('dashboard:'))).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import type { AppPackageV2, CollectionSpec } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
-import type { DashboardBlock, DomainManifest } from '@/src/domain/catalog';
+import type { DomainManifest } from '@/src/domain/catalog';
 
 const CORE_FIELDS: CollectionSpec['fields'] = {
   id: { type: 'text', required: true, indexed: true },
@@ -59,10 +59,6 @@ export function buildAppPackageFromManifest(
     };
   }
 
-  for (const block of manifest.dashboard_blocks ?? []) {
-    addDashboardBlock(block, queries, views, warnings);
-  }
-
   return {
     package: {
       schemaVersion: 'wonder.app-package.v2',
@@ -83,7 +79,6 @@ export function buildAppPackageFromManifest(
           collections: [...surface.collections],
         })),
         ...(manifest.visual_identity ? { visualIdentity: cleanJson(manifest.visual_identity) as Record<string, unknown> } : {}),
-        ...(manifest.dashboard_blocks ? { dashboardBlocks: cleanJson(manifest.dashboard_blocks) as Record<string, unknown>[] } : {}),
         ...(manifest.render ? { render: cleanJson(manifest.render) as Record<string, unknown> } : {}),
         ...(manifest.ui ? { ui: cleanJson(manifest.ui) as Record<string, unknown> } : {}),
         ...(manifest.rich_detail_schema ? { richDetailSchema: manifest.rich_detail_schema } : {}),
@@ -143,38 +138,5 @@ function collectionPredicate(collections: string[]): QueryPredicate | undefined 
   return {
     op: 'or',
     args: collections.map((collection) => ({ op: 'eq', field: 'collection', value: collection })),
-  };
-}
-
-function addDashboardBlock(
-  block: DashboardBlock,
-  queries: AppPackageV2['queries'],
-  views: AppPackageV2['views'],
-  warnings: string[],
-) {
-  if (block.query.match) {
-    warnings.push(`dashboard_block_match_not_translated:${block.id}`);
-    return;
-  }
-
-  const queryId = `dashboard:${block.id}`;
-  const collections = block.query.collections ?? [];
-  const where = collectionPredicate(collections);
-  queries[queryId] = {
-    from: 'records',
-    ...(where ? { where } : {}),
-    orderBy: [{ field: 'updated_at', direction: 'desc' }],
-    ...(block.query.limit === undefined ? {} : { limit: block.query.limit }),
-  };
-  views[block.id] = {
-    id: block.id,
-    query: queryId,
-    mode: block.kind === 'metric' ? 'chart' : 'list',
-    fields: [...DEFAULT_VIEW_FIELDS],
-    layout: {
-      size: block.size ?? 'standard',
-      tone: block.tone,
-      href: block.href,
-    },
   };
 }

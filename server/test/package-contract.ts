@@ -21,7 +21,6 @@ assert.equal(validateAppPackage({
     homeSurface: 'decisions.inbox',
     surfaces: [{ id: 'decisions.inbox', label: 'Inbox', icon: 'inbox', collections: ['decisions'] }],
     visualIdentity: { domain: { icon: 'inbox', accent: 'blue' } },
-    dashboardBlocks: [{ id: 'open', title: 'Open decisions', query: { collections: ['decisions'] } }],
     render: { default_title: 'Decision inbox' },
     richDetailSchema: 'schemas/decision-detail.v1.schema.json',
     providerTemplateFields: { required: ['id', 'title'] },

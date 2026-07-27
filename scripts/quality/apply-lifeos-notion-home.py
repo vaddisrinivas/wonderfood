@@ -233,7 +233,7 @@ def update_seed_dates(today: str) -> None:
     )
 
 
-def dashboard_blocks(tasks: dict[str, dict], today: str) -> list[dict]:
+def home_sections(tasks: dict[str, dict], today: str) -> list[dict]:
     dinner_parts = [
         rich_text("Dinner · Spinach tomato rice bowl\n", bold=True),
         rich_text("35 minutes. Uses the spinach expiring today and fits the active pantry-first plan.\n"),
@@ -432,7 +432,7 @@ def install() -> dict:
     appended = request_json(
         "PATCH",
         f"https://api.notion.com/v1/blocks/{TODAY_PAGE_ID}/children",
-        {"children": dashboard_blocks(tasks, today)},
+        {"children": home_sections(tasks, today)},
     )
 
     archived: list[str] = []
