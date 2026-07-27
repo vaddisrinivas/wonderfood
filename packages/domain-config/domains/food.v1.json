@@ -1200,21 +1200,29 @@
             "widget": "formCard",
             "id": "config_form_demo",
             "title": "Form primitive",
-            "subtitle": "Any app can collect structured input through config.",
+            "subtitle": "Any app can collect structured input through config, then preview a reviewable action.",
             "tone": "moss",
             "props": {
+              "cta": "Preview request",
               "fields": [
                 {
+                  "id": "name",
                   "label": "Name",
-                  "subtitle": "Short text"
+                  "type": "short text",
+                  "placeholder": "e.g. Weekend dinner poll",
+                  "required": true
                 },
                 {
+                  "id": "type",
                   "label": "Type",
-                  "subtitle": "Choice"
+                  "type": "choice",
+                  "placeholder": "Post, poll, recipe, task…"
                 },
                 {
+                  "id": "notes",
                   "label": "Notes",
-                  "subtitle": "Long text"
+                  "type": "long text",
+                  "placeholder": "What should Wonder create or change?"
                 }
               ]
             }

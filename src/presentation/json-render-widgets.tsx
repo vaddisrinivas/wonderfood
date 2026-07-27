@@ -119,6 +119,10 @@ function actionUrl(value: Record<string, unknown>): string {
   return text(value.url, text(value.href, text(value.deeplink)));
 }
 
+function fieldKey(value: Record<string, unknown>, index: number): string {
+  return text(value.id, text(value.name, label(value, `field_${index}`))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
 function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <View style={styles.card}>
@@ -576,21 +580,41 @@ function MapBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
 function FormCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const fields = rows(props.fields);
-  const fallback = [
-    { label: 'Title', subtitle: 'Text' },
-    { label: 'Notes', subtitle: 'Long text' },
-    { label: 'Status', subtitle: 'Choice' },
+  const fallback: Record<string, unknown>[] = [
+    { label: 'Title', subtitle: 'Text', placeholder: 'What is this?' },
+    { label: 'Notes', subtitle: 'Long text', placeholder: 'Add useful context…' },
+    { label: 'Status', subtitle: 'Choice', placeholder: 'New, review, done…' },
   ];
+  const formFields = (fields.length ? fields : fallback).slice(0, 8);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
   return (
     <WidgetShell title={text(props.title, 'Form')} subtitle={text(props.subtitle, 'Config-declared inputs. Writes must still go through proposals/actions.')}>
-      {(fields.length ? fields : fallback).slice(0, 8).map((field) => (
-        <View key={label(field)} style={styles.formField}>
+      {formFields.map((field, index) => {
+        const key = fieldKey(field, index);
+        const fieldType = text(field.type, detail(field, 'Field'));
+        const multiline = /long|note|textarea|multi/i.test(fieldType);
+        return (
+        <View key={key} style={styles.formField}>
           <Text style={styles.formLabel}>{label(field)}</Text>
-          <Text style={styles.formHint}>{detail(field, 'Field')}</Text>
+          <Text style={styles.formHint}>{fieldType}{field.required === true ? ' · Required' : ''}</Text>
+          <TextInput
+            style={[styles.formInput, multiline ? styles.formInputMultiline : null]}
+            value={values[key] ?? ''}
+            onChangeText={(next) => {
+              setSubmitted(false);
+              setValues((prev) => ({ ...prev, [key]: next }));
+            }}
+            placeholder={text(field.placeholder, `Enter ${label(field).toLowerCase()}`)}
+            placeholderTextColor="#9A8D7D"
+            multiline={multiline}
+          />
         </View>
-      ))}
-      <Pressable style={styles.primaryButton}>
-        <Text style={styles.primaryButtonText}>{text(props.body, 'Preview action')}</Text>
+        );
+      })}
+      {submitted ? <Text style={styles.success}>Preview ready. Review before writing.</Text> : null}
+      <Pressable style={styles.primaryButton} onPress={() => setSubmitted(true)}>
+        <Text style={styles.primaryButtonText}>{text(props.body, text(props.cta, 'Preview action'))}</Text>
       </Pressable>
     </WidgetShell>
   );
@@ -955,9 +979,11 @@ const styles = StyleSheet.create({
   mediaGlyph: { color: '#241C16', fontSize: 32, fontWeight: '900' },
   mapBox: { minHeight: 112, borderRadius: 18, backgroundColor: '#E8F4F5', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
   mapPin: { color: '#2F7448', fontSize: 32, fontWeight: '900' },
-  formField: { borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12, gap: 3 },
+  formField: { borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12, gap: 7 },
   formLabel: { color: '#241C16', fontWeight: '900', fontSize: 14 },
   formHint: { color: '#6D6257', fontSize: 12 },
+  formInput: { minHeight: 42, borderRadius: 12, backgroundColor: '#FFFFFF', color: '#241C16', paddingHorizontal: 11, paddingVertical: 9, fontSize: 14 },
+  formInputMultiline: { minHeight: 82, textAlignVertical: 'top' },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12 },
   checkBox: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: '#B8AB9A', textAlign: 'center', color: '#FFFFFF', fontWeight: '900', overflow: 'hidden' },
   checkBoxOn: { backgroundColor: '#2F7448', borderColor: '#2F7448' },
