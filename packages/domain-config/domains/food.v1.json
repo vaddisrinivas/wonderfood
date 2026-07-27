@@ -1116,6 +1116,9 @@
             "props": {
               "items": [
                 { "title": "Assistant chat" },
+                { "title": "Health connect" },
+                { "title": "Schema editor" },
+                { "title": "Widget catalog" },
                 { "title": "Post card" },
                 { "title": "Poll card" },
                 { "title": "Link preview" },
