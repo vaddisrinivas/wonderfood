@@ -64,23 +64,6 @@ export type LifeOSSettings = {
         showSourceTrust: boolean;
         showControlCard: boolean;
       };
-      food: {
-        sectionOrder: string;
-        showHero: boolean;
-        showViewTabs: boolean;
-        showManifestBlocks: boolean;
-        showCollectionAtlas: boolean;
-        dashboardBlocks: string;
-        showWidgets: boolean;
-        widgets: string;
-        showWorkspace: boolean;
-        showOperatingViews: boolean;
-        operatingViewOrder: string;
-        showAttention: boolean;
-        showPackageCard: boolean;
-        columnLimit: string;
-        attentionLimit: string;
-      };
       chat: {
         sectionOrder: string;
         showThreads: boolean;
@@ -148,9 +131,6 @@ export type LifeOSSettings = {
 };
 
 const listeners = new Set<(settings: LifeOSSettings) => void>();
-const oldFoodSectionOrderDefault = 'hero,tabs,manifest,workspace,attention,widgets,view,package';
-const oldFoodWidgetsDefault = 'Food sources|Open profile-configured Food views and provider trust.|blue|/sources\nSkills and MCP|Use the same skills, schemas and tools from app chat or external AI clients.|plum|/settings';
-const weakFoodWidgetMarkers = ['Skills and MCP', 'Open profile-configured Food views'];
 const oldCaptureDestinationDefault = 'Writes to Food local graph with no network dependency.';
 
 export const defaultLifeOSSettings: LifeOSSettings = {
@@ -219,23 +199,6 @@ export const defaultLifeOSSettings: LifeOSSettings = {
         showLifeSpaces: true,
         showSourceTrust: true,
         showControlCard: false,
-      },
-      food: {
-        sectionOrder: 'tabs,hero,workspace,attention,widgets,view',
-        showHero: true,
-        showViewTabs: true,
-        showManifestBlocks: false,
-        showCollectionAtlas: false,
-        dashboardBlocks: '',
-        showWidgets: true,
-        widgets: 'Ask WonderFood|Use pantry, recipes, shopping and nutrition context in one thread.|plum|/chat\nMake grocery list|Turn dinner into a clean shopping list.|blue|/capture',
-        showWorkspace: true,
-        showOperatingViews: true,
-        operatingViewOrder: 'assemblyTable,weekPlan,pantryTimeline,shoppingChecklist',
-        showAttention: true,
-        showPackageCard: false,
-        columnLimit: '4',
-        attentionLimit: '3',
       },
       chat: {
         sectionOrder: 'threads,sources,messages,promptRail,context',
@@ -395,17 +358,6 @@ function normalizeDefaultOrder(value: unknown, fallback: string, legacy: string)
   return text === legacy ? fallback : text;
 }
 
-function normalizeFoodSectionOrder(value: unknown, fallback: string) {
-  const text = typeof value === 'string' ? value.trim() : '';
-  if (!text || text === oldFoodSectionOrderDefault || text === 'hero,tabs,widgets,workspace,attention,view,package') {
-    return fallback;
-  }
-  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
-  if (parts.includes('collections')) return text;
-  const anchor = parts.includes('manifest') ? parts.indexOf('manifest') : parts.includes('hero') ? parts.indexOf('hero') : 0;
-  return [...parts.slice(0, anchor + 1), 'collections', ...parts.slice(anchor + 1)].join(',');
-}
-
 function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surfaceConfig'] {
   const config = value && typeof value === 'object' ? value as Partial<LifeOSSettings['runtime']['surfaceConfig']> : {};
   const defaults = defaultLifeOSSettings.runtime.surfaceConfig;
@@ -420,23 +372,6 @@ function normalizeSurfaceConfig(value: unknown): LifeOSSettings['runtime']['surf
       showLifeSpaces: config.home?.showLifeSpaces !== false,
       showSourceTrust: config.home?.showSourceTrust !== false,
       showControlCard: config.home?.showControlCard !== false,
-    },
-    food: {
-      sectionOrder: normalizeFoodSectionOrder(config.food?.sectionOrder, defaults.food.sectionOrder),
-      showHero: config.food?.showHero !== false,
-      showViewTabs: config.food?.showViewTabs !== false,
-      showManifestBlocks: config.food?.showManifestBlocks === true,
-      showCollectionAtlas: config.food?.showCollectionAtlas === true,
-      dashboardBlocks: typeof config.food?.dashboardBlocks === 'string' ? config.food.dashboardBlocks : defaults.food.dashboardBlocks,
-      showWidgets: config.food?.showWidgets !== false,
-      widgets: typeof config.food?.widgets === 'string' && config.food.widgets !== oldFoodWidgetsDefault && !weakFoodWidgetMarkers.some((marker) => config.food?.widgets.includes(marker)) ? config.food.widgets : defaults.food.widgets,
-      showWorkspace: config.food?.showWorkspace !== false,
-      showOperatingViews: config.food?.showOperatingViews !== false,
-      operatingViewOrder: normalizeOrderString(config.food?.operatingViewOrder, defaults.food.operatingViewOrder),
-      showAttention: config.food?.showAttention !== false,
-      showPackageCard: config.food?.showPackageCard === true,
-      columnLimit: normalizePositiveString(config.food?.columnLimit, defaults.food.columnLimit),
-      attentionLimit: normalizePositiveString(config.food?.attentionLimit, defaults.food.attentionLimit),
     },
     chat: {
       sectionOrder: normalizeOrderString(config.chat?.sectionOrder, defaults.chat.sectionOrder),

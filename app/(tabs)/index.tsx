@@ -115,7 +115,6 @@ export default function TodayScreen() {
     if (section === 'control') return homeConfig.showControlCard;
     return false;
   }).length;
-  const visibleFoodSections = settings.runtime.surfaceConfig.food.sectionOrder.split(',').filter(Boolean).length;
   const visibleRecordSections = settings.runtime.surfaceConfig.record.sectionOrder.split(',').filter(Boolean).length;
 
   const renderHomeSection = (section: HomeSection) => {
@@ -235,7 +234,7 @@ export default function TodayScreen() {
             <Card style={styles.controlCard}>
               <View style={styles.controlCopy}>
                 <Text style={[styles.controlTitle, { color: theme.colors.ink }]}>Make LifeOS yours.</Text>
-                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Choose sections, card counts, domains, providers, skills and assistant behavior from the app. Current profile: {visibleHomeSections} Home sections, {visibleFoodSections} Food blocks, {visibleRecordSections} page sections.</Text>
+                <Text style={[sharedStyles.muted, { color: theme.colors.muted }]}>Choose sections, card counts, domains, providers, skills and assistant behavior from the app. Current profile: {visibleHomeSections} Home sections, {visibleRecordSections} page sections.</Text>
               </View>
               <View style={styles.controlActions}>
                   <Link href="/settings" style={[styles.controlLink, { backgroundColor: theme.colors.ink, color: theme.colors.paper }]}>Settings</Link>

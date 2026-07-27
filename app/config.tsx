@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import agentRegistry from '@/packages/domain-config/agents/registry.v1.json';
 import catalog from '@/packages/domain-config/domain-catalog.v1.json';
 import { Card, Page, PageHeader, Pill, SectionTitle, sharedStyles } from '@/src/components/ui';
-import { DashboardBlock, DashboardBlockSize, DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
+import { DomainCatalogEntry, getDomainManifest, setActiveDomainOverride } from '@/src/domain/catalog';
 import { mergeVisualIdentity, parseVisualIdentityOverrides, visualGlyph } from '@/src/domain/visual-identity';
 import {
   LifeOSSettings,
@@ -235,34 +235,6 @@ function parseProfile(input: string) {
   };
 }
 
-function dashboardBlockLine(block: DashboardBlock, size: DashboardBlockSize) {
-  const collections = block.query.collections?.join(',') ?? '';
-  const match = block.query.match ?? '';
-  const limit = String(block.query.limit ?? 3);
-  return [
-    block.id,
-    block.title,
-    block.subtitle ?? '',
-    block.kind,
-    block.tone,
-    collections,
-    match,
-    limit,
-    block.href,
-    size,
-  ].join('|');
-}
-
-function dashboardSizePreset(blocks: DashboardBlock[], preset: 'balanced' | 'uniform' | 'editorial') {
-  return blocks.map((block, index) => {
-    let size: DashboardBlockSize = 'standard';
-    if (preset === 'uniform') size = 'standard';
-    if (preset === 'balanced') size = block.kind === 'metric' || index % 3 === 2 ? 'wide' : 'standard';
-    if (preset === 'editorial') size = index === 0 ? 'feature' : block.kind === 'list' && index > 3 ? 'compact' : block.kind === 'metric' ? 'wide' : 'standard';
-    return dashboardBlockLine(block, size);
-  }).join('\n');
-}
-
 export default function ConfigStudioScreen() {
   const theme = useLifeOSTheme();
   const router = useRouter();
@@ -341,7 +313,6 @@ export default function ConfigStudioScreen() {
           density: runtime.density === 'compact' || runtime.density === 'comfortable' ? runtime.density : current.runtime.density,
           surfaceConfig: {
             home: { ...current.runtime.surfaceConfig.home, ...runtime.surfaceConfig?.home },
-            food: { ...current.runtime.surfaceConfig.food, ...runtime.surfaceConfig?.food },
             chat: { ...current.runtime.surfaceConfig.chat, ...runtime.surfaceConfig?.chat },
             record: { ...current.runtime.surfaceConfig.record, ...runtime.surfaceConfig?.record },
             search: { ...current.runtime.surfaceConfig.search, ...runtime.surfaceConfig?.search },
@@ -711,29 +682,6 @@ export default function ConfigStudioScreen() {
                 <ToggleRow title="Life spaces section" detail="Show active/add-domain cards." value={settings.runtime.surfaceConfig.home.showLifeSpaces} onValueChange={(showLifeSpaces) => updateSurfaceConfig('home', { showLifeSpaces })} />
                 <ToggleRow title="Source trust section" detail="Show Notion/Sheets/local trust cards." value={settings.runtime.surfaceConfig.home.showSourceTrust} onValueChange={(showSourceTrust) => updateSurfaceConfig('home', { showSourceTrust })} />
                 <ToggleRow title="Control card" detail="Show Settings/Config entry point." value={settings.runtime.surfaceConfig.home.showControlCard} onValueChange={(showControlCard) => updateSurfaceConfig('home', { showControlCard })} />
-              </SurfaceConfigCard>
-              <SurfaceConfigCard title="Active workspace">
-                <Field label="Section order" value={settings.runtime.surfaceConfig.food.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('food', { sectionOrder })} />
-                <ToggleRow title="Hero" detail="Show tonight/use-soon command area." value={settings.runtime.surfaceConfig.food.showHero} onValueChange={(showHero) => updateSurfaceConfig('food', { showHero })} />
-                <ToggleRow title="View tabs" detail="Show Overview/Meals/Kitchen/Shopping." value={settings.runtime.surfaceConfig.food.showViewTabs} onValueChange={(showViewTabs) => updateSurfaceConfig('food', { showViewTabs })} />
-                <ToggleRow title="Manifest dashboard blocks" detail="Render cards declared by the active domain package." value={settings.runtime.surfaceConfig.food.showManifestBlocks} onValueChange={(showManifestBlocks) => updateSurfaceConfig('food', { showManifestBlocks })} />
-                <ToggleRow title="Collection atlas" detail="Show every managed collection grouped by workspace view." value={settings.runtime.surfaceConfig.food.showCollectionAtlas} onValueChange={(showCollectionAtlas) => updateSurfaceConfig('food', { showCollectionAtlas })} />
-                <CardSizePresetRow
-                  onPreset={(preset) => {
-                    const blocks = (activeManifest?.dashboard_blocks ?? []).filter((block) => block.surface.startsWith(`${settings.runtime.activeDomain}.`));
-                    updateSurfaceConfig('food', { dashboardBlocks: dashboardSizePreset(blocks, preset) });
-                  }}
-                />
-                <Field label="Dashboard blocks" value={settings.runtime.surfaceConfig.food.dashboardBlocks} onChangeText={(dashboardBlocks) => updateSurfaceConfig('food', { dashboardBlocks })} placeholder="Leave empty to use manifest. Or one per line: id|title|subtitle|kind|tone|collections|match|limit|href|size. Size: compact, standard, wide, feature." multiline />
-                <ToggleRow title="Profile widgets" detail="Show custom cards defined by profile." value={settings.runtime.surfaceConfig.food.showWidgets} onValueChange={(showWidgets) => updateSurfaceConfig('food', { showWidgets })} />
-                <Field label="Widgets" value={settings.runtime.surfaceConfig.food.widgets} onChangeText={(widgets) => updateSurfaceConfig('food', { widgets })} multiline />
-                <ToggleRow title="Workspace board" detail="Show Meals/Kitchen/Shopping columns." value={settings.runtime.surfaceConfig.food.showWorkspace} onValueChange={(showWorkspace) => updateSurfaceConfig('food', { showWorkspace })} />
-                <ToggleRow title="Operating views" detail="Show week plan, pantry timeline and shopping checklist." value={settings.runtime.surfaceConfig.food.showOperatingViews} onValueChange={(showOperatingViews) => updateSurfaceConfig('food', { showOperatingViews })} />
-                <Field label="Operating view order" value={settings.runtime.surfaceConfig.food.operatingViewOrder} onChangeText={(operatingViewOrder) => updateSurfaceConfig('food', { operatingViewOrder })} placeholder="assemblyTable,weekPlan,pantryTimeline,shoppingChecklist" />
-                <ToggleRow title="Attention section" detail="Show review cards." value={settings.runtime.surfaceConfig.food.showAttention} onValueChange={(showAttention) => updateSurfaceConfig('food', { showAttention })} />
-                <ToggleRow title="Package card" detail="Show edit-package footer." value={settings.runtime.surfaceConfig.food.showPackageCard} onValueChange={(showPackageCard) => updateSurfaceConfig('food', { showPackageCard })} />
-                <Field label="Cards per column" value={settings.runtime.surfaceConfig.food.columnLimit} onChangeText={(columnLimit) => updateSurfaceConfig('food', { columnLimit })} />
-                <Field label="Attention cards" value={settings.runtime.surfaceConfig.food.attentionLimit} onChangeText={(attentionLimit) => updateSurfaceConfig('food', { attentionLimit })} />
               </SurfaceConfigCard>
               <SurfaceConfigCard title="Chat">
                 <Field label="Section order" value={settings.runtime.surfaceConfig.chat.sectionOrder} onChangeText={(sectionOrder) => updateSurfaceConfig('chat', { sectionOrder })} />
