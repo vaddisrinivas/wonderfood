@@ -1,7 +1,7 @@
 import { getDomainManifest, loadCatalog, type DomainManifest, type DomainRenderContract, type DomainRenderIntent } from '@/src/domain/catalog';
-import { listConversations, getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
+import { getConversation, createConversation, upsertConversation, appendMessage } from '@/src/db/conversations';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult, ChatThread } from '@/src/chat/types';
+import { ChatAnswer, ChatMessage, ChatSendInput, ChatSendResult } from '@/src/chat/types';
 import { sendDirectModelMessage } from '@/src/chat/direct-provider';
 import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/settings/lifeos-settings';
 import { listRecordsForDomain } from '@/src/db/records';
@@ -48,12 +48,6 @@ export type ServerChatResponse = {
     aborted: boolean;
     previous_response_id?: string;
   };
-};
-
-export type ServerControlResponse = {
-  run_id?: string;
-  status?: 'running' | 'completed' | 'cancelled' | 'failed';
-  status_name?: string;
 };
 
 export type ServerUndoResponse = {
@@ -112,30 +106,6 @@ export async function resolveChatServerConfig(input?: { serverUrl?: string; serv
     serverUrl: input?.serverUrl?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_URL'),
     serverToken: input?.serverToken?.trim() || publicEnv('EXPO_PUBLIC_LIFEOS_SERVER_TOKEN'),
   };
-}
-
-export async function listChatThreads(db: SQLiteDatabase | null): Promise<ChatThread[]> {
-  if (!db) {
-    return [];
-  }
-
-  const catalog = loadCatalog();
-  const rows = await listConversations(db, catalog.activeDomainId);
-
-  const threads: ChatThread[] = await Promise.all(
-    rows.map(async (row) => {
-      const envelope = await getConversation(db, row.id);
-      const messages = envelope?.messages ? envelope.messages.map(dbMessageToChat) : [];
-      return {
-        id: row.id,
-        title: row.title,
-        detail: row.detail,
-        messages,
-      };
-    })
-  );
-
-  return threads;
 }
 
 function manifestForDomain(domainId: string): DomainManifest {
@@ -683,36 +653,6 @@ export function localQueryToolResultMessage(input: {
       output: input.result,
     }],
   };
-}
-
-export async function stopServerRun(input: { runId: string; baseUrl: string; token?: string; }) {
-  if (!input.baseUrl) {
-    return null;
-  }
-  const endpoint = input.baseUrl.replace(/\/$/, '');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
-
-  try {
-    const response = await fetch(`${endpoint}/chat/stop`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'content-type': 'application/json',
-        ...(input.token ? { authorization: `Bearer ${input.token}` } : {}),
-      },
-      body: JSON.stringify({ run_id: input.runId }),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-    return (await response.json()) as ServerControlResponse;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export async function undoServerAction(input: {
