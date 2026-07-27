@@ -10,6 +10,7 @@ import type {
 } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import { APP_PACKAGE_WIDGET_KINDS } from '@/packages/shared/contracts/ui-widgets';
+import packageChangeBlueprintsJson from '@/packages/domain-config/templates/package-change-templates/package-change-blueprints.v1.json';
 import widgetScreenIntentRegistryJson from '@/packages/domain-config/templates/package-change-templates/widget-screen-intents.v1.json';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 import { sha256Canonical } from '@/src/domain/canonical-json';
@@ -52,7 +53,19 @@ type WidgetIntentRegistry = {
   schema_version: 'wonder.package-change-template-registry.v1';
   intents: Record<WidgetScreenIntent, WidgetIntentConfig>;
 };
+type PackageChangeBlueprints = {
+  schema_version: 'wonder.package-change-blueprints.v1';
+  theme: {
+    visualIdentity: Record<string, unknown>;
+    screen: { components: A2UiComponent[] };
+  };
+  workflow: {
+    rule: Record<string, unknown>;
+    screen: { components: A2UiComponent[] };
+  };
+};
 
+const PACKAGE_CHANGE_BLUEPRINTS = packageChangeBlueprintsJson as PackageChangeBlueprints;
 const WIDGET_INTENT_REGISTRY = (widgetScreenIntentRegistryJson as WidgetIntentRegistry).intents;
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
@@ -467,20 +480,10 @@ function buildThemeChange(
   presentation: PackagePresentationSpec,
   name: PackageChangeName,
 ): AppPackageChangeRequest {
+  const blueprint = PACKAGE_CHANGE_BLUEPRINTS.theme;
   const visualIdentity = {
     ...(presentation.visualIdentity ?? {}),
-    schemaVersion: 'wonder.visual-identity.v1',
-    mood: 'warm, minimal, alive',
-    colors: {
-      background: '#FFF7EA',
-      card: '#FFFFFF',
-      text: '#241C16',
-      primary: '#2F7448',
-      accent: '#F3B15E',
-      calm: '#B9DCE8',
-    },
-    radius: { card: 24, chip: 999 },
-    density: 'compact-cute',
+    ...hydrateTemplateValue(blueprint.visualIdentity, templateReplacements(name)),
   };
   return {
     basePackageKey: `${active.id}@${active.version}`,
@@ -488,10 +491,11 @@ function buildThemeChange(
     patch: [
       versionPatch(active.version),
       { op: presentation.visualIdentity ? 'replace' : 'add', path: '/presentation/visualIdentity', value: visualIdentity },
-      ...buildUiScreenPatches(presentation, { ...name, screenId: `${name.screenId}_theme`, surfaceId: `${name.surfaceId}_theme` }, [
-        { kind: 'widget', widget: 'themePreview', id: `${name.screenId}_theme_preview`, title: `${name.label} theme`, subtitle: 'Tokenized visual identity preview.' },
-        { kind: 'text', id: `${name.screenId}_theme_note`, title: 'Design tokens', subtitle: 'Background, card, text, primary, accent, radius, and density now live in package config.' },
-      ]),
+      ...buildUiScreenPatches(
+        presentation,
+        { ...name, screenId: `${name.screenId}_theme`, surfaceId: `${name.surfaceId}_theme` },
+        hydrateTemplateValue(blueprint.screen.components, templateReplacements(name)),
+      ),
     ],
   };
 }
@@ -501,6 +505,7 @@ function buildWorkflowChange(
   presentation: PackagePresentationSpec,
   name: PackageChangeName,
 ): AppPackageChangeRequest {
+  const blueprint = PACKAGE_CHANGE_BLUEPRINTS.workflow;
   const ruleId = `${name.collectionId}_workflow_rule`;
   if (active.rules.some((rule) => rule.id === ruleId)) throw new Error(`Workflow rule already exists: ${ruleId}`);
   return {
@@ -513,17 +518,14 @@ function buildWorkflowChange(
         path: '/rules/-',
         value: {
           id: ruleId,
-          trigger: { kind: 'query_transition', query: 'expiring_inventory', transition: 'enter' },
-          when: { '==': [{ var: 'collection' }, 'inventory'] },
-          effect: { kind: 'propose_operation', operation: { kind: 'custom', tool: 'food.dinner.suggest' } },
-          mode: 'suggest',
-          maxRunsPerEvent: 1,
+          ...hydrateTemplateValue(blueprint.rule, templateReplacements(name, { ruleId })),
         },
       },
-      ...buildUiScreenPatches(presentation, { ...name, screenId: `${name.screenId}_workflow`, surfaceId: `${name.surfaceId}_workflow` }, [
-        { kind: 'widget', widget: 'postCard', id: `${name.screenId}_workflow_hero`, title: `${name.label} workflow`, subtitle: 'Rule added as suggestion-only.', props: { body: 'When inventory enters the expiring set, Wonder can suggest dinner instead of silently mutating data.' } },
-        { kind: 'widget', widget: 'feedList', id: `${name.screenId}_workflow_feed`, title: 'Workflow receipts', subtitle: 'Approvals and receipts remain visible only when you open this control surface.' },
-      ]),
+      ...buildUiScreenPatches(
+        presentation,
+        { ...name, screenId: `${name.screenId}_workflow`, surfaceId: `${name.surfaceId}_workflow` },
+        hydrateTemplateValue(blueprint.screen.components, templateReplacements(name, { ruleId })),
+      ),
     ],
   };
 }
@@ -725,7 +727,7 @@ function componentsForIntent(
 }
 
 function propsForIntent(name: PackageChangeName, intent: WidgetScreenIntent): Record<string, unknown> {
-  return hydrateIntentTemplate(WIDGET_INTENT_REGISTRY[intent].props, name);
+  return hydrateTemplateValue(WIDGET_INTENT_REGISTRY[intent].props, templateReplacements(name));
 }
 
 function subtitleForIntent(intent: WidgetScreenIntent) {
@@ -741,15 +743,26 @@ function isWidgetScreenIntent(intent: PackageChangeIntent): intent is WidgetScre
 }
 
 function hydrateIntentTemplate(value: unknown, name: PackageChangeName): Record<string, unknown> {
-  const replacements = {
+  return hydrateTemplateValue(value, templateReplacements(name)) as Record<string, unknown>;
+}
+
+function templateReplacements(
+  name: PackageChangeName,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
     label: name.label,
     collectionId: name.collectionId,
     screenId: name.screenId,
     surfaceId: name.surfaceId,
+    ...extra,
   };
+}
+
+function hydrateTemplateValue<T>(value: T, replacements: Record<string, string>): T {
   const hydrate = (item: unknown): unknown => {
     if (typeof item === 'string') {
-      return item.replace(/\{\{(label|collectionId|screenId|surfaceId)\}\}/g, (_, key: keyof typeof replacements) => replacements[key]);
+      return item.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, key) => replacements[key] ?? match);
     }
     if (Array.isArray(item)) return item.map(hydrate);
     if (item && typeof item === 'object') {
@@ -757,8 +770,7 @@ function hydrateIntentTemplate(value: unknown, name: PackageChangeName): Record<
     }
     return item;
   };
-  const hydrated = hydrate(value);
-  return hydrated && typeof hydrated === 'object' && !Array.isArray(hydrated) ? hydrated as Record<string, unknown> : {};
+  return hydrate(value) as T;
 }
 
 function derivePackageChangeName(prompt: string) {
