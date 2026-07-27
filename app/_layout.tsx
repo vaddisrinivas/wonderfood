@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { Linking, Platform } from 'react-native';
+import { Linking, LogBox, Platform } from 'react-native';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
@@ -7,6 +7,10 @@ import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { setActiveDomainOverride } from '@/src/domain/catalog';
 import { useIncomingShareSafe } from '@/src/platform/incoming-share';
 import { defaultLifeOSSettings, loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
+
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+]);
 
 function IncomingShareRouter() {
   const router = useRouter();

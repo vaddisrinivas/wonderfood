@@ -134,8 +134,7 @@ export const ROUTE_SHELL_UI: PackagePresentationUi = {
       title: 'Ask Wonder',
       subtitle: 'Ask, plan, and change the app from one AI surface. Advanced receipts stay behind the curtain.',
       components: [
-        { kind: 'text', id: 'chat_prompt', title: 'What should we do?', subtitle: 'Try: plan dinner from expiring pantry, add a shopping item, create a new food table, or redesign this page.', tone: 'plum' },
-        { kind: 'action', id: 'chat_start', title: 'Start with AI', subtitle: 'Open the assistant workflow for this package.', tone: 'moss', action: { kind: 'propose', label: 'Ask Wonder', command: 'open_chat', payload: { route: '/chat' } } },
+        { kind: 'widget', widget: 'assistantChat', id: 'chat_assistant', title: 'Ask Wonder', subtitle: 'A real food assistant inside the JSON-render surface.', tone: 'plum', props: { prompt: 'Ask about dinner, pantry, shopping, or app changes…' } },
         { kind: 'recordList', id: 'chat_context', title: 'Context it can use', subtitle: 'Food records available for grounded answers.', tone: 'blue', query: { limit: 4 } },
       ],
     },
@@ -184,7 +183,8 @@ export const ROUTE_SHELL_UI: PackagePresentationUi = {
       title: 'Customize',
       subtitle: 'Ask AI to change tables, package config, screens, theme, and defaults safely.',
       components: [
-        { kind: 'text', id: 'config_ai_first', title: 'AI edits. You approve.', subtitle: 'Describe the app change you want. Wonder should propose a package diff, not make hidden edits.', tone: 'plum' },
+        { kind: 'widget', widget: 'schemaEditor', id: 'config_ai_first', title: 'AI edits. You approve.', subtitle: 'Describe the app change you want. Wonder should propose a package diff, not make hidden edits.', tone: 'plum' },
+        { kind: 'widget', widget: 'widgetCatalog', id: 'config_widgets', title: 'Available building blocks', subtitle: 'What config can place on generated screens today.', tone: 'blue' },
         { kind: 'action', id: 'config_ask', title: 'Change the app', tone: 'moss', action: { kind: 'propose', label: 'Ask Wonder', command: 'change_app_config', payload: { route: '/chat' } } },
         { kind: 'action', id: 'config_settings', title: 'Settings', tone: 'blue', action: { kind: 'propose', label: 'Settings', command: 'open_settings', payload: { route: '/settings' } } },
       ],
@@ -201,8 +201,7 @@ export const ROUTE_SHELL_UI: PackagePresentationUi = {
       title: 'Health Connect',
       subtitle: 'Android health permissions and food-health context. Still JSON-rendered; native permissions stay behind this surface.',
       components: [
-        { kind: 'text', id: 'health_status', title: 'Health Connect status', subtitle: 'Use this to verify Android permission state and future nutrition/activity links. If setup is missing, ask Wonder to prepare the exact permission flow.', tone: 'blue' },
-        { kind: 'action', id: 'health_prepare', title: 'Prepare permission flow', subtitle: 'Ask AI to wire or repair Health Connect permissions for this build.', tone: 'amber', action: { kind: 'propose', label: 'Ask Wonder', command: 'prepare_health_connect', payload: { route: '/chat' } } },
+        { kind: 'widget', widget: 'healthConnect', id: 'health_status', title: 'Health Connect status', subtitle: 'Live Android permission status and controls rendered as a JSON widget.', tone: 'blue' },
         { kind: 'action', id: 'health_settings', title: 'Settings', subtitle: 'Return to app controls.', tone: 'plum', action: { kind: 'propose', label: 'Settings', command: 'open_settings', payload: { route: '/settings' } } },
         { kind: 'action', id: 'health_home', title: 'Back to food', tone: 'moss', action: { kind: 'propose', label: 'Open food', command: 'open_food', payload: { route: '/food' } } },
       ],

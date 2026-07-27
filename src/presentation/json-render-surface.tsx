@@ -1,11 +1,12 @@
 import type { Spec } from '@json-render/core';
 import { validateSpec } from '@json-render/core';
-import { JSONUIProvider, Renderer } from '@json-render/react-native';
+import { JSONUIProvider, Renderer, createStandardActionHandlers } from '@json-render/react-native';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 
 import type { PackagePresentationUi, PackageUiAction, PackageUiComponent } from '@/packages/shared/contracts/package';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
+import { JSON_RENDER_WIDGET_REGISTRY } from '@/src/presentation/json-render-widgets';
 import { useLifeOSTheme } from '@/src/theme';
 
 type JsonRenderSurfaceProps = {
@@ -248,6 +249,22 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
 }
 
 function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, records: DomainRecordViewModel[], palette: Palette) {
+  if (component.kind === 'widget') {
+    const typeByWidget: Record<string, string> = {
+      assistantChat: 'AssistantChatWidget',
+      healthConnect: 'HealthConnectWidget',
+      schemaEditor: 'SchemaEditorWidget',
+      widgetCatalog: 'WidgetCatalogWidget',
+    };
+    const widgetType = component.widget ? typeByWidget[component.widget] : null;
+    if (widgetType) {
+      return add(widgetType, {
+        title: component.title,
+        subtitle: component.subtitle,
+        ...(component.props ?? {}),
+      });
+    }
+  }
   if (component.kind === 'recordList') return addRecordListBlock(add, component, records, palette);
   if (component.kind === 'metric') return addMetricBlock(add, component, records, palette);
   if (component.kind === 'action') return addActionBlock(add, component, palette);
@@ -299,10 +316,14 @@ export function JsonRenderSurface(props: JsonRenderSurfaceProps) {
   const theme = useLifeOSTheme();
   const palette = paletteFor(theme.dark);
   const spec = useMemo(() => assertJsonRenderSpec(buildSpec(props, palette)), [palette, props]);
+  const handlers = useMemo(() => createStandardActionHandlers({
+    navigate: (screen) => router.push(screen as never),
+    goBack: () => router.back(),
+  }), [router]);
 
   return (
-    <JSONUIProvider navigate={(path) => router.push(path as never)}>
-      <Renderer spec={spec} includeStandard />
+    <JSONUIProvider navigate={(path) => router.push(path as never)} handlers={handlers} registry={JSON_RENDER_WIDGET_REGISTRY}>
+      <Renderer spec={spec} includeStandard registry={JSON_RENDER_WIDGET_REGISTRY} />
     </JSONUIProvider>
   );
 }

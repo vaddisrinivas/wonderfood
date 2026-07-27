@@ -385,8 +385,20 @@
             "recordList",
             "metric",
             "action",
-            "text"
+            "text",
+            "widget"
           ]
+        },
+        "widget": {
+          "enum": [
+            "assistantChat",
+            "healthConnect",
+            "schemaEditor",
+            "widgetCatalog"
+          ]
+        },
+        "props": {
+          "type": "object"
         },
         "id": {
           "type": "string"

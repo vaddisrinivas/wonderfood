@@ -42,10 +42,12 @@ export type PackageUiAction = {
 };
 
 export type PackageUiComponent = {
-  kind: 'recordList' | 'metric' | 'action' | 'text';
+  kind: 'recordList' | 'metric' | 'action' | 'text' | 'widget';
   id?: string;
   title?: string;
   subtitle?: string;
+  widget?: 'assistantChat' | 'healthConnect' | 'schemaEditor' | 'widgetCatalog';
+  props?: Record<string, unknown>;
   view?: string;
   tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
   query?: {

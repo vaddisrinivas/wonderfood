@@ -288,9 +288,15 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
   }
   const raw = value as Record<string, unknown>;
   const kind = raw.kind;
-  assertCondition(kind === 'recordList' || kind === 'metric' || kind === 'action' || kind === 'text', `${path}.kind must be recordList|metric|action|text`);
+  assertCondition(kind === 'recordList' || kind === 'metric' || kind === 'action' || kind === 'text' || kind === 'widget', `${path}.kind must be recordList|metric|action|text|widget`);
   if (kind === 'action') {
     assertCondition(typeof raw.id === 'string' && raw.id.trim().length > 0, `${path}.id required for action components`);
+  }
+  if (kind === 'widget') {
+    assertCondition(raw.widget === 'assistantChat' || raw.widget === 'healthConnect' || raw.widget === 'schemaEditor' || raw.widget === 'widgetCatalog', `${path}.widget must be assistantChat|healthConnect|schemaEditor|widgetCatalog`);
+    if (raw.props !== undefined) {
+      assertCondition(isObject(raw.props), `${path}.props must be an object`);
+    }
   }
   if (raw.tone !== undefined && raw.tone !== 'neutral' && raw.tone !== 'moss' && raw.tone !== 'amber' && raw.tone !== 'plum' && raw.tone !== 'blue') {
     throw new Error(`${path}.tone must be neutral|moss|amber|plum|blue`);
