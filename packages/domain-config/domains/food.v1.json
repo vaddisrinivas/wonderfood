@@ -448,15 +448,21 @@
               "items": [
                 {
                   "title": "Breakfast: Greek yogurt bowl",
-                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review."
+                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review.",
+                  "badge": "Morning",
+                  "route": "/chat"
                 },
                 {
                   "title": "Lunch: Chickpea spinach wraps",
-                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list."
+                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list.",
+                  "badge": "Use first",
+                  "route": "/food"
                 },
                 {
                   "title": "Dinner: Salmon rice bowls",
-                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar."
+                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar.",
+                  "badge": "Review",
+                  "route": "/capture"
                 }
               ]
             }
@@ -737,15 +743,21 @@
               "items": [
                 {
                   "title": "Breakfast: Greek yogurt bowl",
-                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review."
+                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review.",
+                  "badge": "Morning",
+                  "route": "/chat"
                 },
                 {
                   "title": "Lunch: Chickpea spinach wraps",
-                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list."
+                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list.",
+                  "badge": "Use first",
+                  "route": "/food"
                 },
                 {
                   "title": "Dinner: Salmon rice bowls",
-                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar."
+                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar.",
+                  "badge": "Review",
+                  "route": "/capture"
                 }
               ]
             }
@@ -1267,6 +1279,31 @@
                   "signals": ["youtube", "recipe"],
                   "score": 86,
                   "url": "https://www.youtube.com"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "kanbanBoard",
+            "id": "config_board_demo",
+            "title": "Board primitive",
+            "subtitle": "Cards can route or open links from JSON.",
+            "tone": "plum",
+            "props": {
+              "columns": [
+                {
+                  "title": "Ideas",
+                  "items": [
+                    { "title": "Family dinner poll", "subtitle": "Collect votes", "route": "/config" },
+                    { "title": "Recipe video", "subtitle": "Open source link", "url": "https://www.youtube.com" }
+                  ]
+                },
+                {
+                  "title": "Ready",
+                  "items": [
+                    { "title": "Shopping rows", "subtitle": "Open capture", "route": "/capture" }
+                  ]
                 }
               ]
             }

@@ -521,24 +521,27 @@ function LinkPreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function FeedListWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const items = rows(props.items);
   return (
     <WidgetShell title={text(props.title, 'Feed')} subtitle={text(props.subtitle, 'Posts, links, updates, and activity in one stream.')}>
       {(items.length ? items : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8).map((item) => (
-        <View key={label(item)} style={styles.feedItem}>
+        <Pressable key={label(item)} style={styles.feedItem} onPress={() => openWidgetTarget(router, item)} disabled={!actionRoute(item) && !actionUrl(item)}>
           <View style={styles.feedDot} />
           <View style={styles.feedCopy}>
+            {text(item.badge, text(item.status, text(item.date, text(item.when)))) ? <Text style={styles.feedMeta}>{text(item.badge, text(item.status, text(item.date, text(item.when))))}</Text> : null}
             <Text style={styles.feedTitle}>{label(item)}</Text>
             <Text style={styles.feedDetail}>{detail(item)}</Text>
           </View>
-        </View>
+        </Pressable>
       ))}
     </WidgetShell>
   );
 }
 
 function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const columns = rows(props.columns);
   return (
@@ -548,9 +551,10 @@ function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
           <View key={label(column, 'Column')} style={styles.boardColumn}>
             <Text style={styles.boardTitle}>{label(column, 'Column')}</Text>
             {rows(column.items).slice(0, 5).map((item) => (
-              <View key={label(item)} style={styles.boardCard}>
+              <Pressable key={label(item)} style={styles.boardCard} onPress={() => openWidgetTarget(router, item)} disabled={!actionRoute(item) && !actionUrl(item)}>
                 <Text style={styles.boardCardText}>{label(item)}</Text>
-              </View>
+                {detail(item) ? <Text style={styles.boardCardDetail}>{detail(item)}</Text> : null}
+              </Pressable>
             ))}
           </View>
         ))}
@@ -992,13 +996,15 @@ const styles = StyleSheet.create({
   feedItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E3DACB' },
   feedDot: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#E4F1E8', marginTop: 2 },
   feedCopy: { flex: 1, gap: 3 },
+  feedMeta: { color: '#2F7448', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   feedTitle: { color: '#241C16', fontSize: 15, fontWeight: '900' },
   feedDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
   board: { gap: 10 },
   boardColumn: { width: 168, backgroundColor: '#F6F1E8', borderRadius: 18, padding: 10, gap: 8 },
   boardTitle: { color: '#241C16', fontWeight: '900' },
-  boardCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10 },
+  boardCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10, gap: 4 },
   boardCardText: { color: '#241C16', fontWeight: '700' },
+  boardCardDetail: { color: '#6D6257', fontSize: 12, lineHeight: 16 },
   chart: { gap: 10 },
   chartRow: { gap: 5 },
   chartLabel: { color: '#6D6257', fontSize: 12, fontWeight: '800' },
