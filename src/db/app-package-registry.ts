@@ -6,6 +6,7 @@ import { sha256 } from 'js-sha256';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
 import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
+import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
 
 type AppPackageRow = {
@@ -233,37 +234,11 @@ function validatePackageChangeRequest(request: AppPackageChangeRequest, active: 
   for (const operation of request.patch) {
     if (!operation || typeof operation !== 'object' || typeof operation.path !== 'string') throw new Error('package_change_patch_invalid');
     if (!['add', 'replace', 'remove', 'move', 'copy', 'test'].includes(operation.op)) throw new Error('package_change_patch_op_invalid');
-    if (!isAllowedPackagePatchPath(operation.path)) throw new Error(`package_change_path_forbidden:${operation.path}`);
-    if ((operation.op === 'move' || operation.op === 'copy') && (!operation.from || !isAllowedPackagePatchPath(operation.from))) {
+    if (!isAllowedAppPackagePatchPath(operation.path)) throw new Error(`package_change_path_forbidden:${operation.path}`);
+    if ((operation.op === 'move' || operation.op === 'copy') && (!operation.from || !isAllowedAppPackagePatchPath(operation.from))) {
       throw new Error(`package_change_path_forbidden:${operation.from ?? '<missing>'}`);
     }
   }
-}
-
-function isAllowedPackagePatchPath(path: string): boolean {
-  return path === '/version'
-    || path === '/collections'
-    || path.startsWith('/collections/')
-    || path === '/presentation'
-    || path.startsWith('/presentation/')
-    || path === '/queries'
-    || path.startsWith('/queries/')
-    || path === '/views'
-    || path.startsWith('/views/')
-    || path === '/rules'
-    || path.startsWith('/rules/')
-    || path === '/computedFields'
-    || path.startsWith('/computedFields/')
-    || path === '/capabilities'
-    || path.startsWith('/capabilities/')
-    || path === '/acceptanceTests'
-    || path.startsWith('/acceptanceTests/')
-    || path === '/nativeCapabilities'
-    || path.startsWith('/nativeCapabilities/')
-    || path === '/contractLock/checksum'
-    || path === '/contractLock/pinnedAt'
-    || path === '/contractLock/nativeCapabilities'
-    || path.startsWith('/contractLock/nativeCapabilities/');
 }
 
 function applyPackagePatch(base: AppPackage, patch: readonly JsonPatchOperation[]): AppPackage {
