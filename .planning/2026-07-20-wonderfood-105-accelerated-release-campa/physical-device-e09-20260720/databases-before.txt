@@ -1,4 +1,0 @@
-databases:
-wonderfood-v105-household.db
-wonderfood-v105-household.db-shm
-wonderfood-v105-household.db-wal

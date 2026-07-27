@@ -1,120 +1,56 @@
-# WonderFood LifeOS
+# WonderFood
 
-WonderFood is being reimagined as a local-first LifeOS built with Expo and React Native: a quiet workspace for food, planning, personal context, and reviewable AI actions.
+WonderFood is a JSON-rendered, package-driven Expo app shell for personal software.
 
-Current release state: `1.0.5`, verified against source snapshot `fd8e2e6`. Machine-readable acceptance lives in `docs/V1-ACCEPTANCE-REGISTRY.json`. Historical evidence stays in `docs/lifeos/implementation-ledger.md` and `docs/lifeos/convergence/*.md`.
+The product direction is simple:
 
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Expo SDK 57](https://img.shields.io/badge/Expo-SDK%2057-000020.svg)](https://expo.dev/)
-[![React Native](https://img.shields.io/badge/React%20Native-0.86-61dafb.svg)](https://reactnative.dev/)
-[![Android primary](https://img.shields.io/badge/platform-Android%20primary-3ddc84.svg)](app.json)
+- App behavior comes from package JSON.
+- UI surfaces render through JSON Render.
+- Data stays local-first, with optional Notion / Google Sheets provider homes.
+- AI proposes package, schema, workflow, and data changes; Wonder validates before mutation.
+- Official libraries are preferred over custom framework code.
 
-## Platform order
+## Current shape
 
-1. **Static web first:** fastest review and deployment surface.
-2. **Android primary:** product-quality mobile target and first native release.
-3. **iOS last:** enabled in configuration, packaged after web and Android gates are stable.
+- Native shell: Expo / React Native.
+- Renderer: `@json-render/react-native` with an A2UI-shaped package contract.
+- Config: `packages/domain-config/`.
+- Shared contracts: `packages/shared/contracts/`.
+- Server: local/private Wonder runtime for chat, providers, package changes, workflows, and official MCP.
+- Providers: Notion SDK and Google APIs client are installed; Wonder-owned mapping, authority, undo, and verification stay in repo.
 
-Both native targets use the application identifier `com.wonderfood.app`.
-
-## Current implementation
-
-Implemented now: responsive Today/domain/Chat shell, record editor, global search, capture, SQLite persistence, direct AI primary/fallback routing, encrypted in-app configuration, Config Studio, a Health Connect read bridge, and self-contained Android release packaging. Food, Health, and Plants are selectable config packages. The app does not require a public server or webhook.
-
-Provider secrets stay outside the repo. AI, Notion, Sheets, Postgres, MCP, domains, skills, workflows, agents, schemas, sync, privacy, and appearance are configured inside the app. Android/iOS use platform-secure storage; web uses that browser's local storage and displays the limitation.
-
-- Domain runtime files: `packages/domain-config/`
-
-## Local development
-
-Requirements: Node.js 22+, npm, and Android Studio for native Android work.
+## Development
 
 ```bash
 npm install
 npm run start
-```
-
-No server URL or token is compiled into the app. External GPT/MCP clients may run the separate FOSS MCP package, but the app does not depend on it. Never commit provider credentials.
-
-Launch a target:
-
-```bash
-npm run web
-npm run android
-# optional Metro-backed development shell
 npm run android:dev
-npm run ios
+npm run web
 ```
 
-## Quality gates
-
-Run the same ordered checks used by CI:
+## Core gates
 
 ```bash
 npm run typecheck
 npm run config:validate
-npm run doctor
+npm run check:json-render-only-ui
+npm run check:mcp-official-only
 npm run export:web
 npm run export:android
 ```
 
-Or run the combined gate:
+## Repo rules
 
-```bash
-npm run quality
-```
+- Do not commit secrets.
+- Do not add spike artifacts to the production tree.
+- Do not add custom MCP protocol code; use the official MCP SDK.
+- Do not add new hand-built UI screens when package JSON can own the surface.
+- Do not bypass the canonical writer / approval / provider verification kernel.
 
-Exports are written to `dist/web` and `dist/android`. The web export is static. Android remains the primary native package; iOS export/build automation will follow after those gates stabilize.
+## Useful docs
 
-Root `typecheck` covers the production tree only. Experimental spikes live under `spikes/` and have their own checks:
-
-```bash
-npm run typecheck:spikes
-npm run audit:production
-```
-
-## EAS packaging
-
-Preview Android APK:
-
-```bash
-npx eas-cli build --platform android --profile preview-android
-```
-
-Production Android App Bundle:
-
-```bash
-npx eas-cli build --platform android --profile production-android
-```
-
-iOS production build, last in the rollout:
-
-```bash
-npx eas-cli build --platform ios --profile production-ios
-```
-
-Signing credentials and provider secrets stay in EAS or local environment storage; they must not be committed.
-
-## Product contracts and retained evidence
-
-The React Native shell is new, but WonderFood's validated product work remains authoritative reference material:
-
-- [LifeOS product pass](docs/lifeos/product-pass.md) and [UI copy audit](docs/lifeos/ui-copy-audit.md)
-- [AI contracts and golden fixtures](docs/ai/README.md)
-- [Privacy](PRIVACY.md), [security](SECURITY.md), and [release checklist](docs/release/RELEASE_CHECKLIST.md)
-- [Testing evidence](docs/testing/README.md), [design history](docs/design/v3-product-experience.md), and [distribution readiness](docs/distribution/FOSS_READINESS.md)
-- Existing screenshots, demo media, release notes, and native Android evidence remain under `docs/`, `fastlane/`, and repository history.
-
-Do not treat historical Kotlin/Compose commands as current Expo build instructions. Preserve those records while the LifeOS implementation replaces the legacy runtime.
-
-## Safety principles
-
-- Local-first data remains usable without an account or AI provider.
-- Ordinary reversible changes write directly and offer Undo; sensitive or irreversible changes stay explicit.
-- Provider credentials never ship in the app or repository.
-- Unknown nutrition stays unknown; estimates retain provenance and confidence.
-- Destructive agent actions require explicit user confirmation.
-
-## License
-
-WonderFood is licensed under [Apache-2.0](LICENSE).
+- [AI contracts](docs/ai/README.md)
+- [Release checklist](docs/release/RELEASE_CHECKLIST.md)
+- [Testing](docs/testing/README.md)
+- [Security](SECURITY.md)
+- [Privacy](PRIVACY.md)

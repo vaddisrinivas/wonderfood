@@ -5,6 +5,7 @@
   "dependencies": {
     "@a2ui/web_core": "^0.10.5",
     "@ai-sdk/openai": "4.0.20",
+    "@hono/node-server": "^2.0.12",
     "@json-render/core": "^0.19.0",
     "@json-render/react-native": "^0.19.0",
     "@notionhq/client": "^5.23.2",
@@ -27,6 +28,7 @@
     "expo-web-browser": "~57.0.2",
     "fast-json-patch": "^3.1.1",
     "googleapis": "^173.0.0",
+    "hono": "^4.12.32",
     "js-sha256": "^1.0.0",
     "json-logic-js": "^2.0.5",
     "react": "19.2.3",

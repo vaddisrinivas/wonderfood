@@ -34,9 +34,6 @@ This checklist is required before calling a build release-ready.
 
 ## Device proof
 
-- Run `./scripts/quality/triage-release-device-rows.sh` before final proof to
-  list current blockers for `E01`, `E07`, `E09`, and `E12`-`E16` without using
-  signing secrets or creating release state.
 - Install and launch the signed build on a physical Android device.
 - Capture proof for first-run onboarding, Local setup, and the selected release remote backend.
 - Run the focused unit/build gate and record command output.

@@ -7,7 +7,7 @@ import { AiProviderProfile, loadLifeOSSettings, usableAiProfiles } from '@/src/s
 import { listRecordsForDomain } from '@/src/db/records';
 import type { CanonicalRecord } from '@/src/domain/runtime';
 import { undoOperation } from '@/src/ops/undo';
-import { executeLocalQueryForChat, type LocalQueryRequest, type LocalQueryResult } from '@/src/chat/local-query';
+import type { LocalQueryRequest, LocalQueryResult } from '@/src/chat/local-query';
 // Keep citations user-controlled to avoid fabricated defaults when model fallback is in effect.
 
 export type ServerResponseMessage = {
@@ -73,16 +73,6 @@ type AgentUiMessage = {
   id: string;
   role: 'user' | 'assistant';
   parts: Array<Record<string, unknown>>;
-};
-
-type AgentUiChunk = {
-  type: string;
-  id?: string;
-  delta?: string;
-  errorText?: string;
-  toolCallId?: string;
-  toolName?: string;
-  input?: unknown;
 };
 
 function nowId(prefix: string) {
@@ -249,28 +239,16 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
       };
     }
 
-    const serverEndpoint = configuredServerUrl;
-    const serverResult = input.onModelToken
-      ? await sendToServerStream({
-          conversationId,
-          text,
-          domainId,
-          userId,
-          token: configuredServerToken,
-          baseUrl: serverEndpoint,
-          retryOf,
-          onToken: input.onModelToken,
-        })
-      : await sendToServer({
-          conversationId,
-          text,
-          domainId,
-          userId,
-          limit: 4,
-          token: configuredServerToken,
-          baseUrl: serverEndpoint,
-          retryOf,
-        });
+    const serverResult = await sendToServer({
+      conversationId,
+      text,
+      domainId,
+      userId,
+      limit: 4,
+      token: configuredServerToken,
+      baseUrl: configuredServerUrl,
+      retryOf,
+    });
 
     if (!serverResult) {
       return {
@@ -438,36 +416,16 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     };
   }
 
-  const serverResult = input.onModelToken
-    ? await sendToServerAgent({
-      db,
-      conversationId,
-      text,
-      domainId,
-      userId,
-      token: configuredServerToken,
-      baseUrl: configuredServerUrl,
-      onToken: input.onModelToken,
-    }) ?? await sendToServerStream({
-      conversationId,
-      text,
-      domainId,
-      userId,
-      token: configuredServerToken,
-      baseUrl: configuredServerUrl,
-      retryOf,
-      onToken: input.onModelToken,
-    })
-    : await sendToServer({
-      conversationId,
-      text,
-      domainId,
-      userId,
-      limit: 1,
-      token: configuredServerToken,
-      baseUrl: configuredServerUrl,
-      retryOf,
-    });
+  const serverResult = await sendToServer({
+    conversationId,
+    text,
+    domainId,
+    userId,
+    limit: 1,
+    token: configuredServerToken,
+    baseUrl: configuredServerUrl,
+    retryOf,
+  });
 
   if (!serverResult) {
     const fallback = makeOfflineAnswer(text, sourceRecords, manifest);
@@ -708,14 +666,6 @@ async function sendToServer(payload: {
   }
 }
 
-function userUiMessage(id: string, text: string): AgentUiMessage {
-  return {
-    id,
-    role: 'user',
-    parts: [{ type: 'text', text }],
-  };
-}
-
 export function localQueryToolResultMessage(input: {
   id: string;
   toolCallId: string;
@@ -733,339 +683,6 @@ export function localQueryToolResultMessage(input: {
       output: input.result,
     }],
   };
-}
-
-function parseUiStreamFrame(rawFrame: string): AgentUiChunk[] {
-  const lines = rawFrame
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const chunks: AgentUiChunk[] = [];
-  for (const line of lines) {
-    const data = line.startsWith('data:') ? line.replace(/^data:\s*/, '') : line;
-    if (!data || data === '[DONE]') continue;
-    try {
-      const parsed = JSON.parse(data) as AgentUiChunk;
-      if (parsed && typeof parsed.type === 'string') chunks.push(parsed);
-    } catch {
-      // ignore non-json stream control lines
-    }
-  }
-  return chunks;
-}
-
-async function readAgentUiStream(input: {
-  response: Response;
-  onToken?: (token: string) => void;
-  onLocalQuery?: (chunk: AgentUiChunk) => Promise<AgentUiMessage | null>;
-}): Promise<{ text: string; toolResultMessage: AgentUiMessage | null; error?: string }> {
-  if (!input.response.body) return { text: '', toolResultMessage: null, error: 'agent_stream_body_missing' };
-  const reader = input.response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let text = '';
-  let toolResultMessage: AgentUiMessage | null = null;
-
-  const handleChunk = async (chunk: AgentUiChunk) => {
-    if (chunk.type === 'text-delta' && typeof chunk.delta === 'string') {
-      text += chunk.delta;
-      input.onToken?.(chunk.delta);
-      return;
-    }
-    if (chunk.type === 'error') {
-      throw new Error(chunk.errorText || 'agent_stream_error');
-    }
-    if (chunk.type === 'tool-input-available' && chunk.toolName === 'localQuery' && !toolResultMessage) {
-      toolResultMessage = await input.onLocalQuery?.(chunk) ?? null;
-    }
-  };
-
-  while (true) {
-    const read = await reader.read();
-    if (read.done) break;
-    buffer += decoder.decode(read.value, { stream: true });
-    const frames = buffer.split('\n\n');
-    buffer = frames.pop() ?? '';
-    for (const frame of frames) {
-      for (const chunk of parseUiStreamFrame(frame)) {
-        await handleChunk(chunk);
-      }
-    }
-  }
-  if (buffer.trim()) {
-    for (const chunk of parseUiStreamFrame(buffer)) {
-      await handleChunk(chunk);
-    }
-  }
-
-  return { text, toolResultMessage };
-}
-
-async function sendAgentMessages(input: {
-  endpoint: string;
-  token?: string;
-  messages: AgentUiMessage[];
-  signal?: AbortSignal;
-  onToken?: (token: string) => void;
-  onLocalQuery?: (chunk: AgentUiChunk) => Promise<AgentUiMessage | null>;
-}) {
-  const response = await fetch(`${input.endpoint}/chat/agent`, {
-    method: 'POST',
-    signal: input.signal,
-    headers: {
-      accept: 'text/event-stream',
-      'content-type': 'application/json',
-      ...(input.token ? { authorization: `Bearer ${input.token}` } : {}),
-    },
-    body: JSON.stringify({ messages: input.messages }),
-  });
-  if (!response.ok) return null;
-  return readAgentUiStream({
-    response,
-    onToken: input.onToken,
-    onLocalQuery: input.onLocalQuery,
-  });
-}
-
-async function sendToServerAgent(payload: {
-  db: SQLiteDatabase | null;
-  conversationId: string;
-  text: string;
-  domainId: string;
-  userId: string;
-  baseUrl: string;
-  token?: string;
-  onToken?: (token: string) => void;
-}): Promise<ServerChatResponse | null> {
-  if (!payload.baseUrl || !payload.db) return null;
-  const endpoint = payload.baseUrl.replace(/\/$/, '');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
-  const messages = [userUiMessage(payload.userId, payload.text)];
-
-  try {
-    const first = await sendAgentMessages({
-      endpoint,
-      token: payload.token,
-      messages,
-      signal: controller.signal,
-      onLocalQuery: async (chunk) => {
-        if (!chunk.toolCallId || !chunk.input) return null;
-        const executed = await executeLocalQueryForChat({
-          db: payload.db,
-          domainId: payload.domainId,
-          request: chunk.input as LocalQueryRequest,
-        });
-        if (!executed.ok) return null;
-        return localQueryToolResultMessage({
-          id: `tool-result-${chunk.toolCallId}`,
-          toolCallId: chunk.toolCallId,
-          request: chunk.input as LocalQueryRequest,
-          result: executed.result,
-        });
-      },
-    });
-    if (!first) return null;
-
-    const final = first.toolResultMessage
-      ? await sendAgentMessages({
-        endpoint,
-        token: payload.token,
-        messages: [...messages, first.toolResultMessage],
-        signal: controller.signal,
-        onToken: payload.onToken,
-      })
-      : first;
-    if (!final || final.error || !final.text.trim()) return null;
-
-    const answerId = nowId('asst-agent');
-    return {
-      conversation_id: payload.conversationId,
-      messages: [{
-        id: answerId,
-        role: 'assistant',
-        text: final.text.trim(),
-      }],
-      thread: {
-        title: payload.text.slice(0, 40) || 'Conversation',
-        detail: first.toolResultMessage ? 'Server AI + local rows' : 'Server AI',
-      },
-      warnings: first.toolResultMessage ? ['Answered with localQuery rows from this device.'] : undefined,
-      run: {
-        id: `agent-${answerId}`,
-        status: 'completed',
-        needs_retry: false,
-        aborted: false,
-      },
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function sendToServerStream(payload: {
-  conversationId: string;
-  text: string;
-  domainId: string;
-  userId: string;
-  baseUrl: string;
-  token?: string;
-  retryOf?: string;
-  onToken?: (token: string) => void;
-}): Promise<ServerChatResponse | null> {
-  if (!payload.baseUrl) {
-    return null;
-  }
-
-  const endpoint = payload.baseUrl.replace(/\/$/, '');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const response = await fetch(`${endpoint}/chat/send/stream`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        accept: 'text/event-stream',
-        'content-type': 'application/json',
-        ...(payload.token ? { authorization: `Bearer ${payload.token}` } : {}),
-      },
-      body: JSON.stringify({
-        conversation_id: payload.conversationId,
-        domain_id: payload.domainId,
-        message: { id: payload.userId, role: 'user', text: payload.text },
-        idempotency_key: `${payload.conversationId}:${payload.userId}`,
-        ...(payload.retryOf ? { retry_of: payload.retryOf } : {}),
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      return null;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let result: ServerChatResponse | null = null;
-
-    while (true) {
-      const read = await reader.read();
-      if (read.done) {
-        break;
-      }
-      buffer += decoder.decode(read.value, { stream: true });
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() ?? '';
-
-        for (const rawFrame of frames) {
-          const lines = rawFrame
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith('data:'));
-        for (const line of lines) {
-          const dataText = line.replace(/^data:\s*/, '');
-          if (!dataText) {
-            continue;
-          }
-          try {
-            const event = JSON.parse(dataText) as {
-              type: string;
-              response?: ServerChatResponse;
-              conversation_id?: string;
-              messages?: ServerResponseMessage[];
-              thread?: ServerChatResponse['thread'];
-              run?: ServerChatResponse['run'];
-              warnings?: string[];
-              delta?: string;
-              error?: string;
-            };
-            if (event.type === 'token' && event.delta) {
-              payload.onToken?.(event.delta);
-              continue;
-            }
-            if (event.type === 'run.end' && event.response) {
-              result = event.response;
-              continue;
-            }
-            if (event.type === 'cache' && event.response) {
-              result = event.response;
-              continue;
-            }
-            if (event.type === 'cache' && !event.response) {
-              result = {
-                conversation_id: event.conversation_id || payload.conversationId,
-                messages: event.messages || [],
-                thread: event.thread,
-                run: event.run,
-                warnings: event.warnings,
-              };
-              continue;
-            }
-            if (event.type === 'error') {
-              if (event.error) {
-                return null;
-              }
-            }
-          } catch {
-            continue;
-          }
-        }
-      }
-    }
-
-    if (buffer) {
-      const lines = buffer
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith('data:'));
-        for (const line of lines) {
-          const dataText = line.replace(/^data:\s*/, '');
-          if (!dataText) continue;
-          try {
-            const event = JSON.parse(dataText) as {
-              type: string;
-              response?: ServerChatResponse;
-              conversation_id?: string;
-              messages?: ServerResponseMessage[];
-              thread?: ServerChatResponse['thread'];
-              run?: ServerChatResponse['run'];
-              warnings?: string[];
-              delta?: string;
-            };
-            if (event.type === 'token' && event.delta) {
-              payload.onToken?.(event.delta);
-            }
-            if (event.type === 'run.end' && event.response) {
-              result = event.response;
-              continue;
-            }
-            if (event.type === 'cache' && event.response) {
-              result = event.response;
-              continue;
-            }
-            if (event.type === 'cache' && !event.response) {
-              result = {
-                conversation_id: event.conversation_id || payload.conversationId,
-                messages: event.messages || [],
-                thread: event.thread,
-                run: event.run,
-                warnings: event.warnings,
-              };
-            }
-          } catch {
-            continue;
-          }
-      }
-    }
-
-    return result;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export async function stopServerRun(input: { runId: string; baseUrl: string; token?: string; }) {
