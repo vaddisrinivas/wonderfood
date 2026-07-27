@@ -30,6 +30,9 @@ if (!officialServer.includes('@modelcontextprotocol/sdk/server/streamableHttp.js
 if (!officialServer.includes('new StreamableHTTPServerTransport')) {
   violations.push('server/src/mcp/official-server.ts: /mcp must use official StreamableHTTPServerTransport');
 }
+if (/jsonrpc/i.test(officialServer)) {
+  violations.push('server/src/mcp/official-server.ts: preflight errors must not hand-roll JSON-RPC envelopes');
+}
 if (!sdkServer.includes('@modelcontextprotocol/sdk/server/index.js')) {
   violations.push('server/src/mcp/sdk-server.ts: missing official MCP Server import');
 }

@@ -35,6 +35,10 @@ async function readJson(response: Response) {
   };
 }
 
+async function readText(response: Response) {
+  return response.text();
+}
+
 async function postMcp(body: unknown, headers: Record<string, string> = {}) {
   return fetch(`${base}/mcp`, {
     method: 'POST',
@@ -74,9 +78,9 @@ try {
   };
 
   const failClosed = await postMcp(initializeBody);
-  const failClosedBody = await readJson(failClosed);
+  const failClosedBody = await readText(failClosed);
   ensure(failClosed.status === 503, `official MCP should fail closed without configured token, got ${failClosed.status}`);
-  ensure(String(failClosedBody.error?.message).includes('not configured'), 'MCP fail-closed response should explain missing token');
+  ensure(failClosedBody.includes('not configured'), 'MCP fail-closed response should explain missing token');
 
   process.env.LIFEOS_MCP_TRUSTED_TOKENS_JSON = JSON.stringify([
     { token: foodToken, principal: 'food-principal', domains: ['food'] },
@@ -129,14 +133,14 @@ try {
   });
 
   const missingToken = await postMcp(initializeBody);
-  const missingTokenBody = await readJson(missingToken);
+  const missingTokenBody = await readText(missingToken);
   ensure(missingToken.status === 401, `official MCP should reject missing bearer token, got ${missingToken.status}`);
-  ensure(String(missingTokenBody.error?.message).includes('Missing mcp bearer token'), 'missing MCP token response should be explicit');
+  ensure(missingTokenBody.includes('Missing mcp bearer token'), 'missing MCP token response should be explicit');
 
   const wrongToken = await postMcp(initializeBody, { authorization: 'Bearer wrong-token' });
-  const wrongTokenBody = await readJson(wrongToken);
+  const wrongTokenBody = await readText(wrongToken);
   ensure(wrongToken.status === 401, `official MCP should reject wrong bearer token, got ${wrongToken.status}`);
-  ensure(String(wrongTokenBody.error?.message).includes('Invalid mcp bearer token'), 'wrong MCP token response should be explicit');
+  ensure(wrongTokenBody.includes('Invalid mcp bearer token'), 'wrong MCP token response should be explicit');
 
   const initialize = await postMcp(initializeBody, { authorization: `Bearer ${foodToken}` });
   const initializeResult = await readJson(initialize);
@@ -318,9 +322,9 @@ try {
       'x-lifeos-domain-scope': 'health',
     },
   );
-  const forgedScopeBody = await readJson(forgedScope);
+  const forgedScopeBody = await readText(forgedScope);
   ensure(forgedScope.status === 403, `forged MCP scope header should be rejected, got ${forgedScope.status}`);
-  ensure(String(forgedScopeBody.error?.message).includes('trusted server configuration'), 'forged scope denial should explain trusted config');
+  ensure(forgedScopeBody.includes('trusted server configuration'), 'forged scope denial should explain trusted config');
 
   const forgedPrincipal = await postMcp(
     {
@@ -334,9 +338,9 @@ try {
       'x-lifeos-principal': 'health-principal',
     },
   );
-  const forgedPrincipalBody = await readJson(forgedPrincipal);
+  const forgedPrincipalBody = await readText(forgedPrincipal);
   ensure(forgedPrincipal.status === 403, `forged MCP principal header should be rejected, got ${forgedPrincipal.status}`);
-  ensure(String(forgedPrincipalBody.error?.message).includes('trusted server configuration'), 'forged principal denial should explain trusted config');
+  ensure(forgedPrincipalBody.includes('trusted server configuration'), 'forged principal denial should explain trusted config');
 
   const unscopedList = await postMcp(
     {
@@ -400,9 +404,9 @@ try {
       },
     }),
   });
-  const oversizedMcpBody = await readJson(oversizedMcp);
+  const oversizedMcpBody = await readText(oversizedMcp);
   ensure(oversizedMcp.status === 413, `official MCP should reject oversized body, got ${oversizedMcp.status}`);
-  ensure(String(oversizedMcpBody.error?.message).includes('Limit is'), 'oversized MCP response should mention the byte limit');
+  ensure(oversizedMcpBody.includes('Limit is'), 'oversized MCP response should mention the byte limit');
 
   console.log('PASS server/test/mcp-official-security.ts');
 } finally {

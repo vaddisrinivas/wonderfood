@@ -5,15 +5,11 @@ import { createWonderMcpSdkServer } from './sdk-server';
 const MCP_BODY_LIMIT_BYTES = 256 * 1024;
 const LOCAL_ORIGINS = new Set(['http://localhost', 'http://127.0.0.1', 'http://[::1]']);
 
-function writeJson(res: any, payload: unknown, status = 200) {
+function writeHttpError(res: any, status: number, message: string) {
   res.writeHead(status, {
-    'content-type': 'application/json',
+    'content-type': 'text/plain; charset=utf-8',
   });
-  res.end(JSON.stringify(payload));
-}
-
-function writePreflightError(res: any, status: number, code: number, message: string) {
-  writeJson(res, { jsonrpc: '2.0', error: { code, message }, id: null }, status);
+  res.end(message);
 }
 
 function firstHeaderValue(headers: HeaderMap, name: string): string | undefined {
@@ -47,11 +43,11 @@ function rejectOversizedBody(req: any, res: any, maxBytes: number): boolean {
     return false;
   }
   if (!Number.isFinite(contentLength)) {
-    writePreflightError(res, 400, -32600, 'Invalid Content-Length header');
+    writeHttpError(res, 400, 'Invalid Content-Length header');
     return true;
   }
   if (contentLength > maxBytes) {
-    writePreflightError(res, 413, -32004, `Request body too large. Limit is ${maxBytes} bytes.`);
+    writeHttpError(res, 413, `Request body too large. Limit is ${maxBytes} bytes.`);
     return true;
   }
   return false;
@@ -64,12 +60,7 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
 
   const auth = authorizeMcpRequest(req.headers ?? {});
   if (!auth.ok) {
-    writePreflightError(
-      res,
-      auth.statusCode,
-      auth.statusCode === 503 ? -32003 : -32001,
-      auth.message,
-    );
+    writeHttpError(res, auth.statusCode, auth.message);
     return true;
   }
 
@@ -93,7 +84,11 @@ export async function handleMcpRequest(req: any, res: any): Promise<boolean> {
     await transport.handleRequest(req, res);
     return true;
   } catch (error) {
-    writePreflightError(res, 500, -32603, (error as Error).message);
+    if (!res.headersSent) {
+      writeHttpError(res, 500, (error as Error).message);
+    } else {
+      res.end();
+    }
     return true;
   }
 }
