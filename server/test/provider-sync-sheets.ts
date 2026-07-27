@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { clearWebhookReplayState, getWebhookReplayState } from '../src/providers/webhooks/sheets';
 import { syncSheetsFromWebhook } from '../src/providers/sync/sheets';
-import { readSheetsConfig, sheetsEndpoint } from '../src/providers/sheets/client';
+import { createOfficialDriveClient, createOfficialSheetsClient, readSheetsConfig, sheetsEndpoint } from '../src/providers/sheets/client';
 import { pullSheetsRecordsLive } from '../src/providers/sheets/pull';
 
 type MockCall = {
@@ -67,6 +67,8 @@ function setupMockSheetsFetch() {
   process.env.GOOGLE_SHEETS_ACCESS_TOKEN = 'test-token';
   process.env.GOOGLE_SHEETS_SPREADSHEET_ID = 'sheet-sync-test';
   process.env.GOOGLE_SHEETS_DATA_SOURCE_ID = 'phase6-data-source';
+  ensure(createOfficialSheetsClient() !== null, 'Expected official Sheets SDK client');
+  ensure(createOfficialDriveClient() !== null, 'Expected official Drive SDK client');
   const previousAuthority = process.env.LIFEOS_AUTHORITY_PROVIDER;
   process.env.LIFEOS_AUTHORITY_PROVIDER = 'google_sheets';
 

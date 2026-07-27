@@ -1,3 +1,5 @@
+import { Client as NotionClient } from '@notionhq/client';
+
 export const NOTION_API_VERSION = '2026-03-11';
 export const NOTION_BASE_URL = process.env.NOTION_BASE_URL?.trim() || 'https://api.notion.com/v1';
 export const NOTION_DATA_SOURCE_QUERY_PATH = '/data_sources/{data_source_id}/query';
@@ -40,6 +42,17 @@ export function readNotionConfig(): NotionClientConfig | null {
     webhookSigningSecret: process.env.NOTION_WEBHOOK_SIGNING_SECRET?.trim() || undefined,
     requestTrace: process.env.NOTION_REQUEST_TRACE || undefined,
   };
+}
+
+export function createOfficialNotionClient(config?: NotionClientConfig): NotionClient | null {
+  const resolved = config ?? readNotionConfig();
+  if (!resolved) {
+    return null;
+  }
+  return new NotionClient({
+    auth: resolved.token,
+    notionVersion: resolved.apiVersion,
+  });
 }
 
 export function isNotionConfigured(): boolean {

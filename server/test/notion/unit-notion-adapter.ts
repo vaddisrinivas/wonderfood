@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 
 import { pullNotionRecordsLive } from '../../src/providers/notion/pull';
 import { writeNotionRecord } from '../../src/providers/notion/push';
+import { createOfficialNotionClient } from '../../src/providers/notion/client';
 
 type MockCall = {
   url: string;
@@ -151,6 +152,9 @@ function hasUnsupported(value: unknown) {
 
   process.env.NOTION_TOKEN = 'test-notion-token-unit';
   process.env.NOTION_DATA_SOURCE_ID = 'notion-source-1';
+  if (!createOfficialNotionClient()) {
+    throw new Error('Expected official Notion SDK client');
+  }
 
   const mock = withMockNotionFetch('notion-page-1', 'notion-source-1');
 

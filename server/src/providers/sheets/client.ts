@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { google } from 'googleapis';
 
 export const SHEETS_API_BASE_URL = process.env.GOOGLE_SHEETS_API_BASE_URL?.trim() || 'https://sheets.googleapis.com/v4';
 export const SHEETS_REQUEST_TIMEOUT_MS = 15000;
@@ -47,6 +48,26 @@ export function readSheetsConfig(): SheetsClientConfig | null {
 
 export function isSheetsConfigured() {
   return readSheetsConfig() !== null;
+}
+
+export function createOfficialSheetsClient(config?: SheetsClientConfig) {
+  const resolved = config ?? readSheetsConfig();
+  if (!resolved) {
+    return null;
+  }
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: resolved.accessToken });
+  return google.sheets({ version: 'v4', auth });
+}
+
+export function createOfficialDriveClient(config?: SheetsClientConfig) {
+  const resolved = config ?? readSheetsConfig();
+  if (!resolved) {
+    return null;
+  }
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: resolved.accessToken });
+  return google.drive({ version: 'v3', auth });
 }
 
 export function sheetsEndpoint(path: string, config?: SheetsClientConfig) {
