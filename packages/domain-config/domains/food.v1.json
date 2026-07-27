@@ -972,6 +972,20 @@
                   "title": "Wonder verifies",
                   "subtitle": "Every external write is reread before it is trusted."
                 }
+              ],
+              "actions": [
+                {
+                  "title": "Use phone only",
+                  "subtitle": "Skip setup and keep everything local."
+                },
+                {
+                  "title": "Connect home",
+                  "subtitle": "Bind Notion or Sheets when ready."
+                },
+                {
+                  "title": "Invite later",
+                  "subtitle": "Share the source home with family first."
+                }
               ]
             }
           },
@@ -998,6 +1012,20 @@
                   "subtitle": "Wonder rereads changed pages before calling them synced.",
                   "status": "Safe"
                 }
+              ],
+              "actions": [
+                {
+                  "title": "Paste page",
+                  "subtitle": "Use an existing food page."
+                },
+                {
+                  "title": "Share page",
+                  "subtitle": "Invite family in Notion."
+                },
+                {
+                  "title": "Reread",
+                  "subtitle": "Confirm the latest source state."
+                }
               ]
             }
           },
@@ -1023,6 +1051,20 @@
                   "title": "Invisible sync",
                   "subtitle": "Pending and failed writes surface only when action is needed.",
                   "status": "Quiet"
+                }
+              ],
+              "actions": [
+                {
+                  "title": "Paste Sheet",
+                  "subtitle": "Bind an existing workbook."
+                },
+                {
+                  "title": "Share Sheet",
+                  "subtitle": "Let collaborators edit rows."
+                },
+                {
+                  "title": "Reread",
+                  "subtitle": "Verify synced rows."
                 }
               ]
             }

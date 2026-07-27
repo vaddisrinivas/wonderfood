@@ -691,6 +691,7 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const connected = summary?.connected ?? false;
   const homes = rows(props.homes);
   const steps = rows(props.steps);
+  const actions = rows(props.actions);
   return (
     <WidgetShell title={text(props.title, 'Sources')} subtitle={text(props.subtitle, 'Your data homes stay quiet until there is something useful to do.')}>
       <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
@@ -727,6 +728,16 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
                 <Text style={styles.providerStepTitle}>{label(step)}</Text>
                 <Text style={styles.sourceHomeDetail}>{detail(step)}</Text>
               </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {actions.length ? (
+        <View style={styles.providerActions}>
+          {actions.slice(0, 3).map((action) => (
+            <View key={label(action)} style={styles.providerAction}>
+              <Text style={styles.providerActionTitle}>{label(action)}</Text>
+              <Text style={styles.providerActionDetail}>{detail(action, 'Ready when you are.')}</Text>
             </View>
           ))}
         </View>
@@ -861,6 +872,10 @@ const styles = StyleSheet.create({
   providerStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   providerStepNumber: { width: 24, height: 24, borderRadius: 999, backgroundColor: '#241C16', color: '#FFFFFF', textAlign: 'center', lineHeight: 24, fontSize: 12, fontWeight: '900', overflow: 'hidden' },
   providerStepTitle: { color: '#241C16', fontSize: 13, fontWeight: '900' },
+  providerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  providerAction: { flexGrow: 1, flexBasis: '30%', borderRadius: 16, backgroundColor: '#EFE6ED', paddingHorizontal: 11, paddingVertical: 10, gap: 3 },
+  providerActionTitle: { color: '#3F2D42', fontSize: 12, fontWeight: '900' },
+  providerActionDetail: { color: '#6D6257', fontSize: 11, lineHeight: 15 },
   providerCta: { alignSelf: 'flex-start', backgroundColor: '#2F7448', borderRadius: 999, color: '#FFFFFF', fontSize: 13, fontWeight: '900', paddingHorizontal: 14, paddingVertical: 9 },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primaryButton: { backgroundColor: '#2F7448', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
