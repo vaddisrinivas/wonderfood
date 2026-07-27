@@ -134,9 +134,88 @@ export const appPackageSchema = {
         dashboardBlocks: { type: 'array', items: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } } },
         mobileSurface: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
         render: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
+        ui: { $ref: '#/$defs/presentationUi' },
         richDetailSchema: { type: 'string', minLength: 1 },
         providerTemplateFields: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
         sourceSchemaVersion: { type: 'string', minLength: 1 },
+      },
+    },
+    presentationUi: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        schemaVersion: { const: 'wonder.ui.v1' },
+        openUrlAllowlist: { type: 'array', items: { type: 'string', minLength: 1 } },
+        components: {
+          type: 'array',
+          items: { $ref: '#/$defs/presentationUiComponent' },
+        },
+        screens: {
+          type: 'object',
+          additionalProperties: { $ref: '#/$defs/presentationScreen' },
+        },
+        defaultScreen: { type: 'string', minLength: 1 },
+      },
+    },
+    presentationUiAction: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind'],
+      properties: {
+        kind: { enum: ['open_url', 'propose'] },
+        label: { type: 'string', minLength: 1 },
+        url: { type: 'string', minLength: 1 },
+        command: { type: 'string', minLength: 1 },
+        tool: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_.:-]*$' },
+        payload: { type: 'object', additionalProperties: true },
+      },
+      allOf: [
+        {
+          if: { properties: { kind: { const: 'open_url' } } },
+          then: { required: ['url'] },
+        },
+        {
+          if: { properties: { kind: { const: 'propose' } } },
+          then: {
+            anyOf: [
+              { required: ['tool'] },
+              { required: ['command'] },
+            ],
+          },
+        },
+      ],
+    },
+    presentationUiQuery: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        collections: { type: 'array', items: { type: 'string', minLength: 1 } },
+        match: { type: 'string', minLength: 1 },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+      },
+    },
+    presentationUiComponent: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind'],
+      properties: {
+        kind: { enum: ['recordList', 'metric', 'action', 'text'] },
+        id: { type: 'string', minLength: 1 },
+        title: { type: 'string', minLength: 1 },
+        subtitle: { type: 'string', minLength: 1 },
+        view: { type: 'string', minLength: 1 },
+        tone: { enum: ['neutral', 'moss', 'amber', 'plum', 'blue'] },
+        query: { $ref: '#/$defs/presentationUiQuery' },
+        action: { $ref: '#/$defs/presentationUiAction' },
+      },
+    },
+    presentationScreen: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', minLength: 1 },
+        subtitle: { type: 'string', minLength: 1 },
+        components: { type: 'array', items: { $ref: '#/$defs/presentationUiComponent' } },
       },
     },
     viewLayout: {

@@ -31,8 +31,70 @@ assert.equal(validateAppPackage({
 assert.equal(validateAppPackage({
   ...pkg,
   presentation: {
+    label: 'Food shell',
+    homeSurface: 'decisions.inbox',
+    surfaces: [{ id: 'decisions.inbox', label: 'Inbox', collections: ['decisions'] }],
+    visualIdentity: { domain: { icon: 'inbox', accent: 'blue' } },
+    ui: {
+      schemaVersion: 'wonder.ui.v1',
+      openUrlAllowlist: ['https://wonder.example', 'http://localhost:3000'],
+      components: [
+        {
+          kind: 'action',
+          id: 'open-home',
+          title: 'Open docs',
+          action: { kind: 'open_url', url: 'https://wonder.example/docs' },
+        },
+        {
+          kind: 'action',
+          id: 'propose-action',
+          title: 'Propose update',
+          action: { kind: 'propose', tool: 'local_query' },
+        },
+      ],
+      screens: {
+        home: {
+          title: 'Home',
+          subtitle: 'Primary',
+          components: [
+            { kind: 'text', id: 'tip', title: 'Tip', subtitle: 'Welcome to Food.' },
+            { kind: 'recordList', id: 'records', title: 'Recent', query: { collections: ['decisions'], limit: 3 } },
+          ],
+        },
+      },
+      defaultScreen: 'home',
+    },
+  },
+}).valid, true);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
     label: 'Bad',
     surfaces: [{ id: 'bad', label: 'Bad', collections: [], script: 'bad' }],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
+    ui: { schemaVersion: 'wonder.ui.v1', components: [{ kind: 'action', id: 'bad-open', title: 'Bad', action: { kind: 'open_url' } }] },
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
+    ui: { schemaVersion: 'wonder.ui.v1', components: [{ kind: 'action', id: 'bad-propose', title: 'Bad', action: { kind: 'propose' } }] },
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
+    ui: { schemaVersion: 'wonder.ui.v1', openUrlAllowlist: [''], components: [] },
   },
 }).valid, false);
 assert.equal(validateAppPackage({

@@ -54,6 +54,13 @@ describe('domain manifest to app package bridge', () => {
     expect(rendered.provenance).toBe(`${bridged.package.id}@${bridged.package.version}/query:${view.query}`);
   });
 
+  it('preserves manifest ui config on presentation', () => {
+    const manifest = loadCatalog().activeManifest;
+    const bridged = buildAppPackageFromManifest(manifest);
+
+    expect(bridged.package.presentation?.ui).toEqual(manifest.ui);
+  });
+
   it('refuses to silently translate legacy regex dashboard matching', () => {
     const manifest = loadCatalog().activeManifest;
     const bridged = buildAppPackageFromManifest(manifest);

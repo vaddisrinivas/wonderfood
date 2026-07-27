@@ -1,8 +1,9 @@
 import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Page } from '@/src/components/ui';
+import { resolveChatServerConfig } from '@/src/chat/client';
 import {
   loadCatalog,
   setActiveDomainOverride,
@@ -43,6 +44,70 @@ function toneInk(tone: MobileSurfaceTone, colors: LifeOSColors) {
   return colors.ink;
 }
 
+function coerceCollectionQuery(raw: unknown, fallback: string[]): { collections: string[]; match?: string; limit: number } {
+  if (!raw || typeof raw !== 'object') {
+    return { collections: fallback, match: undefined, limit: 6 };
+  }
+  const value = raw as Record<string, unknown>;
+  const rawCollections = Array.isArray(value.collections) ? value.collections.filter((item): item is string => typeof item === 'string') : [];
+  const rawLimit = Number(value.limit);
+  const validLimit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(20, rawLimit) : 6;
+  const rawMatch = typeof value.match === 'string' && value.match.trim().length > 0 ? value.match : undefined;
+
+  if (rawCollections.length > 0) {
+    return { collections: rawCollections, match: rawMatch, limit: validLimit };
+  }
+  return { collections: fallback, match: rawMatch, limit: validLimit };
+}
+
+function isAllowedUrl(targetUrl: string, allowlist: string[] | undefined): boolean {
+  if (!allowlist || allowlist.length === 0) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(targetUrl);
+  } catch {
+    return false;
+  }
+  return allowlist.some((entry) => {
+    const allow = String(entry || '').trim().toLowerCase();
+    if (!allow) return false;
+    if (allow === '*') return true;
+    if (allow === parsed.origin) return true;
+    if (allow === parsed.hostname) return true;
+    if (allow.startsWith('*.') && parsed.hostname.endsWith(allow.slice(2))) return true;
+    return parsed.href.startsWith(allow);
+  });
+}
+
+function isObjectValue(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function toUiString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toUiPayload(value: unknown): Record<string, unknown> | null {
+  if (!isObjectValue(value)) {
+    return null;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function makeUiRecordsQuery(
+  manifestCollections: string[],
+  component: Record<string, unknown> | undefined,
+) {
+  const { collections, match, limit } = coerceCollectionQuery(component?.query, manifestCollections);
+  return { collections, match, limit };
+}
+
 function SurfaceAction({ action, filled = false }: { action?: MobileSurfaceAction; filled?: boolean }) {
   const theme = useLifeOSTheme();
   if (!action) return null;
@@ -60,6 +125,45 @@ function SurfaceAction({ action, filled = false }: { action?: MobileSurfaceActio
         <Text maxFontSizeMultiplier={1.25} style={[styles.actionText, { color: filled ? theme.colors.paper : theme.colors.ink }]}>{action.label}</Text>
       </Pressable>
     </Link>
+  );
+}
+
+function UiActionButton({
+  actionLabel,
+  onPress,
+  disabled = false,
+  filled = false,
+}: { actionLabel?: string; onPress: () => void; disabled?: boolean; filled?: boolean }) {
+  const theme = useLifeOSTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      style={StyleSheet.flatten([
+        styles.action,
+        {
+          backgroundColor: disabled ? theme.colors.line : filled ? theme.colors.ink : 'transparent',
+          borderColor: disabled ? theme.colors.line : (filled ? theme.colors.ink : theme.colors.line),
+          opacity: disabled ? 0.8 : 1,
+        },
+      ])}
+      onPress={onPress}>
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={[styles.actionText, { color: disabled ? theme.colors.muted : (filled ? theme.colors.paper : theme.colors.ink) }]}>
+        {actionLabel || 'Open'}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TextSection({ title, subtitle }: { title: string; subtitle?: string }) {
+  const theme = useLifeOSTheme();
+  return (
+    <View style={styles.textSection}>
+      <Text maxFontSizeMultiplier={1.3} style={[styles.textTitle, { color: theme.colors.ink }]}>{title}</Text>
+      {subtitle ? <Text maxFontSizeMultiplier={1.2} style={[styles.textSubtitle, { color: theme.colors.muted }]}>{subtitle}</Text> : null}
+    </View>
   );
 }
 
@@ -172,6 +276,96 @@ function FocusSection({ card, records }: { card: MobileSurfaceCard; records: Dom
   );
 }
 
+function uiTone(value: unknown): MobileSurfaceTone {
+  if (value === 'moss' || value === 'amber' || value === 'plum' || value === 'blue' || value === 'neutral') {
+    return value;
+  }
+  return 'neutral';
+}
+
+function countSummary(records: DomainRecordViewModel[]) {
+  return `${records.length} ${records.length === 1 ? 'record' : 'records'}`;
+}
+
+function metricRows(queryRecords: DomainRecordViewModel[]) {
+  const title = queryRecords.length === 1 ? 'record' : 'records';
+  return `${queryRecords.length} ${title}`;
+}
+
+function MetricSection({
+  component,
+  records,
+}: { component: { title?: unknown; subtitle?: unknown; tone?: unknown; id?: unknown }, records: DomainRecordViewModel[] }) {
+  const tone = uiTone(component.tone);
+  const theme = useLifeOSTheme();
+  const title = typeof component.title === 'string' && component.title.trim() ? component.title : 'Metric';
+
+  return (
+    <View style={[styles.metricSection, { borderColor: toneSurface(tone, theme.colors) }]}>
+      <Text maxFontSizeMultiplier={1.25} style={[styles.metricTitle, { color: theme.colors.ink }]}>{title}</Text>
+      <Text maxFontSizeMultiplier={1.35} style={[styles.metricValue, { color: toneInk(tone, theme.colors) }]}>{metricRows(records)}</Text>
+      {typeof component.subtitle === 'string' && component.subtitle.trim() ? (
+        <Text maxFontSizeMultiplier={1.2} style={[styles.textSubtitle, { color: theme.colors.muted }]}>{component.subtitle}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function RecordListSection({
+  component,
+  manifestCollections,
+  records,
+  onAction,
+  actionLabel,
+  showHeader = true,
+}: {
+  component: { title?: unknown; subtitle?: unknown; tone?: unknown; action?: unknown; query?: unknown; id?: unknown };
+  manifestCollections: string[];
+  records: DomainRecordViewModel[];
+  onAction?: () => void;
+  actionLabel?: string;
+  showHeader?: boolean;
+}) {
+  const tone = uiTone(component.tone);
+  const theme = useLifeOSTheme();
+  const title = typeof component.title === 'string' && component.title.trim() ? component.title : 'Items';
+  const subtitle = typeof component.subtitle === 'string' && component.subtitle.trim() ? component.subtitle : 'No items';
+  const action = component.action as unknown;
+  const cardTone = toneSurface(tone, theme.colors);
+  const card: MobileSurfaceCard = {
+    kind: 'list',
+    id: String(component.id || title).slice(0, 40),
+    label: title,
+    icon: tone === 'neutral' ? '◻' : '◆',
+    tone,
+    query: (() => {
+      const query = makeUiRecordsQuery(manifestCollections, component as Record<string, unknown>);
+      return { collections: query.collections, match: query.match, limit: query.limit };
+    })(),
+    empty: { title: subtitle, detail: `No ${title.toLowerCase()} found.` },
+    action: component.action as MobileSurfaceCard['action'],
+    nested: [],
+  };
+
+  const rows = matchingRecords(card.query, records);
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeading}>
+        <View style={[styles.sectionMark, { backgroundColor: cardTone }]}>
+          <Text allowFontScaling={false} style={[styles.sectionMarkText, { color: toneInk(tone, theme.colors) }]}>◦</Text>
+        </View>
+        {showHeader ? <Text maxFontSizeMultiplier={1.25} style={[styles.sectionLabel, { color: theme.colors.ink }]}>{title}</Text> : null}
+      </View>
+      <View style={styles.recordList}>
+        {rows.length ? rows.map((record) => <RecordRow key={record.id} card={card} record={record} />) : <EmptyContent card={card} />}
+      </View>
+      {action && onAction ? (
+        <UiActionButton actionLabel={actionLabel || 'Run'} onPress={onAction} />
+      ) : null}
+    </View>
+  );
+}
+
 function LoadingSurface() {
   const theme = useLifeOSTheme();
   return (
@@ -200,6 +394,29 @@ export function ManifestMobileSurface() {
   const { activeManifest } = loadCatalog();
   const db = useLifeOSDatabase();
   const theme = useLifeOSTheme();
+  const ui = activeManifest.ui;
+  const uiScreens = useMemo(() => {
+    if (!ui?.screens || Object.keys(ui.screens).length === 0) {
+      return [];
+    }
+    return Object.entries(ui.screens).map(([screenId, screen]) => {
+      const value = screen as Record<string, unknown>;
+      return {
+        id: screenId,
+        title: typeof value.title === 'string' && value.title.trim() ? value.title : screenId,
+        subtitle: typeof value.subtitle === 'string' && value.subtitle.trim() ? value.subtitle : 'Screen',
+        components: Array.isArray(value.components) ? value.components : [],
+      };
+    });
+  }, [ui?.screens]);
+  const hasUi = Boolean(
+    ui && (
+      (Array.isArray(ui.components) && ui.components.length > 0)
+      || (uiScreens.length > 0)
+    )
+  );
+  const [selectedUiScreenId, setSelectedUiScreenId] = useState(uiScreens[0]?.id ?? '');
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const surface = activeManifest.mobile_surface;
   const views = useMemo(
     () => surface?.views?.length ? surface.views : surface ? [fallbackView(surface.title, surface.subtitle, surface.card_order)] : [],
@@ -231,6 +448,212 @@ export function ManifestMobileSurface() {
       });
     return () => { current = false; };
   }, [activeManifest.collections, activeManifest.id, db, reloadToken]);
+
+  useEffect(() => {
+    if (uiScreens.length && !selectedUiScreenId) {
+      setSelectedUiScreenId(uiScreens[0]?.id ?? '');
+    }
+  }, [selectedUiScreenId, uiScreens]);
+
+  if (hasUi) {
+    const fallbackComponents = Array.isArray(ui?.components) ? ui.components : [];
+    const hasUiScreens = uiScreens.length > 0;
+    const selectedScreen = uiScreens.find((screen) => screen.id === selectedUiScreenId) ?? uiScreens[0];
+    const screenComponents = hasUiScreens ? (selectedScreen?.components ?? []) : fallbackComponents;
+    const safeScreenComponents = Array.isArray(screenComponents) ? screenComponents : [];
+
+    async function handleUiAction(rawAction: unknown) {
+      if (!rawAction || typeof rawAction !== 'object') {
+        setActionFeedback('No action attached to this component.');
+        return;
+      }
+      const action = rawAction as Record<string, unknown>;
+      const kind = toUiString(action.kind);
+      if (kind !== 'open_url' && kind !== 'propose') {
+        setActionFeedback('Unknown component action.');
+        return;
+      }
+
+      if (kind === 'open_url') {
+        const url = toUiString(action.url);
+        if (!url || !isAllowedUrl(url, ui?.openUrlAllowlist)) {
+          setActionFeedback('This link is not allowed for this package.');
+          return;
+        }
+        try {
+          await Linking.openURL(url);
+          setActionFeedback('Opened link.');
+        } catch {
+          setActionFeedback('Could not open link.');
+        }
+        return;
+      }
+
+      const command = toUiString(action.command);
+      const tool = toUiString(action.tool);
+      const normalizedCommand = command || tool;
+      if (!normalizedCommand) {
+        setActionFeedback('Missing proposal command.');
+        return;
+      }
+      const payload = toUiPayload(action.payload);
+      const serverConfig = await resolveChatServerConfig();
+      if (!serverConfig.serverUrl) {
+        setActionFeedback('Server unavailable for proposals.');
+        return;
+      }
+      try {
+        const endpoint = serverConfig.serverUrl.replace(/\/$/, '');
+        const response = await fetch(`${endpoint}/chat/action`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(serverConfig.serverToken ? { authorization: `Bearer ${serverConfig.serverToken}` } : {}),
+          },
+          body: JSON.stringify({
+            action: 'propose',
+            command: normalizedCommand,
+            tool: tool || undefined,
+            payload: payload ?? undefined,
+            domain_id: activeManifest.id,
+            actor: 'ui-package',
+            idempotency_key: `ui:${Date.now()}:${Math.floor(Math.random() * 1000)}`,
+          }),
+        });
+        if (!response.ok) {
+          setActionFeedback('Proposal request failed.');
+          return;
+        }
+        setActionFeedback('Proposal queued.');
+      } catch {
+        setActionFeedback('Could not queue proposal.');
+      }
+    }
+
+    function renderUiComponent(component: unknown, index: number) {
+      if (!component || typeof component !== 'object') {
+        return (
+          <View style={styles.section} key={`ui-unsupported-${index}`}>
+            <TextSection title="Unsupported component" subtitle="Missing component payload." />
+          </View>
+        );
+      }
+      const typed = component as Record<string, unknown>;
+      const kind = typed.kind;
+      const title = typeof typed.title === 'string' && typed.title.trim() ? typed.title : undefined;
+      if (kind === 'recordList') {
+        const query = makeUiRecordsQuery(activeManifest.collections, typed as { query?: unknown } as Record<string, unknown>);
+        const rows = matchingRecords({ collections: query.collections, match: query.match, limit: query.limit }, records);
+        const queryMeta = { title: title || 'Items', subtitle: typed.subtitle, tone: typed.tone, action: typed.action, query: typed.query };
+        return (
+          <RecordListSection
+            key={`ui-${typed.id ?? index}-${kind}`}
+            manifestCollections={activeManifest.collections}
+            component={queryMeta}
+            records={rows}
+            onAction={() => void handleUiAction(typed.action)}
+            actionLabel={typeof typed.action === 'object' && typeof (typed.action as Record<string, unknown>).label === 'string'
+              ? String((typed.action as Record<string, unknown>).label)
+              : 'Action'}
+          />
+        );
+      }
+      if (kind === 'metric') {
+        const query = makeUiRecordsQuery(activeManifest.collections, typed as { query?: unknown } as Record<string, unknown>);
+        const rows = matchingRecords({ collections: query.collections, match: query.match, limit: query.limit }, records);
+        return <MetricSection key={`ui-${typed.id ?? index}-${kind}`} component={{ title, subtitle: typed.subtitle, tone: typed.tone, id: typed.id }} records={rows} />;
+      }
+      if (kind === 'text') {
+        return <TextSection key={`ui-${typed.id ?? index}-${kind}`} title={title || 'Note'} subtitle={typeof typed.subtitle === 'string' ? typed.subtitle : ''} />;
+      }
+      if (kind === 'action') {
+        return (
+          <View key={`ui-${typed.id ?? index}-${kind}`} style={styles.section}>
+            <UiActionButton
+              actionLabel={title || 'Run'}
+              onPress={() => void handleUiAction(typed.action)}
+            />
+          </View>
+        );
+      }
+      return (
+        <View style={styles.section} key={`ui-unsupported-${index}`}>
+          <TextSection title="Unsupported component" subtitle={`Unknown kind: ${String(kind || 'unknown')}`} />
+        </View>
+      );
+    }
+
+    const activeScreenTitle = selectedScreen?.title || activeManifest.label;
+    const activeScreenSubtitle = selectedScreen?.subtitle ?? '';
+
+    return (
+      <Page>
+        <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <View style={styles.headerCopy}>
+                <Text maxFontSizeMultiplier={1.2} style={[styles.title, { color: theme.colors.ink }]}>{activeScreenTitle}</Text>
+                {activeScreenSubtitle ? <Text maxFontSizeMultiplier={1.25} style={[styles.subtitle, { color: theme.colors.muted }]}>{activeScreenSubtitle}</Text> : null}
+              </View>
+            </View>
+
+            {hasUiScreens && uiScreens.length > 1 ? (
+              <ScrollView
+                horizontal
+                accessibilityRole="tablist"
+                contentContainerStyle={styles.viewTabs}
+                showsHorizontalScrollIndicator={false}>
+                {uiScreens.map((screen) => {
+                  const selected = screen.id === selectedScreen?.id;
+                  return (
+                    <Pressable
+                      key={screen.id}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      onPress={() => setSelectedUiScreenId(screen.id)}
+                      style={({ pressed }) => [
+                        styles.viewTab,
+                        {
+                          backgroundColor: selected ? theme.colors.ink : theme.colors.paper,
+                          borderColor: selected ? theme.colors.ink : theme.colors.line,
+                        },
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text maxFontSizeMultiplier={1.2} style={[styles.viewTabLabel, { color: selected ? theme.colors.paper : theme.colors.ink }]}>{screen.title}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
+            {loadState === 'loading' ? <LoadingSurface /> : null}
+            {loadState === 'error' ? (
+              <View style={[styles.errorState, { backgroundColor: theme.colors.paper, borderColor: theme.colors.line }]}>
+                <Text maxFontSizeMultiplier={1.25} style={[styles.emptyTitle, { color: theme.colors.ink }]}>Food could not load.</Text>
+                <Text maxFontSizeMultiplier={1.25} style={[styles.emptyDetail, { color: theme.colors.muted }]}>Your data is untouched. Try the local view again.</Text>
+                <Pressable accessibilityRole="button" onPress={() => setReloadToken((value) => value + 1)} style={[styles.action, { borderColor: theme.colors.line }]}>
+                  <Text maxFontSizeMultiplier={1.25} style={[styles.actionText, { color: theme.colors.ink }]}>Try again</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {loadState === 'ready' ? (
+              <View style={styles.sections}>
+                {safeScreenComponents.length ? (
+                  safeScreenComponents.map((component, index) => renderUiComponent(component, index))
+                ) : (
+                  <View style={styles.centered}>
+                    <Text maxFontSizeMultiplier={1.25} style={[styles.emptyTitle, { color: theme.colors.ink }]}>UI shell is empty.</Text>
+                    <Text maxFontSizeMultiplier={1.25} style={[styles.emptyDetail, { color: theme.colors.muted }]}>Ask Wonder to add components to this screen.</Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+            {actionFeedback ? <Text maxFontSizeMultiplier={1.25} style={[styles.actionFeedback, { color: theme.colors.muted }]}>{actionFeedback}</Text> : null}
+          </View>
+        </ScrollView>
+      </Page>
+    );
+  }
 
   if (!surface) {
     return (
@@ -334,6 +757,12 @@ const styles = StyleSheet.create({
   viewTabIcon: { fontSize: 14 },
   viewTabLabel: { fontSize: 12, fontWeight: '800' },
   sections: { gap: 18 },
+  textSection: { gap: 4 },
+  textTitle: { fontSize: 18, lineHeight: 22, fontWeight: '800', letterSpacing: -0.2 },
+  textSubtitle: { fontSize: 12, lineHeight: 16, marginTop: 3 },
+  metricSection: { borderWidth: 1, borderRadius: radius.md, padding: 12, gap: 6 },
+  metricTitle: { fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  metricValue: { fontSize: 28, lineHeight: 34, fontWeight: '900' },
   section: { gap: 7 },
   sectionHeading: { minHeight: 26, flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionMark: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
@@ -369,5 +798,6 @@ const styles = StyleSheet.create({
   loadingLineShort: { width: '84%', height: 8, opacity: 0.4 },
   errorState: { borderWidth: 1, borderRadius: radius.md, padding: 16, gap: 8 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28 },
+  actionFeedback: { marginTop: 8, fontSize: 12, lineHeight: 16 },
   advanced: { marginTop: 24, gap: 18 },
 });
