@@ -155,6 +155,14 @@ function buildControlRoomChange(
           props: {
             collections,
             editable: true,
+            examples: [
+              { title: 'New table', subtitle: 'Create a structured table and screen.', prompt: 'add freezer ideas table' },
+              { title: 'New field', subtitle: 'Add a typed field to an existing table.', prompt: 'add spice level number field to recipe' },
+              { title: 'Board view', subtitle: 'Reframe records as a kanban board.', prompt: 'show recipe board view' },
+              { title: 'Cuter theme', subtitle: 'Make cards calmer and less dense.', prompt: 'make theme cuter cards' },
+              { title: 'Rule', subtitle: 'Suggest dinner when pantry is expiring.', prompt: 'when pantry expires suggest dinner' },
+              { title: 'Native', subtitle: 'Declare supported shell access.', prompt: 'add camera permission and share intent' },
+            ],
           },
         },
         {

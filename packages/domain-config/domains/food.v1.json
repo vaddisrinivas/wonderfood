@@ -1294,7 +1294,42 @@
             "id": "collection_change",
             "title": "Change this table",
             "subtitle": "Ask Wonder for a reviewed package diff before schema or UI changes apply.",
-            "tone": "plum"
+            "tone": "plum",
+            "props": {
+              "placeholder": "Try: add spice level number field to recipe",
+              "examples": [
+                {
+                  "title": "Add field",
+                  "subtitle": "Add a typed field to this table.",
+                  "prompt": "add spice level number field to recipe"
+                },
+                {
+                  "title": "Make compact",
+                  "subtitle": "Simplify the overview layout.",
+                  "prompt": "make overview smaller less dense"
+                },
+                {
+                  "title": "Board view",
+                  "subtitle": "Create a kanban-style view.",
+                  "prompt": "show recipe board view"
+                },
+                {
+                  "title": "Dinner poll",
+                  "subtitle": "Add a family poll screen.",
+                  "prompt": "add family dinner poll"
+                },
+                {
+                  "title": "Recipe video",
+                  "subtitle": "Add media/video slots.",
+                  "prompt": "add youtube recipe video page"
+                },
+                {
+                  "title": "Theme",
+                  "subtitle": "Tune package design tokens.",
+                  "prompt": "make theme cuter cards"
+                }
+              ]
+            }
           }
         ]
       },

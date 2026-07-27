@@ -26,6 +26,8 @@ type WidgetProps = {
   title?: string;
   subtitle?: string;
   prompt?: string;
+  placeholder?: string;
+  examples?: unknown[];
   suggestions?: string[];
   body?: string;
   author?: string;
@@ -241,6 +243,11 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const db = useLifeOSDatabase();
   const [prompt, setPrompt] = useState(text(props.prompt, 'Add a notes table with a cute card list'));
+  const examples = rows(props.examples).map((item) => ({
+    title: label(item),
+    prompt: text(item.prompt, label(item)),
+    detail: detail(item),
+  })).filter((item) => item.prompt.length > 0);
   const [preview, setPreview] = useState<AppPackageChangePreview | null>(null);
   const [request, setRequest] = useState<AppPackageChangeRequest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -302,11 +309,21 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
       <TextInput
         value={prompt}
         onChangeText={setPrompt}
-        placeholder="Example: add a family recipes table"
+        placeholder={text(props.placeholder, 'Example: add a family recipes table')}
         placeholderTextColor="#8A8172"
         style={styles.editorInput}
         multiline
       />
+      {examples.length ? (
+        <View style={styles.exampleGrid}>
+          {examples.slice(0, 6).map((example) => (
+            <Pressable key={example.prompt} style={styles.exampleChip} onPress={() => setPrompt(example.prompt)}>
+              <Text style={styles.exampleTitle}>{example.title}</Text>
+              {example.detail ? <Text style={styles.exampleDetail}>{example.detail}</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.buttonRow}>
         <Pressable style={[styles.primaryButton, busy ? styles.disabled : null]} onPress={buildPreview} disabled={busy}>
           <Text style={styles.primaryButtonText}>{busy ? 'Checking…' : 'Preview change'}</Text>
@@ -795,6 +812,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
   },
+  exampleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  exampleChip: { maxWidth: '48%', borderRadius: 16, backgroundColor: '#EFE6ED', paddingHorizontal: 11, paddingVertical: 9, gap: 2 },
+  exampleTitle: { color: '#3F2D42', fontSize: 12, fontWeight: '900' },
+  exampleDetail: { color: '#6D6257', fontSize: 11, lineHeight: 15 },
   previewBox: { borderRadius: 18, backgroundColor: '#F6F1E8', padding: 14, gap: 6 },
   previewTitle: { color: '#241C16', fontSize: 16, fontWeight: '900' },
   previewText: { color: '#6D6257', fontSize: 12, fontWeight: '700' },
