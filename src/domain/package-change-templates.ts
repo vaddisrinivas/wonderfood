@@ -6,9 +6,11 @@ import type {
   AppPackageV3,
   FieldType,
   PackagePresentationSpec,
+  ViewSpec,
 } from '@/packages/shared/contracts/package';
 import type { QueryPredicate } from '@/packages/shared/contracts/query';
 import { APP_PACKAGE_WIDGET_KINDS } from '@/packages/shared/contracts/ui-widgets';
+import widgetScreenIntentRegistryJson from '@/packages/domain-config/templates/package-change-templates/widget-screen-intents.v1.json';
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 import { sha256Canonical } from '@/src/domain/canonical-json';
 
@@ -37,6 +39,21 @@ type PackageChangeIntent =
   | 'screen';
 type WidgetScreenIntent = Exclude<PackageChangeIntent, 'control' | 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
 type UiScreenSpec = NonNullable<NonNullable<PackagePresentationSpec['ui']>['screens']>[string];
+type FieldSpec = { type: FieldType; required?: boolean; indexed?: boolean };
+type WidgetIntentConfig = {
+  widget: NonNullable<A2UiComponent['widget']>;
+  viewMode: ViewSpec['mode'];
+  tone: A2UiComponent['tone'];
+  subtitle: string;
+  fields?: Record<string, FieldSpec>;
+  props: Record<string, unknown>;
+};
+type WidgetIntentRegistry = {
+  schema_version: 'wonder.package-change-template-registry.v1';
+  intents: Record<WidgetScreenIntent, WidgetIntentConfig>;
+};
+
+const WIDGET_INTENT_REGISTRY = (widgetScreenIntentRegistryJson as WidgetIntentRegistry).intents;
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
   const name = derivePackageChangeName(prompt);
@@ -649,27 +666,11 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
 }
 
 function widgetForIntent(intent: WidgetScreenIntent): NonNullable<A2UiComponent['widget']> {
-  if (intent === 'form') return 'formCard';
-  if (intent === 'board') return 'kanbanBoard';
-  if (intent === 'feed') return 'feedList';
-  if (intent === 'poll') return 'pollCard';
-  if (intent === 'checklist') return 'checklistCard';
-  if (intent === 'calendar') return 'calendarBlock';
-  if (intent === 'timeline') return 'timelineBlock';
-  if (intent === 'gallery') return 'galleryGrid';
-  if (intent === 'media') return 'mediaBlock';
-  if (intent === 'link') return 'linkPreview';
-  if (intent === 'map') return 'mapBlock';
-  if (intent === 'chart') return 'chartBlock';
-  return 'dataTable';
+  return WIDGET_INTENT_REGISTRY[intent].widget;
 }
 
 function viewModeForIntent(intent: PackageChangeIntent): 'list' | 'board' | 'table' | 'calendar' | 'timeline' | 'chart' {
-  if (intent === 'board') return 'board';
-  if (intent === 'calendar') return 'calendar';
-  if (intent === 'timeline') return 'timeline';
-  if (intent === 'screen' || intent === 'form') return 'table';
-  if (intent === 'chart') return 'chart';
+  if (isWidgetScreenIntent(intent)) return WIDGET_INTENT_REGISTRY[intent].viewMode;
   return 'list';
 }
 
@@ -682,16 +683,7 @@ function fieldsForIntent(intent: PackageChangeIntent) {
     updated_at: { type: 'timestamp' as const, indexed: true },
     properties: { type: 'json' as const },
   };
-  if (intent === 'poll') return { ...base, options: { type: 'json' as const }, votes: { type: 'json' as const } };
-  if (intent === 'checklist') return { ...base, items: { type: 'json' as const }, completed_count: { type: 'number' as const }, due_at: { type: 'timestamp' as const } };
-  if (intent === 'calendar') return { ...base, starts_at: { type: 'timestamp' as const, indexed: true }, ends_at: { type: 'timestamp' as const } };
-  if (intent === 'timeline') return { ...base, happened_at: { type: 'timestamp' as const, indexed: true } };
-  if (intent === 'gallery' || intent === 'media') return { ...base, media: { type: 'json' as const }, url: { type: 'text' as const } };
-  if (intent === 'link') return { ...base, url: { type: 'text' as const, indexed: true }, preview: { type: 'json' as const } };
-  if (intent === 'map') return { ...base, location: { type: 'json' as const }, address: { type: 'text' as const } };
-  if (intent === 'chart') return { ...base, value: { type: 'number' as const, indexed: true }, series: { type: 'json' as const } };
-  if (intent === 'form') return { ...base, answers: { type: 'json' as const } };
-  return base;
+  return isWidgetScreenIntent(intent) ? { ...base, ...(WIDGET_INTENT_REGISTRY[intent].fields ?? {}) } : base;
 }
 
 function componentsForIntent(
@@ -733,43 +725,40 @@ function componentsForIntent(
 }
 
 function propsForIntent(name: PackageChangeName, intent: WidgetScreenIntent): Record<string, unknown> {
-  if (intent === 'form') return { fields: [{ label: 'Title', subtitle: 'Short text' }, { label: 'Status', subtitle: 'Choice' }, { label: 'Notes', subtitle: 'Long text' }] };
-  if (intent === 'board') return { columns: [{ title: 'Ideas', items: [{ title: `Plan ${name.label}` }] }, { title: 'Doing', items: [] }, { title: 'Done', items: [] }] };
-  if (intent === 'poll') return { options: [{ label: 'Yes' }, { label: 'No' }, { label: 'Maybe' }] };
-  if (intent === 'checklist') return { items: [{ title: 'Capture' }, { title: 'Review' }, { title: 'Done' }] };
-  if (intent === 'calendar') return { events: [{ title: name.label, subtitle: 'First scheduled item', when: 'Soon' }] };
-  if (intent === 'timeline') return { items: [{ title: 'Created', subtitle: 'Added by package diff' }, { title: 'Next', subtitle: 'Add real events' }] };
-  if (intent === 'gallery') return { items: [{ title: 'Photo', emoji: '◼︎' }, { title: 'Clip', emoji: '▶︎' }, { title: 'Doc', emoji: '◇' }] };
-  if (intent === 'media') return { body: 'Drop video, audio, image, or link records into this package collection.' };
-  if (intent === 'link') return { url: 'https://example.com', subtitle: 'Safe URL preview surface.' };
-  if (intent === 'map') return { body: 'Render places, stores, routes, homes, or field work from package data.' };
-  if (intent === 'chart') return { points: [{ label: 'A', value: 4 }, { label: 'B', value: 8 }, { label: 'C', value: 5 }] };
-  if (intent === 'feed') return { items: [{ title: `${name.label} update`, subtitle: 'Feed item from package config' }] };
-  return {};
+  return hydrateIntentTemplate(WIDGET_INTENT_REGISTRY[intent].props, name);
 }
 
 function subtitleForIntent(intent: WidgetScreenIntent) {
-  if (intent === 'form') return 'Collect structured data without hand-built screens.';
-  if (intent === 'board') return 'Kanban-quality grouped records from config.';
-  if (intent === 'feed') return 'Posts, updates, links, comments, and activity.';
-  if (intent === 'poll') return 'Voting and choice UI as a safe package primitive.';
-  if (intent === 'checklist') return 'Tasks, inspections, packing, routines, and step-by-step work.';
-  if (intent === 'calendar') return 'Schedules and events as package data.';
-  if (intent === 'timeline') return 'History, provenance, and milestones.';
-  if (intent === 'gallery') return 'Visual collections for images and assets.';
-  if (intent === 'media') return 'Video, audio, image, and link surfaces.';
-  if (intent === 'link') return 'Bookmarks, YouTube, recipes, docs, and source previews.';
-  if (intent === 'map') return 'Places, stores, routes, homes, and field work.';
-  if (intent === 'chart') return 'Numbers, trends, budgets, signals, and reports.';
-  return 'A generated JSON-render screen.';
+  return WIDGET_INTENT_REGISTRY[intent].subtitle;
 }
 
 function toneForIntent(intent: WidgetScreenIntent): A2UiComponent['tone'] {
-  if (intent === 'board' || intent === 'calendar') return 'blue';
-  if (intent === 'poll' || intent === 'checklist' || intent === 'timeline') return 'amber';
-  if (intent === 'media' || intent === 'gallery') return 'plum';
-  if (intent === 'link' || intent === 'map' || intent === 'chart') return 'blue';
-  return 'moss';
+  return WIDGET_INTENT_REGISTRY[intent].tone;
+}
+
+function isWidgetScreenIntent(intent: PackageChangeIntent): intent is WidgetScreenIntent {
+  return intent in WIDGET_INTENT_REGISTRY;
+}
+
+function hydrateIntentTemplate(value: unknown, name: PackageChangeName): Record<string, unknown> {
+  const replacements = {
+    label: name.label,
+    collectionId: name.collectionId,
+    screenId: name.screenId,
+    surfaceId: name.surfaceId,
+  };
+  const hydrate = (item: unknown): unknown => {
+    if (typeof item === 'string') {
+      return item.replace(/\{\{(label|collectionId|screenId|surfaceId)\}\}/g, (_, key: keyof typeof replacements) => replacements[key]);
+    }
+    if (Array.isArray(item)) return item.map(hydrate);
+    if (item && typeof item === 'object') {
+      return Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([key, child]) => [key, hydrate(child)]));
+    }
+    return item;
+  };
+  const hydrated = hydrate(value);
+  return hydrated && typeof hydrated === 'object' && !Array.isArray(hydrated) ? hydrated as Record<string, unknown> : {};
 }
 
 function derivePackageChangeName(prompt: string) {

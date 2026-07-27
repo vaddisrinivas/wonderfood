@@ -13,6 +13,7 @@ const INSTANCE_RULES = [
   { match: (path) => path.startsWith('domains/') && path.endsWith('.json'), schema: 'schemas/domain.v1.schema.json' },
   { match: (path) => path.startsWith('workflows/') && path.endsWith('.json'), schema: 'schemas/workflow.v1.schema.json' },
   { match: (path) => path === 'templates/lifeos-data-plane-template.v1.json', schema: 'templates/lifeos-data-plane-template.v1.schema.json' },
+  { match: (path) => path === 'templates/package-change-templates/widget-screen-intents.v1.json', schema: 'templates/package-change-templates/widget-screen-intents.v1.schema.json' },
   { match: (path) => path === 'providers/notion/metadata.v1.json', schema: providerMetadataSchema() },
   { match: (path) => path === 'providers/notion/surface.v1.json', schema: providerSurfaceSchema() },
 ];
