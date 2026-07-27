@@ -1089,9 +1089,9 @@
               "badge": "Automatic after writes",
               "body": "Wonder should feel like magic because verification happens behind the curtain: write, reread, confirm, then show only the useful result.",
               "actions": [
-                { "title": "Run safe reread" },
-                { "title": "View last sync" },
-                { "title": "Invite collaborator" }
+                { "title": "Run safe reread", "route": "/system" },
+                { "title": "View last sync", "route": "/system" },
+                { "title": "Invite collaborator", "url": "https://support.google.com/docs/answer/2494822" }
               ]
             }
           }
@@ -1225,6 +1225,18 @@
                   "placeholder": "What should Wonder create or change?"
                 }
               ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "linkPreview",
+            "id": "config_link_preview_demo",
+            "title": "Link preview primitive",
+            "subtitle": "Recipe posts, YouTube links, docs, maps, and external references can be declared in JSON.",
+            "tone": "blue",
+            "props": {
+              "url": "https://www.youtube.com",
+              "body": "Tap opens the target URL. Apps can use this for recipes, lessons, posts, evidence, or media references."
             }
           },
           {

@@ -119,6 +119,18 @@ function actionUrl(value: Record<string, unknown>): string {
   return text(value.url, text(value.href, text(value.deeplink)));
 }
 
+function openWidgetTarget(router: ReturnType<typeof useRouter>, target: Record<string, unknown>) {
+  const route = actionRoute(target);
+  if (route) {
+    router.push(route as never);
+    return;
+  }
+  const url = actionUrl(target);
+  if (url) {
+    void Linking.openURL(url);
+  }
+}
+
 function fieldKey(value: Record<string, unknown>, index: number): string {
   return text(value.id, text(value.name, label(value, `field_${index}`))).toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
@@ -433,6 +445,7 @@ function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const actions = rows(props.actions);
   return (
@@ -443,9 +456,9 @@ function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
       {actions.length ? (
         <View style={styles.buttonRow}>
           {actions.slice(0, 3).map((action) => (
-            <View key={label(action)} style={styles.miniAction}>
+            <Pressable key={label(action)} style={styles.miniAction} onPress={() => openWidgetTarget(router, action)}>
               <Text style={styles.miniActionText}>{label(action)}</Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       ) : null}
@@ -473,22 +486,24 @@ function PollCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function LinkPreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
+  const url = text(props.url);
   const host = (() => {
     try {
-      return props.url ? new URL(text(props.url)).hostname.replace(/^www\./, '') : 'link';
+      return url ? new URL(url).hostname.replace(/^www\./, '') : 'link';
     } catch {
       return 'link';
     }
   })();
   return (
     <WidgetShell title={text(props.title, 'Link preview')} subtitle={host}>
-      <View style={styles.previewHero}>
+      <Pressable style={styles.previewHero} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
         <Text style={styles.previewGlyph}>↗</Text>
         <Text style={styles.previewHost}>{host}</Text>
-      </View>
-      <Text style={styles.bodyText}>{text(props.subtitle, 'A safe preview surface for YouTube, docs, recipes, posts, and references.')}</Text>
-      {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
+      </Pressable>
+      <Text style={styles.bodyText}>{text(props.body, text(props.subtitle, 'A safe preview surface for YouTube, docs, recipes, posts, and references.'))}</Text>
+      {url ? <Text style={styles.linkText}>{url}</Text> : null}
     </WidgetShell>
   );
 }
@@ -554,25 +569,31 @@ function ChartBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function MediaBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
+  const url = text(props.url);
   return (
     <WidgetShell title={text(props.title, 'Media')} subtitle={text(props.subtitle, 'Image, audio, and video slots declared by package config.')}>
-      <View style={styles.mediaBox}>
+      <Pressable style={styles.mediaBox} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
         <Text style={styles.mediaGlyph}>▶︎</Text>
         <Text style={styles.bodyText}>{text(props.body, 'Attach or preview media here.')}</Text>
-      </View>
+      </Pressable>
+      {url ? <Text style={styles.linkText}>{url}</Text> : null}
     </WidgetShell>
   );
 }
 
 function MapBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
+  const url = text(props.url);
   return (
     <WidgetShell title={text(props.title, 'Map')} subtitle={text(props.subtitle, 'Location-aware surfaces without custom app code.')}>
-      <View style={styles.mapBox}>
+      <Pressable style={styles.mapBox} onPress={() => openWidgetTarget(router, { url })} disabled={!url}>
         <Text style={styles.mapPin}>⌖</Text>
         <Text style={styles.bodyText}>{text(props.body, 'Map provider hooks can render stores, trips, homes, routes, or field work.')}</Text>
-      </View>
+      </Pressable>
+      {url ? <Text style={styles.linkText}>{url}</Text> : null}
     </WidgetShell>
   );
 }
@@ -751,17 +772,6 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const homes = rows(props.homes);
   const steps = rows(props.steps);
   const actions = rows(props.actions);
-  const runAction = useCallback((action: Record<string, unknown>) => {
-    const route = actionRoute(action);
-    if (route) {
-      router.push(route as never);
-      return;
-    }
-    const url = actionUrl(action);
-    if (url) {
-      void Linking.openURL(url);
-    }
-  }, [router]);
   return (
     <WidgetShell title={text(props.title, 'Sources')} subtitle={text(props.subtitle, 'Your data homes stay quiet until there is something useful to do.')}>
       <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
@@ -805,7 +815,7 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
       {actions.length ? (
         <View style={styles.providerActions}>
           {actions.slice(0, 3).map((action) => (
-            <Pressable key={label(action)} style={styles.providerAction} onPress={() => runAction(action)}>
+            <Pressable key={label(action)} style={styles.providerAction} onPress={() => openWidgetTarget(router, action)}>
               <Text style={styles.providerActionTitle}>{label(action)}</Text>
               <Text style={styles.providerActionDetail}>{detail(action, 'Ready when you are.')}</Text>
             </Pressable>
