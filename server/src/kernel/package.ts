@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { validateJsonSchema } from './validation';
 import { appPackageSchemaV2, appPackageSchemaV3 } from './package-schema';
 import type { 
@@ -430,6 +432,9 @@ function validateAppPackageV3(value: Partial<AppPackageV3>, errors: string[]): v
   if (nativeCapabilities && !isNativeCapabilityMatch(nativeCapabilities, contractLock.nativeCapabilities)) {
     errors.push('contractLock.nativeCapabilities must match top-level nativeCapabilities');
   }
+  if (contractLock.checksum !== expectedContractLockChecksum(contractLock)) {
+    errors.push('contractLock.checksum mismatch');
+  }
 }
 
 function isDependencyPin(value: unknown, index: number, errors: string[], seen?: Set<string>): value is AppPackageDependencyPin {
@@ -472,9 +477,14 @@ function isNativeCapability(value: unknown): value is AppPackageNativeCapability
   if (!text(raw.platform)) return false;
   if (!Array.isArray(raw.packages) || raw.packages.length < 1) return false;
   if (!raw.packages.every((item) => text(item))) return false;
-  if (raw.permissions === undefined) return true;
-  if (!Array.isArray(raw.permissions)) return false;
-  return raw.permissions.every((permission) => {
+  if (raw.permissions !== undefined && !isNativePermissions(raw.permissions)) return false;
+  if (raw.intents !== undefined && !isNativeIntents(raw.intents)) return false;
+  return true;
+}
+
+function isNativePermissions(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.every((permission) => {
     if (typeof permission === 'string') return text(permission);
     if (!object(permission)) return false;
     return text(permission.id)
@@ -487,13 +497,29 @@ function isNativeCapability(value: unknown): value is AppPackageNativeCapability
   });
 }
 
+function isNativeIntents(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.every((intent) => {
+    if (!object(intent)) return false;
+    return text(intent.id)
+      && text(intent.platform)
+      && ['expo', 'android', 'ios', 'web'].includes(intent.platform)
+      && text(intent.kind)
+      && ['share', 'deep_link', 'shortcut', 'voice', 'background_task', 'file_open', 'url_open'].includes(intent.kind)
+      && text(intent.reason)
+      && (intent.required === undefined || typeof intent.required === 'boolean')
+      && (intent.payload === undefined || isPlainObject(intent.payload));
+  });
+}
+
 function isNativeCapabilityMatch(left: AppPackageNativeCapability, right: AppPackageNativeCapability): boolean {
   if (left.schemaVersion !== right.schemaVersion || left.platform !== right.platform) return false;
   const leftPackages = [...left.packages].sort();
   const rightPackages = [...right.packages].sort();
   if (leftPackages.length !== rightPackages.length) return false;
   if (!leftPackages.every((item, index) => item === rightPackages[index])) return false;
-  return stableJson(left.permissions ?? []) === stableJson(right.permissions ?? []);
+  return stableJson(left.permissions ?? []) === stableJson(right.permissions ?? [])
+    && stableJson(left.intents ?? []) === stableJson(right.intents ?? []);
 }
 
 function isContractLock(value: unknown): value is AppPackageContractLock {
@@ -506,6 +532,16 @@ function isContractLock(value: unknown): value is AppPackageContractLock {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return object(value) && !Array.isArray(value);
+}
+
+function expectedContractLockChecksum(lock: AppPackageContractLock): string {
+  return `sha256:${createHash('sha256').update(stableJson({
+    schemaVersion: lock.schemaVersion,
+    algorithm: lock.algorithm,
+    pinnedAt: lock.pinnedAt,
+    dependencyPins: lock.dependencyPins,
+    nativeCapabilities: lock.nativeCapabilities,
+  })).digest('hex')}`;
 }
 
 function stableJson(value: unknown): string {

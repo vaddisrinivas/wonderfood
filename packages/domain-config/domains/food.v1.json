@@ -1078,6 +1078,51 @@
         "required": false,
         "prompt": "Allow WonderFood to use the share sheet for food capture."
       }
+    ],
+    "intents": [
+      {
+        "id": "save-food-link",
+        "platform": "expo",
+        "kind": "share",
+        "reason": "Let users send recipes, YouTube cooking links, grocery pages, and receipts into the Food package.",
+        "required": false,
+        "payload": {
+          "accepts": ["url", "text", "image"],
+          "target": "food.capture"
+        }
+      },
+      {
+        "id": "open-recipe-url",
+        "platform": "expo",
+        "kind": "url_open",
+        "reason": "Open cited recipe, product, store, and video sources from rendered Food cards.",
+        "required": false,
+        "payload": {
+          "allowlist": ["https://www.youtube.com", "https://youtu.be", "https://docs.google.com", "https://www.notion.so", "https://app.notion.com"]
+        }
+      },
+      {
+        "id": "quick-add-food",
+        "platform": "android",
+        "kind": "shortcut",
+        "reason": "Expose a launcher shortcut for fast meal, pantry, receipt, and shopping capture.",
+        "required": false,
+        "payload": {
+          "label": "Add food",
+          "target": "food.capture"
+        }
+      },
+      {
+        "id": "freshness-reminder",
+        "platform": "expo",
+        "kind": "background_task",
+        "reason": "Optionally check pantry freshness and propose dinner or shopping updates without manual hunting.",
+        "required": false,
+        "payload": {
+          "workflow": "pantry_freshness_sweep",
+          "mode": "proposal_only"
+        }
+      }
     ]
   },
   "render": {

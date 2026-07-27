@@ -347,6 +347,51 @@
       },
       "additionalProperties": false
     },
+    "native_intent": {
+      "type": "object",
+      "required": [
+        "id",
+        "platform",
+        "kind",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "platform": {
+          "enum": [
+            "expo",
+            "android",
+            "ios",
+            "web"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "share",
+            "deep_link",
+            "shortcut",
+            "voice",
+            "background_task",
+            "file_open",
+            "url_open"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
     "dependency_pin": {
       "type": "object",
       "required": [
@@ -415,6 +460,13 @@
               }
             ]
           }
+        },
+        "intents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/native_intent"
+          },
+          "uniqueItems": true
         }
       },
       "additionalProperties": false

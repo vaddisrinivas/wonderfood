@@ -202,6 +202,16 @@ const pkgV3 = (() => {
         prompt: 'Allow Wonder to read nutrition records for food context.',
       },
     ],
+    intents: [
+      {
+        id: 'save-food-link',
+        platform: 'expo',
+        kind: 'share',
+        reason: 'Let users send food links into the package.',
+        required: false,
+        payload: { accepts: ['url', 'text'], target: 'food.capture' },
+      },
+    ],
   };
   return {
     ...pkg,
@@ -231,6 +241,44 @@ assert.equal(validateAppPackage({
   contractLock: {
     ...pkgV3.contractLock,
     checksum: 'sha256:0',
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkgV3,
+  nativeCapabilities: {
+    ...pkgV3.nativeCapabilities,
+    permissions: [
+      ...pkgV3.nativeCapabilities.permissions,
+      {
+        id: 'forged-camera',
+        platform: 'android',
+        permission: 'android.permission.CAMERA',
+        reason: 'Forged runtime permission.',
+        required: true,
+      },
+    ],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkgV3,
+  nativeCapabilities: {
+    ...pkgV3.nativeCapabilities,
+    intents: [
+      ...(pkgV3.nativeCapabilities.intents ?? []),
+      {
+        id: 'bad-intent',
+        platform: 'android',
+        kind: 'shell_exec',
+        reason: 'Bad native intent.',
+      },
+    ],
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkgV3,
+  contractLock: {
+    ...pkgV3.contractLock,
+    checksum: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
   },
 }).valid, false);
 console.log('package-contract: passed');

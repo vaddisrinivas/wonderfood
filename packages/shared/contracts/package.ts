@@ -148,6 +148,14 @@ export type AppPackageNativeCapability = {
   platform: 'expo' | 'android' | 'ios' | 'web';
   packages: string[];
   permissions?: Array<string | AppPackagePermissionDeclaration>;
+  intents?: Array<{
+    id: string;
+    platform: 'expo' | 'android' | 'ios' | 'web';
+    kind: 'share' | 'deep_link' | 'shortcut' | 'voice' | 'background_task' | 'file_open' | 'url_open';
+    reason: string;
+    required?: boolean;
+    payload?: Record<string, unknown>;
+  }>;
 };
 
 export type AppPackageContractLock = {

@@ -180,6 +180,37 @@ describe('app package SQLite registry', () => {
     })).rejects.toThrow(/package_change_path_forbidden/);
   });
 
+  it('fails closed when native capability lock content is forged', async () => {
+    const db = new MemoryDb() as any;
+    const pkg = buildAppPackageFromManifest(loadCatalog().activeManifest, { version: 'forged-native-lock' }).package;
+    if (pkg.schemaVersion !== 'wonder.app-package.v3') throw new Error('expected V3 package');
+
+    await expect(activateAppPackage(db, {
+      ...pkg,
+      nativeCapabilities: {
+        ...pkg.nativeCapabilities,
+        permissions: [
+          ...(pkg.nativeCapabilities.permissions ?? []),
+          {
+            id: 'forged-camera',
+            platform: 'android',
+            permission: 'android.permission.CAMERA',
+            reason: 'Forged runtime permission.',
+            required: true,
+          },
+        ],
+      },
+    })).rejects.toThrow(/contractLock.nativeCapabilities must match nativeCapabilities/);
+
+    await expect(activateAppPackage(db, {
+      ...pkg,
+      contractLock: {
+        ...pkg.contractLock,
+        checksum: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+      },
+    })).rejects.toThrow(/contractLock.checksum mismatch/);
+  });
+
   it('builds safe package-edit templates for table, theme, and workflow prompts', async () => {
     setActivePackageOverride(null);
     const db = new MemoryDb() as any;

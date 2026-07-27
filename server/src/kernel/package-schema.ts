@@ -416,6 +416,24 @@ export const appPackageSchemaV3 = {
             ],
           },
         },
+        intents: {
+          type: 'array',
+          uniqueItems: true,
+          items: { $ref: '#/$defs/nativeIntent' },
+        },
+      },
+    },
+    nativeIntent: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id', 'platform', 'kind', 'reason'],
+      properties: {
+        id: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+        platform: { enum: ['expo', 'android', 'ios', 'web'] },
+        kind: { enum: ['share', 'deep_link', 'shortcut', 'voice', 'background_task', 'file_open', 'url_open'] },
+        reason: { type: 'string', minLength: 1 },
+        required: { type: 'boolean' },
+        payload: { type: 'object', additionalProperties: true },
       },
     },
     contractLock: {

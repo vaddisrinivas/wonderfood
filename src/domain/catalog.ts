@@ -266,11 +266,15 @@ function parseNativeCapability(value: unknown, path: string): AppPackageNativeCa
   const permissions = raw.permissions === undefined
     ? undefined
     : parseNativePermissions(raw.permissions, `${path}.permissions`);
+  const intents = raw.intents === undefined
+    ? undefined
+    : parseNativeIntents(raw.intents, `${path}.intents`);
   return {
     schemaVersion: 'wonder.app-package-native-capabilities.v1',
     platform: raw.platform,
     packages,
     ...(permissions ? { permissions } : {}),
+    ...(intents ? { intents } : {}),
   };
 }
 
@@ -316,6 +320,41 @@ function parseNativePermissions(value: unknown, path: string): AppPackageNativeC
       reason: parseString(raw.reason, `${path}[${index}].reason`),
       ...(raw.required === undefined ? {} : { required: raw.required }),
       ...(typeof raw.prompt === 'string' ? { prompt: raw.prompt } : {}),
+    };
+  });
+}
+
+function parseNativeIntents(value: unknown, path: string): AppPackageNativeCapability['intents'] {
+  assertCondition(Array.isArray(value), `${path} must be an array`);
+  return value.map((item, index) => {
+    assertCondition(isObject(item), `${path}[${index}] must be an object`);
+    const raw = item as Record<string, unknown>;
+    const platform = raw.platform;
+    assertCondition(platform === 'expo' || platform === 'android' || platform === 'ios' || platform === 'web', `${path}[${index}].platform must be expo|android|ios|web`);
+    const kind = raw.kind;
+    assertCondition(
+      kind === 'share'
+        || kind === 'deep_link'
+        || kind === 'shortcut'
+        || kind === 'voice'
+        || kind === 'background_task'
+        || kind === 'file_open'
+        || kind === 'url_open',
+      `${path}[${index}].kind is invalid`,
+    );
+    if (raw.required !== undefined) {
+      assertCondition(typeof raw.required === 'boolean', `${path}[${index}].required must be boolean`);
+    }
+    if (raw.payload !== undefined) {
+      assertCondition(isObject(raw.payload), `${path}[${index}].payload must be an object`);
+    }
+    return {
+      id: parseString(raw.id, `${path}[${index}].id`),
+      platform,
+      kind,
+      reason: parseString(raw.reason, `${path}[${index}].reason`),
+      ...(raw.required === undefined ? {} : { required: raw.required }),
+      ...(isObject(raw.payload) ? { payload: raw.payload } : {}),
     };
   });
 }

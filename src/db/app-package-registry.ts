@@ -382,6 +382,16 @@ function assertAppPackageShapeV3(input: unknown): asserts input is AppPackageV3 
   }
   if (!isAppPackageContractLock(value.contractLock)) {
     errors.push('contractLock is required');
+  } else {
+    if (Array.isArray(value.dependencyPins) && !sameDependencyPins(value.dependencyPins, value.contractLock.dependencyPins)) {
+      errors.push('contractLock.dependencyPins must match dependencyPins');
+    }
+    if (isAppPackageNativeCapability(value.nativeCapabilities) && stableJson(value.nativeCapabilities) !== stableJson(value.contractLock.nativeCapabilities)) {
+      errors.push('contractLock.nativeCapabilities must match nativeCapabilities');
+    }
+    if (value.contractLock.checksum !== expectedContractLockChecksum(value.contractLock)) {
+      errors.push('contractLock.checksum mismatch');
+    }
   }
 
   if (errors.length) {
@@ -448,6 +458,32 @@ function isAppPackageNativeCapability(input: unknown): input is AppPackageNative
             && (permission.prompt === undefined || typeof permission.prompt === 'string');
         })
       )
+    )
+    && (
+      capability.intents === undefined
+      || (
+        Array.isArray(capability.intents)
+        && capability.intents.every((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+          const intent = item as Record<string, unknown>;
+          return typeof intent.id === 'string'
+            && intent.id.trim().length > 0
+            && (intent.platform === 'expo' || intent.platform === 'android' || intent.platform === 'ios' || intent.platform === 'web')
+            && (
+              intent.kind === 'share'
+              || intent.kind === 'deep_link'
+              || intent.kind === 'shortcut'
+              || intent.kind === 'voice'
+              || intent.kind === 'background_task'
+              || intent.kind === 'file_open'
+              || intent.kind === 'url_open'
+            )
+            && typeof intent.reason === 'string'
+            && intent.reason.trim().length > 0
+            && (intent.required === undefined || typeof intent.required === 'boolean')
+            && (intent.payload === undefined || (typeof intent.payload === 'object' && intent.payload !== null && !Array.isArray(intent.payload)));
+        })
+      )
     );
 }
 
@@ -464,4 +500,21 @@ function isAppPackageContractLock(input: unknown): input is AppPackageContractLo
     && Array.isArray(lock.dependencyPins)
     && lock.dependencyPins.every((pin) => isAppPackageDependencyPin(pin))
     && isAppPackageNativeCapability(lock.nativeCapabilities);
+}
+
+function sameDependencyPins(left: readonly AppPackageV3['dependencyPins'][number][], right: readonly AppPackageV3['dependencyPins'][number][]): boolean {
+  if (left.length !== right.length) return false;
+  const leftLabels = left.map((pin) => `${pin.package}@${pin.version}`).sort();
+  const rightLabels = right.map((pin) => `${pin.package}@${pin.version}`).sort();
+  return leftLabels.every((label, index) => label === rightLabels[index]);
+}
+
+function expectedContractLockChecksum(lock: AppPackageContractLock): string {
+  return hashValue({
+    schemaVersion: lock.schemaVersion,
+    algorithm: lock.algorithm,
+    pinnedAt: lock.pinnedAt,
+    dependencyPins: lock.dependencyPins,
+    nativeCapabilities: lock.nativeCapabilities,
+  });
 }
