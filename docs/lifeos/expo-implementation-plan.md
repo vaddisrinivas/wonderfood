@@ -439,16 +439,17 @@ This phase is blocking for provider polish, Android polish, and workflow polish.
 ### Files
 
 - server/src/mcp/server.ts
-- server/src/mcp/resources.ts
-- server/src/mcp/tools.ts
-- server/src/mcp/auth.ts
-- server/src/mcp/policy.ts
-- scripts/mcp/wonderfood_mcp_server.py
-- docs/mcp-bridge.md
+- server/src/mcp/sdk-server.ts
+- server/src/mcp/official-server.ts
+- server/src/mcp/scoped-access.ts
+- server/src/resources/catalog.ts
+- server/src/tools/catalog.ts
+- server/src/security/auth.ts
+- server/src/security/policy.ts
 
 ### Tasks
 
-1. Expose Streamable HTTP MCP as an optional adapter.
+1. Expose Streamable HTTP MCP through the official TypeScript SDK.
 2. Expose catalog, manifests, schemas, records, source snapshots, and conversations as resources.
 3. Expose search, read, create, update, archive, run workflow, and Undo as typed tools.
 4. Generate schemas from the same domain package as the app.

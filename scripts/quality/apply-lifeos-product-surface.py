@@ -538,7 +538,7 @@ def update_lifeos_sheet() -> dict:
         ["Data plane", "Google Sheets", "Workbook tabs mirror schema surfaces", "Spreadsheet-primary"],
         ["Data plane", "SQLite/Postgres", "Canonical store + hosted snapshot route", "Runtime"],
         ["AI/MCP", "WonderFood Chat", "Multi-turn, sources, markdown tables, proposal review", "Runtime"],
-        ["MCP", "wonderfood_mcp_server.py", "Skills, schemas, validation, packages, review-only app links", "Ready"],
+        ["MCP", "Official MCP SDK /mcp endpoint", "Scoped resources, tools, validation, proposals, workflows", "Ready"],
         ["Benchmark", "LiFE RPG 2.0", "Quests, habits, boss fights, P.A.R.A., RPGenie, sample/empty parity", "Borrowed"],
         ["Food loop", "Food quests", "Weekly cook/shop/clean/eat objectives", "Config"],
         ["Food loop", "Good habits", "Water, protein, home-cooked meals, prep blocks", "Config"],

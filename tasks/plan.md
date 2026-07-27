@@ -58,7 +58,7 @@ Rules:
 |---|---|---|
 | Custom package UI schema and shell specs | A2UI v0.9.1 | old UI contracts, `buildSpec`, `shell-ui.ts`, `surfaceConfig` |
 | Manual chat streaming/client plumbing | Vercel AI SDK | superseded portions of `src/chat/client.ts` |
-| Manual MCP protocol/transport | official MCP TypeScript SDK | `official-server.ts`, `protocol-compat.ts`, redundant validation/transport code |
+| Manual MCP protocol/transport | official MCP TypeScript SDK | custom JSON-RPC/SSE dispatch, `protocol-compat.ts`, old Python stdio bridge |
 | Raw Notion HTTP | `@notionhq/client` | request/auth/pagination plumbing |
 | Raw Google HTTP | `@googleapis/sheets` and `@googleapis/drive` | request/auth/pagination plumbing |
 | Custom query representation | React Query Builder `RuleGroupType` | duplicate predicate/query AST |
@@ -380,7 +380,7 @@ npm run phase3:check:chat-send
 npm run phase3:check:chat-rollback-idempotency
 npm run phase4:check:mcp
 npm run doctor
-rg -n 'protocol-compat|PROTOCOL_VERSION.*2026-03-11' server/src/mcp src/chat
+rg -n 'protocol-compat|wonderfood_mcp_server|run-mcp-bridge-proof' server/src scripts README.md docs
 test ! -e spikes/ai-sdk
 test ! -e spikes/mcp-sdk
 ```

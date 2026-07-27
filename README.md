@@ -101,7 +101,6 @@ The React Native shell is new, but WonderFood's validated product work remains a
 
 - [LifeOS product pass](docs/lifeos/product-pass.md) and [UI copy audit](docs/lifeos/ui-copy-audit.md)
 - [AI contracts and golden fixtures](docs/ai/README.md)
-- [MCP bridge](docs/mcp-bridge.md)
 - [Privacy](PRIVACY.md), [security](SECURITY.md), and [release checklist](docs/release/RELEASE_CHECKLIST.md)
 - [Testing evidence](docs/testing/README.md), [design history](docs/design/v3-product-experience.md), and [distribution readiness](docs/distribution/FOSS_READINESS.md)
 - Existing screenshots, demo media, release notes, and native Android evidence remain under `docs/`, `fastlane/`, and repository history.

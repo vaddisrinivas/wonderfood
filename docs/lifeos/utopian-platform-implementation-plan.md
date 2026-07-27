@@ -743,12 +743,12 @@ and canonical local mutation semantics remain outside MCP.
 - one prompt;
 - bearer-auth rejection fixture;
 - official client initialization and tool invocation.
-- a deletion inventory for `protocol-compat.ts` and custom JSON-RPC/SSE parsing;
-- no production route switch or compatibility shim in this phase.
+- deletion of `protocol-compat.ts` and custom JSON-RPC/SSE parsing;
+- production route uses the official SDK Streamable HTTP transport.
 
 ### Acceptance criteria
 
-- No custom JSON-RPC parser in spike.
+- No custom JSON-RPC parser in production MCP path.
 - No deprecated SSE transport.
 - Inspector or official client lists capabilities.
 - Mutation-like request returns proposal JSON only.

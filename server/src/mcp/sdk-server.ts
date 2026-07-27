@@ -1,14 +1,33 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 
-import { listMcpResources, readMcpResource } from '../resources/catalog';
-import { callMcpTool, listMcpTools } from '../tools/catalog';
 import type { McpScope } from '../security/auth';
+import { isMcpToolAllowed } from '../security/policy';
+import { resolveResourceMimeType } from '../resources/catalog';
+import { listMcpTools } from '../tools/catalog';
+import { validateArgsForTool } from '../tools/tool-validation';
+import {
+  McpScopeDeniedError,
+  callScopedMcpTool,
+  listScopedMcpResources,
+  readScopedMcpResource,
+} from './scoped-access';
 
-const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
-const MCP_SERVER_VERSION = '1.0.0';
+export const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
+export const MCP_SERVER_VERSION = '1.0.0';
 
-function jsonText(value: unknown) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function textContent(value: unknown) {
   return {
     content: [
       {
@@ -20,67 +39,77 @@ function jsonText(value: unknown) {
 }
 
 export function createWonderMcpSdkServer(scope: McpScope) {
-  const server = new McpServer({
-    name: MCP_SERVER_NAME,
-    version: MCP_SERVER_VERSION,
+  const server = new Server(
+    {
+      name: MCP_SERVER_NAME,
+      version: MCP_SERVER_VERSION,
+    },
+    {
+      capabilities: {
+        tools: {},
+        resources: {},
+      },
+    },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: listMcpTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema as {
+        type: 'object';
+        properties?: Record<string, object>;
+        required?: string[];
+      },
+    })),
+  }));
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: listScopedMcpResources(scope),
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const uri = request.params.uri;
+    try {
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: resolveResourceMimeType(uri),
+            text: readScopedMcpResource(uri, scope),
+          },
+        ],
+      };
+    } catch (error) {
+      if (error instanceof McpScopeDeniedError) {
+        throw new McpError(ErrorCode.InvalidParams, error.message);
+      }
+      throw error;
+    }
   });
 
-  server.registerTool(
-    'wonderfood.status',
-    {
-      title: 'WonderFood status',
-      description: 'Return the WonderFood MCP tool/resource status.',
-      inputSchema: {},
-    },
-    async () => jsonText({ status: 'ready', server: MCP_SERVER_NAME }),
-  );
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const toolName = request.params.name;
+    if (!isMcpToolAllowed(toolName)) {
+      throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${toolName}`);
+    }
 
-  server.registerTool(
-    'wonderfood.tools',
-    {
-      title: 'WonderFood tool catalog',
-      description: 'List WonderFood MCP tools available to the scoped principal.',
-      inputSchema: {},
-    },
-    async () => jsonText(listMcpTools()),
-  );
+    const args = request.params.arguments ?? {};
+    const validationErrors = validateArgsForTool(toolName, args);
+    if (validationErrors.length > 0) {
+      throw new McpError(ErrorCode.InvalidParams, `Invalid arguments: ${validationErrors.join('; ')}`);
+    }
 
-  server.registerTool(
-    'wonderfood.call_tool',
-    {
-      title: 'WonderFood scoped tool call',
-      description: 'Call a WonderFood MCP tool through the existing policy and proposal boundary.',
-      inputSchema: {
-        name: z.string(),
-        arguments: z.record(z.string(), z.unknown()).optional(),
-      },
-    },
-    async ({ name, arguments: args }: { name: string; arguments?: Record<string, unknown> }) => {
-      return jsonText(await callMcpTool(name, args ?? {}));
-    },
-  );
-
-  server.registerTool(
-    'wonderfood.resources',
-    {
-      title: 'WonderFood resource catalog',
-      description: 'List WonderFood MCP resources available to the scoped principal.',
-      inputSchema: {},
-    },
-    async () => jsonText(listMcpResources()),
-  );
-
-  server.registerTool(
-    'wonderfood.read_resource',
-    {
-      title: 'WonderFood scoped resource read',
-      description: 'Read a WonderFood MCP resource through existing resource authorization.',
-      inputSchema: {
-        uri: z.string(),
-      },
-    },
-    async ({ uri }: { uri: string }) => jsonText(readMcpResource(uri)),
-  );
+    try {
+      const result = await callScopedMcpTool(toolName, isRecord(args) ? args : {}, scope);
+      return textContent(result.json);
+    } catch (error) {
+      if (error instanceof McpScopeDeniedError) {
+        throw new McpError(-32001, error.message);
+      }
+      throw error;
+    }
+  });
 
   return server;
 }
