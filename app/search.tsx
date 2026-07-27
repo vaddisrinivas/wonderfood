@@ -1,5 +1,5 @@
 import { JsonRenderRoute } from '@/src/presentation/json-render-route';
 
 export default function SearchScreen() {
-  return <JsonRenderRoute screen="search" eyebrow="WONDER" title="Search" />;
+  return <JsonRenderRoute screen="search" />;
 }

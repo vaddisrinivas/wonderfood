@@ -54,7 +54,7 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
 
   return (
     <JsonRenderSurface
-      eyebrow={eyebrow ?? activeManifest.label.toUpperCase()}
+      eyebrow={eyebrow}
       title={title ?? activeManifest.label}
       subtitle={subtitle}
       ui={useDomainUi ? activeManifest.ui : activeUi}

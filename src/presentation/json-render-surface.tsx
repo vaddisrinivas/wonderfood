@@ -45,10 +45,10 @@ type Palette = {
 };
 
 const lightPalette: Palette = {
-  canvas: '#F6F7F4',
+  canvas: '#FBF7EE',
   ink: '#182019',
   muted: '#657066',
-  paper: '#FFFFFF',
+  paper: '#FFFCF5',
   moss: '#2F7448',
   mossSoft: '#E4F1E8',
   amberSoft: '#F9E7D9',
@@ -168,7 +168,7 @@ function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: A
   if (!action?.label) {
     return null;
   }
-  return add('Button', { label: action.label, variant: 'secondary', size: 'lg' }, [], {
+  return add('Button', { label: action.label, variant: 'secondary', size: 'md' }, [], {
     on: { press: actionBinding(action, fallback) },
   });
 }
@@ -225,7 +225,6 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   const rows = queryRecords(records, component.query);
   const children: string[] = [];
   const button = addActionButton(add, component.action, '/chat');
-  if (button) children.push(button);
   if (rows.length) {
     for (const row of rows) {
       children.push(add('ListItem', {
@@ -241,11 +240,12 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   } else {
     children.push(add('Paragraph', { text: fallbackFor(component), color: palette.muted, fontSize: 15 }));
   }
+  if (button) children.push(button);
   return add('Card', {
     title: component.title ?? 'Records',
     subtitle: component.subtitle ?? null,
-    padding: 18,
-    backgroundColor: toneColor(component.tone, palette),
+    padding: 14,
+    backgroundColor: palette.paper,
     borderRadius: 18,
     elevated: false,
   }, children);

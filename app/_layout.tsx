@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { Linking, LogBox, Platform } from 'react-native';
+import { Linking, LogBox, Platform, StatusBar as NativeStatusBar } from 'react-native';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,7 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { LifeOSDatabaseProvider } from '@/src/db/provider';
 import { setActiveDomainOverride } from '@/src/domain/catalog';
 import { useIncomingShareSafe } from '@/src/platform/incoming-share';
-import { defaultLifeOSSettings, loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
+import { loadLifeOSSettings, subscribeLifeOSSettings } from '@/src/settings/lifeos-settings';
 
 LogBox.ignoreLogs([
   'SafeAreaView has been deprecated',
@@ -59,6 +59,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (ready) {
       void SplashScreen.hideAsync().catch(() => {});
+      if (Platform.OS === 'android') {
+        NativeStatusBar.setBarStyle('dark-content');
+        NativeStatusBar.setBackgroundColor('#FBF7EE');
+        NativeStatusBar.setTranslucent(false);
+      }
     }
   }, [ready]);
 
@@ -66,7 +71,7 @@ export default function RootLayout() {
 
   return (
     <LifeOSDatabaseProvider seedInDev={__DEV__}>
-      <StatusBar style={defaultLifeOSSettings.runtime.theme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style="dark" />
       {Platform.OS === 'web' ? null : <IncomingShareRouter />}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />

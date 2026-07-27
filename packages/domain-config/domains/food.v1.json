@@ -434,75 +434,65 @@
     "screens": {
       "overview": {
         "title": "Today",
-        "subtitle": "Dinner, use-first food, and tiny shopping. No kitchen wall of rows.",
+        "subtitle": "Meals, reviews, use first",
         "components": [
           {
             "kind": "widget",
-            "widget": "postCard",
-            "id": "food_ai_brief",
-            "title": "Tonight looks easy",
-            "subtitle": "One useful read, not a dashboard.",
-            "tone": "plum",
+            "widget": "feedList",
+            "id": "meal_timeline_snapshot",
+            "title": "Meal timeline",
+            "subtitle": "4 meals planned from pantry ingredients",
+            "tone": "neutral",
             "props": {
-              "body": "Use the open spinach and yogurt, pick dinner once, and only buy the missing garnish.",
-              "author": "Wonder",
+              "density": "compact",
+              "items": [
+                {
+                  "title": "Breakfast: Greek yogurt bowl",
+                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review."
+                },
+                {
+                  "title": "Lunch: Chickpea spinach wraps",
+                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list."
+                },
+                {
+                  "title": "Dinner: Salmon rice bowls",
+                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar."
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "review_queue",
+            "title": "Review queue",
+            "subtitle": "Receipt proposal from Market Basket",
+            "tone": "moss",
+            "props": {
+              "body": "Add: salmon fillets, blueberries, spinach. You can edit quantities before saving.",
               "density": "compact",
               "summaryFirst": true
             }
           },
           {
-            "kind": "recordList",
-            "id": "today_plan",
-            "title": "Tonight",
-            "tone": "moss",
-            "subtitle": "Best next meal from plans and recipes.",
-            "query": {
-              "collections": [
-                "meal_plan",
-                "recipe"
-              ],
-              "match": "planned|tonight|dinner",
-              "limit": 1
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Choose dinner",
-              "command": "choose_dinner",
-              "payload": {
-                "route": "/chat"
-              }
-            }
-          },
-          {
-            "kind": "recordList",
-            "id": "use_first",
-            "title": "Use first",
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "pantry_suggestion",
+            "title": "Pantry-aware suggestion",
+            "subtitle": "Cook lentil soup tomorrow",
             "tone": "amber",
-            "subtitle": "Open, expiring, or too-good-to-waste food.",
-            "query": {
-              "collections": [
-                "inventory",
-                "inventory_lot",
-                "ingredient"
-              ],
-              "match": "use in|use soon|expire|best by|use by|open",
-              "limit": 3
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Plan around it",
-              "command": "plan_around_use_first",
-              "payload": {
-                "route": "/chat"
-              }
+            "props": {
+              "body": "Uses carrots, celery, and stock expiring soon. Wonder can turn this into a recipe, shopping delta, and prep checklist.",
+              "density": "compact",
+              "summaryFirst": true
             }
           },
           {
             "kind": "widget",
             "widget": "pollCard",
             "id": "dinner_vote",
-            "title": "Family dinner vote",
-            "subtitle": "Pick the vibe. Wonder turns it into a plan.",
+            "title": "Dinner vote",
+            "subtitle": "Pick the vibe. Wonder keeps the plan updated.",
             "tone": "moss",
             "props": {
               "density": "compact",
@@ -526,9 +516,9 @@
           {
             "kind": "recordList",
             "id": "shopping_preview",
-            "title": "Tiny shop",
+            "title": "Shop next",
             "tone": "neutral",
-            "subtitle": "Only what dinner actually needs.",
+            "subtitle": "Only what dinner and use-first food actually need.",
             "query": {
               "collections": [
                 "shopping_item",
@@ -546,83 +536,19 @@
                 "route": "/capture"
               }
             }
-          },
-          {
-            "kind": "widget",
-            "widget": "kanbanBoard",
-            "id": "food_flow_board",
-            "title": "Dinner flow",
-            "subtitle": "A soft board for tonight only.",
-            "tone": "amber",
-            "props": {
-              "density": "compact",
-              "summaryFirst": true,
-              "columns": [
-                {
-                  "title": "Decide",
-                  "items": [
-                    {
-                      "title": "Pick dinner"
-                    }
-                  ]
-                },
-                {
-                  "title": "Prep",
-                  "items": [
-                    {
-                      "title": "Use open yogurt"
-                    }
-                  ]
-                },
-                {
-                  "title": "Buy",
-                  "items": [
-                    {
-                      "title": "Only missing garnish"
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "chartBlock",
-            "id": "food_signal_chart",
-            "title": "Kitchen signal",
-            "subtitle": "Tiny status at a glance.",
-            "tone": "blue",
-            "props": {
-              "density": "compact",
-              "summaryFirst": true,
-              "points": [
-                {
-                  "label": "Ready",
-                  "value": 8
-                },
-                {
-                  "label": "Use first",
-                  "value": 3
-                },
-                {
-                  "label": "Buy",
-                  "value": 2
-                }
-              ]
-            }
           }
         ]
       },
       "kitchen": {
         "title": "Kitchen",
-        "subtitle": "What you have and what should move first.",
+        "subtitle": "Use first 5 · Pantry 18 · Freezer 6",
         "components": [
           {
             "kind": "recordList",
             "id": "use_first_kitchen",
             "title": "Use first",
             "tone": "amber",
-            "subtitle": "Shelf life and movement-aware priorities.",
+            "subtitle": "Move these before they become waste.",
             "query": {
               "collections": [
                 "inventory",
@@ -646,7 +572,7 @@
             "id": "pantry",
             "title": "Pantry and fridge",
             "tone": "neutral",
-            "subtitle": "Your kitchen is ready to fill.",
+            "subtitle": "Food Wonder can plan from.",
             "query": {
               "collections": [
                 "inventory",
@@ -662,6 +588,18 @@
               "payload": {
                 "route": "/capture"
               }
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "inventory_context",
+            "title": "Inventory context",
+            "subtitle": "Quietly useful",
+            "tone": "moss",
+            "props": {
+              "body": "Wonder can use pantry, fridge, freezer, receipts, and meal notes when you allow those sources in settings.",
+              "density": "compact"
             }
           }
         ]
@@ -720,14 +658,14 @@
       },
       "shop": {
         "title": "Shop",
-        "subtitle": "Buy what meals and kitchen need.",
+        "subtitle": "To buy 7 · Receipts 2 · Put away 4",
         "components": [
           {
             "kind": "recordList",
             "id": "shopping_list",
             "title": "To buy",
             "tone": "neutral",
-            "subtitle": "Keep your list active and practical.",
+            "subtitle": "Dinner-aware, not a junk drawer.",
             "query": {
               "collections": [
                 "shopping_item",
@@ -749,9 +687,9 @@
           {
             "kind": "recordList",
             "id": "receipt_review",
-            "title": "Receipts and put-away",
+            "title": "Receipt review",
             "tone": "blue",
-            "subtitle": "Track captured receipts and reconciliation.",
+            "subtitle": "Add to inventory, keep on list, or ignore household lines.",
             "query": {
               "collections": [
                 "purchase",
@@ -768,93 +706,83 @@
                 "route": "/capture"
               }
             }
+          },
+          {
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "reviewable_ai_command",
+            "title": "Reviewable AI command",
+            "subtitle": "Never surprise-saves",
+            "tone": "moss",
+            "props": {
+              "body": "Wonder can draft the shopping and inventory changes, then show you the exact save before it writes.",
+              "density": "compact"
+            }
           }
         ]
       },
       "home": {
         "title": "Today",
-        "subtitle": "Dinner, pantry, shopping, and Wonder in one calm food cockpit.",
+        "subtitle": "Meals, reviews, use first",
         "components": [
           {
-            "kind": "recordList",
-            "id": "home_tonight",
-            "title": "Tonight",
-            "subtitle": "Best next meal from plans and recipes.",
+            "kind": "widget",
+            "widget": "feedList",
+            "id": "home_meal_timeline",
+            "title": "Meal timeline",
+            "subtitle": "4 meals planned from pantry ingredients",
+            "tone": "neutral",
+            "props": {
+              "density": "compact",
+              "items": [
+                {
+                  "title": "Breakfast: Greek yogurt bowl",
+                  "subtitle": "Blueberries, walnuts, honey. Protein estimate pending review."
+                },
+                {
+                  "title": "Lunch: Chickpea spinach wraps",
+                  "subtitle": "Use spinach before Sunday; add tomatoes from shopping list."
+                },
+                {
+                  "title": "Dinner: Salmon rice bowls",
+                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar."
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "home_review_queue",
+            "title": "Review queue",
+            "subtitle": "Receipt proposal from Market Basket",
             "tone": "moss",
-            "query": {
-              "collections": [
-                "meal_plan",
-                "recipe"
-              ],
-              "match": "planned|tonight|dinner",
-              "limit": 1
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Ask Wonder",
-              "command": "ask_today",
-              "payload": {
-                "route": "/chat"
-              }
+            "props": {
+              "body": "Add: salmon fillets, blueberries, spinach. You can edit quantities before saving.",
+              "density": "compact"
             }
           },
           {
-            "kind": "recordList",
-            "id": "home_use_first",
-            "title": "Use first",
-            "subtitle": "Open, expiring, or too-good-to-waste food.",
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "home_pantry_suggestion",
+            "title": "Pantry-aware suggestion",
+            "subtitle": "Cook lentil soup tomorrow",
             "tone": "amber",
-            "query": {
-              "collections": [
-                "inventory",
-                "inventory_lot",
-                "ingredient"
-              ],
-              "match": "use soon|expire|best by|open",
-              "limit": 3
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Plan around it",
-              "command": "plan_around_expiry",
-              "payload": {
-                "route": "/chat"
-              }
-            }
-          },
-          {
-            "kind": "recordList",
-            "id": "home_shopping",
-            "title": "Tiny shop",
-            "subtitle": "Only what dinner actually needs.",
-            "tone": "blue",
-            "query": {
-              "collections": [
-                "shopping_item",
-                "shopping_demand",
-                "shopping_list"
-              ],
-              "match": "to buy|needed|shopping|cart",
-              "limit": 3
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Add item",
-              "command": "add_shopping_item",
-              "payload": {
-                "route": "/capture"
-              }
+            "props": {
+              "body": "Uses carrots, celery, and stock expiring soon.",
+              "density": "compact"
             }
           },
           {
             "kind": "action",
             "id": "home_chat",
-            "title": "Ask Wonder",
-            "subtitle": "Plan dinner, add food, or change this app by asking.",
+            "title": "Ask",
+            "subtitle": "Plan dinner, add food, or review proposed changes.",
             "tone": "plum",
             "action": {
               "kind": "propose",
-              "label": "Chat",
+              "label": "Ask",
               "command": "open_chat",
               "payload": {
                 "route": "/chat"
@@ -924,6 +852,34 @@
             "tone": "moss"
           },
           {
+            "kind": "widget",
+            "widget": "checklistCard",
+            "id": "settings_ai_context_sources",
+            "title": "What Wonder can use",
+            "subtitle": "Choose context sources here; the chat stays clean.",
+            "tone": "neutral",
+            "props": {
+              "items": [
+                {
+                  "title": "On-device food graph",
+                  "subtitle": "Meals, pantry, shopping, and notes."
+                },
+                {
+                  "title": "Connected Notion pages",
+                  "subtitle": "Only selected food homes."
+                },
+                {
+                  "title": "Connected Sheets",
+                  "subtitle": "Shared rows when you want family visibility."
+                },
+                {
+                  "title": "Health Connect",
+                  "subtitle": "Nutrition context only after Android permission."
+                }
+              ]
+            }
+          },
+          {
             "kind": "action",
             "id": "settings_config",
             "title": "App config",
@@ -949,20 +905,10 @@
             "widget": "assistantChat",
             "id": "chat_assistant",
             "title": "Ask Wonder",
-            "subtitle": "Dinner, pantry, shopping, sources, and safe app changes.",
+            "subtitle": "Dinner, pantry, shopping, and reviewable app changes.",
             "tone": "plum",
             "props": {
               "prompt": "Ask about dinner, pantry, shopping, or app changes…"
-            }
-          },
-          {
-            "kind": "recordList",
-            "id": "chat_context",
-            "title": "Food context",
-            "subtitle": "Grounding records Wonder can use.",
-            "tone": "blue",
-            "query": {
-              "limit": 4
             }
           }
         ]

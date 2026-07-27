@@ -427,8 +427,11 @@ function FeedListWidget({ element }: ComponentRenderProps<WidgetProps>) {
     <WidgetShell title={text(props.title, 'Feed')} subtitle={text(props.subtitle, 'Posts, links, updates, and activity in one stream.')}>
       {(items.length ? items : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8).map((item) => (
         <View key={label(item)} style={styles.feedItem}>
-          <Text style={styles.feedTitle}>{label(item)}</Text>
-          <Text style={styles.feedDetail}>{detail(item)}</Text>
+          <View style={styles.feedDot} />
+          <View style={styles.feedCopy}>
+            <Text style={styles.feedTitle}>{label(item)}</Text>
+            <Text style={styles.feedDetail}>{detail(item)}</Text>
+          </View>
         </View>
       ))}
     </WidgetShell>
@@ -656,9 +659,9 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
       <Text style={styles.bodyText}>{body}</Text>
       {summary ? (
         <View style={styles.providerStats}>
-          <Text style={styles.providerStat}>{connected ? `${summary.linkCount} linked` : 'local only'}</Text>
-          <Text style={styles.providerStat}>{summary.pendingWrites + summary.inflightWrites ? `${summary.pendingWrites + summary.inflightWrites} syncing` : 'caught up'}</Text>
-          <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites ? `${summary.failedWrites} need help` : 'no issues'}</Text>
+          <Text style={styles.providerStat}>{connected ? `${summary.linkCount} connected` : 'On-device'}</Text>
+          <Text style={styles.providerStat}>{summary.pendingWrites + summary.inflightWrites ? `${summary.pendingWrites + summary.inflightWrites} syncing` : 'Synced'}</Text>
+          <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites ? `${summary.failedWrites} need help` : 'Healthy'}</Text>
         </View>
       ) : null}
     </WidgetShell>
@@ -704,15 +707,15 @@ export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
+    backgroundColor: '#FFFCF5',
+    borderRadius: 20,
+    padding: 14,
     gap: 12,
     shadowColor: '#271D14',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   title: { color: '#241C16', fontSize: 22, fontWeight: '800' },
   subtitle: { color: '#6D6257', fontSize: 14, lineHeight: 20 },
@@ -782,8 +785,10 @@ const styles = StyleSheet.create({
   pollSelected: { backgroundColor: '#E4F1E8', borderWidth: 1, borderColor: '#2F7448' },
   pollText: { color: '#241C16', fontSize: 15, fontWeight: '800' },
   pollMeta: { color: '#6D6257', fontSize: 12 },
-  feedItem: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2' },
-  feedTitle: { color: '#241C16', fontSize: 16, fontWeight: '800' },
+  feedItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E3DACB' },
+  feedDot: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#E4F1E8', marginTop: 2 },
+  feedCopy: { flex: 1, gap: 3 },
+  feedTitle: { color: '#241C16', fontSize: 15, fontWeight: '900' },
   feedDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
   board: { gap: 10 },
   boardColumn: { width: 168, backgroundColor: '#F6F1E8', borderRadius: 18, padding: 10, gap: 8 },
