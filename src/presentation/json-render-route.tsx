@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react';
 
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { getProviderSyncSummary, type ProviderSyncSummary } from '@/src/db/provider-status';
-import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
-import { queryDomainRecords } from '@/src/domain/queries';
-import type { DomainRecordViewModel } from '@/src/domain/renderer';
+import { listRecordsForDomain } from '@/src/db/records';
+import { recordsToViews, type DomainRecordViewModel } from '@/src/domain/renderer';
+import { useAppRuntime } from '@/src/domain/runtime-context';
 import { JsonRenderSurface } from '@/src/presentation/json-render-surface';
-import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 type JsonRenderRouteProps = {
   screen: string;
@@ -19,23 +18,33 @@ type JsonRenderRouteProps = {
 
 export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, recordId }: JsonRenderRouteProps) {
   const db = useLifeOSDatabase();
-  const settings = useLifeOSSettingsSnapshot();
-  setActiveDomainOverride(settings.runtime.activeDomain);
-  const { activeManifest } = loadCatalog();
+  const { activeManifest, activePackage, catalog } = useAppRuntime();
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
   const [providerSync, setProviderSync] = useState<ProviderSyncSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void queryDomainRecords(db).then((items) => {
-      if (!cancelled) setRecords(recordId ? items.filter((item) => item.id === recordId) : items);
+    const domainId = catalog?.activeDomainId ?? activeManifest?.id ?? null;
+    if (!db || !domainId) {
+      setRecords([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void listRecordsForDomain(db, domainId).then((items) => {
+      if (!cancelled) {
+        const next = recordsToViews(items);
+        setRecords(recordId ? next.filter((item) => item.id === recordId) : next);
+      }
     }).catch(() => {
-      if (!cancelled) setRecords([]);
+      if (!cancelled) {
+        setRecords([]);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [db, recordId, settings.runtime.activeDomain]);
+  }, [activeManifest?.id, catalog?.activeDomainId, db, recordId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,16 +56,18 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, 
     return () => {
       cancelled = true;
     };
-  }, [db, screen, settings.runtime.activeDomain]);
+  }, [db, screen]);
   return (
     <JsonRenderSurface
       eyebrow={eyebrow}
-      title={title ?? activeManifest.label}
+      title={title ?? activeManifest?.label ?? 'App'}
       subtitle={subtitle}
-      ui={activeManifest.ui}
+      ui={activeManifest?.ui}
       screen={screen}
       records={records}
-      nativePermissions={activeManifest.native_capabilities?.permissions}
+      nativePermissions={activePackage?.schemaVersion === 'wonder.app-package.v3'
+        ? activePackage.nativeCapabilities.permissions
+        : activeManifest?.native_capabilities?.permissions}
       providerSync={providerSync}
       emptyTitle={emptyTitle}
     />

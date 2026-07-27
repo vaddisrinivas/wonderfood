@@ -21,6 +21,7 @@ import {
   type HealthConnectStatus,
 } from '@/src/health/connect';
 import type { ProviderSyncStatus } from '@/src/db/provider-status';
+import { useAppRuntime } from '@/src/domain/runtime-context';
 
 type WidgetProps = {
   widget?: string;
@@ -52,9 +53,9 @@ type WidgetProps = {
 };
 
 const DEFAULT_PROMPTS = [
-  'Plan dinner from food that expires first.',
-  'Add milk and cilantro to my shopping list.',
-  'Create a better pantry table.',
+  'Summarize what needs attention today.',
+  'Draft a new task and assign it.',
+  'Create a simpler records table.',
   'Make this app calmer and less dense.',
 ];
 
@@ -169,11 +170,13 @@ function Bubble({ message }: { message: ChatMessage }) {
 function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const db = useLifeOSDatabase();
+  const runtime = useAppRuntime();
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const suggestions = useMemo(() => list(props.suggestions, DEFAULT_PROMPTS), [props.suggestions]);
+  const domainId = runtime.catalog?.activeDomainId ?? runtime.activeManifest?.id ?? 'app';
 
   const submit = useCallback(async (raw: string) => {
     const value = raw.trim();
@@ -185,31 +188,31 @@ function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
       const result = await sendChatMessage({
         db,
         text: value,
-        domainId: 'food',
+        domainId,
         conversationId: thread?.id,
         actor: 'mobile-json-render',
       });
       setThread(result.thread);
       if (result.serverError) setError(result.serverError);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Wonder chat failed.');
+      setError(err instanceof Error ? err.message : 'Assistant request failed.');
     } finally {
       setBusy(false);
     }
-  }, [busy, db, thread?.id]);
+  }, [busy, db, domainId, thread?.id]);
 
   const messages = thread?.messages ?? [];
 
   return (
     <WidgetShell
-      title={text(props.title, 'Ask Wonder')}
-      subtitle={text(props.subtitle, 'Food assistant, app editor, and safe proposal surface.')}
+      title={text(props.title, 'Assistant')}
+      subtitle={text(props.subtitle, 'Source-backed chat, editor, and proposal surface.')}
     >
       <ScrollView style={styles.chatLog} contentContainerStyle={styles.chatLogContent}>
         {messages.length ? messages.map((message) => <Bubble key={message.id} message={message} />) : (
           <View style={styles.emptyChat}>
-            <Text style={styles.emptyTitle}>What should food do next?</Text>
-            <Text style={styles.emptyCopy}>Ask for dinner, pantry cleanup, shopping, or app changes. Wonder answers from local records when live AI is unavailable.</Text>
+            <Text style={styles.emptyTitle}>What should this app do next?</Text>
+            <Text style={styles.emptyCopy}>Ask for record help, summaries, or app changes. The assistant falls back to local records when live AI is unavailable.</Text>
           </View>
         )}
         {busy ? <ActivityIndicator color="#2F7448" /> : null}
@@ -226,7 +229,7 @@ function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder={text(props.prompt, 'Ask Wonder…')}
+          placeholder={text(props.prompt, 'Ask anything…')}
           placeholderTextColor="#8A8172"
           style={styles.input}
           multiline
@@ -269,7 +272,7 @@ function HealthConnectWidget({ element }: ComponentRenderProps<WidgetProps>) {
   return (
     <WidgetShell
       title={text(props.title, 'Health Connect')}
-      subtitle={text(props.subtitle, 'Optional Android health context for food decisions. You choose what is shared.')}
+      subtitle={text(props.subtitle, 'Optional Android health context for package decisions. You choose what is shared.')}
     >
       <View style={styles.statusPill}>
         <Text style={styles.statusText}>{status?.availability ?? 'checking'}</Text>
@@ -356,7 +359,7 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
   return (
     <WidgetShell
       title={text(props.title, 'AI package editor')}
-      subtitle={text(props.subtitle, 'Describe a table or screen change. Wonder previews a safe package diff before it can apply.')}
+      subtitle={text(props.subtitle, 'Describe a table or screen change. The app previews a safe package diff before it can apply.')}
     >
       <TextInput
         value={prompt}
@@ -454,9 +457,9 @@ function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const columns = rows(props.columns);
   return (
-    <WidgetShell title={text(props.title, 'Board')} subtitle={text(props.subtitle, 'Generic grouped work, meals, projects, or approvals.')}>
+    <WidgetShell title={text(props.title, 'Board')} subtitle={text(props.subtitle, 'Generic grouped work, projects, or approvals.')}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.board}>
-        {(columns.length ? columns : [{ title: 'Ideas', items: [{ title: 'Plan dinner' }] }, { title: 'Next', items: [{ title: 'Buy cilantro' }] }]).map((column) => (
+        {(columns.length ? columns : [{ title: 'Ideas', items: [{ title: 'Draft setup' }] }, { title: 'Next', items: [{ title: 'Review changes' }] }]).map((column) => (
           <View key={label(column, 'Column')} style={styles.boardColumn}>
             <Text style={styles.boardTitle}>{label(column, 'Column')}</Text>
             {rows(column.items).slice(0, 5).map((item) => (
@@ -542,7 +545,7 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const permissions = rows(props.permissions);
   return (
     <WidgetShell title={text(props.title, 'Permissions')} subtitle={text(props.subtitle, 'This app asks only when a package feature needs native access.')}>
-      {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Optional food-health context; you stay in control.' }]).map((permission) => (
+      {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Optional device context; you stay in control.' }]).map((permission) => (
         <View key={text(permission.id, permissionLabel(permission))} style={styles.permissionRow}>
           <View style={styles.permissionHeading}>
             <Text style={styles.permissionTitle}>{permissionLabel(permission)}</Text>
