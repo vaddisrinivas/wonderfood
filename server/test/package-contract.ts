@@ -236,6 +236,20 @@ pkgV3.contractLock.checksum = `sha256:${createHash('sha256').update(stableJson({
   nativeCapabilities: pkgV3.nativeCapabilities,
 })).digest('hex')}`;
 assert.equal(validateAppPackage(pkgV3).valid, true);
+assert.equal(validateAppPackage(withNativeCapabilities(pkgV3, {
+  ...pkgV3.nativeCapabilities,
+  intents: [
+    ...(pkgV3.nativeCapabilities.intents ?? []),
+    {
+      id: 'unsupported-voice',
+      platform: 'android',
+      kind: 'voice',
+      reason: 'Voice routing is not implemented in the shell yet.',
+      required: false,
+      payload: {},
+    },
+  ],
+})).valid, false);
 assert.equal(validateAppPackage({
   ...pkgV3,
   contractLock: {
@@ -293,4 +307,23 @@ function stableJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
+}
+
+function withNativeCapabilities(base: typeof pkgV3, nativeCapabilities: any): typeof pkgV3 {
+  const contractLock = {
+    ...base.contractLock,
+    nativeCapabilities,
+  };
+  contractLock.checksum = `sha256:${createHash('sha256').update(stableJson({
+    schemaVersion: contractLock.schemaVersion,
+    algorithm: contractLock.algorithm,
+    pinnedAt: contractLock.pinnedAt,
+    dependencyPins: contractLock.dependencyPins,
+    nativeCapabilities,
+  })).digest('hex')}`;
+  return {
+    ...base,
+    nativeCapabilities,
+    contractLock,
+  };
 }

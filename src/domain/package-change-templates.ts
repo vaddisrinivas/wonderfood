@@ -1176,6 +1176,10 @@ function mergeNativeCapabilityRequest(
   prompt: string,
 ): AppPackageNativeCapability {
   const lower = prompt.toLowerCase();
+  const unsupported = unsupportedNativeCapabilityRequests(lower);
+  if (unsupported.length) {
+    throw new Error(`native_capability_unsupported:${unsupported.join(',')}`);
+  }
   const permissions = [...(current.permissions ?? [])];
   const intents = [...(current.intents ?? [])];
 
@@ -1200,14 +1204,7 @@ function mergeNativeCapabilityRequest(
     });
   }
   if (/\b(health connect|nutrition|steps|sleep|body|exercise)\b/.test(lower)) {
-    upsertPermission(permissions, {
-      id: 'health-connect-read-nutrition',
-      platform: 'android',
-      permission: 'android.permission.health.READ_NUTRITION',
-      reason: 'Use Health Connect nutrition records as optional food context after user approval.',
-      required: false,
-      prompt: 'Allow WonderFood to read nutrition records for food context.',
-    });
+    for (const permission of HEALTH_CONNECT_PERMISSION_DECLARATIONS) upsertPermission(permissions, permission);
   }
   if (/\b(share sheet|share intent|share|send to app)\b/.test(lower)) {
     upsertIntent(intents, {
@@ -1227,42 +1224,6 @@ function mergeNativeCapabilityRequest(
       required: false,
     });
   }
-  if (/\b(shortcut|launcher|quick action)\b/.test(lower)) {
-    upsertIntent(intents, {
-      id: 'package-shortcut',
-      platform: 'android',
-      kind: 'shortcut',
-      reason: 'Expose common package actions as app shortcuts.',
-      required: false,
-    });
-  }
-  if (/\b(voice|okay google|google assistant|assistant)\b/.test(lower)) {
-    upsertIntent(intents, {
-      id: 'voice-command',
-      platform: 'android',
-      kind: 'voice',
-      reason: 'Let supported assistants route approved package commands into WonderFood.',
-      required: false,
-    });
-  }
-  if (/\b(background|scheduled|periodic|sync|reminder)\b/.test(lower)) {
-    upsertIntent(intents, {
-      id: 'background-package-task',
-      platform: 'expo',
-      kind: 'background_task',
-      reason: 'Run package-approved reminders, refreshes, and provider checks in the background where supported.',
-      required: false,
-    });
-  }
-  if (/\b(file open|open file|document|pdf|csv|import file)\b/.test(lower)) {
-    upsertIntent(intents, {
-      id: 'open-package-file',
-      platform: 'expo',
-      kind: 'file_open',
-      reason: 'Open package-supported files such as PDFs, CSVs, images, audio, and video as records.',
-      required: false,
-    });
-  }
   if (intents.length === (current.intents ?? []).length && permissions.length === (current.permissions ?? []).length) {
     upsertIntent(intents, {
       id: 'package-capability-request',
@@ -1278,6 +1239,58 @@ function mergeNativeCapabilityRequest(
     permissions: sortById(permissions),
     intents: sortById(intents),
   }) as AppPackageNativeCapability;
+}
+
+const HEALTH_CONNECT_PERMISSION_DECLARATIONS: AppPackagePermissionDeclaration[] = [
+  {
+    id: 'health-connect-read-nutrition',
+    platform: 'android',
+    permission: 'android.permission.health.READ_NUTRITION',
+    reason: 'Use Health Connect nutrition records as optional food context after user approval.',
+    required: false,
+    prompt: 'Allow WonderFood to read nutrition records for food context.',
+  },
+  {
+    id: 'health-connect-read-hydration',
+    platform: 'android',
+    permission: 'android.permission.health.READ_HYDRATION',
+    reason: 'Use hydration records as optional food-health context after user approval.',
+    required: false,
+    prompt: 'Allow WonderFood to read hydration records for food context.',
+  },
+  {
+    id: 'health-connect-read-steps',
+    platform: 'android',
+    permission: 'android.permission.health.READ_STEPS',
+    reason: 'Use step trends as optional planning context after user approval.',
+    required: false,
+    prompt: 'Allow WonderFood to read step records for food context.',
+  },
+  {
+    id: 'health-connect-read-active-calories',
+    platform: 'android',
+    permission: 'android.permission.health.READ_ACTIVE_CALORIES_BURNED',
+    reason: 'Use active calorie context only when the user enables Health Connect.',
+    required: false,
+    prompt: 'Allow WonderFood to read active calorie records for food context.',
+  },
+  {
+    id: 'health-connect-read-weight',
+    platform: 'android',
+    permission: 'android.permission.health.READ_WEIGHT',
+    reason: 'Use weight context only when the user enables Health Connect.',
+    required: false,
+    prompt: 'Allow WonderFood to read weight records for food context.',
+  },
+];
+
+function unsupportedNativeCapabilityRequests(lowerPrompt: string): string[] {
+  return [
+    [/\b(shortcut|launcher|quick action)\b/, 'shortcut'],
+    [/\b(voice|okay google|google assistant)\b/, 'voice'],
+    [/\b(background|scheduled|periodic|reminder)\b/, 'background_task'],
+    [/\b(file open|open file|document|pdf|csv|import file)\b/, 'file_open'],
+  ].flatMap(([pattern, label]) => (pattern as RegExp).test(lowerPrompt) ? [label as string] : []);
 }
 
 function upsertPermission(

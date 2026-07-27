@@ -357,17 +357,19 @@ describe('app package SQLite registry', () => {
     expect(chart.package?.views.ai_spending.mode).toBe('chart');
     expect(chart.package?.presentation?.ui?.screens?.ai_spending.components?.[0].widget).toBe('chartBlock');
 
-    const native = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add camera permission and voice shortcut'));
+    expect(() => buildSafePackageChangeRequest(active, 'add camera permission and voice shortcut')).toThrow(/native_capability_unsupported/);
+
+    const native = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add camera permission and share intent'));
     expect(native.status).toBe('valid');
     if (native.package?.schemaVersion !== 'wonder.app-package.v3') throw new Error('expected V3 package');
     expect(native.package.nativeCapabilities.permissions?.some((permission) => (
       typeof permission !== 'string' && permission.id === 'camera-capture'
     ))).toBe(true);
-    expect(native.package.nativeCapabilities.intents?.some((intent) => intent.id === 'voice-command')).toBe(true);
+    expect(native.package.nativeCapabilities.intents?.some((intent) => intent.id === 'receive-shared-content')).toBe(true);
     expect(native.package.contractLock.nativeCapabilities).toEqual(native.package.nativeCapabilities);
-    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.[0].widget).toBe('permissionCard');
-    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.some((component) => component.id === 'ai_camera_voice_shortcut_open_permissions')).toBe(true);
-    expect(native.package.presentation?.ui?.screens?.ai_camera_voice_shortcut_permissions.components?.some((component) => component.id === 'ai_camera_voice_shortcut_test_intents')).toBe(true);
+    expect(native.package.presentation?.ui?.screens?.ai_camera_share_permissions.components?.[0].widget).toBe('permissionCard');
+    expect(native.package.presentation?.ui?.screens?.ai_camera_share_permissions.components?.some((component) => component.id === 'ai_camera_share_open_permissions')).toBe(true);
+    expect(native.package.presentation?.ui?.screens?.ai_camera_share_permissions.components?.some((component) => component.id === 'ai_camera_share_test_intents')).toBe(true);
   });
 });
 
