@@ -555,8 +555,7 @@ export async function handleServerChat(input: {
     modelAnswer.sourceCards = sourceCards;
   }
 
-  // The mobile surface presents the full modelAnswer in its answer card. Keep
-  // the chat bubble as a short hand-off so the same prose is not printed twice.
+  // Keep chat output as a short hand-off so repeated prose is avoided.
   const displayText = modelAnswer
     ? (modelAnswer.rows.length || modelAnswer.citations.length ? 'Here’s the answer.' : modelAnswer.intro || finalText)
     : finalText;
