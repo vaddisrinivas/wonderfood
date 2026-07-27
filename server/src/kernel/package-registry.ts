@@ -256,6 +256,8 @@ function validatePackageChangeRequest(request: PackageChangeRequest, active: App
 
 function isAllowedPackagePatchPath(path: string): boolean {
   return path === '/version'
+    || path === '/collections'
+    || path.startsWith('/collections/')
     || path === '/presentation'
     || path.startsWith('/presentation/')
     || path === '/queries'
@@ -269,7 +271,13 @@ function isAllowedPackagePatchPath(path: string): boolean {
     || path === '/capabilities'
     || path.startsWith('/capabilities/')
     || path === '/acceptanceTests'
-    || path.startsWith('/acceptanceTests/');
+    || path.startsWith('/acceptanceTests/')
+    || path === '/nativeCapabilities'
+    || path.startsWith('/nativeCapabilities/')
+    || path === '/contractLock/checksum'
+    || path === '/contractLock/pinnedAt'
+    || path === '/contractLock/nativeCapabilities'
+    || path.startsWith('/contractLock/nativeCapabilities/');
 }
 
 function applyPackagePatch(base: AppPackage, patch: readonly Operation[]): AppPackage {

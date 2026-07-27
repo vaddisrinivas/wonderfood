@@ -434,14 +434,74 @@
     "screens": {
       "overview": {
         "title": "Today",
-        "subtitle": "Dinner first. Waste less. Buy only what you need.",
+        "subtitle": "A living kitchen cockpit: decide dinner, use what matters, keep shopping tiny.",
         "components": [
+          {
+            "kind": "widget",
+            "widget": "postCard",
+            "id": "food_ai_brief",
+            "title": "Wonder brief",
+            "subtitle": "Tonight’s kitchen read",
+            "tone": "plum",
+            "props": {
+              "body": "Cook from what is already open, pick one dinner path, and buy only the missing garnish.",
+              "author": "Wonder"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "pollCard",
+            "id": "dinner_vote",
+            "title": "Dinner direction",
+            "subtitle": "One-tap family choice. Approval-backed writes come next.",
+            "tone": "moss",
+            "props": {
+              "options": [
+                {
+                  "label": "Quick dal bowl",
+                  "subtitle": "Use spinach and yogurt first."
+                },
+                {
+                  "label": "Tandoori sheet pan",
+                  "subtitle": "Best if chicken is already thawed."
+                },
+                {
+                  "label": "Leftovers remix",
+                  "subtitle": "Fastest and lowest waste."
+                }
+              ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "chartBlock",
+            "id": "food_signal_chart",
+            "title": "Kitchen signal",
+            "subtitle": "Tiny overview instead of a wall of rows.",
+            "tone": "blue",
+            "props": {
+              "points": [
+                {
+                  "label": "Ready",
+                  "value": 8
+                },
+                {
+                  "label": "Use first",
+                  "value": 3
+                },
+                {
+                  "label": "Buy",
+                  "value": 2
+                }
+              ]
+            }
+          },
           {
             "kind": "recordList",
             "id": "today_plan",
             "title": "Tonight",
             "tone": "moss",
-            "subtitle": "Dinner first. Waste less. Buy only what you need.",
+            "subtitle": "Best next meal from plans and recipes.",
             "query": {
               "collections": [
                 "meal_plan",
@@ -529,6 +589,42 @@
               "payload": {
                 "route": "/chat"
               }
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "kanbanBoard",
+            "id": "food_flow_board",
+            "title": "Food flow",
+            "subtitle": "Meal work as a soft board: decide, prep, buy, done.",
+            "tone": "amber",
+            "props": {
+              "columns": [
+                {
+                  "title": "Decide",
+                  "items": [
+                    {
+                      "title": "Pick dinner"
+                    }
+                  ]
+                },
+                {
+                  "title": "Prep",
+                  "items": [
+                    {
+                      "title": "Use open yogurt"
+                    }
+                  ]
+                },
+                {
+                  "title": "Buy",
+                  "items": [
+                    {
+                      "title": "Only missing garnish"
+                    }
+                  ]
+                }
+              ]
             }
           }
         ]

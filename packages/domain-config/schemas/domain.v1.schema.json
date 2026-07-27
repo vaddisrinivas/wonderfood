@@ -394,7 +394,18 @@
             "assistantChat",
             "healthConnect",
             "schemaEditor",
-            "widgetCatalog"
+            "widgetCatalog",
+            "postCard",
+            "pollCard",
+            "linkPreview",
+            "feedList",
+            "kanbanBoard",
+            "chartBlock",
+            "mediaBlock",
+            "mapBlock",
+            "permissionCard",
+            "providerStatus",
+            "themePreview"
           ]
         },
         "props": {

@@ -46,7 +46,22 @@ export type A2UiComponent = {
   id?: string;
   title?: string;
   subtitle?: string;
-  widget?: 'assistantChat' | 'healthConnect' | 'schemaEditor' | 'widgetCatalog';
+  widget?:
+    | 'assistantChat'
+    | 'healthConnect'
+    | 'schemaEditor'
+    | 'widgetCatalog'
+    | 'postCard'
+    | 'pollCard'
+    | 'linkPreview'
+    | 'feedList'
+    | 'kanbanBoard'
+    | 'chartBlock'
+    | 'mediaBlock'
+    | 'mapBlock'
+    | 'permissionCard'
+    | 'providerStatus'
+    | 'themePreview';
   props?: Record<string, unknown>;
   view?: string;
   tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
@@ -123,7 +138,14 @@ export type AppPackageNativeCapability = {
   schemaVersion: 'wonder.app-package-native-capabilities.v1';
   platform: 'expo' | 'android' | 'ios' | 'web';
   packages: string[];
-  permissions?: string[];
+  permissions?: Array<string | {
+    id: string;
+    platform: 'expo' | 'android' | 'ios' | 'web';
+    permission: string;
+    reason: string;
+    required?: boolean;
+    prompt?: string;
+  }>;
 };
 
 export type AppPackageContractLock = {

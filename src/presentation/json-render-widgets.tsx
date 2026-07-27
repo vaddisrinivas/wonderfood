@@ -18,6 +18,16 @@ type WidgetProps = {
   subtitle?: string;
   prompt?: string;
   suggestions?: string[];
+  body?: string;
+  author?: string;
+  url?: string;
+  imageUrl?: string;
+  items?: unknown[];
+  options?: unknown[];
+  columns?: unknown[];
+  points?: unknown[];
+  permissions?: unknown[];
+  status?: string;
 };
 
 const DEFAULT_PROMPTS = [
@@ -33,6 +43,29 @@ function text(value: unknown, fallback = '') {
 
 function list(value: unknown, fallback: string[]) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : fallback;
+}
+
+function rows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+}
+
+function label(value: unknown, fallback = 'Item') {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const raw = value as Record<string, unknown>;
+    return text(raw.title, text(raw.label, text(raw.name, fallback)));
+  }
+  return fallback;
+}
+
+function detail(value: unknown, fallback = '') {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const raw = value as Record<string, unknown>;
+    return text(raw.subtitle, text(raw.body, text(raw.detail, text(raw.reason, fallback))));
+  }
+  return fallback;
 }
 
 function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
@@ -201,7 +234,26 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
 
 function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
-  const widgets = ['Assistant chat', 'Health Connect', 'Record lists', 'Metrics', 'Actions', 'Text cards', 'Package editor'];
+  const widgets = [
+    'Assistant chat',
+    'Post cards',
+    'Polls',
+    'Link previews',
+    'Feeds',
+    'Kanban boards',
+    'Charts',
+    'Media',
+    'Maps',
+    'Permissions',
+    'Provider status',
+    'Theme preview',
+    'Health Connect',
+    'Record lists',
+    'Metrics',
+    'Actions',
+    'Text cards',
+    'Package editor',
+  ];
   return (
     <WidgetShell title={text(props.title, 'Widget catalog')} subtitle={text(props.subtitle, 'The safe building blocks JSON Render can place on screens today.')}>
       <View style={styles.catalogGrid}>
@@ -215,11 +267,189 @@ function WidgetCatalogWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
+function PostCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  return (
+    <WidgetShell title={text(props.title, 'Post')} subtitle={text(props.subtitle, text(props.author, 'Wonder'))}>
+      <Text style={styles.bodyText}>{text(props.body, 'A package-defined post, note, update, or announcement.')}</Text>
+      {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
+    </WidgetShell>
+  );
+}
+
+function PollCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const [selected, setSelected] = useState<string | null>(null);
+  const options = rows(props.options);
+  return (
+    <WidgetShell title={text(props.title, 'Poll')} subtitle={text(props.subtitle, 'Choose one. Stored action wiring comes from package proposals.')}>
+      {(options.length ? options : [{ label: 'Yes' }, { label: 'No' }]).map((option) => {
+        const optionLabel = label(option);
+        return (
+          <Pressable key={optionLabel} style={[styles.pollOption, selected === optionLabel ? styles.pollSelected : null]} onPress={() => setSelected(optionLabel)}>
+            <Text style={styles.pollText}>{optionLabel}</Text>
+            <Text style={styles.pollMeta}>{selected === optionLabel ? 'Selected' : detail(option, 'Tap to choose')}</Text>
+          </Pressable>
+        );
+      })}
+    </WidgetShell>
+  );
+}
+
+function LinkPreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const host = (() => {
+    try {
+      return props.url ? new URL(text(props.url)).hostname.replace(/^www\./, '') : 'link';
+    } catch {
+      return 'link';
+    }
+  })();
+  return (
+    <WidgetShell title={text(props.title, 'Link preview')} subtitle={host}>
+      <Text style={styles.bodyText}>{text(props.subtitle, 'A safe preview surface for YouTube, docs, recipes, posts, and references.')}</Text>
+      {props.url ? <Text style={styles.linkText}>{text(props.url)}</Text> : null}
+    </WidgetShell>
+  );
+}
+
+function FeedListWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <WidgetShell title={text(props.title, 'Feed')} subtitle={text(props.subtitle, 'Posts, links, updates, and activity in one stream.')}>
+      {(items.length ? items : [{ title: 'No feed items yet', subtitle: 'Ask Wonder to add posts, links, or updates.' }]).slice(0, 8).map((item) => (
+        <View key={label(item)} style={styles.feedItem}>
+          <Text style={styles.feedTitle}>{label(item)}</Text>
+          <Text style={styles.feedDetail}>{detail(item)}</Text>
+        </View>
+      ))}
+    </WidgetShell>
+  );
+}
+
+function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const columns = rows(props.columns);
+  return (
+    <WidgetShell title={text(props.title, 'Board')} subtitle={text(props.subtitle, 'Generic grouped work, meals, projects, or approvals.')}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.board}>
+        {(columns.length ? columns : [{ title: 'Ideas', items: [{ title: 'Plan dinner' }] }, { title: 'Next', items: [{ title: 'Buy cilantro' }] }]).map((column) => (
+          <View key={label(column, 'Column')} style={styles.boardColumn}>
+            <Text style={styles.boardTitle}>{label(column, 'Column')}</Text>
+            {rows(column.items).slice(0, 5).map((item) => (
+              <View key={label(item)} style={styles.boardCard}>
+                <Text style={styles.boardCardText}>{label(item)}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    </WidgetShell>
+  );
+}
+
+function ChartBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const points = rows(props.points);
+  const values = (points.length ? points : [{ label: 'A', value: 6 }, { label: 'B', value: 10 }, { label: 'C', value: 4 }])
+    .map((point) => ({ label: label(point), value: typeof point.value === 'number' ? point.value : Number(point.value ?? 0) }))
+    .filter((point) => Number.isFinite(point.value));
+  const max = Math.max(1, ...values.map((point) => point.value));
+  return (
+    <WidgetShell title={text(props.title, 'Chart')} subtitle={text(props.subtitle, 'Config-driven bars for budgets, habits, inventory, or signals.')}>
+      <View style={styles.chart}>
+        {values.slice(0, 8).map((point) => (
+          <View key={point.label} style={styles.chartRow}>
+            <Text style={styles.chartLabel}>{point.label}</Text>
+            <View style={styles.chartTrack}><View style={[styles.chartFill, { width: `${Math.max(8, (point.value / max) * 100)}%` }]} /></View>
+          </View>
+        ))}
+      </View>
+    </WidgetShell>
+  );
+}
+
+function MediaBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  return (
+    <WidgetShell title={text(props.title, 'Media')} subtitle={text(props.subtitle, 'Image, audio, and video slots declared by package config.')}>
+      <View style={styles.mediaBox}>
+        <Text style={styles.mediaGlyph}>▶︎</Text>
+        <Text style={styles.bodyText}>{text(props.body, 'Attach or preview media here.')}</Text>
+      </View>
+    </WidgetShell>
+  );
+}
+
+function MapBlockWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  return (
+    <WidgetShell title={text(props.title, 'Map')} subtitle={text(props.subtitle, 'Location-aware surfaces without custom app code.')}>
+      <View style={styles.mapBox}>
+        <Text style={styles.mapPin}>⌖</Text>
+        <Text style={styles.bodyText}>{text(props.body, 'Map provider hooks can render stores, trips, homes, routes, or field work.')}</Text>
+      </View>
+    </WidgetShell>
+  );
+}
+
+function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const permissions = rows(props.permissions);
+  return (
+    <WidgetShell title={text(props.title, 'Permissions')} subtitle={text(props.subtitle, 'Native capabilities explained before request.')}>
+      {(permissions.length ? permissions : [{ title: 'Health Connect', subtitle: 'Used only for food-health context.' }]).map((permission) => (
+        <View key={label(permission)} style={styles.permissionRow}>
+          <Text style={styles.permissionTitle}>{label(permission)}</Text>
+          <Text style={styles.permissionDetail}>{detail(permission, 'Required by this package feature.')}</Text>
+        </View>
+      ))}
+    </WidgetShell>
+  );
+}
+
+function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  return (
+    <WidgetShell title={text(props.title, 'Sync')} subtitle={text(props.subtitle, 'Provider sync should feel invisible until attention is needed.')}>
+      <View style={styles.statusPill}>
+        <Text style={styles.statusText}>{text(props.status, 'Ready')}</Text>
+      </View>
+      <Text style={styles.bodyText}>{text(props.body, 'Local data is primary. Notion and Sheets writes require verification before success.')}</Text>
+    </WidgetShell>
+  );
+}
+
+function ThemePreviewWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  return (
+    <WidgetShell title={text(props.title, 'Theme')} subtitle={text(props.subtitle, 'Package-level design tokens for generated apps.')}>
+      <View style={styles.swatches}>
+        {['#2F7448', '#F3B15E', '#7B4E8A', '#B9DCE8', '#241C16'].map((color) => (
+          <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
+        ))}
+      </View>
+    </WidgetShell>
+  );
+}
+
 export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   AssistantChatWidget,
   HealthConnectWidget,
   SchemaEditorWidget,
   WidgetCatalogWidget,
+  PostCardWidget,
+  PollCardWidget,
+  LinkPreviewWidget,
+  FeedListWidget,
+  KanbanBoardWidget,
+  ChartBlockWidget,
+  MediaBlockWidget,
+  MapBlockWidget,
+  PermissionCardWidget,
+  ProviderStatusWidget,
+  ThemePreviewWidget,
 };
 
 const styles = StyleSheet.create({
@@ -278,4 +508,31 @@ const styles = StyleSheet.create({
   catalogGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catalogItem: { backgroundColor: '#EFE6ED', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8 },
   catalogText: { color: '#3F2D42', fontWeight: '700', fontSize: 12 },
+  linkText: { color: '#2F7448', fontSize: 13, fontWeight: '800' },
+  pollOption: { borderRadius: 16, padding: 12, backgroundColor: '#F6F1E8', gap: 3 },
+  pollSelected: { backgroundColor: '#E4F1E8', borderWidth: 1, borderColor: '#2F7448' },
+  pollText: { color: '#241C16', fontSize: 15, fontWeight: '800' },
+  pollMeta: { color: '#6D6257', fontSize: 12 },
+  feedItem: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2' },
+  feedTitle: { color: '#241C16', fontSize: 16, fontWeight: '800' },
+  feedDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  board: { gap: 10 },
+  boardColumn: { width: 168, backgroundColor: '#F6F1E8', borderRadius: 18, padding: 10, gap: 8 },
+  boardTitle: { color: '#241C16', fontWeight: '900' },
+  boardCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10 },
+  boardCardText: { color: '#241C16', fontWeight: '700' },
+  chart: { gap: 10 },
+  chartRow: { gap: 5 },
+  chartLabel: { color: '#6D6257', fontSize: 12, fontWeight: '800' },
+  chartTrack: { height: 12, backgroundColor: '#F6F1E8', borderRadius: 999, overflow: 'hidden' },
+  chartFill: { height: 12, backgroundColor: '#2F7448', borderRadius: 999 },
+  mediaBox: { minHeight: 112, borderRadius: 18, backgroundColor: '#F6F1E8', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
+  mediaGlyph: { color: '#241C16', fontSize: 32, fontWeight: '900' },
+  mapBox: { minHeight: 112, borderRadius: 18, backgroundColor: '#E8F4F5', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
+  mapPin: { color: '#2F7448', fontSize: 32, fontWeight: '900' },
+  permissionRow: { borderRadius: 16, backgroundColor: '#F6F1E8', padding: 12, gap: 4 },
+  permissionTitle: { color: '#241C16', fontWeight: '900' },
+  permissionDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  swatches: { flexDirection: 'row', gap: 8 },
+  swatch: { width: 42, height: 42, borderRadius: 14 },
 });

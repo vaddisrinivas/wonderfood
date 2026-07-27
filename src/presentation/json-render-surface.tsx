@@ -255,6 +255,17 @@ function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], compo
       healthConnect: 'HealthConnectWidget',
       schemaEditor: 'SchemaEditorWidget',
       widgetCatalog: 'WidgetCatalogWidget',
+      postCard: 'PostCardWidget',
+      pollCard: 'PollCardWidget',
+      linkPreview: 'LinkPreviewWidget',
+      feedList: 'FeedListWidget',
+      kanbanBoard: 'KanbanBoardWidget',
+      chartBlock: 'ChartBlockWidget',
+      mediaBlock: 'MediaBlockWidget',
+      mapBlock: 'MapBlockWidget',
+      permissionCard: 'PermissionCardWidget',
+      providerStatus: 'ProviderStatusWidget',
+      themePreview: 'ThemePreviewWidget',
     };
     const widgetType = component.widget ? typeByWidget[component.widget] : null;
     if (widgetType) {

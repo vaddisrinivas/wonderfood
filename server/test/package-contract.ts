@@ -59,6 +59,9 @@ assert.equal(validateAppPackage({
           components: [
             { kind: 'text', id: 'tip', title: 'Tip', subtitle: 'Welcome to Food.' },
             { kind: 'recordList', id: 'records', title: 'Recent', query: { collections: ['decisions'], limit: 3 } },
+            { kind: 'widget', widget: 'pollCard', id: 'vote', title: 'Vote', props: { options: [{ label: 'Yes' }, { label: 'No' }] } },
+            { kind: 'widget', widget: 'kanbanBoard', id: 'board', title: 'Board', props: { columns: [{ title: 'Next', items: [{ title: 'Review' }] }] } },
+            { kind: 'widget', widget: 'permissionCard', id: 'permissions', title: 'Permissions', props: { permissions: [{ title: 'Camera', subtitle: 'Receipt capture' }] } },
           ],
         },
       },
@@ -95,6 +98,14 @@ assert.equal(validateAppPackage({
     label: 'Bad',
     surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
     ui: { schemaVersion: 'a2ui.v0_9', openUrlAllowlist: [''], components: [] },
+  },
+}).valid, false);
+assert.equal(validateAppPackage({
+  ...pkg,
+  presentation: {
+    label: 'Bad',
+    surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
+    ui: { schemaVersion: 'a2ui.v0_9', components: [{ kind: 'widget', widget: 'rawCodeRunner', id: 'bad-widget' }] },
   },
 }).valid, false);
 assert.equal(validateAppPackage({
@@ -181,6 +192,16 @@ const pkgV3 = (() => {
     schemaVersion: 'wonder.app-package-native-capabilities.v1',
     platform: 'expo',
     packages: ['@a2ui/web_core/v0_9'],
+    permissions: [
+      {
+        id: 'health-connect-read',
+        platform: 'android',
+        permission: 'android.permission.health.READ_NUTRITION',
+        reason: 'Food-health context when enabled.',
+        required: false,
+        prompt: 'Allow Wonder to read nutrition records for food context.',
+      },
+    ],
   };
   return {
     ...pkg,

@@ -293,7 +293,24 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
     assertCondition(typeof raw.id === 'string' && raw.id.trim().length > 0, `${path}.id required for action components`);
   }
   if (kind === 'widget') {
-    assertCondition(raw.widget === 'assistantChat' || raw.widget === 'healthConnect' || raw.widget === 'schemaEditor' || raw.widget === 'widgetCatalog', `${path}.widget must be assistantChat|healthConnect|schemaEditor|widgetCatalog`);
+    assertCondition(
+      raw.widget === 'assistantChat'
+        || raw.widget === 'healthConnect'
+        || raw.widget === 'schemaEditor'
+        || raw.widget === 'widgetCatalog'
+        || raw.widget === 'postCard'
+        || raw.widget === 'pollCard'
+        || raw.widget === 'linkPreview'
+        || raw.widget === 'feedList'
+        || raw.widget === 'kanbanBoard'
+        || raw.widget === 'chartBlock'
+        || raw.widget === 'mediaBlock'
+        || raw.widget === 'mapBlock'
+        || raw.widget === 'permissionCard'
+        || raw.widget === 'providerStatus'
+        || raw.widget === 'themePreview',
+      `${path}.widget must be a supported A2UI widget`,
+    );
     if (raw.props !== undefined) {
       assertCondition(isObject(raw.props), `${path}.props must be an object`);
     }

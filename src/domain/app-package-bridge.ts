@@ -63,7 +63,7 @@ export function buildAppPackageFromManifest(
     package: {
       schemaVersion: 'wonder.app-package.v2',
       id: manifest.id,
-      version: options.version?.trim() || '1.0.0',
+      version: options.version?.trim() || bundledManifestVersion(manifest),
       collections,
       queries,
       views,
@@ -99,6 +99,19 @@ export function buildAppPackageFromManifest(
     },
     warnings,
   };
+}
+
+function bundledManifestVersion(manifest: DomainManifest): string {
+  return `1.0.0+bundle.${hashString(JSON.stringify(cleanJson(manifest))).slice(0, 8)}`;
+}
+
+function hashString(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 function cleanJson(value: unknown): unknown {

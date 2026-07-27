@@ -16,6 +16,20 @@ const registry = new PackageRegistry();
 assert.equal(registry.preview(pkg).valid, true);
 registry.activate(pkg);
 assert.equal(registry.getActive()?.id, 'ledger');
+const addTablePreview = registry.previewChange({
+  requestedBy: 'ai-package-builder',
+  patch: [
+    { op: 'add', path: '/collections/notes', value: { id: 'notes', fields: { body: { type: 'text' } } } },
+    { op: 'add', path: '/queries/notes', value: { from: 'notes' } },
+    { op: 'add', path: '/views/notes', value: { id: 'notes', query: 'notes', mode: 'list', fields: ['body'] } },
+    { op: 'add', path: '/presentation', value: { label: 'Ledger', surfaces: [{ id: 'notes', label: 'Notes', collections: ['notes'] }] } },
+  ],
+});
+assert.equal(addTablePreview.status, 'valid', addTablePreview.validation.valid ? '' : addTablePreview.validation.errors.join('|'));
+assert.throws(
+  () => registry.previewChange({ patch: [{ op: 'add', path: '/dependencyPins/0', value: { package: 'danger', version: '1.0.0' } }] }),
+  /package_change_path_forbidden/,
+);
 registry.activate({ ...pkg, version: '2.0.0' });
 assert.equal(registry.rollback()?.version, '1.0.0');
 

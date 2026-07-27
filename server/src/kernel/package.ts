@@ -41,7 +41,24 @@ function hasExecutableCode(value: unknown): boolean {
   return Object.entries(value as Record<string, unknown>).some(([key, child]) => key === 'code' || key === 'javascript' || key === 'script' || hasExecutableCode(child));
 }
 
-const UI_COMPONENT_KINDS = new Set(['recordList', 'metric', 'action', 'text']);
+const UI_COMPONENT_KINDS = new Set(['recordList', 'metric', 'action', 'text', 'widget']);
+const UI_WIDGET_KINDS = new Set([
+  'assistantChat',
+  'healthConnect',
+  'schemaEditor',
+  'widgetCatalog',
+  'postCard',
+  'pollCard',
+  'linkPreview',
+  'feedList',
+  'kanbanBoard',
+  'chartBlock',
+  'mediaBlock',
+  'mapBlock',
+  'permissionCard',
+  'providerStatus',
+  'themePreview',
+]);
 const UI_ACTION_KINDS = new Set(['open_url', 'propose']);
 const UI_ACTION_TOOL_PATTERN = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 
@@ -75,6 +92,10 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
   const component = value as Record<string, unknown>;
   if (!text(component.kind) || !UI_COMPONENT_KINDS.has(component.kind)) throw new Error(`${path}.kind is invalid`);
   if (component.kind === 'action' && !text(component.id)) throw new Error(`${path}.id required for action components`);
+  if (component.kind === 'widget') {
+    if (!text(component.widget) || !UI_WIDGET_KINDS.has(component.widget)) throw new Error(`${path}.widget is invalid`);
+    if (component.props !== undefined && !object(component.props)) throw new Error(`${path}.props must be an object`);
+  }
 
   if (component.view !== undefined && !text(component.view)) throw new Error(`${path}.view must be text`);
   if (typeof component.view === 'string' && component.view && !Object.hasOwn(packageViews, component.view)) {
@@ -450,7 +471,20 @@ function isNativeCapability(value: unknown): value is AppPackageNativeCapability
   if (raw.schemaVersion !== 'wonder.app-package-native-capabilities.v1') return false;
   if (!text(raw.platform)) return false;
   if (!Array.isArray(raw.packages) || raw.packages.length < 1) return false;
-  return raw.packages.every((item) => text(item));
+  if (!raw.packages.every((item) => text(item))) return false;
+  if (raw.permissions === undefined) return true;
+  if (!Array.isArray(raw.permissions)) return false;
+  return raw.permissions.every((permission) => {
+    if (typeof permission === 'string') return text(permission);
+    if (!object(permission)) return false;
+    return text(permission.id)
+      && text(permission.platform)
+      && ['expo', 'android', 'ios', 'web'].includes(permission.platform)
+      && text(permission.permission)
+      && text(permission.reason)
+      && (permission.required === undefined || typeof permission.required === 'boolean')
+      && (permission.prompt === undefined || text(permission.prompt));
+  });
 }
 
 function isNativeCapabilityMatch(left: AppPackageNativeCapability, right: AppPackageNativeCapability): boolean {
@@ -458,7 +492,8 @@ function isNativeCapabilityMatch(left: AppPackageNativeCapability, right: AppPac
   const leftPackages = [...left.packages].sort();
   const rightPackages = [...right.packages].sort();
   if (leftPackages.length !== rightPackages.length) return false;
-  return leftPackages.every((item, index) => item === rightPackages[index]);
+  if (!leftPackages.every((item, index) => item === rightPackages[index])) return false;
+  return stableJson(left.permissions ?? []) === stableJson(right.permissions ?? []);
 }
 
 function isContractLock(value: unknown): value is AppPackageContractLock {
@@ -471,4 +506,16 @@ function isContractLock(value: unknown): value is AppPackageContractLock {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return object(value) && !Array.isArray(value);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }

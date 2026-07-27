@@ -197,15 +197,41 @@ export const appPackageSchemaV2 = {
       additionalProperties: false,
       required: ['kind'],
       properties: {
-        kind: { enum: ['recordList', 'metric', 'action', 'text'] },
+        kind: { enum: ['recordList', 'metric', 'action', 'text', 'widget'] },
         id: { type: 'string', minLength: 1 },
         title: { type: 'string', minLength: 1 },
         subtitle: { type: 'string', minLength: 1 },
+        widget: {
+          enum: [
+            'assistantChat',
+            'healthConnect',
+            'schemaEditor',
+            'widgetCatalog',
+            'postCard',
+            'pollCard',
+            'linkPreview',
+            'feedList',
+            'kanbanBoard',
+            'chartBlock',
+            'mediaBlock',
+            'mapBlock',
+            'permissionCard',
+            'providerStatus',
+            'themePreview',
+          ],
+        },
+        props: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
         view: { type: 'string', minLength: 1 },
         tone: { enum: ['neutral', 'moss', 'amber', 'plum', 'blue'] },
         query: { $ref: '#/$defs/presentationUiQuery' },
         action: { $ref: '#/$defs/presentationUiAction' },
       },
+      allOf: [
+        {
+          if: { properties: { kind: { const: 'widget' } } },
+          then: { required: ['widget'] },
+        },
+      ],
     },
     presentationScreen: {
       type: 'object',
@@ -369,7 +395,27 @@ export const appPackageSchemaV3 = {
         schemaVersion: { const: 'wonder.app-package-native-capabilities.v1' },
         platform: { enum: ['expo', 'android', 'ios', 'web'] },
         packages: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
-        permissions: { type: 'array', items: { type: 'string', minLength: 1 } },
+        permissions: {
+          type: 'array',
+          items: {
+            oneOf: [
+              { type: 'string', minLength: 1 },
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['id', 'platform', 'permission', 'reason'],
+                properties: {
+                  id: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+                  platform: { enum: ['expo', 'android', 'ios', 'web'] },
+                  permission: { type: 'string', minLength: 1 },
+                  reason: { type: 'string', minLength: 1 },
+                  required: { type: 'boolean' },
+                  prompt: { type: 'string', minLength: 1 },
+                },
+              },
+            ],
+          },
+        },
       },
     },
     contractLock: {

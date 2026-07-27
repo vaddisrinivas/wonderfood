@@ -24,8 +24,13 @@ export type AppPackageReceiptEvidence = {
 };
 
 export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
+  const manifest = loadCatalog().activeManifest;
+  const bundledPackage = buildAppPackageFromManifest(manifest).package;
   const active = await getActiveAppPackage(db);
   if (active) {
+    if (shouldRefreshBundledPackage(active, bundledPackage)) {
+      return activateAppPackage(db, bundledPackage, 'bootstrap', { packageHash: bundledPackage.version });
+    }
     setActivePackageOverride(active);
     return active;
   }
@@ -34,11 +39,9 @@ export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<A
     throw new Error('app_package_active_missing');
   }
 
-  const manifest = loadCatalog().activeManifest;
-  const appPackage = buildAppPackageFromManifest(manifest).package;
-  await activateAppPackage(db, appPackage, 'bootstrap');
-  setActivePackageOverride(appPackage);
-  return appPackage;
+  await activateAppPackage(db, bundledPackage, 'bootstrap');
+  setActivePackageOverride(bundledPackage);
+  return bundledPackage;
 }
 
 export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
@@ -117,6 +120,13 @@ export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage
 
 function packageKey(appPackage: AppPackage): string {
   return `${appPackage.id}@${appPackage.version}`;
+}
+
+function shouldRefreshBundledPackage(active: AppPackage, bundledPackage: AppPackage): boolean {
+  if (active.id !== bundledPackage.id) return false;
+  if (active.version === bundledPackage.version) return false;
+  const sourceSchemaVersion = active.presentation?.sourceSchemaVersion;
+  return typeof sourceSchemaVersion === 'string' && sourceSchemaVersion.length > 0;
 }
 
 async function getPackageState(db: SQLiteDatabase): Promise<AppPackageStateRow | null> {
@@ -259,7 +269,27 @@ function isAppPackageNativeCapability(input: unknown): input is AppPackageNative
   return capability.schemaVersion === 'wonder.app-package-native-capabilities.v1'
     && (capability.platform === 'expo' || capability.platform === 'android' || capability.platform === 'ios' || capability.platform === 'web')
     && Array.isArray(capability.packages)
-    && capability.packages.every((item) => typeof item === 'string');
+    && capability.packages.every((item) => typeof item === 'string')
+    && (
+      capability.permissions === undefined
+      || (
+        Array.isArray(capability.permissions)
+        && capability.permissions.every((item) => {
+          if (typeof item === 'string') return item.trim().length > 0;
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+          const permission = item as Record<string, unknown>;
+          return typeof permission.id === 'string'
+            && permission.id.trim().length > 0
+            && (permission.platform === 'expo' || permission.platform === 'android' || permission.platform === 'ios' || permission.platform === 'web')
+            && typeof permission.permission === 'string'
+            && permission.permission.trim().length > 0
+            && typeof permission.reason === 'string'
+            && permission.reason.trim().length > 0
+            && (permission.required === undefined || typeof permission.required === 'boolean')
+            && (permission.prompt === undefined || typeof permission.prompt === 'string');
+        })
+      )
+    );
 }
 
 function isAppPackageContractLock(input: unknown): input is AppPackageContractLock {
