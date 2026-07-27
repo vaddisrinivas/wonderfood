@@ -5,10 +5,14 @@ import type { Operation as JsonPatchOperation } from 'fast-json-patch';
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
-import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
+import {
+  collectAppPackageValidationIssues,
+  formatAppPackageValidationIssues,
+  type AppPackage,
+  type AppPackageV2,
+  type AppPackageV3,
+} from '@/packages/shared/contracts/package';
 import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
-import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
-import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
 
 type AppPackageRow = {
   package_key: string;
@@ -328,155 +332,15 @@ function assertAppPackageShape(input: unknown): asserts input is AppPackage {
 }
 
 function assertAppPackageShapeV2(input: unknown): asserts input is AppPackageV2 {
-  const errors = collectAppPackageShapeErrors(input);
+  const errors = formatAppPackageValidationIssues(collectAppPackageValidationIssues(input, 'wonder.app-package.v2'));
   if (errors.length) {
     throw new Error(`app_package_invalid:${errors.join('|')}`);
   }
 }
 
 function assertAppPackageShapeV3(input: unknown): asserts input is AppPackageV3 {
-  const errors: string[] = [];
-  const value = input as Partial<AppPackageV3>;
-  if (!value.id || typeof value.id !== 'string') errors.push('id is required');
-  if (!value.version || typeof value.version !== 'string') errors.push('version is required');
-  if (!Array.isArray(value.dependencyPins)) errors.push('dependencyPins must be an array');
-  else {
-    for (const pin of value.dependencyPins) {
-      if (!isAppPackageDependencyPin(pin)) errors.push('dependencyPins entries must include package and version');
-    }
-  }
-  if (!isAppPackageNativeCapability(value.nativeCapabilities)) {
-    errors.push('nativeCapabilities is required');
-  } else {
-    errors.push(...nativeCapabilitySupportErrors(value.nativeCapabilities));
-  }
-  if (!isAppPackageContractLock(value.contractLock)) {
-    errors.push('contractLock is required');
-  } else {
-    if (Array.isArray(value.dependencyPins) && !sameDependencyPins(value.dependencyPins, value.contractLock.dependencyPins)) {
-      errors.push('contractLock.dependencyPins must match dependencyPins');
-    }
-    if (isAppPackageNativeCapability(value.nativeCapabilities) && stableJson(value.nativeCapabilities) !== stableJson(value.contractLock.nativeCapabilities)) {
-      errors.push('contractLock.nativeCapabilities must match nativeCapabilities');
-    }
-    if (value.contractLock.checksum !== expectedContractLockChecksum(value.contractLock)) {
-      errors.push('contractLock.checksum mismatch');
-    }
-  }
-
+  const errors = formatAppPackageValidationIssues(collectAppPackageValidationIssues(input, 'wonder.app-package.v3'));
   if (errors.length) {
     throw new Error(`app_package_invalid:${errors.join('|')}`);
   }
-}
-
-function collectAppPackageShapeErrors(input: unknown): string[] {
-  const errors: string[] = [];
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return ['package must be an object'];
-  const value = input as Partial<AppPackage>;
-  if (value.schemaVersion !== 'wonder.app-package.v2') errors.push('schemaVersion must be wonder.app-package.v2');
-  if (!value.id || typeof value.id !== 'string') errors.push('id is required');
-  if (!value.version || typeof value.version !== 'string') errors.push('version is required');
-  if (!value.collections || typeof value.collections !== 'object') errors.push('collections are required');
-  if (!value.queries || typeof value.queries !== 'object') errors.push('queries are required');
-  if (!value.views || typeof value.views !== 'object') errors.push('views are required');
-  if (!Array.isArray(value.rules)) errors.push('rules must be an array');
-  if (!Array.isArray(value.capabilities)) errors.push('capabilities must be an array');
-  if (!Array.isArray(value.acceptanceTests)) errors.push('acceptanceTests must be an array');
-
-  for (const [id, collection] of Object.entries(value.collections ?? {})) {
-    if (!collection || typeof collection !== 'object' || collection.id !== id) errors.push(`collection ${id} must have matching id`);
-  }
-  for (const [id, query] of Object.entries(value.queries ?? {})) {
-    if (!query || typeof query !== 'object' || typeof query.from !== 'string') errors.push(`query ${id} must declare from`);
-  }
-  for (const [id, view] of Object.entries(value.views ?? {})) {
-    if (!view || typeof view !== 'object' || view.id !== id) errors.push(`view ${id} must have matching id`);
-    if (!view || typeof view !== 'object' || typeof view.query !== 'string') errors.push(`view ${id} must reference a query`);
-  }
-  return errors;
-}
-
-function isAppPackageDependencyPin(input: unknown): boolean {
-  if (!input || typeof input !== 'object') return false;
-  const pin = input as Partial<unknown> as { package?: unknown; version?: unknown };
-  return typeof pin.package === 'string' && pin.package.trim().length > 0 && typeof pin.version === 'string' && pin.version.trim().length > 0;
-}
-
-function isAppPackageNativeCapability(input: unknown): input is AppPackageNativeCapability {
-  if (!input || typeof input !== 'object') return false;
-  const capability = input as Partial<AppPackageNativeCapability>;
-  return capability.schemaVersion === 'wonder.app-package-native-capabilities.v1'
-    && (capability.platform === 'expo' || capability.platform === 'android' || capability.platform === 'ios' || capability.platform === 'web')
-    && Array.isArray(capability.packages)
-    && capability.packages.every((item) => typeof item === 'string')
-    && (
-      capability.permissions === undefined
-      || (
-        Array.isArray(capability.permissions)
-        && capability.permissions.every((item) => {
-          if (typeof item === 'string') return item.trim().length > 0;
-          if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-          const permission = item as Record<string, unknown>;
-          return typeof permission.id === 'string'
-            && permission.id.trim().length > 0
-            && (permission.platform === 'expo' || permission.platform === 'android' || permission.platform === 'ios' || permission.platform === 'web')
-            && typeof permission.permission === 'string'
-            && permission.permission.trim().length > 0
-            && typeof permission.reason === 'string'
-            && permission.reason.trim().length > 0
-            && (permission.required === undefined || typeof permission.required === 'boolean')
-            && (permission.prompt === undefined || typeof permission.prompt === 'string');
-        })
-      )
-    )
-    && (
-      capability.intents === undefined
-      || (
-        Array.isArray(capability.intents)
-        && capability.intents.every((item) => {
-          if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-          const intent = item as Record<string, unknown>;
-          return typeof intent.id === 'string'
-            && intent.id.trim().length > 0
-            && (intent.platform === 'expo' || intent.platform === 'android' || intent.platform === 'ios' || intent.platform === 'web')
-            && isAppPackageNativeIntentKind(intent.kind)
-            && typeof intent.reason === 'string'
-            && intent.reason.trim().length > 0
-            && (intent.required === undefined || typeof intent.required === 'boolean')
-            && (intent.payload === undefined || (typeof intent.payload === 'object' && intent.payload !== null && !Array.isArray(intent.payload)));
-        })
-      )
-    );
-}
-
-function isAppPackageContractLock(input: unknown): input is AppPackageContractLock {
-  if (!input || typeof input !== 'object') return false;
-  const lock = input as Partial<AppPackageContractLock>;
-  return lock.schemaVersion === 'wonder.package-contract-lock.v1'
-    && typeof lock.algorithm === 'string'
-    && lock.algorithm === 'sha256'
-    && typeof lock.checksum === 'string'
-    && /^sha256:[a-f0-9]{64}$/.test(lock.checksum)
-    && typeof lock.pinnedAt === 'string'
-    && !Number.isNaN(Date.parse(lock.pinnedAt))
-    && Array.isArray(lock.dependencyPins)
-    && lock.dependencyPins.every((pin) => isAppPackageDependencyPin(pin))
-    && isAppPackageNativeCapability(lock.nativeCapabilities);
-}
-
-function sameDependencyPins(left: readonly AppPackageV3['dependencyPins'][number][], right: readonly AppPackageV3['dependencyPins'][number][]): boolean {
-  if (left.length !== right.length) return false;
-  const leftLabels = left.map((pin) => `${pin.package}@${pin.version}`).sort();
-  const rightLabels = right.map((pin) => `${pin.package}@${pin.version}`).sort();
-  return leftLabels.every((label, index) => label === rightLabels[index]);
-}
-
-function expectedContractLockChecksum(lock: AppPackageContractLock): string {
-  return hashValue({
-    schemaVersion: lock.schemaVersion,
-    algorithm: lock.algorithm,
-    pinnedAt: lock.pinnedAt,
-    dependencyPins: lock.dependencyPins,
-    nativeCapabilities: lock.nativeCapabilities,
-  });
 }
