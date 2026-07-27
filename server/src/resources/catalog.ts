@@ -74,6 +74,13 @@ const STATIC_RESOURCES: Record<string, McpResourceRecord> = {
     path: resolvePath('packages/domain-config/domain-catalog.v1.json'),
     mode: 'file',
   },
+  'wonderfood://domain-catalog-v1': {
+    uri: 'wonderfood://domain-catalog-v1',
+    name: 'domain-catalog-v1',
+    mimeType: 'application/json',
+    path: resolvePath('packages/domain-config/domain-catalog.v1.json'),
+    mode: 'file',
+  },
   'wonderfood://domain-catalog': {
     uri: 'wonderfood://domain-catalog',
     name: 'domain-catalog',
@@ -182,6 +189,7 @@ const SAFE_GLOBAL_RESOURCE_URIS = new Set([
 const GLOBAL_INDEX_RESOURCE_URIS = new Set([
   'wonderfood://agent-registry-v1',
   'wonderfood://lifeos/domain-catalog-v1',
+  'wonderfood://domain-catalog-v1',
   'wonderfood://domain-catalog',
   'wonderfood://records',
   'wonderfood://actions',

@@ -69,6 +69,7 @@ function filterScopedJson(uri: string, text: string, scope: McpScope): string {
 
   if (
     uri === 'wonderfood://domain-catalog'
+    || uri === 'wonderfood://domain-catalog-v1'
     || uri === 'wonderfood://lifeos/domain-catalog-v1'
   ) {
     const payload = JSON.parse(text) as {

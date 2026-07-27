@@ -605,7 +605,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
   }
 
   if (req.method === 'GET' && path === '/health') {
-    ok(res, { status: 'ok', service: 'wonderfood-lifeos-server' });
+    ok(res, { status: 'ok', service: 'wonderfood-server' });
     return;
   }
 

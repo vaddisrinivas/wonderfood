@@ -83,7 +83,7 @@ export function notionHeadersSafe() {
   }
   return {
     ...headers,
-    'User-Agent': 'wonderfood-lifeos-server',
+    'User-Agent': 'wonderfood-server',
   } as NotionHeaderMap;
 }
 

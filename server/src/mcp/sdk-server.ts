@@ -20,7 +20,7 @@ import {
   readScopedMcpResource,
 } from './scoped-access';
 
-export const MCP_SERVER_NAME = 'wonderfood-lifeos-server';
+export const MCP_SERVER_NAME = 'wonderfood-server';
 export const MCP_SERVER_VERSION = '1.0.0';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

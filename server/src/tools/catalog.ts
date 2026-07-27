@@ -2321,14 +2321,14 @@ export async function callMcpTool(name: string, args: Record<string, unknown>): 
   if (name === ACTION_TOOLS.status) {
     return resolveToolResult({
       server: {
-        name: 'wonderfood-lifeos-server',
+        name: 'wonderfood-server',
         version: '1.0.0',
         protocolVersion: PROTOCOL_VERSION,
       },
       safety: 'review-only; no direct writes; generated links/packages must be accepted in app',
       dataHomes: DATA_HOME,
       tools: listMcpTools().map((tool) => tool.name),
-      resources: ['wonderfood://domain-catalog', 'wonderfood://lifeos/domain-catalog-v1'],
+      resources: ['wonderfood://domain-catalog', 'wonderfood://domain-catalog-v1'],
     });
   }
 

@@ -306,7 +306,7 @@ def append_source_pack_section() -> dict:
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "[MCP schema] wonderfood://lifeos/domain-catalog-v1 exposes package metadata for GPT/plugin parity."}}]
+                "rich_text": [{"type": "text", "text": {"content": "[MCP schema] wonderfood://domain-catalog-v1 exposes package metadata for GPT/plugin parity."}}]
             },
         },
     ]
@@ -567,7 +567,7 @@ def update_lifeos_sheet() -> dict:
         ["[App snapshot]", "Android", "Kitchen, shopping, recipes, meal logs/plans, receipts, preferences, Health Connect context injected into Chat prompt", "On-device canonical store", "Native first, not toy page"],
         ["[LifeOS Notion]", "Notion", "Dashboards, relations, rollups, quests, habits, journal, vaults, template health", f"https://app.notion.com/p/manasa-srinivas/LifeOS-2026-{NOTION_PAGE_ID}", "Pretty + interconnected dashboard"],
         ["[LifeOS Sheets]", "Google Sheets", "Schema rows, imports/exports, formula checks, conflict inbox, source handles", f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit", "Spreadsheet-primary operating mode"],
-        ["[MCP schema]", "MCP/GPT", "Domain catalog, skills, command schemas, validation, review-only links", "wonderfood://lifeos/domain-catalog-v1", "GPT/plugin parity"],
+        ["[MCP schema]", "MCP/GPT", "Domain catalog, skills, command schemas, validation, review-only links", "wonderfood://domain-catalog-v1", "GPT/plugin parity"],
         ["[Template health]", "Notion + Sheets + App", "@now duplication risk, sample/empty parity, relation/rollup checks, source visibility", "LifeOS Runtime + Sync Loop tabs", "LiFE RPG quality gate"],
         ["[Food domain]", "Day 0 package", "Food quests, good/bad habits, boss fights, meal plans, inventory, grocery spend", "assets/lifeos/domain-catalog.v1.json", "Food-centered LifeOS"],
         ["[Skill map]", "App + Notion + Sheets + MCP", "Domain skill + workflow skill + schema contract rule", "LifeOS Skill Map", "GPT/plugin parity"],
