@@ -19,6 +19,7 @@ import {
   requestLifeOSHealthPermissions,
   type HealthConnectStatus,
 } from '@/src/health/connect';
+import type { ProviderSyncStatus } from '@/src/db/provider-status';
 
 type WidgetProps = {
   widget?: string;
@@ -35,6 +36,8 @@ type WidgetProps = {
   columns?: unknown[];
   points?: unknown[];
   permissions?: unknown[];
+  provider?: string;
+  providerStatus?: ProviderSyncStatus;
   status?: string;
 };
 
@@ -507,12 +510,24 @@ function PermissionCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
 
 function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
+  const summary = props.providerStatus;
+  const status = summary?.headline ?? text(props.status, 'Ready');
+  const body = summary?.detail ?? text(props.body, 'Local data is primary. Notion and Sheets writes require verification before success.');
+  const attention = summary?.status === 'attention';
+  const connected = summary?.connected ?? false;
   return (
     <WidgetShell title={text(props.title, 'Sync')} subtitle={text(props.subtitle, 'Provider sync should feel invisible until attention is needed.')}>
-      <View style={styles.statusPill}>
-        <Text style={styles.statusText}>{text(props.status, 'Ready')}</Text>
+      <View style={[styles.statusPill, attention ? styles.statusPillAttention : null]}>
+        <Text style={[styles.statusText, attention ? styles.statusTextAttention : null]}>{status}</Text>
       </View>
-      <Text style={styles.bodyText}>{text(props.body, 'Local data is primary. Notion and Sheets writes require verification before success.')}</Text>
+      <Text style={styles.bodyText}>{body}</Text>
+      {summary ? (
+        <View style={styles.providerStats}>
+          <Text style={styles.providerStat}>{connected ? `${summary.linkCount} linked` : 'not connected'}</Text>
+          <Text style={styles.providerStat}>{summary.pendingWrites + summary.inflightWrites} queued</Text>
+          <Text style={[styles.providerStat, attention ? styles.providerStatAttention : null]}>{summary.failedWrites} failed</Text>
+        </View>
+      ) : null}
     </WidgetShell>
   );
 }
@@ -609,7 +624,12 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   sendText: { color: '#FFFFFF', fontWeight: '800' },
   statusPill: { alignSelf: 'flex-start', backgroundColor: '#E4F1E8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  statusPillAttention: { backgroundColor: '#F9E7D9' },
   statusText: { color: '#2F7448', fontWeight: '800' },
+  statusTextAttention: { color: '#9A4B2E' },
+  providerStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  providerStat: { backgroundColor: '#F6F1E8', borderRadius: 999, color: '#6D6257', fontSize: 12, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 6 },
+  providerStatAttention: { color: '#9A4B2E', backgroundColor: '#F9E7D9' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primaryButton: { backgroundColor: '#2F7448', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },

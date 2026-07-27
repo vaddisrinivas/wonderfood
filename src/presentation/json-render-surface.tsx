@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 
 import type { A2UiSurface, A2UiAction, A2UiComponent, AppPackageNativeCapability } from '@/packages/shared/contracts/package';
+import type { ProviderSyncSummary, ProviderStatusKey } from '@/src/db/provider-status';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
 import { JSON_RENDER_WIDGET_REGISTRY } from '@/src/presentation/json-render-widgets';
 import { useLifeOSTheme } from '@/src/theme';
@@ -17,6 +18,7 @@ type JsonRenderSurfaceProps = {
   screen?: string;
   records?: DomainRecordViewModel[];
   nativePermissions?: AppPackageNativeCapability['permissions'];
+  providerSync?: ProviderSyncSummary | null;
   emptyTitle?: string;
 };
 
@@ -249,7 +251,20 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   }, children);
 }
 
-function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette, nativePermissions?: AppPackageNativeCapability['permissions']) {
+function providerKeyFromComponent(component: A2UiComponent): ProviderStatusKey {
+  const raw = component.props?.provider;
+  if (raw === 'local' || raw === 'notion' || raw === 'google_sheets' || raw === 'summary') return raw;
+  return 'summary';
+}
+
+function addSurfaceComponent(
+  add: ReturnType<typeof createBuilder>['add'],
+  component: A2UiComponent,
+  records: DomainRecordViewModel[],
+  palette: Palette,
+  nativePermissions?: AppPackageNativeCapability['permissions'],
+  providerSync?: ProviderSyncSummary | null,
+) {
   if (component.kind === 'widget') {
     const typeByWidget: Record<string, string> = {
       assistantChat: 'AssistantChatWidget',
@@ -274,6 +289,7 @@ function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], compo
         title: component.title,
         subtitle: component.subtitle,
         ...(component.widget === 'permissionCard' && component.props?.permissions === undefined && nativePermissions ? { permissions: nativePermissions } : {}),
+        ...(component.widget === 'providerStatus' && providerSync ? { providerStatus: providerSync.providers[providerKeyFromComponent(component)] } : {}),
         ...(component.props ?? {}),
       });
     }
@@ -298,7 +314,7 @@ function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette):
   }
   if (components.length) {
     for (const component of components) {
-      contentChildren.push(addSurfaceComponent(add, component, props.records ?? [], palette, props.nativePermissions));
+      contentChildren.push(addSurfaceComponent(add, component, props.records ?? [], palette, props.nativePermissions, props.providerSync));
     }
   } else {
     contentChildren.push(add('Card', {

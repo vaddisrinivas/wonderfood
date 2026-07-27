@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useLifeOSDatabase } from '@/src/db/provider';
+import { getProviderSyncSummary, type ProviderSyncSummary } from '@/src/db/provider-status';
 import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
@@ -24,6 +25,7 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
   setActiveDomainOverride(settings.runtime.activeDomain);
   const { activeManifest } = loadCatalog();
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
+  const [providerSync, setProviderSync] = useState<ProviderSyncSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +39,18 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
     };
   }, [db, recordId, settings.runtime.activeDomain]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void getProviderSyncSummary(db).then((summary) => {
+      if (!cancelled) setProviderSync(summary);
+    }).catch(() => {
+      if (!cancelled) setProviderSync(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [db, screen, settings.runtime.activeDomain]);
+
   return (
     <JsonRenderSurface
       eyebrow={eyebrow ?? activeManifest.label.toUpperCase()}
@@ -46,6 +60,7 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
       screen={screen}
       records={records}
       nativePermissions={activeManifest.native_capabilities?.permissions}
+      providerSync={providerSync}
       emptyTitle={emptyTitle}
     />
   );

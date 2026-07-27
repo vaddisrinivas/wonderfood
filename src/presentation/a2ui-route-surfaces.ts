@@ -102,7 +102,7 @@ export const SETTINGS_SHELL_UI: A2UiSurface = {
           title: 'Sync',
           subtitle: 'Invisible by default. Shows up only when Notion or Sheets need attention.',
           tone: 'blue',
-          props: { status: 'Local ready', body: 'Wonder keeps local records usable first, then verifies provider writeback before calling it done.' },
+          props: { provider: 'summary' },
         },
         {
           kind: 'widget',
@@ -159,9 +159,9 @@ export const ROUTE_SHELL_UI: A2UiSurface = {
       title: 'Sources',
       subtitle: 'Local, Notion, and Sheets stay invisible until you need control.',
       components: [
-        { kind: 'widget', widget: 'providerStatus', id: 'sources_local', title: 'Local ready', subtitle: 'Works first, even before any provider is connected.', tone: 'moss', props: { status: 'On-device graph ready', body: 'This is the source of truth the app can use immediately.' } },
-        { kind: 'widget', widget: 'providerStatus', id: 'sources_notion', title: 'Notion', subtitle: 'Optional home for people who already live in Notion.', tone: 'blue', props: { status: 'Connect when wanted', body: 'Writes must be reread and verified before Wonder calls them complete.' } },
-        { kind: 'widget', widget: 'providerStatus', id: 'sources_sheets', title: 'Sheets', subtitle: 'Optional shared spreadsheet home for family or small-team apps.', tone: 'amber', props: { status: 'Connect when wanted', body: 'Best simple collaboration path: share the underlying sheet and package.' } },
+        { kind: 'widget', widget: 'providerStatus', id: 'sources_local', title: 'Local ready', subtitle: 'Works first, even before any provider is connected.', tone: 'moss', props: { provider: 'local' } },
+        { kind: 'widget', widget: 'providerStatus', id: 'sources_notion', title: 'Notion', subtitle: 'Optional home for people who already live in Notion.', tone: 'blue', props: { provider: 'notion' } },
+        { kind: 'widget', widget: 'providerStatus', id: 'sources_sheets', title: 'Sheets', subtitle: 'Optional shared spreadsheet home for family or small-team apps.', tone: 'amber', props: { provider: 'google_sheets' } },
         { kind: 'action', id: 'sources_connect', title: 'Manage connections', subtitle: 'Open setup only when needed.', tone: 'blue', action: { kind: 'propose', label: 'Open settings', command: 'open_settings', payload: { route: '/settings' } } },
         { kind: 'action', id: 'sources_food', title: 'Back to food', subtitle: 'Return to the main food workspace.', tone: 'moss', action: { kind: 'propose', label: 'Food', command: 'open_food', payload: { route: '/food' } } },
       ],

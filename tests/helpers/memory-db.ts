@@ -236,6 +236,10 @@ export class MemoryDb {
         .filter((row) => row.domain === params[0])
         .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at))) as T[];
     }
+    if (compact === 'SELECT * FROM provider_links ORDER BY updated_at DESC') {
+      return Array.from(this.providerLinks.values())
+        .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at))) as T[];
+    }
     if (compact === 'SELECT * FROM outbox_events ORDER BY updated_at ASC') {
       return Array.from(this.outbox.values()).sort((left, right) => String(left.updated_at).localeCompare(String(right.updated_at))) as T[];
     }
