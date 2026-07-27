@@ -287,6 +287,30 @@ describe('app package SQLite registry', () => {
       'permissionCard',
       'themePreview',
     ]));
+    const widgetCatalog = controlRoom.package?.presentation?.ui?.screens?.ai_control_room.components?.find((component) => component.id === 'control_widget_catalog');
+    expect(widgetCatalog?.props?.widgets).toEqual(expect.arrayContaining([
+      'assistantChat',
+      'healthConnect',
+      'schemaEditor',
+      'widgetCatalog',
+      'postCard',
+      'pollCard',
+      'checklistCard',
+      'linkPreview',
+      'feedList',
+      'kanbanBoard',
+      'chartBlock',
+      'mediaBlock',
+      'mapBlock',
+      'formCard',
+      'calendarBlock',
+      'timelineBlock',
+      'galleryGrid',
+      'dataTable',
+      'permissionCard',
+      'providerStatus',
+      'themePreview',
+    ]));
 
     const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
     expect(form.status).toBe('valid');
@@ -302,6 +326,11 @@ describe('app package SQLite registry', () => {
     expect(poll.status).toBe('valid');
     expect(poll.package?.collections.ai_family_dinner.fields.options.type).toBe('json');
     expect(poll.package?.presentation?.ui?.screens?.ai_family_dinner.components?.[0].widget).toBe('pollCard');
+
+    const checklist = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add catering checklist'));
+    expect(checklist.status).toBe('valid');
+    expect(checklist.package?.collections.ai_catering.fields.items.type).toBe('json');
+    expect(checklist.package?.presentation?.ui?.screens?.ai_catering.components?.[0].widget).toBe('checklistCard');
 
     const calendar = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'create meal prep calendar'));
     expect(calendar.status).toBe('valid');

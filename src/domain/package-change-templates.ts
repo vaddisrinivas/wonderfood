@@ -25,6 +25,7 @@ type PackageChangeIntent =
   | 'board'
   | 'feed'
   | 'poll'
+  | 'checklist'
   | 'calendar'
   | 'timeline'
   | 'gallery'
@@ -36,6 +37,29 @@ type PackageChangeIntent =
   | 'screen';
 type WidgetScreenIntent = Exclude<PackageChangeIntent, 'control' | 'edit' | 'field' | 'view' | 'table' | 'theme' | 'workflow' | 'native'>;
 type UiScreenSpec = NonNullable<NonNullable<PackagePresentationSpec['ui']>['screens']>[string];
+const SUPPORTED_A2UI_WIDGETS = [
+  'assistantChat',
+  'healthConnect',
+  'schemaEditor',
+  'widgetCatalog',
+  'postCard',
+  'pollCard',
+  'linkPreview',
+  'feedList',
+  'kanbanBoard',
+  'chartBlock',
+  'mediaBlock',
+  'mapBlock',
+  'formCard',
+  'checklistCard',
+  'calendarBlock',
+  'timelineBlock',
+  'galleryGrid',
+  'dataTable',
+  'permissionCard',
+  'providerStatus',
+  'themePreview',
+];
 
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
@@ -141,7 +165,7 @@ function buildControlRoomChange(
           subtitle: 'Supported JSON-render widgets for generated apps.',
           tone: 'moss',
           props: {
-            widgets: ['postCard', 'pollCard', 'linkPreview', 'feedList', 'kanbanBoard', 'chartBlock', 'mediaBlock', 'mapBlock', 'formCard', 'calendarBlock', 'timelineBlock', 'galleryGrid', 'dataTable'],
+            widgets: SUPPORTED_A2UI_WIDGETS,
           },
         },
         {
@@ -628,6 +652,7 @@ function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   if (/\b(board|kanban|pipeline|status board|columns?)\b/.test(value)) return 'board';
   if (/\b(feed|posts?|updates?|social|comments?)\b/.test(value)) return 'feed';
   if (/\b(poll|vote|voting|ballot|choice)\b/.test(value)) return 'poll';
+  if (/\b(checklist|check list|todo|to-do|tasks?|steps?|packing list|inspection)\b/.test(value)) return 'checklist';
   if (/\b(calendar|schedule|booking|appointment|events?)\b/.test(value)) return 'calendar';
   if (/\b(timeline|history|milestone|log|journey)\b/.test(value)) return 'timeline';
   if (/\b(gallery|photos?|images?|album|grid)\b/.test(value)) return 'gallery';
@@ -644,6 +669,7 @@ function widgetForIntent(intent: WidgetScreenIntent): NonNullable<A2UiComponent[
   if (intent === 'board') return 'kanbanBoard';
   if (intent === 'feed') return 'feedList';
   if (intent === 'poll') return 'pollCard';
+  if (intent === 'checklist') return 'checklistCard';
   if (intent === 'calendar') return 'calendarBlock';
   if (intent === 'timeline') return 'timelineBlock';
   if (intent === 'gallery') return 'galleryGrid';
@@ -673,6 +699,7 @@ function fieldsForIntent(intent: PackageChangeIntent) {
     properties: { type: 'json' as const },
   };
   if (intent === 'poll') return { ...base, options: { type: 'json' as const }, votes: { type: 'json' as const } };
+  if (intent === 'checklist') return { ...base, items: { type: 'json' as const }, completed_count: { type: 'number' as const }, due_at: { type: 'timestamp' as const } };
   if (intent === 'calendar') return { ...base, starts_at: { type: 'timestamp' as const, indexed: true }, ends_at: { type: 'timestamp' as const } };
   if (intent === 'timeline') return { ...base, happened_at: { type: 'timestamp' as const, indexed: true } };
   if (intent === 'gallery' || intent === 'media') return { ...base, media: { type: 'json' as const }, url: { type: 'text' as const } };
@@ -725,6 +752,7 @@ function propsForIntent(name: PackageChangeName, intent: WidgetScreenIntent): Re
   if (intent === 'form') return { fields: [{ label: 'Title', subtitle: 'Short text' }, { label: 'Status', subtitle: 'Choice' }, { label: 'Notes', subtitle: 'Long text' }] };
   if (intent === 'board') return { columns: [{ title: 'Ideas', items: [{ title: `Plan ${name.label}` }] }, { title: 'Doing', items: [] }, { title: 'Done', items: [] }] };
   if (intent === 'poll') return { options: [{ label: 'Yes' }, { label: 'No' }, { label: 'Maybe' }] };
+  if (intent === 'checklist') return { items: [{ title: 'Capture' }, { title: 'Review' }, { title: 'Done' }] };
   if (intent === 'calendar') return { events: [{ title: name.label, subtitle: 'First scheduled item', when: 'Soon' }] };
   if (intent === 'timeline') return { items: [{ title: 'Created', subtitle: 'Added by package diff' }, { title: 'Next', subtitle: 'Add real events' }] };
   if (intent === 'gallery') return { items: [{ title: 'Photo', emoji: '◼︎' }, { title: 'Clip', emoji: '▶︎' }, { title: 'Doc', emoji: '◇' }] };
@@ -741,6 +769,7 @@ function subtitleForIntent(intent: WidgetScreenIntent) {
   if (intent === 'board') return 'Kanban-quality grouped records from config.';
   if (intent === 'feed') return 'Posts, updates, links, comments, and activity.';
   if (intent === 'poll') return 'Voting and choice UI as a safe package primitive.';
+  if (intent === 'checklist') return 'Tasks, inspections, packing, routines, and step-by-step work.';
   if (intent === 'calendar') return 'Schedules and events as package data.';
   if (intent === 'timeline') return 'History, provenance, and milestones.';
   if (intent === 'gallery') return 'Visual collections for images and assets.';
@@ -753,7 +782,7 @@ function subtitleForIntent(intent: WidgetScreenIntent) {
 
 function toneForIntent(intent: WidgetScreenIntent): A2UiComponent['tone'] {
   if (intent === 'board' || intent === 'calendar') return 'blue';
-  if (intent === 'poll' || intent === 'timeline') return 'amber';
+  if (intent === 'poll' || intent === 'checklist' || intent === 'timeline') return 'amber';
   if (intent === 'media' || intent === 'gallery') return 'plum';
   if (intent === 'link' || intent === 'map' || intent === 'chart') return 'blue';
   return 'moss';
@@ -762,7 +791,7 @@ function toneForIntent(intent: WidgetScreenIntent): A2UiComponent['tone'] {
 function derivePackageChangeName(prompt: string) {
   const clean = prompt
     .replace(/\b(add|create|make|new|show|view|views|filter|filtered|list|report|table|screen|surface|collection|with|for|a|an|the|and|or|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
-    .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page|permission|permissions|capability|capabilities|intent|intents|native)\b/gi, ' ')
+    .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|checklist|todo|task|tasks|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page|permission|permissions|capability|capabilities|intent|intents|native)\b/gi, ' ')
     .replace(/[^a-z0-9 ]/gi, ' ')
     .trim()
     .split(/\s+/)
