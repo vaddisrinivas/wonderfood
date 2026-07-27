@@ -1,286 +1,65 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { basename, dirname, join } from 'node:path';
-import { getDomainManifest, loadCatalog } from '../../../src/domain/catalog';
-import type { CanonicalRecord, CanonicalProvenance } from '@/src/domain/runtime';
-import type { Operation, OperationActor, OperationOrigin } from '@/src/ops/operation';
+import type { CanonicalRecord } from '@/src/domain/runtime';
+import type { Operation } from '@/src/ops/operation';
 import { planOperation } from '@/src/ops/plan';
-import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
 import { executeQuery, QueryPredicate, QuerySort } from '../kernel/query';
 import {
   notifyOperationCommit,
   type OperationCommitEvent,
 } from '../kernel/operation-observer';
-import { mutateJsonStateFile, readJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
+import { mutateJsonStateFile, writeJsonStateFileAtomic } from '../providers/json-state';
 import type { ProviderUndoInput, ProviderUndoResult } from '../providers/undo';
-import { canonicalJson } from '@/src/domain/canonical-json';
+import { getWorkflowCheckpoint, WorkflowRunCheckpoint } from '../workflows/checkpoint';
+import { normalizeRecord, parseRecordManifest } from './state-records';
+import { createEmptyStore, isValidStore, loadStore, normalizeStore, RUNTIME_STATE_PATH } from './state-store';
+import {
+  actorForAction,
+  cloneActionEvent,
+  nowIso,
+  normalizeProviderSourceEquality,
+  originForAction,
+  provenanceForAction,
+  stableStringify,
+  toCanonicalRecord,
+  toMcpRecord,
+  type ActionEvent,
+  type ActionRisk,
+  type CanonicalRelation,
+  type McpRecord,
+  type OperationCommitOutboxItem,
+  type PersistOptions,
+  type PersistedStore,
+  type RecordProvider,
+  type WorkflowDocument,
+} from './state-types';
+import { loadCatalogWorkflows } from './workflows';
 
-type ActionRisk = 'low' | 'standard' | 'sensitive' | 'irreversible' | 'restricted';
+export type {
+  ActionEvent,
+  CanonicalRelation,
+  McpRecord,
+  OperationCommitOutboxItem,
+  RecordProvider,
+  RecordSource,
+  WorkflowDocument,
+  WorkflowStep,
+} from './state-types';
 
-type RecordProvider = 'notion' | 'google_sheets' | 'sqlite' | 'postgres' | 'web' | 'user';
-
-export type RecordSource = {
-  provider: RecordProvider;
-  external_id: string;
-  url: string | null;
-  observed_at: string;
-  content_hash: string | null;
-};
-
-export type CanonicalRelation = {
-  name: string;
-  target_id: string;
-};
-
-export type McpRecord = {
-  id: string;
-  domain: string;
-  collection: string;
-  title: string;
-  properties: Record<string, unknown>;
-  relations: CanonicalRelation[];
-  source: RecordSource;
-  archived_at: string | null;
-  created_at: string;
-  updated_at: string;
-  /** Monotonic canonical revision. Legacy records may omit it until rewritten. */
-  revision?: number;
-};
-
-type ActionState = {
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'undo_failed';
-};
-
-export type ActionEvent = {
-  schema_version: 'lifeos.action-event.v1';
-  id: string;
-  actor: string;
-  domain: string;
-  tool: string;
-  risk: ActionRisk;
-  status: ActionState['status'];
-  record_ids: string[];
-  before_json: unknown | null;
-  after_json: unknown | null;
-  undo_payload_json: unknown | null;
-  idempotency_key: string | null;
-  created_at: string;
-  updated_at: string;
-  undo_deadline_at: string | null;
-  conversation_id: string | null;
-  source_ids: string[];
-  command: string;
-  /** Causal links shared by action, operation, effect and verification records. */
-  operation_id: string;
-  cause_id: string;
-  expected_revision: number | null;
-  verification_json?: unknown | null;
-};
-
-type PersistedStore = {
-  version: 1;
-  updated_at: string;
-  records: Record<string, McpRecord>;
-  actions: Record<string, ActionEvent>;
-  operation_commit_outbox: Record<string, OperationCommitOutboxItem>;
-};
-
-export type OperationCommitOutboxItem = {
-  event: OperationCommitEvent;
-  status: 'pending';
-  attempts: number;
-  last_error: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type PersistOptions = {
-  persist?: boolean;
-};
-
-export type WorkflowStep = {
-  id: string;
-  action?: string;
-  tool?: string;
-  skill?: string;
-  input?: Record<string, unknown>;
-  input_from?: string[];
-  output?: string;
-  required?: boolean;
-  [key: string]: unknown;
-};
-
-export type WorkflowDocument = {
-  schema_version: 'lifeos.workflow.v1';
-  id: string;
-  domain: string;
-  label: string;
-  trigger?: Record<string, unknown>;
-  steps: WorkflowStep[];
-  write_policy: string;
-  [key: string]: unknown;
-};
-
-const RUNTIME_STATE_PATH = process.env.WONDER_RUNTIME_STATE_PATH ?? join(process.cwd(), 'server-data', 'wonder-runtime.json');
 const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
-const WORKFLOW_DIR = join(process.cwd(), 'packages', 'domain-config', 'workflows');
 
 const PROVIDER_UNDO_WORKER_PATH = fileURLToPath(new URL('../providers/undo-worker.ts', import.meta.url));
 const PROVIDER_UNDO_TSX_PATH = join(process.cwd(), 'server', 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
 
 let store: PersistedStore = loadStore();
-let workflowCache: WorkflowDocument[] | null = null;
 let storeMutationDepth = 0;
 let unpersistedStore: PersistedStore | null = null;
 const deferredOperationCommitIds: string[] = [];
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
 function nowDeadlineIso(): string {
   return new Date(Date.now() + ACTION_TTL_MS).toISOString();
-}
-
-function actorForAction(actor: string): OperationActor {
-  return actor === 'user' || actor === 'ai' || actor === 'import' || actor === 'sync' || actor === 'agent' || actor === 'api' || actor === 'workflow'
-    ? actor
-    : 'agent';
-}
-
-function originForAction(tool: string): OperationOrigin {
-  if (tool.includes('workflow')) return 'workflow';
-  if (tool.includes('import')) return 'import';
-  if (tool.includes('sync')) return 'sync';
-  return 'chat';
-}
-
-function provenanceForAction(input: { actor: string; command: string }): CanonicalProvenance {
-  return {
-    actor: actorForAction(input.actor),
-    confidence: null,
-    evidence: [],
-    reason: input.command || null,
-  };
-}
-
-function toCanonicalRecord(record: McpRecord | null): CanonicalRecord | null {
-  if (!record) return null;
-  return {
-    ...record,
-    revision: record.revision ?? 1,
-    schema_version: '1.0.0',
-    deleted: false,
-    privacy: 'personal',
-    provenance: null,
-  };
-}
-
-function toMcpRecord(record: CanonicalRecord): McpRecord {
-  return {
-    id: record.id,
-    domain: record.domain,
-    collection: record.collection,
-    title: record.title,
-    properties: record.properties,
-    relations: record.relations,
-    source: record.source,
-    archived_at: record.archived_at,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-    revision: record.revision,
-  };
-}
-
-function isValidStore(value: unknown): value is PersistedStore {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const row = value as Record<string, unknown>;
-  return (
-    row.version === 1 &&
-    typeof row.updated_at === 'string' &&
-    isObject(row.records) &&
-    isObject(row.actions) &&
-    (
-      row.operation_commit_outbox === undefined
-      || (
-        isObject(row.operation_commit_outbox)
-        && Object.entries(row.operation_commit_outbox).every(([operationId, item]) => (
-          isOperationCommitOutboxItem(item)
-          && item.event.operationId === operationId
-        ))
-      )
-    )
-  );
-}
-
-function isOperationCommitOutboxItem(value: unknown): value is OperationCommitOutboxItem {
-  if (!isObject(value) || !isObject(value.event)) return false;
-  const event = value.event;
-  return (
-    value.status === 'pending'
-    && Number.isInteger(value.attempts)
-    && Number(value.attempts) >= 0
-    && (value.last_error === null || typeof value.last_error === 'string')
-    && typeof value.created_at === 'string'
-    && typeof value.updated_at === 'string'
-    && typeof event.actionId === 'string'
-    && typeof event.operationId === 'string'
-    && typeof event.causeId === 'string'
-    && typeof event.domain === 'string'
-    && typeof event.recordId === 'string'
-    && Object.hasOwn(event, 'before')
-    && Object.hasOwn(event, 'after')
-  );
-}
-
-function createEmptyStore(): PersistedStore {
-  return {
-    version: 1,
-    updated_at: nowIso(),
-    records: {},
-    actions: {},
-    operation_commit_outbox: {},
-  };
-}
-
-function normalizeStore(parsed: PersistedStore): PersistedStore {
-  return {
-    version: 1,
-    updated_at: String(parsed.updated_at),
-    records: parsed.records as Record<string, McpRecord>,
-    actions: Object.fromEntries(
-      Object.entries(parsed.actions as Record<string, ActionEvent>).map(([id, action]) => [id, {
-        ...action,
-        operation_id: action.operation_id || `${action.id || id}:operation`,
-        cause_id: action.cause_id || action.id || id,
-        expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
-        verification_json: action.verification_json ?? null,
-      }]),
-    ),
-    operation_commit_outbox: normalizeOperationCommitOutbox(parsed.operation_commit_outbox),
-  };
-}
-
-function loadStore(): PersistedStore {
-  if (!existsSync(RUNTIME_STATE_PATH)) {
-    return createEmptyStore();
-  }
-  return normalizeStore(readJsonStateFile(RUNTIME_STATE_PATH, {
-    label: 'Wonder runtime state',
-    validate: isValidStore,
-  }));
-}
-
-function normalizeOperationCommitOutbox(value: unknown): Record<string, OperationCommitOutboxItem> {
-  if (!isObject(value)) return {};
-  return value as Record<string, OperationCommitOutboxItem>;
 }
 
 function persistStore() {
@@ -424,122 +203,6 @@ function persistCommittedOperation(event: OperationCommitEvent): void {
   attemptOperationCommitDelivery(event.operationId);
 }
 
-function getSupportedProviders(): RecordProvider[] {
-  return ['notion', 'google_sheets', 'sqlite', 'postgres', 'web', 'user'];
-}
-
-function parseRecordManifest(domain: string) {
-  const catalog = loadCatalog();
-  const manifest = getDomainManifest(catalog.catalog.domains, domain);
-  if (!manifest) {
-    throw new Error(`Unknown domain: ${domain}`);
-  }
-  return manifest;
-}
-
-function normalizeRecord(
-  record: Omit<McpRecord, 'created_at' | 'updated_at' | 'relations' | 'source' | 'archived_at'> & Partial<McpRecord>,
-): McpRecord {
-  if (!record.id || typeof record.id !== 'string') {
-    throw new Error('record.id is required');
-  }
-  const id = record.id.trim();
-  if (!id) {
-    throw new Error('record.id cannot be empty');
-  }
-
-  if (!record.domain || typeof record.domain !== 'string') {
-    throw new Error('record.domain is required');
-  }
-  const domain = record.domain.trim();
-  if (!domain) {
-    throw new Error('record.domain cannot be empty');
-  }
-
-  if (!record.collection || typeof record.collection !== 'string') {
-    throw new Error('record.collection is required');
-  }
-  const collection = record.collection.trim();
-  if (!collection) {
-    throw new Error('record.collection cannot be empty');
-  }
-
-  const manifest = parseRecordManifest(domain);
-  if (!manifest.collections.includes(collection)) {
-    throw new Error(`collection ${collection} not in domain manifest`);
-  }
-
-  const parsedRelations = Array.isArray(record.relations)
-    ? record.relations
-        .filter(
-          (relation): relation is CanonicalRelation =>
-            Boolean(relation && typeof relation.name === 'string' && relation.name.trim() && typeof relation.target_id === 'string' && relation.target_id.trim()),
-        )
-        .map((relation) => ({
-          name: relation.name.trim(),
-          target_id: relation.target_id.trim(),
-        }))
-    : [];
-
-  const seen = new Set<string>();
-  const dedupedRelations = parsedRelations.filter((relation) => {
-    const key = `${relation.name}:${relation.target_id}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-
-  const relationFromManifest = dedupedRelations.filter((relation) => {
-    const edge = manifest.relations.find((item) => item.name === relation.name && item.from === collection);
-    return !edge || edge.to === '*' || manifest.collections.includes(edge.to);
-  });
-
-  const sourceProvider = typeof record.source?.provider === 'string' ? record.source.provider : 'user';
-  const provider =
-    (getSupportedProviders() as string[]).includes(sourceProvider) ? (sourceProvider as RecordProvider) : 'user';
-
-  const source: RecordSource = record.source
-    ? {
-        provider,
-        external_id:
-          typeof record.source.external_id === 'string' && record.source.external_id.trim().length > 0
-            ? record.source.external_id
-            : `${domain}:${collection}:${id}`,
-        url: typeof record.source.url === 'string' ? record.source.url : null,
-        observed_at:
-          typeof record.source.observed_at === 'string' && record.source.observed_at.trim().length > 0
-            ? record.source.observed_at
-            : nowIso(),
-        content_hash:
-          typeof record.source.content_hash === 'string' && record.source.content_hash.length > 0
-            ? record.source.content_hash
-            : null,
-      }
-    : {
-        provider: 'user',
-        external_id: `${domain}:${collection}:${id}`,
-        url: null,
-        observed_at: nowIso(),
-        content_hash: null,
-      };
-
-  return {
-    id,
-    domain,
-    collection,
-    title: typeof record.title === 'string' && record.title.trim().length > 0 ? record.title.trim() : id,
-    properties: typeof record.properties === 'object' && record.properties !== null ? record.properties : {},
-    relations: relationFromManifest,
-    source,
-    archived_at: typeof record.archived_at === 'string' && record.archived_at.trim().length > 0 ? record.archived_at : null,
-    created_at: record.created_at ?? nowIso(),
-    updated_at: record.updated_at ?? nowIso(),
-    revision: typeof record.revision === 'number' && Number.isInteger(record.revision) && record.revision >= 0 ? record.revision : 1,
-  };
-}
-
 function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
   const next = normalizeRecord(record);
   const exists = store.records[next.id];
@@ -569,10 +232,6 @@ function upsertRecord(record: McpRecord, options: PersistOptions = {}) {
     persistStore();
   }
   return { ...store.records[next.id] };
-}
-
-function stableStringify(value: unknown): string {
-  return canonicalJson(value);
 }
 
 function deleteRecordMutation(id: string, options: PersistOptions = {}) {
@@ -615,162 +274,6 @@ function restoreRecordMutation(record: McpRecord) {
 
 export function restoreRecord(record: McpRecord) {
   return mutateCanonicalStore(() => restoreRecordMutation(record));
-}
-
-function isWorkflowFileName(value: string) {
-  return value.endsWith('.v1.json');
-}
-
-function workflowPathFromId(id: string) {
-  return join(WORKFLOW_DIR, `${id.replace(/_/g, '-')}.v1.json`);
-}
-
-function parseWorkflowDocument(raw: unknown, fallbackDomain: string): WorkflowDocument | null {
-  if (!isObject(raw)) {
-    return null;
-  }
-
-  const candidate = raw as {
-    schema_version?: string;
-    id?: unknown;
-    domain?: unknown;
-    label?: unknown;
-    trigger?: unknown;
-    steps?: unknown;
-    write_policy?: unknown;
-  };
-
-  if (candidate.schema_version !== 'lifeos.workflow.v1') {
-    return null;
-  }
-  if (typeof candidate.id !== 'string' || candidate.id.trim().length === 0) {
-    return null;
-  }
-  if (!Array.isArray(candidate.steps)) {
-    return null;
-  }
-  if (typeof candidate.label !== 'string' || candidate.label.trim().length === 0) {
-    return null;
-  }
-  if (typeof candidate.write_policy !== 'string' || candidate.write_policy.trim().length === 0) {
-    return null;
-  }
-
-  const steps = candidate.steps
-    .map((step) => {
-      if (!isObject(step) || typeof step.id !== 'string' || step.id.trim().length === 0) {
-        return null;
-      }
-      const parsed: WorkflowStep = {
-        id: step.id.trim(),
-      };
-      if (typeof (step as { tool?: unknown }).tool === 'string') {
-        parsed.tool = String((step as { tool: string }).tool);
-      }
-      if (typeof (step as { action?: unknown }).action === 'string') {
-        parsed.action = String((step as { action: string }).action);
-      }
-      if (typeof (step as { skill?: unknown }).skill === 'string') {
-        parsed.skill = String((step as { skill: string }).skill);
-      }
-      if (typeof (step as { input?: unknown }).input === 'object' && (step as { input: unknown }).input !== null) {
-        parsed.input = (step as { input: Record<string, unknown> }).input;
-      }
-      if (Array.isArray((step as { input_from?: unknown }).input_from)) {
-        parsed.input_from = (step as { input_from: unknown[] }).input_from
-          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
-          .map((id) => id.trim());
-      }
-      if (typeof (step as { output?: unknown }).output === 'string') {
-        parsed.output = String((step as { output: string }).output);
-      }
-      if (typeof (step as { required?: unknown }).required === 'boolean') {
-        parsed.required = (step as { required: boolean }).required;
-      }
-      return parsed;
-    })
-    .filter((step): step is WorkflowStep => step !== null);
-
-  if (steps.length === 0) {
-    return null;
-  }
-
-  return {
-    schema_version: 'lifeos.workflow.v1',
-    id: candidate.id.trim(),
-    domain:
-      typeof candidate.domain === 'string' && candidate.domain.trim().length > 0 ? candidate.domain.trim() : fallbackDomain,
-    label: candidate.label.trim(),
-    ...(isObject(candidate.trigger) ? { trigger: { ...candidate.trigger } } : {}),
-    steps,
-    write_policy: candidate.write_policy.trim(),
-  };
-}
-
-function loadCatalogWorkflows(): WorkflowDocument[] {
-  if (workflowCache) {
-    return [...workflowCache];
-  }
-
-  const catalog = loadCatalog();
-  const workflowById = new Map<string, string>();
-
-  for (const entry of catalog.catalog.domains) {
-    const manifest = getDomainManifest(catalog.catalog.domains, entry.id);
-    if (!manifest) {
-      continue;
-    }
-    for (const workflowId of manifest.workflows) {
-      if (typeof workflowId === 'string' && workflowId.trim().length > 0) {
-        workflowById.set(workflowId.trim(), entry.id);
-      }
-    }
-  }
-
-  const entries = existsSync(WORKFLOW_DIR) ? readdirSync(WORKFLOW_DIR, { withFileTypes: true }) : [];
-  const loaded: WorkflowDocument[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
-    }
-    if (!isWorkflowFileName(entry.name)) {
-      continue;
-    }
-    const workflowId = basename(entry.name, '.v1.json').replace(/-/g, '_');
-    if (!workflowById.has(workflowId) || seen.has(workflowId)) {
-      continue;
-    }
-
-    const filePath = join(WORKFLOW_DIR, entry.name);
-    try {
-      const raw = readFileSync(filePath, 'utf-8');
-      const parsed = parseWorkflowDocument(JSON.parse(raw), workflowById.get(workflowId) ?? 'food');
-      if (!parsed) {
-        continue;
-      }
-      loaded.push(parsed);
-      seen.add(workflowId);
-    } catch {
-      continue;
-    }
-  }
-
-  workflowCache = loaded;
-  return [...loaded];
-}
-
-function cloneActionEvent(action: ActionEvent): ActionEvent {
-  return {
-    ...action,
-    operation_id: action.operation_id || `${action.id}:operation`,
-    cause_id: action.cause_id || action.id,
-    expected_revision: typeof action.expected_revision === 'number' ? action.expected_revision : null,
-    verification_json: action.verification_json ?? null,
-    record_ids: [...action.record_ids],
-    source_ids: [...action.source_ids],
-  };
 }
 
 export function listRecords(input: {
@@ -851,15 +354,6 @@ export type ProviderCanonicalApplyResult = {
   record: McpRecord | null;
   reason?: string;
 };
-
-function normalizeProviderSourceEquality(source: RecordSource) {
-  return {
-    provider: source.provider,
-    external_id: source.external_id,
-    url: source.url,
-    content_hash: source.content_hash,
-  };
-}
 
 /** Apply a provider pull only after the provider adapter has passed its authority checks. */
 function upsertProviderCanonicalRecordMutation(input: ProviderCanonicalRecordInput): ProviderCanonicalApplyResult {
@@ -1642,7 +1136,7 @@ function createActionEventMutation(input: {
   before?: unknown;
   after?: unknown;
   undoPayload?: unknown;
-  status?: ActionState['status'];
+  status?: ActionEvent['status'];
   sourceIds?: string[];
   conversationId?: string | null;
   operationId?: string;
