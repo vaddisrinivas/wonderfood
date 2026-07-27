@@ -22,6 +22,7 @@ import type {
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
 import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
+import { APP_PACKAGE_UI_ACTION_KIND_SET, APP_PACKAGE_UI_COMPONENT_KIND_SET, APP_PACKAGE_UI_TONE_SET } from '@/packages/shared/contracts/ui-primitives';
 import { APP_PACKAGE_WIDGET_KIND_SET } from '@/packages/shared/contracts/ui-widgets';
 
 function text(value: unknown): value is string {
@@ -46,8 +47,6 @@ function hasExecutableCode(value: unknown): boolean {
   return Object.entries(value as Record<string, unknown>).some(([key, child]) => key === 'code' || key === 'javascript' || key === 'script' || hasExecutableCode(child));
 }
 
-const UI_COMPONENT_KINDS = new Set(['recordList', 'metric', 'action', 'text', 'widget']);
-const UI_ACTION_KINDS = new Set(['open_url', 'propose']);
 const UI_ACTION_TOOL_PATTERN = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 
 function isTextArray(value: unknown, path: string): string[] {
@@ -63,7 +62,7 @@ function isTextArray(value: unknown, path: string): string[] {
 function isUiAction(value: unknown, path: string): { command: string; tool: string } {
   if (!object(value)) throw new Error(`${path} must be an object`);
   const action = value as Record<string, unknown>;
-  if (!text(action.kind) || !UI_ACTION_KINDS.has(action.kind)) throw new Error(`${path}.kind must be one of open_url|propose`);
+  if (!text(action.kind) || !APP_PACKAGE_UI_ACTION_KIND_SET.has(action.kind)) throw new Error(`${path}.kind must be one of open_url|propose`);
   if (action.kind === 'open_url' && !text(action.url)) throw new Error(`${path}.url required for open_url actions`);
   if (action.kind === 'propose' && !text(action.tool) && !text(action.command)) {
     throw new Error(`${path}.tool or ${path}.command required for propose actions`);
@@ -78,7 +77,7 @@ function isUiAction(value: unknown, path: string): { command: string; tool: stri
 function isUiComponent(value: unknown, path: string, packageCollections: Record<string, unknown>, packageViews: Record<string, unknown>): { hasQuery: boolean } {
   if (!object(value)) throw new Error(`${path} must be an object`);
   const component = value as Record<string, unknown>;
-  if (!text(component.kind) || !UI_COMPONENT_KINDS.has(component.kind)) throw new Error(`${path}.kind is invalid`);
+  if (!text(component.kind) || !APP_PACKAGE_UI_COMPONENT_KIND_SET.has(component.kind)) throw new Error(`${path}.kind is invalid`);
   if (component.kind === 'action' && !text(component.id)) throw new Error(`${path}.id required for action components`);
   if (component.kind === 'widget') {
     if (!text(component.widget) || !APP_PACKAGE_WIDGET_KIND_SET.has(component.widget)) throw new Error(`${path}.widget is invalid`);
@@ -90,7 +89,7 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
     throw new Error(`${path}.view must reference an existing view`);
   }
 
-  if (component.tone !== undefined && !['neutral', 'moss', 'amber', 'plum', 'blue'].includes(String(component.tone))) {
+  if (component.tone !== undefined && !APP_PACKAGE_UI_TONE_SET.has(String(component.tone))) {
     throw new Error(`${path}.tone is invalid`);
   }
   if (component.action !== undefined) {

@@ -1,4 +1,5 @@
 import type { QueryPredicate, QuerySort } from './query';
+import type { AppPackageUiActionKind, AppPackageUiComponentKind, AppPackageUiTone } from './ui-primitives';
 import type { AppPackageWidgetKind } from './ui-widgets';
 import type { AppPackageNativeIntentKind } from './native-capability-kinds';
 
@@ -35,7 +36,7 @@ export type PackageSurfaceSpec = {
 };
 
 export type A2UiAction = {
-  kind: 'open_url' | 'propose';
+  kind: AppPackageUiActionKind;
   label?: string;
   url?: string;
   command?: string;
@@ -44,14 +45,14 @@ export type A2UiAction = {
 };
 
 export type A2UiComponent = {
-  kind: 'recordList' | 'metric' | 'action' | 'text' | 'widget';
+  kind: AppPackageUiComponentKind;
   id?: string;
   title?: string;
   subtitle?: string;
   widget?: AppPackageWidgetKind;
   props?: Record<string, unknown>;
   view?: string;
-  tone?: 'neutral' | 'moss' | 'amber' | 'plum' | 'blue';
+  tone?: AppPackageUiTone;
   query?: {
     collections?: string[];
     match?: string;

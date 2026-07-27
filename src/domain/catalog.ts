@@ -4,6 +4,7 @@ import healthManifestJson from '../../packages/domain-config/domains/health.v1.j
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
 import type { AppPackage, AppPackageDependencyPin, AppPackageNativeCapability, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
 import { isAppPackageNativeIntentKind } from '../../packages/shared/contracts/native-capability-kinds';
+import { isAppPackageUiActionKind, isAppPackageUiComponentKind, isAppPackageUiTone } from '../../packages/shared/contracts/ui-primitives';
 import { isAppPackageWidgetKind } from '../../packages/shared/contracts/ui-widgets';
 
 type ParsedUiScreen = {
@@ -372,7 +373,7 @@ function parseUiAction(value: unknown, path: string): unknown {
     throw new Error(`${path} must be an object`);
   }
   const raw = value as Record<string, unknown>;
-  if (raw.kind !== 'open_url' && raw.kind !== 'propose') {
+  if (!isAppPackageUiActionKind(raw.kind)) {
     throw new Error(`${path}.kind must be open_url|propose`);
   }
   if (raw.kind === 'open_url') {
@@ -390,7 +391,7 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
   }
   const raw = value as Record<string, unknown>;
   const kind = raw.kind;
-  assertCondition(kind === 'recordList' || kind === 'metric' || kind === 'action' || kind === 'text' || kind === 'widget', `${path}.kind must be recordList|metric|action|text|widget`);
+  assertCondition(isAppPackageUiComponentKind(kind), `${path}.kind must be recordList|metric|action|text|widget`);
   if (kind === 'action') {
     assertCondition(typeof raw.id === 'string' && raw.id.trim().length > 0, `${path}.id required for action components`);
   }
@@ -403,7 +404,7 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
       assertCondition(isObject(raw.props), `${path}.props must be an object`);
     }
   }
-  if (raw.tone !== undefined && raw.tone !== 'neutral' && raw.tone !== 'moss' && raw.tone !== 'amber' && raw.tone !== 'plum' && raw.tone !== 'blue') {
+  if (raw.tone !== undefined && !isAppPackageUiTone(raw.tone)) {
     throw new Error(`${path}.tone must be neutral|moss|amber|plum|blue`);
   }
   if (raw.action !== undefined) {
