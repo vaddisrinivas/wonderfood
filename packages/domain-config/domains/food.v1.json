@@ -1648,6 +1648,46 @@
         "prompt": "Allow WonderFood to read nutrition records for food context."
       },
       {
+        "id": "health-connect-read-hydration",
+        "platform": "android",
+        "permission": "android.permission.health.READ_HYDRATION",
+        "reason": "Use hydration records as optional food-health context after user approval.",
+        "required": false,
+        "prompt": "Allow WonderFood to read hydration records for food context."
+      },
+      {
+        "id": "health-connect-read-steps",
+        "platform": "android",
+        "permission": "android.permission.health.READ_STEPS",
+        "reason": "Use step trends as optional planning context after user approval.",
+        "required": false,
+        "prompt": "Allow WonderFood to read step records for food context."
+      },
+      {
+        "id": "health-connect-read-active-calories",
+        "platform": "android",
+        "permission": "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "reason": "Use active calorie context only when the user enables Health Connect.",
+        "required": false,
+        "prompt": "Allow WonderFood to read active calorie records for food context."
+      },
+      {
+        "id": "health-connect-read-weight",
+        "platform": "android",
+        "permission": "android.permission.health.READ_WEIGHT",
+        "reason": "Use weight context only when the user enables Health Connect.",
+        "required": false,
+        "prompt": "Allow WonderFood to read weight records for food context."
+      },
+      {
+        "id": "health-connect-write-hydration-proof",
+        "platform": "android",
+        "permission": "android.permission.health.WRITE_HYDRATION",
+        "reason": "Run a user-approved disposable Health Connect write/read/delete proof.",
+        "required": false,
+        "prompt": "Allow WonderFood to write a disposable hydration proof record."
+      },
+      {
         "id": "camera-photo-library",
         "platform": "expo",
         "permission": "expo-image-picker:media-library",
@@ -1687,25 +1727,14 @@
         }
       },
       {
-        "id": "quick-add-food",
-        "platform": "android",
-        "kind": "shortcut",
-        "reason": "Expose a launcher shortcut for fast meal, pantry, receipt, and shopping capture.",
-        "required": false,
-        "payload": {
-          "label": "Add food",
-          "target": "food.capture"
-        }
-      },
-      {
-        "id": "freshness-reminder",
+        "id": "open-food-capture",
         "platform": "expo",
-        "kind": "background_task",
-        "reason": "Optionally check pantry freshness and propose dinner or shopping updates without manual hunting.",
+        "kind": "deep_link",
+        "reason": "Open the Food capture surface through the app scheme.",
         "required": false,
         "payload": {
-          "workflow": "pantry_freshness_sweep",
-          "mode": "proposal_only"
+          "scheme": "wonderfood",
+          "target": "food.capture"
         }
       }
     ]

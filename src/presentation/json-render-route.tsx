@@ -6,7 +6,6 @@ import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
 import { JsonRenderSurface } from '@/src/presentation/json-render-surface';
-import { ROUTE_SHELL_UI } from '@/src/presentation/a2ui-route-surfaces';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 type JsonRenderRouteProps = {
@@ -14,12 +13,11 @@ type JsonRenderRouteProps = {
   eyebrow?: string;
   title?: string;
   subtitle?: string;
-  useDomainUi?: boolean;
   emptyTitle?: string;
   recordId?: string;
 };
 
-export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi, emptyTitle, recordId }: JsonRenderRouteProps) {
+export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, recordId }: JsonRenderRouteProps) {
   const db = useLifeOSDatabase();
   const settings = useLifeOSSettingsSnapshot();
   setActiveDomainOverride(settings.runtime.activeDomain);
@@ -50,14 +48,12 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, useDomainUi,
       cancelled = true;
     };
   }, [db, screen, settings.runtime.activeDomain]);
-  const activeUi = activeManifest.ui?.screens?.[screen] ? activeManifest.ui : ROUTE_SHELL_UI;
-
   return (
     <JsonRenderSurface
       eyebrow={eyebrow}
       title={title ?? activeManifest.label}
       subtitle={subtitle}
-      ui={useDomainUi ? activeManifest.ui : activeUi}
+      ui={activeManifest.ui}
       screen={screen}
       records={records}
       nativePermissions={activeManifest.native_capabilities?.permissions}
