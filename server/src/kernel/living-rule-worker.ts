@@ -1,4 +1,4 @@
-import type { AppPackageV2 } from './package';
+import type { AppPackage } from './package';
 import { runReactiveCycle, type ReactiveCycleInput, type ReactiveCycleResult } from './reactive-cycle';
 
 type RuleWorkerInput = Omit<ReactiveCycleInput, 'data'> & { data?: unknown };

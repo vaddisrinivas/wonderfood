@@ -1,6 +1,6 @@
 import { evaluateExpression, validateExpressionBudget, type Expression } from './expression';
 import { executeQuery } from './query';
-import type { AppPackageV2 } from '@/packages/shared/contracts/package';
+import type { AppPackage } from '@/packages/shared/contracts/package';
 import type { ComputedFieldSpec } from '@/packages/shared/contracts/package';
 
 export type { ComputedFieldSpec };
@@ -9,7 +9,7 @@ export type ComputedFieldInput = {
   specs: readonly ComputedFieldSpec[];
   record: Readonly<Record<string, unknown>>;
   rows?: readonly Record<string, unknown>[];
-  queries?: AppPackageV2['queries'];
+  queries?: AppPackage['queries'];
   context?: ComputedFieldEvaluationContext;
   budget?: {
     maxFields?: number;
@@ -158,7 +158,7 @@ export function evaluateComputedFields(input: ComputedFieldInput): ComputedField
 export function applyComputedFieldsToRows(
   rows: readonly Record<string, unknown>[],
   specs: readonly ComputedFieldSpec[] = [],
-  queries: AppPackageV2['queries'] = {},
+  queries: AppPackage['queries'] = {},
   queryRows: readonly Record<string, unknown>[] = rows,
   context = createComputedFieldEvaluationContext(),
 ): Record<string, unknown>[] {

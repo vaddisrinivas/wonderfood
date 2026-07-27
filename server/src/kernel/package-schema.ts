@@ -1,5 +1,5 @@
 /** JSON Schema for the executable-data package boundary. No code fields are permitted. */
-export const appPackageSchema = {
+export const appPackageSchemaV2 = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   type: 'object',
   additionalProperties: false,
@@ -330,4 +330,65 @@ export const appPackageSchema = {
       ],
     },
   },
+} as const;
+
+export const appPackageSchemaV3 = {
+  ...appPackageSchemaV2,
+  properties: {
+    ...appPackageSchemaV2.properties,
+    schemaVersion: { const: 'wonder.app-package.v3' },
+    dependencyPins: {
+      type: 'array',
+      minItems: 1,
+      uniqueItems: true,
+      items: { $ref: '#/$defs/dependencyPin' },
+    },
+    nativeCapabilities: { $ref: '#/$defs/nativeCapability' },
+    contractLock: { $ref: '#/$defs/contractLock' },
+  },
+  required: [...appPackageSchemaV2.required, 'dependencyPins', 'nativeCapabilities', 'contractLock'],
+  $defs: {
+    ...appPackageSchemaV2.$defs,
+    dependencyPin: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['package', 'version'],
+      properties: {
+        package: { type: 'string', pattern: '^@[a-zA-Z0-9][a-zA-Z0-9_./:-]*$|^[a-zA-Z0-9][a-zA-Z0-9_./:-]*$' },
+        version: { type: 'string', minLength: 1 },
+        source: {
+          enum: ['npm', 'maven', 'gradle', 'cocoapods', 'other'],
+        },
+      },
+    },
+    nativeCapability: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['schemaVersion', 'platform', 'packages'],
+      properties: {
+        schemaVersion: { const: 'wonder.app-package-native-capabilities.v1' },
+        platform: { enum: ['expo', 'android', 'ios', 'web'] },
+        packages: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+        permissions: { type: 'array', items: { type: 'string', minLength: 1 } },
+      },
+    },
+    contractLock: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['schemaVersion', 'algorithm', 'checksum', 'pinnedAt', 'dependencyPins', 'nativeCapabilities'],
+      properties: {
+        schemaVersion: { const: 'wonder.package-contract-lock.v1' },
+        algorithm: { const: 'sha256' },
+        checksum: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+        pinnedAt: { type: 'string', format: 'date-time' },
+        dependencyPins: { type: 'array', items: { $ref: '#/$defs/dependencyPin' } },
+        nativeCapabilities: { $ref: '#/$defs/nativeCapability' },
+      },
+    },
+  },
+};
+
+export const appPackageSchema = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  oneOf: [appPackageSchemaV2, appPackageSchemaV3],
 } as const;

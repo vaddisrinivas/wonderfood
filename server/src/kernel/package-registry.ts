@@ -1,5 +1,5 @@
 import { validateComputedFieldGraph } from './computed-fields';
-import { type AppPackageV2, type PackageValidation, validateAppPackage } from './package';
+import { type AppPackage, type PackageValidation, validateAppPackage } from './package';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -41,7 +41,7 @@ export type PackageChangePreview = Readonly<{
   requestHash: string;
   packageHash: string | null;
   basePackageKey: string | null;
-  package: AppPackageV2 | null;
+  package: AppPackage | null;
   validation: PackageValidation;
 }>;
 
@@ -49,7 +49,7 @@ type PackageRegistryStore = Readonly<{
   schemaVersion: typeof PACKAGE_REGISTRY_SCHEMA_VERSION;
   activeKey: string | null;
   previousKey: string | null;
-  packages: Readonly<Record<string, AppPackageV2>>;
+  packages: Readonly<Record<string, AppPackage>>;
   receipts: readonly PackageRegistryReceipt[];
 }>;
 
@@ -79,9 +79,9 @@ const packageRegistryStoreSchema = z.object({
 }).strict();
 
 export class PackageRegistry {
-  private active: AppPackageV2 | null = null;
-  private previous: AppPackageV2 | null = null;
-  private packages = new Map<string, AppPackageV2>();
+  private active: AppPackage | null = null;
+  private previous: AppPackage | null = null;
+  private packages = new Map<string, AppPackage>();
   private receipts: PackageRegistryReceipt[] = [];
   private readonly path?: string;
   private readonly now: () => string;
@@ -128,7 +128,7 @@ export class PackageRegistry {
     };
   }
 
-  activateApprovedChange(request: PackageChangeRequest, approval: PackageChangeApprovalReceipt): AppPackageV2 {
+  activateApprovedChange(request: PackageChangeRequest, approval: PackageChangeApprovalReceipt): AppPackage {
     const preview = this.previewChange(request);
     if (preview.status !== 'valid' || !preview.packageHash || !preview.package) {
       const errors = preview.validation.valid ? ['package_change_invalid'] : preview.validation.errors;
@@ -152,13 +152,13 @@ export class PackageRegistry {
     });
   }
 
-  activate(input: unknown): AppPackageV2 {
+  activate(input: unknown): AppPackage {
     const result = this.preview(input);
     if (!result.valid) throw new Error(`package_invalid:${result.errors.join('|')}`);
     return this.activateInternal(result.package, {});
   }
 
-  private activateInternal(pkg: AppPackageV2, evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>): AppPackageV2 {
+  private activateInternal(pkg: AppPackage, evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>): AppPackage {
     this.previous = this.active;
     this.active = pkg;
     this.packages.set(packageKey(pkg), pkg);
@@ -167,7 +167,7 @@ export class PackageRegistry {
     return this.active;
   }
 
-  rollback(): AppPackageV2 | null {
+  rollback(): AppPackage | null {
     const current = this.active;
     this.active = this.previous;
     this.previous = current;
@@ -176,7 +176,7 @@ export class PackageRegistry {
     return this.active;
   }
 
-  getActive(): AppPackageV2 | null {
+  getActive(): AppPackage | null {
     return this.active;
   }
 
@@ -228,7 +228,7 @@ export class PackageRegistry {
   }
 }
 
-function packageKey(pkg: AppPackageV2): string {
+function packageKey(pkg: AppPackage): string {
   return `${pkg.id}@${pkg.version}`;
 }
 
@@ -240,7 +240,7 @@ function normalizePackageChangeRequest(request: PackageChangeRequest): PackageCh
   };
 }
 
-function validatePackageChangeRequest(request: PackageChangeRequest, active: AppPackageV2): void {
+function validatePackageChangeRequest(request: PackageChangeRequest, active: AppPackage): void {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('package_change_request_invalid');
   if (request.basePackageKey && request.basePackageKey !== packageKey(active)) throw new Error('package_change_base_mismatch');
   if (!Array.isArray(request.patch) || request.patch.length < 1 || request.patch.length > 64) throw new Error('package_change_patch_invalid');
@@ -272,10 +272,10 @@ function isAllowedPackagePatchPath(path: string): boolean {
     || path.startsWith('/acceptanceTests/');
 }
 
-function applyPackagePatch(base: AppPackageV2, patch: readonly Operation[]): AppPackageV2 {
-  const clone = JSON.parse(JSON.stringify(base)) as AppPackageV2;
+function applyPackagePatch(base: AppPackage, patch: readonly Operation[]): AppPackage {
+  const clone = JSON.parse(JSON.stringify(base)) as AppPackage;
   const result = jsonPatch.applyPatch(clone, [...patch], true, false);
-  return result.newDocument as AppPackageV2;
+  return result.newDocument as AppPackage;
 }
 
 function hashValue(value: unknown): string {
@@ -304,7 +304,7 @@ function parsePackageRegistryStore(serialized: string): PackageRegistryStore {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('package_registry_invalid');
   const row = packageRegistryStoreSchema.safeParse(value);
   if (!row.success) throw new Error('package_registry_schema_invalid');
-  const packages: Record<string, AppPackageV2> = {};
+  const packages: Record<string, AppPackage> = {};
   for (const [key, pkg] of Object.entries(row.data.packages)) {
     const validation = validateAppPackage(pkg);
     if (!validation.valid) throw new Error(`package_registry_package_invalid:${key}:${validation.errors.join('|')}`);

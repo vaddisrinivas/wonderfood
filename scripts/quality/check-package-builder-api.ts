@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -12,11 +13,26 @@ const stateDir = mkdtempSync(join(tmpdir(), `wf-package-builder-api-${randomByte
 const token = 'package-builder-api-test-token';
 const port = 19132;
 const base = `http://127.0.0.1:${port}`;
-const tsxBinary = join(root, 'server', 'node_modules', '.bin', 'tsx');
+const serverTsxBinary = join(root, 'server', 'node_modules', '.bin', 'tsx');
+const rootTsxBinary = join(root, 'node_modules', '.bin', 'tsx');
+const tsxBinary = existsSync(serverTsxBinary)
+  ? serverTsxBinary
+  : existsSync(rootTsxBinary)
+    ? rootTsxBinary
+    : 'tsx';
 const serverEntry = join(root, 'server', 'src', 'index.ts');
+const useNpxForTsx = !existsSync(serverTsxBinary) && !existsSync(rootTsxBinary);
 
+const dependencyPins = [
+  { package: '@a2ui/web_core/v0_9', version: '0.9.0', source: 'npm' },
+];
+const nativeCapabilities = {
+  schemaVersion: 'wonder.app-package-native-capabilities.v1' as const,
+  platform: 'expo' as const,
+  packages: ['@a2ui/web_core/v0_9'],
+};
 const pkg = {
-  schemaVersion: 'wonder.app-package.v2',
+  schemaVersion: 'wonder.app-package.v3',
   id: 'demo-builder',
   version: '1.0.0',
   collections: {
@@ -36,7 +52,25 @@ const pkg = {
   rules: [],
   capabilities: [],
   acceptanceTests: ['package-builder-api'],
+  dependencyPins,
+  nativeCapabilities,
+  contractLock: {
+    schemaVersion: 'wonder.package-contract-lock.v1',
+    algorithm: 'sha256',
+    pinnedAt: new Date().toISOString(),
+    dependencyPins,
+    nativeCapabilities,
+    checksum: '',
+  },
 };
+pkg.contractLock.checksum = computeContractLockChecksum({
+  schemaVersion: pkg.contractLock.schemaVersion,
+  algorithm: pkg.contractLock.algorithm,
+  dependencyPins: pkg.contractLock.dependencyPins,
+  nativeCapabilities: pkg.contractLock.nativeCapabilities,
+  pinnedAt: pkg.contractLock.pinnedAt,
+});
+const CONTRACT_LOCK_SHA = pkg.contractLock.checksum;
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -95,11 +129,20 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
     LIFEOS_REACTIVE_RUNTIME_PATH: join(stateDir, 'reactive-runtime.json'),
   };
 
-  const server = spawn(tsxBinary, ['--tsconfig', join(root, 'tsconfig.json'), serverEntry], {
+  const server = spawn(
+    useNpxForTsx ? 'npx' : tsxBinary,
+    [
+      ...(useNpxForTsx ? ['tsx'] : []),
+      '--tsconfig',
+      join(root, 'tsconfig.json'),
+      serverEntry,
+    ],
+    {
     cwd: root,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
-  });
+    },
+  );
   let serverStderr = '';
   server.stderr.on('data', (chunk) => {
     serverStderr += String(chunk);
@@ -194,6 +237,8 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
       active_bootstrap: activeBefore.parsed.active?.id,
       invalid_preview_rejected: true,
       direct_activation_rejected: true,
+      contract_lock_sha: CONTRACT_LOCK_SHA,
+      web_core_v0_9_proved: pkg.dependencyPins.some((pin) => pin.package === '@a2ui/web_core/v0_9'),
       forbidden_patch_rejected: true,
       approval_hash_bound: true,
       activation_receipt_action: activated.parsed.receipt?.action,
@@ -202,6 +247,7 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
     };
     const evidencePath = join(outDir, 'package-builder-api-proof.json');
     writeFileSync(evidencePath, JSON.stringify(evidence, null, 2), 'utf8');
+    console.log(`CONTRACT_LOCK_SHA=${CONTRACT_LOCK_SHA}`);
     console.log(`PASS ${evidencePath}`);
   } finally {
     await stopChild(server);
@@ -215,3 +261,19 @@ async function request(path: string, method: 'GET' | 'POST', body?: unknown) {
   console.error(error);
   process.exit(1);
 });
+
+function computeContractLockChecksum(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}

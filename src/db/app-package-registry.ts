@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
-import type { AppPackageV2 } from '@/packages/shared/contracts/package';
+import type { AppPackage, AppPackageContractLock, AppPackageNativeCapability, AppPackageV2, AppPackageV3 } from '@/packages/shared/contracts/package';
 
 type AppPackageRow = {
   package_key: string;
@@ -23,7 +23,7 @@ export type AppPackageReceiptEvidence = {
   approvedBy?: string;
 };
 
-export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackageV2> {
+export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
   const active = await getActiveAppPackage(db);
   if (active) {
     setActivePackageOverride(active);
@@ -41,7 +41,7 @@ export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<A
   return appPackage;
 }
 
-export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackageV2 | null> {
+export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
   const state = await getPackageState(db);
   if (!state?.active_package_key) return null;
   const appPackage = await getPackageByKey(db, state.active_package_key);
@@ -51,10 +51,10 @@ export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackag
 
 export async function activateAppPackage(
   db: SQLiteDatabase,
-  appPackage: AppPackageV2,
+  appPackage: AppPackage,
   action: ReceiptAction = 'activate',
   evidence: AppPackageReceiptEvidence = {},
-): Promise<AppPackageV2> {
+): Promise<AppPackage> {
   assertAppPackageShape(appPackage);
   const now = new Date().toISOString();
   const key = packageKey(appPackage);
@@ -91,7 +91,7 @@ export async function activateAppPackage(
   return appPackage;
 }
 
-export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackageV2 | null> {
+export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
   const state = await getPackageState(db);
   if (!state?.previous_package_key) return null;
   const previousPackage = await getPackageByKey(db, state.previous_package_key);
@@ -115,7 +115,7 @@ export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage
   return previousPackage;
 }
 
-function packageKey(appPackage: AppPackageV2): string {
+function packageKey(appPackage: AppPackage): string {
   return `${appPackage.id}@${appPackage.version}`;
 }
 
@@ -131,7 +131,7 @@ async function getInstalledPackageCount(db: SQLiteDatabase): Promise<number> {
   return Number.isFinite(count) ? count : 0;
 }
 
-async function getPackageByKey(db: SQLiteDatabase, key: string): Promise<AppPackageV2 | null> {
+async function getPackageByKey(db: SQLiteDatabase, key: string): Promise<AppPackage | null> {
   const row = await db.getFirstAsync<AppPackageRow>(
     'SELECT package_key, payload_json FROM app_packages WHERE package_key = $package_key',
     { $package_key: key },
@@ -177,8 +177,44 @@ async function insertReceipt(
   );
 }
 
-function assertAppPackageShape(input: unknown): asserts input is AppPackageV2 {
+function assertAppPackageShape(input: unknown): asserts input is AppPackage {
+  const value = input as Partial<AppPackage>;
+  if (value.schemaVersion === 'wonder.app-package.v2') {
+    assertAppPackageShapeV2(value);
+    return;
+  }
+  if (value.schemaVersion === 'wonder.app-package.v3') {
+    assertAppPackageShapeV3(value);
+    return;
+  }
+  throw new Error('app_package_invalid:schemaVersion must be wonder.app-package.v2 or wonder.app-package.v3');
+}
+
+function assertAppPackageShapeV2(input: unknown): asserts input is AppPackageV2 {
   const errors = collectAppPackageShapeErrors(input);
+  if (errors.length) {
+    throw new Error(`app_package_invalid:${errors.join('|')}`);
+  }
+}
+
+function assertAppPackageShapeV3(input: unknown): asserts input is AppPackageV3 {
+  const errors: string[] = [];
+  const value = input as Partial<AppPackageV3>;
+  if (!value.id || typeof value.id !== 'string') errors.push('id is required');
+  if (!value.version || typeof value.version !== 'string') errors.push('version is required');
+  if (!Array.isArray(value.dependencyPins)) errors.push('dependencyPins must be an array');
+  else {
+    for (const pin of value.dependencyPins) {
+      if (!isAppPackageDependencyPin(pin)) errors.push('dependencyPins entries must include package and version');
+    }
+  }
+  if (!isAppPackageNativeCapability(value.nativeCapabilities)) {
+    errors.push('nativeCapabilities is required');
+  }
+  if (!isAppPackageContractLock(value.contractLock)) {
+    errors.push('contractLock is required');
+  }
+
   if (errors.length) {
     throw new Error(`app_package_invalid:${errors.join('|')}`);
   }
@@ -187,7 +223,7 @@ function assertAppPackageShape(input: unknown): asserts input is AppPackageV2 {
 function collectAppPackageShapeErrors(input: unknown): string[] {
   const errors: string[] = [];
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ['package must be an object'];
-  const value = input as Partial<AppPackageV2>;
+  const value = input as Partial<AppPackage>;
   if (value.schemaVersion !== 'wonder.app-package.v2') errors.push('schemaVersion must be wonder.app-package.v2');
   if (!value.id || typeof value.id !== 'string') errors.push('id is required');
   if (!value.version || typeof value.version !== 'string') errors.push('version is required');
@@ -209,4 +245,34 @@ function collectAppPackageShapeErrors(input: unknown): string[] {
     if (!view || typeof view !== 'object' || typeof view.query !== 'string') errors.push(`view ${id} must reference a query`);
   }
   return errors;
+}
+
+function isAppPackageDependencyPin(input: unknown): boolean {
+  if (!input || typeof input !== 'object') return false;
+  const pin = input as Partial<unknown> as { package?: unknown; version?: unknown };
+  return typeof pin.package === 'string' && pin.package.trim().length > 0 && typeof pin.version === 'string' && pin.version.trim().length > 0;
+}
+
+function isAppPackageNativeCapability(input: unknown): input is AppPackageNativeCapability {
+  if (!input || typeof input !== 'object') return false;
+  const capability = input as Partial<AppPackageNativeCapability>;
+  return capability.schemaVersion === 'wonder.app-package-native-capabilities.v1'
+    && (capability.platform === 'expo' || capability.platform === 'android' || capability.platform === 'ios' || capability.platform === 'web')
+    && Array.isArray(capability.packages)
+    && capability.packages.every((item) => typeof item === 'string');
+}
+
+function isAppPackageContractLock(input: unknown): input is AppPackageContractLock {
+  if (!input || typeof input !== 'object') return false;
+  const lock = input as Partial<AppPackageContractLock>;
+  return lock.schemaVersion === 'wonder.package-contract-lock.v1'
+    && typeof lock.algorithm === 'string'
+    && lock.algorithm === 'sha256'
+    && typeof lock.checksum === 'string'
+    && /^sha256:[a-f0-9]{64}$/.test(lock.checksum)
+    && typeof lock.pinnedAt === 'string'
+    && !Number.isNaN(Date.parse(lock.pinnedAt))
+    && Array.isArray(lock.dependencyPins)
+    && lock.dependencyPins.every((pin) => isAppPackageDependencyPin(pin))
+    && isAppPackageNativeCapability(lock.nativeCapabilities);
 }

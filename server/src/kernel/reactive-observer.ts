@@ -1,4 +1,4 @@
-import type { AppPackageV2 } from './package';
+import type { AppPackage } from './package';
 import { recordReactiveCycle, type ReactiveReceiptStore, type RecordReactiveCycleResult } from './reactive-receipts';
 import { runLivingRuleWorker } from './living-rule-worker';
 import type { ReactiveCycleResult } from './reactive-cycle';
@@ -7,7 +7,7 @@ import type { OperationCommitEvent, OperationCommitObserver } from './operation-
 type ReactiveObserverPhase = 'snapshot_rows' | 'run_cycle' | 'record_receipt' | 'commit_cycle' | 'publish_proposals';
 
 export type ReactiveObserverConfig = {
-  package: AppPackageV2;
+  package: AppPackage;
   getRows: () => readonly Record<string, unknown>[];
   getReceiptStore: () => ReactiveReceiptStore;
   setReceiptStore: (store: ReactiveReceiptStore) => void;

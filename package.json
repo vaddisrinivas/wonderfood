@@ -78,7 +78,7 @@
     "check:kernel-boundaries": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-kernel-boundaries.ts",
     "check:local-query-contract": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-local-query-contract.ts",
     "check:chat-agent-ui-route": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-chat-agent-ui-route.ts",
-    "check:package-builder-api": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-package-builder-api.ts",
+    "check:package-builder-api": "npx --yes tsx --tsconfig tsconfig.json scripts/quality/check-package-builder-api.ts",
     "check:chat-local-query": "vitest run tests/chat/local-query.test.ts",
     "check:chat-agent-continuation": "vitest run tests/chat/agent-continuation.test.ts tests/chat/local-query.test.ts",
     "check:roundtrip": "./server/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/quality/check-roundtrip.ts",

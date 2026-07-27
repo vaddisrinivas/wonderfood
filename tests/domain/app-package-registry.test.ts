@@ -4,7 +4,7 @@ import { activateAppPackage, bootstrapAppPackageRegistry, getActiveAppPackage, r
 import { buildAppPackageFromManifest } from '@/src/domain/app-package-bridge';
 import { loadCatalog, setActivePackageOverride } from '@/src/domain/catalog';
 import { MemoryDb } from '@/tests/helpers/memory-db';
-import type { AppPackageV2 } from '@/packages/shared/contracts/package';
+import type { AppPackage } from '@/packages/shared/contracts/package';
 
 describe('app package SQLite registry', () => {
   it('bootstraps once, persists activation across reopen, and rolls back', async () => {
@@ -21,7 +21,7 @@ describe('app package SQLite registry', () => {
 
     const basePresentation = bootstrapped.presentation;
     expect(basePresentation).toBeDefined();
-    const nextPackage: AppPackageV2 = {
+    const nextPackage: AppPackage = {
       ...bootstrapped,
       id: 'runtime-food',
       version: '2.0.0',
@@ -83,7 +83,7 @@ describe('app package SQLite registry', () => {
     const db = new MemoryDb() as any;
     const manifest = loadCatalog().activeManifest;
     const pkg = buildAppPackageFromManifest(manifest, { version: 'presentation-test' }).package;
-    const activePackage: AppPackageV2 = {
+    const activePackage: AppPackage = {
       ...pkg,
       id: 'chef-lab',
       presentation: {
