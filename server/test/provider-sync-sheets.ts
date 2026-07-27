@@ -6,10 +6,11 @@ import { clearWebhookReplayState, getWebhookReplayState } from '../src/providers
 import { syncSheetsFromWebhook } from '../src/providers/sync/sheets';
 import { createOfficialDriveClient, createOfficialSheetsClient, readSheetsConfig, sheetsEndpoint } from '../src/providers/sheets/client';
 import { pullSheetsRecordsLive } from '../src/providers/sheets/pull';
+import { setSheetsPortForTests } from '../src/providers/sheets/port';
 
 type MockCall = {
-  url: string;
-  method: string;
+  kind: 'getSpreadsheet' | 'batchGetValues';
+  input: Record<string, unknown>;
 };
 
 function ensure(condition: boolean, message: string) {
@@ -29,33 +30,40 @@ function setupMockSheetsFetch() {
     ],
   };
   const calls: MockCall[] = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const method = (init.method || 'GET').toUpperCase();
-    calls.push({ url, method });
-
-    const isMetadata = /\/spreadsheets\/[^/]+\/?$/.test(url);
-    if (method === 'GET' && isMetadata) {
-      return new Response(JSON.stringify({
-        spreadsheetId: state.spreadsheetId,
-        properties: { title: 'LifeOS Runtime Workbook' },
-        sheets: [{ properties: { title: state.sheetName, gridProperties: { columnCount: 26, rowCount: 128 } } }],
-      }), { status: 200 });
-    }
-    if (method === 'GET' && url.includes('/values:batchGet')) {
-      return new Response(JSON.stringify({ valueRanges: [{ range: `${state.sheetName}!A:Z`, values: state.rows }] }), { status: 200 });
-    }
-    if (method === 'POST' && url.includes('/values:batchUpdate')) {
-      return new Response(JSON.stringify({ responses: [{ updatedRange: `${state.sheetName}!A3` }] }), { status: 200 });
-    }
-    return new Response(JSON.stringify({ error: `unexpected endpoint ${method} ${url}` }), { status: 500 });
-  }) as typeof globalThis.fetch;
+  setSheetsPortForTests({
+    async getSpreadsheet(input) {
+      calls.push({ kind: 'getSpreadsheet', input: input as Record<string, unknown> });
+      return {
+        ok: true,
+        status: 200,
+        data: {
+          spreadsheetId: state.spreadsheetId,
+          properties: { title: 'LifeOS Runtime Workbook' },
+          sheets: [{ properties: { title: state.sheetName, gridProperties: { columnCount: 26, rowCount: 128 } } }],
+        },
+      };
+    },
+    async batchGetValues(input) {
+      calls.push({ kind: 'batchGetValues', input: input as Record<string, unknown> });
+      return {
+        ok: true,
+        status: 200,
+        data: { valueRanges: [{ range: `${state.sheetName}!A:Z`, values: state.rows }] },
+      };
+    },
+    async batchUpdateValues() {
+      return {
+        ok: true,
+        status: 200,
+        data: { responses: [{ updatedRange: `${state.sheetName}!A3` }] },
+      };
+    },
+  });
 
   return {
     calls,
     restore() {
-      globalThis.fetch = originalFetch;
+      setSheetsPortForTests(null);
     },
     getStateRows() {
       return state.rows;

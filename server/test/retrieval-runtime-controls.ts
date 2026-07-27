@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setNotionPortForTests } from '../src/providers/notion/port';
 
 process.env.WONDER_RUNTIME_STATE_PATH = join(mkdtempSync(join(tmpdir(), 'wonderfood-retrieval-controls-')), 'wonder-runtime.json');
 process.env.NOTION_TOKEN = 'retrieval-controls-token';
@@ -13,39 +14,39 @@ process.env.LIFEOS_RETRIEVAL_NOTION_TIMEOUT_MS = '50';
 
 const { runRetrieval, resetRetrievalRuntimeForTests } = await import('../src/agents/retrieval');
 
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-const originalFetch = globalThis.fetch;
-
 try {
   resetRetrievalRuntimeForTests();
   let cacheCalls = 0;
-  globalThis.fetch = (async (input: string | URL) => {
-    const url = String(input);
-    if (!url.includes('/data_sources/retrieval-controls-source/query')) {
-      return jsonResponse(500, { error: `unexpected url ${url}` });
-    }
-    cacheCalls += 1;
-    return jsonResponse(200, {
-      results: [{
-        id: 'notion-cache-page',
-        properties: {
-          Name: { title: [{ plain_text: 'Cache page' }] },
-          'LifeOS Domain': 'food',
-          'LifeOS Collection': 'recipe',
-          status: 'ready',
+  setNotionPortForTests({
+    async queryDataSource(input) {
+      assert.equal(input.dataSourceId, 'retrieval-controls-source');
+      cacheCalls += 1;
+      return {
+        ok: true,
+        status: 200,
+        data: {
+          results: [{
+            id: 'notion-cache-page',
+            properties: {
+              Name: { title: [{ plain_text: 'Cache page' }] },
+              'LifeOS Domain': 'food',
+              'LifeOS Collection': 'recipe',
+              status: 'ready',
+            },
+            parent: { database_id: 'retrieval-db' },
+          }],
+          has_more: false,
+          next_cursor: null,
         },
-        parent: { database_id: 'retrieval-db' },
-      }],
-      has_more: false,
-      next_cursor: null,
-    });
-  }) as typeof globalThis.fetch;
+      };
+    },
+    async createPage() {
+      throw new Error('retrieval runtime controls should not create pages');
+    },
+    async updatePage() {
+      throw new Error('retrieval runtime controls should not update pages');
+    },
+  });
 
   const first = await runRetrieval({ query: 'show notion cache page', domain: 'food' });
   const second = await runRetrieval({ query: 'show notion cache page', domain: 'food' });
@@ -54,27 +55,33 @@ try {
   assert.equal(second.snapshots.some((snapshot) => snapshot.detail.includes('cached')), true);
 
   resetRetrievalRuntimeForTests();
+  setNotionPortForTests(null);
   let timeoutCalls = 0;
   let timeoutAborts = 0;
-  globalThis.fetch = ((input: string | URL, init: RequestInit = {}) => {
-    const url = String(input);
-    if (!url.includes('/data_sources/retrieval-controls-source/query')) {
-      return Promise.resolve(jsonResponse(500, { error: `unexpected url ${url}` }));
-    }
-    timeoutCalls += 1;
-    return new Promise<Response>((_resolve, reject) => {
-      const signal = init.signal as AbortSignal | undefined;
-      if (signal?.aborted) {
-        timeoutAborts += 1;
-        reject(signal.reason);
-        return;
-      }
-      signal?.addEventListener('abort', () => {
-        timeoutAborts += 1;
-        reject(signal.reason);
-      }, { once: true });
-    });
-  }) as typeof globalThis.fetch;
+  setNotionPortForTests({
+    async queryDataSource(input) {
+      assert.equal(input.dataSourceId, 'retrieval-controls-source');
+      timeoutCalls += 1;
+      return new Promise((_resolve, reject) => {
+        const signal = input.signal;
+        if (signal?.aborted) {
+          timeoutAborts += 1;
+          reject(signal.reason);
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          timeoutAborts += 1;
+          reject(signal.reason);
+        }, { once: true });
+      });
+    },
+    async createPage() {
+      throw new Error('retrieval runtime controls should not create pages');
+    },
+    async updatePage() {
+      throw new Error('retrieval runtime controls should not update pages');
+    },
+  });
 
   const timeoutFirst = await runRetrieval({ query: 'show notion timeout state', domain: 'food' });
   const timeoutSecond = await runRetrieval({ query: 'show notion timeout state', domain: 'food' });
@@ -85,5 +92,5 @@ try {
 
   console.log('PASS server/test/retrieval-runtime-controls.ts');
 } finally {
-  globalThis.fetch = originalFetch;
+  setNotionPortForTests(null);
 }
