@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@a2ui/web_core": "^0.10.5",
     "@ai-sdk/openai": "4.0.20",
     "@json-render/core": "^0.19.0",
     "@json-render/react-native": "^0.19.0",
@@ -54,9 +55,6 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "vitest run",
-    "typecheck:spike:ai-sdk": "npm --prefix spikes/ai-sdk run typecheck",
-    "typecheck:spike:mcp-sdk": "npm --prefix spikes/mcp-sdk run typecheck",
-    "typecheck:spikes": "npm run typecheck:spike:ai-sdk && npm run typecheck:spike:mcp-sdk",
     "test:server:direct": "for test_file in server/test/*.ts; do ./server/node_modules/.bin/tsx \"$test_file\" || exit 1; done",
     "typecheck": "tsc --noEmit",
     "audit:production": "npm audit --omit=dev --json",

@@ -429,7 +429,7 @@
     }
   },
   "ui": {
-    "schemaVersion": "wonder.ui.v1",
+    "schemaVersion": "a2ui.v0_9",
     "defaultScreen": "overview",
     "screens": {
       "overview": {

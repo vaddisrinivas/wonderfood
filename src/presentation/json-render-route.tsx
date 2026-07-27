@@ -5,7 +5,7 @@ import { loadCatalog, setActiveDomainOverride } from '@/src/domain/catalog';
 import { queryDomainRecords } from '@/src/domain/queries';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
 import { JsonRenderSurface } from '@/src/presentation/json-render-surface';
-import { ROUTE_SHELL_UI } from '@/src/presentation/shell-ui';
+import { ROUTE_SHELL_UI } from '@/src/presentation/a2ui-route-surfaces';
 import { useLifeOSSettingsSnapshot } from '@/src/settings/lifeos-settings';
 
 type JsonRenderRouteProps = {

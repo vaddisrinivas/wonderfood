@@ -142,7 +142,7 @@ export const appPackageSchemaV2 = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        schemaVersion: { const: 'wonder.ui.v1' },
+        schemaVersion: { const: 'a2ui.v0_9' },
         openUrlAllowlist: { type: 'array', items: { type: 'string', minLength: 1 } },
         components: {
           type: 'array',

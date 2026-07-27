@@ -2,12 +2,12 @@ import catalogJson from '../../packages/domain-config/domain-catalog.v1.json';
 import foodManifestJson from '../../packages/domain-config/domains/food.v1.json';
 import healthManifestJson from '../../packages/domain-config/domains/health.v1.json';
 import plantsManifestJson from '../../packages/domain-config/domains/plants.v1.json';
-import type { AppPackage, PackagePresentationUi, PackageUiComponent } from '../../packages/shared/contracts/package';
+import type { AppPackage, A2UiSurface, A2UiComponent } from '../../packages/shared/contracts/package';
 
 type ParsedUiScreen = {
   title?: string;
   subtitle?: string;
-  components?: PackageUiComponent[];
+  components?: A2UiComponent[];
 };
 
 export type CatalogSchemaVersion = 'lifeos.domain-catalog.v1';
@@ -84,7 +84,7 @@ export interface DomainManifest {
   skills: string[];
   workflows: string[];
   data_homes: string[];
-  ui?: PackagePresentationUi;
+  ui?: A2UiSurface;
   render?: DomainRenderContract;
   rich_detail_schema?: string;
   provider_template_fields?: {
@@ -282,7 +282,7 @@ function parseUiAction(value: unknown, path: string): unknown {
   return parseUiValue(raw);
 }
 
-function parseUiComponent(value: unknown, path: string, packageCollections: Set<string>): PackageUiComponent {
+function parseUiComponent(value: unknown, path: string, packageCollections: Set<string>): A2UiComponent {
   if (!isObject(value)) {
     throw new Error(`${path} must be an object`);
   }
@@ -326,7 +326,7 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
       assertCondition(typeof q.limit === 'number' && Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 20, `${path}.query.limit must be 1..20`);
     }
   }
-  return parseUiValue(raw) as PackageUiComponent;
+  return parseUiValue(raw) as A2UiComponent;
 }
 
 function parseUiScreen(value: unknown, path: string, packageCollections: Set<string>): ParsedUiScreen {
@@ -361,14 +361,14 @@ function parseUiScreens(value: unknown, path: string, packageCollections: Set<st
   return screens;
 }
 
-function parseUi(value: unknown, path: string, packageCollections: Set<string>): PackagePresentationUi | undefined {
+function parseUi(value: unknown, path: string, packageCollections: Set<string>): A2UiSurface | undefined {
   if (value === undefined) return undefined;
   if (!isObject(value)) {
     throw new Error(`${path} must be an object`);
   }
   const raw = value as Record<string, unknown>;
-  const parsed: PackagePresentationUi = {
-    schemaVersion: raw.schemaVersion === 'wonder.ui.v1' ? 'wonder.ui.v1' : undefined,
+  const parsed: A2UiSurface = {
+    schemaVersion: raw.schemaVersion === 'a2ui.v0_9' ? 'a2ui.v0_9' : undefined,
     openUrlAllowlist: raw.openUrlAllowlist === undefined ? undefined : parseOptionalStringArray(raw.openUrlAllowlist, `${path}.openUrlAllowlist`),
     components: undefined,
     screens: undefined,
@@ -385,7 +385,7 @@ function parseUi(value: unknown, path: string, packageCollections: Set<string>):
     }
     parsed.components = components.map((component, index) => {
       parseUiComponent(component, `${path}.components[${index}]`, packageCollections);
-      return parseUiValue(component) as PackageUiComponent;
+      return parseUiValue(component) as A2UiComponent;
     });
   }
 

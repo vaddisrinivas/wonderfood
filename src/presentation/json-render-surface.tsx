@@ -4,7 +4,7 @@ import { JSONUIProvider, Renderer, createStandardActionHandlers } from '@json-re
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 
-import type { PackagePresentationUi, PackageUiAction, PackageUiComponent } from '@/packages/shared/contracts/package';
+import type { A2UiSurface, A2UiAction, A2UiComponent } from '@/packages/shared/contracts/package';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
 import { JSON_RENDER_WIDGET_REGISTRY } from '@/src/presentation/json-render-widgets';
 import { useLifeOSTheme } from '@/src/theme';
@@ -13,7 +13,7 @@ type JsonRenderSurfaceProps = {
   eyebrow?: string;
   title?: string;
   subtitle?: string;
-  ui?: PackagePresentationUi;
+  ui?: A2UiSurface;
   screen?: string;
   records?: DomainRecordViewModel[];
   emptyTitle?: string;
@@ -27,7 +27,7 @@ type JsonRenderElement = {
   on?: Record<string, unknown>;
 };
 
-type SurfaceScreen = NonNullable<PackagePresentationUi['screens']>[string];
+type SurfaceScreen = NonNullable<A2UiSurface['screens']>[string];
 
 type Palette = {
   canvas: string;
@@ -74,7 +74,7 @@ function paletteFor(dark: boolean): Palette {
   return dark ? lightPalette : lightPalette;
 }
 
-function toneColor(tone: PackageUiComponent['tone'], palette: Palette) {
+function toneColor(tone: A2UiComponent['tone'], palette: Palette) {
   if (tone === 'moss') return palette.mossSoft;
   if (tone === 'amber') return palette.amberSoft;
   if (tone === 'plum') return palette.plumSoft;
@@ -86,7 +86,7 @@ function normalize(text: unknown) {
   return String(text ?? '').toLowerCase();
 }
 
-function matchesRecord(record: DomainRecordViewModel, query: NonNullable<PackageUiComponent['query']>) {
+function matchesRecord(record: DomainRecordViewModel, query: NonNullable<A2UiComponent['query']>) {
   if (query.collections?.length && !query.collections.includes(record.collection)) {
     return false;
   }
@@ -103,19 +103,19 @@ function matchesRecord(record: DomainRecordViewModel, query: NonNullable<Package
   }
 }
 
-function queryRecords(records: DomainRecordViewModel[], query?: PackageUiComponent['query']) {
+function queryRecords(records: DomainRecordViewModel[], query?: A2UiComponent['query']) {
   if (!query) {
     return records.slice(0, 4);
   }
   return records.filter((record) => matchesRecord(record, query)).slice(0, query.limit ?? 4);
 }
 
-function actionRoute(action?: PackageUiAction) {
+function actionRoute(action?: A2UiAction) {
   const route = action?.payload?.route;
   return typeof route === 'string' && route.startsWith('/') ? route : null;
 }
 
-function actionBinding(action?: PackageUiAction, fallback = '/chat') {
+function actionBinding(action?: A2UiAction, fallback = '/chat') {
   return {
     action: 'navigate',
     params: {
@@ -128,14 +128,14 @@ function rowRoute(record: DomainRecordViewModel) {
   return `/record/${encodeURIComponent(record.id)}`;
 }
 
-function fallbackFor(component: PackageUiComponent) {
+function fallbackFor(component: A2UiComponent) {
   if (component.query?.collections?.includes('shopping_item')) return 'No shopping blockers.';
   if (component.query?.collections?.includes('inventory')) return 'No urgent pantry items.';
   if (component.query?.collections?.includes('meal_plan')) return 'Ask Wonder to build tonight.';
   return 'Nothing here yet.';
 }
 
-function selectScreen(ui?: PackagePresentationUi, screen?: string): SurfaceScreen | null {
+function selectScreen(ui?: A2UiSurface, screen?: string): SurfaceScreen | null {
   if (!ui?.screens) {
     return ui?.components ? { components: ui.components } : null;
   }
@@ -161,7 +161,7 @@ function recordIcon(record: DomainRecordViewModel) {
   return '✨';
 }
 
-function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: PackageUiAction | undefined, fallback: string) {
+function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: A2UiAction | undefined, fallback: string) {
   if (!action?.label) {
     return null;
   }
@@ -170,7 +170,7 @@ function addActionButton(add: ReturnType<typeof createBuilder>['add'], action: P
   });
 }
 
-function addTextBlock(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, palette: Palette) {
+function addTextBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, palette: Palette) {
   const children = [
     add('Heading', { text: component.title ?? 'Section', level: 'h3', color: palette.ink }),
   ];
@@ -189,7 +189,7 @@ function addTextBlock(add: ReturnType<typeof createBuilder>['add'], component: P
   }, children);
 }
 
-function addActionBlock(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, palette: Palette) {
+function addActionBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, palette: Palette) {
   return add('Card', {
     title: component.title ?? component.action?.label ?? 'Open',
     subtitle: component.subtitle ?? null,
@@ -204,7 +204,7 @@ function addActionBlock(add: ReturnType<typeof createBuilder>['add'], component:
   ]);
 }
 
-function addMetricBlock(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, records: DomainRecordViewModel[], palette: Palette) {
+function addMetricBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette) {
   const rows = queryRecords(records, component.query);
   return add('Card', {
     title: component.title ?? 'Metric',
@@ -218,7 +218,7 @@ function addMetricBlock(add: ReturnType<typeof createBuilder>['add'], component:
   ]);
 }
 
-function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, records: DomainRecordViewModel[], palette: Palette) {
+function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette) {
   const rows = queryRecords(records, component.query);
   const children: string[] = [];
   const button = addActionButton(add, component.action, '/chat');
@@ -248,7 +248,7 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
   }, children);
 }
 
-function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: PackageUiComponent, records: DomainRecordViewModel[], palette: Palette) {
+function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, records: DomainRecordViewModel[], palette: Palette) {
   if (component.kind === 'widget') {
     const typeByWidget: Record<string, string> = {
       assistantChat: 'AssistantChatWidget',
@@ -271,7 +271,7 @@ function addSurfaceComponent(add: ReturnType<typeof createBuilder>['add'], compo
   return addTextBlock(add, component, palette);
 }
 
-function buildSpec(props: JsonRenderSurfaceProps, palette: Palette): Spec {
+function composeJsonRenderSpec(props: JsonRenderSurfaceProps, palette: Palette): Spec {
   const screen = selectScreen(props.ui, props.screen);
   const components = screen?.components ?? [];
   const { add, elements } = createBuilder();
@@ -315,7 +315,7 @@ export function JsonRenderSurface(props: JsonRenderSurfaceProps) {
   const router = useRouter();
   const theme = useLifeOSTheme();
   const palette = paletteFor(theme.dark);
-  const spec = useMemo(() => assertJsonRenderSpec(buildSpec(props, palette)), [palette, props]);
+  const spec = useMemo(() => assertJsonRenderSpec(composeJsonRenderSpec(props, palette)), [palette, props]);
   const handlers = useMemo(() => createStandardActionHandlers({
     navigate: (screen) => router.push(screen as never),
     goBack: () => router.back(),

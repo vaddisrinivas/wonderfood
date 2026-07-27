@@ -222,8 +222,8 @@ export function validateAppPackage(input: unknown): PackageValidation {
       if (!object(ui)) {
         errors.push('presentation ui must be an object');
       } else {
-        if (ui.schemaVersion !== undefined && ui.schemaVersion !== 'wonder.ui.v1') {
-          errors.push('presentation ui.schemaVersion must be wonder.ui.v1');
+        if (ui.schemaVersion !== undefined && ui.schemaVersion !== 'a2ui.v0_9') {
+          errors.push('presentation ui.schemaVersion must be a2ui.v0_9');
         }
         if (ui.openUrlAllowlist !== undefined && !Array.isArray(ui.openUrlAllowlist)) {
           errors.push('presentation ui.openUrlAllowlist must be an array');

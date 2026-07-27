@@ -1,7 +1,7 @@
-import type { PackagePresentationUi } from '@/packages/shared/contracts/package';
+import type { A2UiSurface } from '@/packages/shared/contracts/package';
 
-export const HOME_SHELL_UI: PackagePresentationUi = {
-  schemaVersion: 'wonder.ui.v1',
+export const HOME_SHELL_UI: A2UiSurface = {
+  schemaVersion: 'a2ui.v0_9',
   defaultScreen: 'home',
   screens: {
     home: {
@@ -64,8 +64,8 @@ export const HOME_SHELL_UI: PackagePresentationUi = {
   },
 };
 
-export const SETTINGS_SHELL_UI: PackagePresentationUi = {
-  schemaVersion: 'wonder.ui.v1',
+export const SETTINGS_SHELL_UI: A2UiSurface = {
+  schemaVersion: 'a2ui.v0_9',
   defaultScreen: 'settings',
   screens: {
     settings: {
@@ -124,8 +124,8 @@ export const SETTINGS_SHELL_UI: PackagePresentationUi = {
   },
 };
 
-export const ROUTE_SHELL_UI: PackagePresentationUi = {
-  schemaVersion: 'wonder.ui.v1',
+export const ROUTE_SHELL_UI: A2UiSurface = {
+  schemaVersion: 'a2ui.v0_9',
   defaultScreen: 'home',
   screens: {
     ...HOME_SHELL_UI.screens,

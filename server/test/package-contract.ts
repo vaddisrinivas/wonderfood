@@ -36,7 +36,7 @@ assert.equal(validateAppPackage({
     surfaces: [{ id: 'decisions.inbox', label: 'Inbox', collections: ['decisions'] }],
     visualIdentity: { domain: { icon: 'inbox', accent: 'blue' } },
     ui: {
-      schemaVersion: 'wonder.ui.v1',
+      schemaVersion: 'a2ui.v0_9',
       openUrlAllowlist: ['https://wonder.example', 'http://localhost:3000'],
       components: [
         {
@@ -78,7 +78,7 @@ assert.equal(validateAppPackage({
   presentation: {
     label: 'Bad',
     surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
-    ui: { schemaVersion: 'wonder.ui.v1', components: [{ kind: 'action', id: 'bad-open', title: 'Bad', action: { kind: 'open_url' } }] },
+    ui: { schemaVersion: 'a2ui.v0_9', components: [{ kind: 'action', id: 'bad-open', title: 'Bad', action: { kind: 'open_url' } }] },
   },
 }).valid, false);
 assert.equal(validateAppPackage({
@@ -86,7 +86,7 @@ assert.equal(validateAppPackage({
   presentation: {
     label: 'Bad',
     surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
-    ui: { schemaVersion: 'wonder.ui.v1', components: [{ kind: 'action', id: 'bad-propose', title: 'Bad', action: { kind: 'propose' } }] },
+    ui: { schemaVersion: 'a2ui.v0_9', components: [{ kind: 'action', id: 'bad-propose', title: 'Bad', action: { kind: 'propose' } }] },
   },
 }).valid, false);
 assert.equal(validateAppPackage({
@@ -94,7 +94,7 @@ assert.equal(validateAppPackage({
   presentation: {
     label: 'Bad',
     surfaces: [{ id: 'inbox', label: 'Inbox', collections: ['decisions'] }],
-    ui: { schemaVersion: 'wonder.ui.v1', openUrlAllowlist: [''], components: [] },
+    ui: { schemaVersion: 'a2ui.v0_9', openUrlAllowlist: [''], components: [] },
   },
 }).valid, false);
 assert.equal(validateAppPackage({

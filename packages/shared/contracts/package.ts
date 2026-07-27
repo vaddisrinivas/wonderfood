@@ -32,7 +32,7 @@ export type PackageSurfaceSpec = {
   collections: string[];
 };
 
-export type PackageUiAction = {
+export type A2UiAction = {
   kind: 'open_url' | 'propose';
   label?: string;
   url?: string;
@@ -41,7 +41,7 @@ export type PackageUiAction = {
   payload?: Record<string, unknown>;
 };
 
-export type PackageUiComponent = {
+export type A2UiComponent = {
   kind: 'recordList' | 'metric' | 'action' | 'text' | 'widget';
   id?: string;
   title?: string;
@@ -55,14 +55,14 @@ export type PackageUiComponent = {
     match?: string;
     limit?: number;
   };
-  action?: PackageUiAction;
+  action?: A2UiAction;
 };
 
-export type PackagePresentationUi = {
-  schemaVersion?: 'wonder.ui.v1';
+export type A2UiSurface = {
+  schemaVersion?: 'a2ui.v0_9';
   openUrlAllowlist?: string[];
-  components?: PackageUiComponent[];
-  screens?: Record<string, { title?: string; subtitle?: string; components?: PackageUiComponent[] }>;
+  components?: A2UiComponent[];
+  screens?: Record<string, { title?: string; subtitle?: string; components?: A2UiComponent[] }>;
   defaultScreen?: string;
 };
 
@@ -72,7 +72,7 @@ export type PackagePresentationSpec = {
   surfaces: PackageSurfaceSpec[];
   visualIdentity?: Record<string, unknown>;
   render?: Record<string, unknown>;
-  ui?: PackagePresentationUi;
+  ui?: A2UiSurface;
   richDetailSchema?: string;
   providerTemplateFields?: Record<string, unknown>;
   sourceSchemaVersion?: string;

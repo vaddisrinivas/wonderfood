@@ -476,7 +476,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": "wonder.ui.v1"
+          "const": "a2ui.v0_9"
         },
         "openUrlAllowlist": {
           "type": "array",
