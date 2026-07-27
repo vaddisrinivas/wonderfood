@@ -2,6 +2,22 @@ import type { AppPackage, A2UiComponent, PackagePresentationSpec } from '@/packa
 import type { AppPackageChangeRequest } from '@/src/db/app-package-registry';
 
 type PackageChangeName = ReturnType<typeof derivePackageChangeName>;
+type PackageChangeIntent =
+  | 'table'
+  | 'theme'
+  | 'workflow'
+  | 'form'
+  | 'board'
+  | 'feed'
+  | 'poll'
+  | 'calendar'
+  | 'timeline'
+  | 'gallery'
+  | 'media'
+  | 'link'
+  | 'map'
+  | 'chart'
+  | 'screen';
 
 export function buildSafePackageChangeRequest(active: AppPackage, prompt: string): AppPackageChangeRequest {
   const intent = classifyPackageChangeIntent(prompt);
@@ -11,6 +27,7 @@ export function buildSafePackageChangeRequest(active: AppPackage, prompt: string
 
   if (intent === 'theme') return buildThemeChange(active, presentation, name);
   if (intent === 'workflow') return buildWorkflowChange(active, presentation, name);
+  if (intent !== 'table') return buildWidgetScreenChange(active, presentation, name, intent);
   return buildTableScreenChange(active, presentation, name);
 }
 
@@ -62,6 +79,38 @@ function buildTableScreenChange(
           query: { collections: [name.collectionId], limit: 12 },
         },
       ]),
+    ],
+  };
+}
+
+function buildWidgetScreenChange(
+  active: AppPackage,
+  presentation: PackagePresentationSpec,
+  name: PackageChangeName,
+  intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>,
+): AppPackageChangeRequest {
+  const collectionIntent = intent === 'screen' ? 'table' : intent;
+  if (active.collections[name.collectionId]) throw new Error(`Collection already exists: ${name.collectionId}`);
+  const widget = widgetForIntent(intent);
+  const viewMode = viewModeForIntent(intent);
+  const fields = fieldsForIntent(intent);
+  return {
+    basePackageKey: `${active.id}@${active.version}`,
+    requestedBy: 'mobile-package-editor',
+    patch: [
+      versionPatch(active.version),
+      {
+        op: 'add',
+        path: `/collections/${name.collectionId}`,
+        value: {
+          id: name.collectionId,
+          fields,
+        },
+      },
+      { op: 'add', path: `/queries/${name.collectionId}`, value: { from: name.collectionId, orderBy: [{ field: 'updated_at', direction: 'desc' }], limit: 24 } },
+      { op: 'add', path: `/views/${name.collectionId}`, value: { id: name.collectionId, query: name.collectionId, mode: viewMode, fields: Object.keys(fields).slice(0, 6) } },
+      { op: 'add', path: '/presentation/surfaces/-', value: { id: name.surfaceId, label: name.label, collections: [name.collectionId], views: [name.collectionId] } },
+      ...buildUiScreenPatches(presentation, name, componentsForIntent(name, intent, collectionIntent, widget)),
     ],
   };
 }
@@ -159,16 +208,149 @@ function buildUiScreenPatches(
   return [{ op: 'add', path: `/presentation/ui/screens/${name.screenId}`, value: screen }];
 }
 
-function classifyPackageChangeIntent(prompt: string): 'table' | 'theme' | 'workflow' {
+function classifyPackageChangeIntent(prompt: string): PackageChangeIntent {
   const value = prompt.toLowerCase();
   if (/\b(theme|color|style|visual|design|cute|density|card|cards)\b/.test(value)) return 'theme';
   if (/\b(rule|workflow|when|expires|expire|automate|suggest|remind)\b/.test(value)) return 'workflow';
+  if (/\b(form|input|survey|submit|fields?)\b/.test(value)) return 'form';
+  if (/\b(board|kanban|pipeline|status board|columns?)\b/.test(value)) return 'board';
+  if (/\b(feed|posts?|updates?|social|comments?)\b/.test(value)) return 'feed';
+  if (/\b(poll|vote|voting|ballot|choice)\b/.test(value)) return 'poll';
+  if (/\b(calendar|schedule|booking|appointment|events?)\b/.test(value)) return 'calendar';
+  if (/\b(timeline|history|milestone|log|journey)\b/.test(value)) return 'timeline';
+  if (/\b(gallery|photos?|images?|album|grid)\b/.test(value)) return 'gallery';
+  if (/\b(media|video|audio|youtube|song|clip)\b/.test(value)) return 'media';
+  if (/\b(link|url|preview|bookmark|website|webpage)\b/.test(value)) return 'link';
+  if (/\b(map|location|place|places|route|store finder|geo)\b/.test(value)) return 'map';
+  if (/\b(chart|graph|analytics|trend|dashboard metric|report)\b/.test(value)) return 'chart';
+  if (/\b(screen|page|surface|dashboard|home)\b/.test(value)) return 'screen';
   return 'table';
+}
+
+function widgetForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): NonNullable<A2UiComponent['widget']> {
+  if (intent === 'form') return 'formCard';
+  if (intent === 'board') return 'kanbanBoard';
+  if (intent === 'feed') return 'feedList';
+  if (intent === 'poll') return 'pollCard';
+  if (intent === 'calendar') return 'calendarBlock';
+  if (intent === 'timeline') return 'timelineBlock';
+  if (intent === 'gallery') return 'galleryGrid';
+  if (intent === 'media') return 'mediaBlock';
+  if (intent === 'link') return 'linkPreview';
+  if (intent === 'map') return 'mapBlock';
+  if (intent === 'chart') return 'chartBlock';
+  return 'dataTable';
+}
+
+function viewModeForIntent(intent: PackageChangeIntent): 'list' | 'board' | 'table' | 'calendar' | 'timeline' | 'chart' {
+  if (intent === 'board') return 'board';
+  if (intent === 'calendar') return 'calendar';
+  if (intent === 'timeline') return 'timeline';
+  if (intent === 'screen' || intent === 'form') return 'table';
+  if (intent === 'chart') return 'chart';
+  return 'list';
+}
+
+function fieldsForIntent(intent: PackageChangeIntent) {
+  const base = {
+    id: { type: 'text' as const, required: true, indexed: true },
+    title: { type: 'text' as const, required: true, indexed: true },
+    status: { type: 'text' as const, indexed: true },
+    body: { type: 'text' as const },
+    updated_at: { type: 'timestamp' as const, indexed: true },
+    properties: { type: 'json' as const },
+  };
+  if (intent === 'poll') return { ...base, options: { type: 'json' as const }, votes: { type: 'json' as const } };
+  if (intent === 'calendar') return { ...base, starts_at: { type: 'timestamp' as const, indexed: true }, ends_at: { type: 'timestamp' as const } };
+  if (intent === 'timeline') return { ...base, happened_at: { type: 'timestamp' as const, indexed: true } };
+  if (intent === 'gallery' || intent === 'media') return { ...base, media: { type: 'json' as const }, url: { type: 'text' as const } };
+  if (intent === 'link') return { ...base, url: { type: 'text' as const, indexed: true }, preview: { type: 'json' as const } };
+  if (intent === 'map') return { ...base, location: { type: 'json' as const }, address: { type: 'text' as const } };
+  if (intent === 'chart') return { ...base, value: { type: 'number' as const, indexed: true }, series: { type: 'json' as const } };
+  if (intent === 'form') return { ...base, answers: { type: 'json' as const } };
+  return base;
+}
+
+function componentsForIntent(
+  name: PackageChangeName,
+  intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>,
+  collectionIntent: PackageChangeIntent,
+  widget: NonNullable<A2UiComponent['widget']>,
+): A2UiComponent[] {
+  const title = `${name.label} ${intent === 'screen' ? 'screen' : intent}`;
+  const collectionQuery = { collections: [name.collectionId], limit: 12 };
+  const widgetProps = propsForIntent(name, intent);
+  return [
+    {
+      kind: 'widget',
+      widget,
+      id: `${name.screenId}_${intent}`,
+      title: titleCase(title),
+      subtitle: subtitleForIntent(intent),
+      props: widgetProps,
+      tone: toneForIntent(intent),
+    },
+    {
+      kind: 'recordList',
+      id: `${name.collectionId}_records`,
+      title: `${name.label} records`,
+      subtitle: `Stored in ${name.collectionId}; view mode ${viewModeForIntent(collectionIntent)}.`,
+      query: collectionQuery,
+    },
+    {
+      kind: 'widget',
+      widget: 'dataTable',
+      id: `${name.collectionId}_table`,
+      title: `${name.label} table`,
+      subtitle: 'The same data stays inspectable as structured rows.',
+      props: { columns: Object.keys(fieldsForIntent(collectionIntent)).slice(0, 4).map((label) => ({ label })) },
+      tone: 'blue',
+    },
+  ];
+}
+
+function propsForIntent(name: PackageChangeName, intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): Record<string, unknown> {
+  if (intent === 'form') return { fields: [{ label: 'Title', subtitle: 'Short text' }, { label: 'Status', subtitle: 'Choice' }, { label: 'Notes', subtitle: 'Long text' }] };
+  if (intent === 'board') return { columns: [{ title: 'Ideas', items: [{ title: `Plan ${name.label}` }] }, { title: 'Doing', items: [] }, { title: 'Done', items: [] }] };
+  if (intent === 'poll') return { options: [{ label: 'Yes' }, { label: 'No' }, { label: 'Maybe' }] };
+  if (intent === 'calendar') return { events: [{ title: name.label, subtitle: 'First scheduled item', when: 'Soon' }] };
+  if (intent === 'timeline') return { items: [{ title: 'Created', subtitle: 'Added by package diff' }, { title: 'Next', subtitle: 'Add real events' }] };
+  if (intent === 'gallery') return { items: [{ title: 'Photo', emoji: '◼︎' }, { title: 'Clip', emoji: '▶︎' }, { title: 'Doc', emoji: '◇' }] };
+  if (intent === 'media') return { body: 'Drop video, audio, image, or link records into this package collection.' };
+  if (intent === 'link') return { url: 'https://example.com', subtitle: 'Safe URL preview surface.' };
+  if (intent === 'map') return { body: 'Render places, stores, routes, homes, or field work from package data.' };
+  if (intent === 'chart') return { points: [{ label: 'A', value: 4 }, { label: 'B', value: 8 }, { label: 'C', value: 5 }] };
+  if (intent === 'feed') return { items: [{ title: `${name.label} update`, subtitle: 'Feed item from package config' }] };
+  return {};
+}
+
+function subtitleForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>) {
+  if (intent === 'form') return 'Collect structured data without hand-built screens.';
+  if (intent === 'board') return 'Kanban-quality grouped records from config.';
+  if (intent === 'feed') return 'Posts, updates, links, comments, and activity.';
+  if (intent === 'poll') return 'Voting and choice UI as a safe package primitive.';
+  if (intent === 'calendar') return 'Schedules and events as package data.';
+  if (intent === 'timeline') return 'History, provenance, and milestones.';
+  if (intent === 'gallery') return 'Visual collections for images and assets.';
+  if (intent === 'media') return 'Video, audio, image, and link surfaces.';
+  if (intent === 'link') return 'Bookmarks, YouTube, recipes, docs, and source previews.';
+  if (intent === 'map') return 'Places, stores, routes, homes, and field work.';
+  if (intent === 'chart') return 'Numbers, trends, budgets, signals, and reports.';
+  return 'A generated JSON-render screen.';
+}
+
+function toneForIntent(intent: Exclude<PackageChangeIntent, 'table' | 'theme' | 'workflow'>): A2UiComponent['tone'] {
+  if (intent === 'board' || intent === 'calendar') return 'blue';
+  if (intent === 'poll' || intent === 'timeline') return 'amber';
+  if (intent === 'media' || intent === 'gallery') return 'plum';
+  if (intent === 'link' || intent === 'map' || intent === 'chart') return 'blue';
+  return 'moss';
 }
 
 function derivePackageChangeName(prompt: string) {
   const clean = prompt
     .replace(/\b(add|create|make|new|table|screen|surface|collection|with|for|a|an|the|theme|workflow|rule|when|suggest|automate|remind)\b/gi, ' ')
+    .replace(/\b(form|input|survey|board|kanban|feed|post|posts|poll|vote|calendar|schedule|timeline|history|gallery|photo|photos|media|video|audio|youtube|link|url|preview|bookmark|map|location|chart|graph|analytics|dashboard|page)\b/gi, ' ')
     .replace(/[^a-z0-9 ]/gi, ' ')
     .trim()
     .split(/\s+/)

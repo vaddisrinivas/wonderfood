@@ -211,7 +211,7 @@ describe('app package SQLite registry', () => {
     })).rejects.toThrow(/contractLock.checksum mismatch/);
   });
 
-  it('builds safe package-edit templates for table, theme, and workflow prompts', async () => {
+  it('builds safe package-edit templates for table, theme, workflow, and rich widget prompts', async () => {
     setActivePackageOverride(null);
     const db = new MemoryDb() as any;
     const active = await bootstrapAppPackageRegistry(db);
@@ -228,6 +228,46 @@ describe('app package SQLite registry', () => {
     const workflow = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'when pantry expires suggest dinner'));
     expect(workflow.status).toBe('valid');
     expect(workflow.package?.rules.some((rule) => rule.id === 'ai_pantry_expires_dinner_workflow_rule')).toBe(true);
+
+    const form = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add vendor intake form'));
+    expect(form.status).toBe('valid');
+    expect(form.package?.collections.ai_vendor_intake.fields.answers.type).toBe('json');
+    expect(form.package?.presentation?.ui?.screens?.ai_vendor_intake.components?.[0].widget).toBe('formCard');
+
+    const board = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'create catering kanban board'));
+    expect(board.status).toBe('valid');
+    expect(board.package?.views.ai_catering.mode).toBe('board');
+    expect(board.package?.presentation?.ui?.screens?.ai_catering.components?.[0].widget).toBe('kanbanBoard');
+
+    const poll = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add family dinner poll'));
+    expect(poll.status).toBe('valid');
+    expect(poll.package?.collections.ai_family_dinner.fields.options.type).toBe('json');
+    expect(poll.package?.presentation?.ui?.screens?.ai_family_dinner.components?.[0].widget).toBe('pollCard');
+
+    const calendar = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'create meal prep calendar'));
+    expect(calendar.status).toBe('valid');
+    expect(calendar.package?.views.ai_meal_prep.mode).toBe('calendar');
+    expect(calendar.package?.presentation?.ui?.screens?.ai_meal_prep.components?.[0].widget).toBe('calendarBlock');
+
+    const media = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add youtube recipe video page'));
+    expect(media.status).toBe('valid');
+    expect(media.package?.collections.ai_recipe.fields.media.type).toBe('json');
+    expect(media.package?.presentation?.ui?.screens?.ai_recipe.components?.[0].widget).toBe('mediaBlock');
+
+    const link = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add recipe bookmark link preview'));
+    expect(link.status).toBe('valid');
+    expect(link.package?.collections.ai_recipe.fields.preview.type).toBe('json');
+    expect(link.package?.presentation?.ui?.screens?.ai_recipe.components?.[0].widget).toBe('linkPreview');
+
+    const map = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'create grocery store map'));
+    expect(map.status).toBe('valid');
+    expect(map.package?.collections.ai_grocery_store.fields.location.type).toBe('json');
+    expect(map.package?.presentation?.ui?.screens?.ai_grocery_store.components?.[0].widget).toBe('mapBlock');
+
+    const chart = await previewAppPackageChange(db, buildSafePackageChangeRequest(active, 'add spending analytics chart'));
+    expect(chart.status).toBe('valid');
+    expect(chart.package?.views.ai_spending.mode).toBe('chart');
+    expect(chart.package?.presentation?.ui?.screens?.ai_spending.components?.[0].widget).toBe('chartBlock');
   });
 });
 
