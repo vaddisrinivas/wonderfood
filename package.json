@@ -68,6 +68,7 @@
     "check:no-spike-artifacts": "node scripts/quality/check-no-spike-artifacts.mjs",
     "check:widget-catalog": "node scripts/quality/check-widget-catalog.mjs",
     "check:native-capability-contract": "node scripts/quality/check-native-capability-contract.mjs",
+    "check:plugin-compatibility": "npx --yes vitest run tests/platform/plugin-compatibility.test.ts",
     "check:package-owned-routes": "node scripts/quality/check-package-owned-routes.mjs",
     "check:json-render-only-ui": "node scripts/quality/check-json-render-only-ui.mjs",
     "check:platform-day1": "node scripts/quality/run-platform-day1.mjs",

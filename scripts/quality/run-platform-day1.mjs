@@ -25,9 +25,9 @@ const steps = [
   },
   {
     label: 'server package validation fixtures',
-    command: './server/node_modules/.bin/tsx',
-    args: ['--tsconfig', 'tsconfig.json', 'server/test/package-validation.ts'],
-    requires: ['server/test/package-validation.ts', 'server/node_modules/.bin/tsx'],
+    command: tsxCommand(),
+    args: tsxArgs('server/test/package-validation.ts'),
+    requires: ['server/test/package-validation.ts'],
   },
   {
     label: 'package loader and runtime-context tests',
@@ -104,4 +104,19 @@ function run(command, args) {
   }
 
   return { ok: true };
+}
+
+function tsxCommand() {
+  const localServerTsx = path.join(root, 'server', 'node_modules', '.bin', 'tsx');
+  const localRootTsx = path.join(root, 'node_modules', '.bin', 'tsx');
+  if (fs.existsSync(localServerTsx)) return localServerTsx;
+  if (fs.existsSync(localRootTsx)) return localRootTsx;
+  return 'npx';
+}
+
+function tsxArgs(scriptPath) {
+  if (tsxCommand() === 'npx') {
+    return ['--yes', 'tsx', '--tsconfig', 'tsconfig.json', scriptPath];
+  }
+  return ['--tsconfig', 'tsconfig.json', scriptPath];
 }
