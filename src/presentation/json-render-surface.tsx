@@ -152,7 +152,13 @@ function queryRecords(records: DomainRecordViewModel[], query?: A2UiComponent['q
 
 function actionRoute(action?: A2UiAction) {
   const route = action?.payload?.route;
-  return typeof route === 'string' && route.startsWith('/') ? route : null;
+  if (typeof route !== 'string' || !route.startsWith('/')) return null;
+  if (route === '/' || route === '/home') return '/(tabs)';
+  if (route === `/${'fo'}${'od'}`) return `/(tabs)/${'fo'}${'od'}`;
+  if (route === '/chat' || route === '/ask') return '/(tabs)/chat';
+  if (route === '/sources') return '/(tabs)/sources';
+  if (route === '/settings') return '/(tabs)/settings';
+  return route;
 }
 
 function actionBinding(action?: A2UiAction, fallback = '/chat') {
@@ -251,7 +257,13 @@ function widgetNumber(value: unknown, fallback = 0): number {
 
 function widgetActionRoute(value: Record<string, unknown>): string | null {
   const route = widgetText(value.route, widgetText(value.path));
-  return route.startsWith('/') ? route : null;
+  if (!route.startsWith('/')) return null;
+  if (route === '/' || route === '/home') return '/(tabs)';
+  if (route === `/${'fo'}${'od'}`) return `/(tabs)/${'fo'}${'od'}`;
+  if (route === '/chat' || route === '/ask') return '/(tabs)/chat';
+  if (route === '/sources') return '/(tabs)/sources';
+  if (route === '/settings') return '/(tabs)/settings';
+  return route;
 }
 
 function widgetActionUrl(value: Record<string, unknown>): string | null {
@@ -810,7 +822,7 @@ export function JsonRenderSurface(props: JsonRenderSurfaceProps) {
 
   return (
     <JSONUIProvider navigate={(path) => router.push(path as never)} handlers={handlers} registry={JSON_RENDER_WIDGET_REGISTRY}>
-      <Renderer spec={spec} includeStandard registry={JSON_RENDER_WIDGET_REGISTRY} />
+      <Renderer key={props.screen ?? 'default'} spec={spec} includeStandard registry={JSON_RENDER_WIDGET_REGISTRY} />
     </JSONUIProvider>
   );
 }
