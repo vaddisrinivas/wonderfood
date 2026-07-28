@@ -79,6 +79,7 @@ export default function RootLayout() {
         <Stack.Screen name="collection/[id]" />
         <Stack.Screen name="search" />
         <Stack.Screen name="capture" />
+        <Stack.Screen name="install" />
         <Stack.Screen name="system" />
         <Stack.Screen name="config" />
         <Stack.Screen name="health-diagnostics" />

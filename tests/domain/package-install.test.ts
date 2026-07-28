@@ -11,8 +11,14 @@ import {
 } from '@/packages/shared/contracts/package-install';
 import { sha256Canonical } from '@/packages/shared/contracts/canonical-json';
 import {
+  BUNDLED_DEMO_PACKAGE_URL,
+  BUNDLED_UTOPIA_REGISTRY_URL,
+  createPackageInstallFetcher,
   fetchPackageInstallCandidate,
   fetchRegistryManifest,
+  getBundledRegistryManifest,
+  packageInstallPreviewRows,
+  packageInstallTrustLabel,
   type PackageInstallFetcher,
 } from '@/src/domain/package-install';
 
@@ -68,6 +74,24 @@ describe('package install link and registry contracts', () => {
     );
   });
 
+  it('serves bundled registry and demo package without remote fetch', async () => {
+    const fetcher = createPackageInstallFetcher(async () => {
+      throw new Error('remote_fetch_forbidden');
+    });
+    const manifest = await fetchRegistryManifest(BUNDLED_UTOPIA_REGISTRY_URL, fetcher);
+    const bundled = getBundledRegistryManifest();
+
+    expect(manifest).toEqual(bundled);
+    expect(manifest.packages).toHaveLength(1);
+
+    const candidate = await fetchPackageInstallCandidate(BUNDLED_DEMO_PACKAGE_URL, fetcher, {
+      registryPackage: manifest.packages[0],
+    });
+    expect(candidate.preview.status).toBe('ready_for_review');
+    expect(candidate.preview.trust.status).toBe('checksum_verified');
+    expect(candidate.preview.approvalRequired).toBe(true);
+  });
+
   it('builds review-only preview with checksum trust metadata', async () => {
     const checksum = sha256Canonical(packageFixture);
     const fetcher = jsonFetcher({
@@ -98,6 +122,16 @@ describe('package install link and registry contracts', () => {
     expect(result.preview.dataCollections).toEqual(['task']);
     expect(result.preview.providersRequested).toEqual(['provider:notion']);
     expect(result.preview.widgetsRequired).toEqual(['metricTile']);
+    expect(packageInstallTrustLabel(result.preview)).toBe('Checksum verified');
+    expect(packageInstallPreviewRows(result.preview)).toEqual([
+      { label: 'Screens', values: ['home', 'review'] },
+      { label: 'Collections', values: ['task'] },
+      { label: 'Providers', values: ['provider:notion'] },
+      { label: 'Native permissions', values: [] },
+      { label: 'Widgets', values: ['metricTile'] },
+      { label: 'Plugins', values: ['plugin:metricTile'] },
+      { label: 'Fallbacks', values: [] },
+    ]);
   });
 
   it('blocks invalid package and checksum mismatch without activating anything', () => {
