@@ -1,8 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { DEFAULT_APP_INSTALLATION_ID, DEFAULT_WORKSPACE_ID } from '@/packages/shared/contracts/app-installation';
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 7;
+export const DATABASE_VERSION = 9;
 
 const TABLES = {
   meta: 'meta',
@@ -19,8 +20,11 @@ const TABLES = {
   config_sources: 'config_sources',
   config_snapshots: 'config_snapshots',
   config_conflicts: 'config_conflicts',
+  workspaces: 'workspaces',
+  app_installations: 'app_installations',
   app_packages: 'app_packages',
   app_package_state: 'app_package_state',
+  app_installation_package_state: 'app_installation_package_state',
   app_package_receipts: 'app_package_receipts',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
@@ -243,7 +247,7 @@ const MIGRATIONS: Migration[] = [
       `);
 
       await db.execAsync('PRAGMA foreign_keys = ON');
-      await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
+      await db.execAsync(`PRAGMA user_version = 1`);
       await db.runAsync(
         `INSERT OR REPLACE INTO ${TABLES.meta} (key, value) VALUES ($key, $value)`,
         { $key: 'lifecycle', $value: 'ready' }
@@ -454,6 +458,213 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`PRAGMA user_version = 6`);
     },
   },
+  {
+    version: 8,
+    up: async (db) => {
+      const now = new Date().toISOString();
+      try {
+        await db.execAsync(`ALTER TABLE ${TABLES.app_package_state} ADD COLUMN active_installation_id TEXT`);
+      } catch {
+        // Older local builds may already have this compatibility column.
+      }
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.workspaces} (
+          id TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.app_installations} (
+          installation_id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          package_key TEXT,
+          package_id TEXT,
+          version TEXT,
+          source_url TEXT,
+          checksum TEXT,
+          app_name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active','archived','disabled')),
+          launch_path TEXT NOT NULL,
+          approval_hash TEXT,
+          approved_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (workspace_id) REFERENCES ${TABLES.workspaces}(id) ON DELETE CASCADE
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.app_installations}_workspace_status_idx
+          ON ${TABLES.app_installations}(workspace_id, status, updated_at)
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.app_installation_package_state} (
+          installation_id TEXT PRIMARY KEY,
+          active_package_key TEXT,
+          previous_package_key TEXT,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (installation_id) REFERENCES ${TABLES.app_installations}(installation_id) ON DELETE CASCADE
+        )
+      `);
+      await db.runAsync(
+        `INSERT OR IGNORE INTO ${TABLES.workspaces}
+          (id, label, created_at, updated_at)
+          VALUES ($id, $label, $created_at, $updated_at)`,
+        {
+          $id: DEFAULT_WORKSPACE_ID,
+          $label: 'Default workspace',
+          $created_at: now,
+          $updated_at: now,
+        },
+      );
+      await db.runAsync(
+        `INSERT OR IGNORE INTO ${TABLES.app_installations}
+          (installation_id, workspace_id, app_name, status, launch_path, created_at, updated_at)
+          VALUES ($installation_id, $workspace_id, $app_name, 'active', $launch_path, $created_at, $updated_at)`,
+        {
+          $installation_id: DEFAULT_APP_INSTALLATION_ID,
+          $workspace_id: DEFAULT_WORKSPACE_ID,
+          $app_name: 'Default app',
+          $launch_path: `/apps/${DEFAULT_APP_INSTALLATION_ID}`,
+          $created_at: now,
+          $updated_at: now,
+        },
+      );
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.app_installation_package_state}
+          (installation_id, active_package_key, previous_package_key, updated_at)
+        SELECT '${DEFAULT_APP_INSTALLATION_ID}', active_package_key, previous_package_key, updated_at
+        FROM ${TABLES.app_package_state}
+        WHERE id = 'default'
+          AND (active_package_key IS NOT NULL OR previous_package_key IS NOT NULL)
+      `);
+      await db.execAsync(`PRAGMA user_version = 8`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_installation_package_state}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.app_installations}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.workspaces}`);
+      await db.execAsync(`PRAGMA user_version = 7`);
+    },
+  },
+  {
+    version: 9,
+    up: async (db) => {
+      const addColumn = async (table: string, columnSql: string) => {
+        try {
+          await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
+        } catch {
+          // Existing debug/dev databases may already have these compatibility columns.
+        }
+      };
+      await addColumn(TABLES.records, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.relations, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.operations, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.outbox, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.actions, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.undo_events, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.records}_domain_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.records}_updated_idx`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.records}_scoped (
+          app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}',
+          id TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          collection TEXT NOT NULL,
+          title TEXT NOT NULL,
+          properties TEXT NOT NULL,
+          source_provider TEXT NOT NULL CHECK(source_provider IN ('notion', 'google_sheets', 'sqlite', 'postgres', 'web', 'user')),
+          source_external_id TEXT NOT NULL,
+          source_url TEXT,
+          source_observed_at TEXT NOT NULL,
+          source_content_hash TEXT,
+          archived_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          revision INTEGER NOT NULL DEFAULT 1,
+          schema_version TEXT NOT NULL DEFAULT '1.0.0',
+          deleted INTEGER NOT NULL DEFAULT 0,
+          privacy TEXT NOT NULL DEFAULT 'personal' CHECK(privacy IN ('private','personal','shared')),
+          provenance_json TEXT,
+          PRIMARY KEY (app_installation_id, id)
+        )
+      `);
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.records}_scoped (
+          app_installation_id, id, domain, collection, title, properties, source_provider,
+          source_external_id, source_url, source_observed_at, source_content_hash, archived_at,
+          created_at, updated_at, revision, schema_version, deleted, privacy, provenance_json
+        )
+        SELECT app_installation_id, id, domain, collection, title, properties, source_provider,
+          source_external_id, source_url, source_observed_at, source_content_hash, archived_at,
+          created_at, updated_at, revision, schema_version, deleted, privacy, provenance_json
+        FROM ${TABLES.records}
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.records}`);
+      await db.execAsync(`ALTER TABLE ${TABLES.records}_scoped RENAME TO ${TABLES.records}`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.relations}_scoped (
+          app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}',
+          from_id TEXT NOT NULL,
+          collection TEXT NOT NULL,
+          name TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          target_domain TEXT NOT NULL,
+          target_collection TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (app_installation_id, from_id, name, target_id)
+        )
+      `);
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.relations}_scoped (
+          app_installation_id, from_id, collection, name, target_id, target_domain, target_collection, created_at
+        )
+        SELECT app_installation_id, from_id, collection, name, target_id, target_domain, target_collection, created_at
+        FROM ${TABLES.relations}
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.relations}`);
+      await db.execAsync(`ALTER TABLE ${TABLES.relations}_scoped RENAME TO ${TABLES.relations}`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.operations}_idem_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.operations}_record_idx`);
+      await db.execAsync(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ${TABLES.records}_installation_id_idx
+          ON ${TABLES.records}(app_installation_id, id)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.relations}_installation_from_idx
+          ON ${TABLES.relations}(app_installation_id, from_id)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.operations}_installation_record_idx
+          ON ${TABLES.operations}(app_installation_id, record_id, created_at)
+      `);
+      await db.execAsync(`
+        CREATE UNIQUE INDEX IF NOT EXISTS ${TABLES.operations}_installation_idem_idx
+          ON ${TABLES.operations}(app_installation_id, idempotency_key)
+          WHERE idempotency_key IS NOT NULL
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.actions}_installation_domain_idx
+          ON ${TABLES.actions}(app_installation_id, domain, created_at)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.outbox}_installation_status_idx
+          ON ${TABLES.outbox}(app_installation_id, status, updated_at)
+      `);
+      await db.execAsync(`PRAGMA user_version = 9`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.outbox}_installation_status_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.actions}_installation_domain_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.operations}_installation_idem_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.operations}_installation_record_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.relations}_installation_from_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.records}_installation_id_idx`);
+      await db.execAsync(`PRAGMA user_version = 8`);
+    },
+  },
 ];
 
 export async function getDatabaseVersion(db: SQLiteDatabase): Promise<number> {
@@ -476,7 +687,7 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   }
 
   for (const migration of MIGRATIONS) {
-    if (migration.version <= currentVersion) {
+    if (migration.version <= currentVersion || migration.version > DATABASE_VERSION) {
       continue;
     }
 

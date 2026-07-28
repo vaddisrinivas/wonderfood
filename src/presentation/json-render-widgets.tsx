@@ -624,6 +624,179 @@ function ProviderStatusWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
+function FoodHeroWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const stats = rows((props as Record<string, unknown>).stats);
+  const actions = rows(props.actions);
+  return (
+    <View style={styles.premiumHero}>
+      <Text style={styles.premiumEmoji}>{text((props as Record<string, unknown>).emoji, '🍲')}</Text>
+      <Text style={styles.premiumBadge}>{text(props.badge, 'Smart plan')}</Text>
+      <Text style={styles.premiumTitle}>{text(props.title, 'Tonight is almost solved')}</Text>
+      <Text style={styles.premiumSubtitle}>{text(props.subtitle, 'Use-first records, review, and next steps in one place.')}</Text>
+      {stats.length ? (
+        <View style={styles.premiumStats}>
+          {stats.slice(0, 3).map((stat) => (
+            <View key={label(stat)} style={styles.premiumStat}>
+              <Text style={styles.premiumStatValue}>{text(stat.value, label(stat))}</Text>
+              <Text style={styles.premiumStatLabel}>{text(stat.label, detail(stat))}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      <Text style={styles.premiumBody}>{text(props.body, 'The calmest next path is ready.')}</Text>
+      <View style={styles.premiumActions}>
+        {actions.slice(0, 3).map((action, index) => (
+          <Pressable key={label(action)} style={[styles.premiumAction, index === 0 ? styles.premiumActionPrimary : null]} onPress={() => openWidgetTarget(router, action)}>
+            <Text style={[styles.premiumActionText, index === 0 ? styles.premiumActionPrimaryText : null]}>{label(action)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function UseFirstCarouselWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <View style={styles.premiumSection}>
+      <View style={styles.premiumSectionHeader}>
+        <Text style={styles.premiumSectionTitle}>{text(props.title, 'Use first')}</Text>
+        <Text style={styles.premiumSectionCta}>{text(props.cta, 'Cook')}</Text>
+      </View>
+      {props.subtitle ? <Text style={styles.premiumSectionSubtitle}>{text(props.subtitle)}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.premiumRail}>
+        {(items.length ? items : [{ title: 'Baby spinach', subtitle: '2 days · wraps or eggs', emoji: '🥬', badge: '2 days' }]).slice(0, 8).map((item, index) => (
+          <Pressable key={label(item)} style={[styles.useFirstPremiumCard, index % 3 === 1 ? styles.useFirstPremiumBlue : index % 3 === 2 ? styles.useFirstPremiumYellow : null]} onPress={() => openWidgetTarget(router, item)}>
+            <Text style={styles.useFirstPremiumEmoji}>{text(item.emoji, '🥬')}</Text>
+            <Text style={styles.useFirstPremiumBadge}>{text(item.badge, text(item.status, 'use first'))}</Text>
+            <Text style={styles.useFirstPremiumTitle}>{label(item)}</Text>
+            <Text style={styles.useFirstPremiumDetail}>{detail(item, 'Ready to use.')}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function MealTimelineWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <View style={styles.premiumCard}>
+      <Text style={styles.premiumSectionTitle}>{text(props.title, 'Meal timeline')}</Text>
+      {props.subtitle ? <Text style={styles.premiumSectionSubtitle}>{text(props.subtitle)}</Text> : null}
+      {(items.length ? items : [{ title: 'Dinner', subtitle: 'Pick from available items', time: 'PM' }]).slice(0, 6).map((item) => (
+        <Pressable key={label(item)} style={styles.mealPremiumRow} onPress={() => openWidgetTarget(router, item)}>
+          <Text style={styles.mealPremiumTime}>{text(item.time, text(item.badge, 'Now'))}</Text>
+          <View style={styles.mealPremiumCopy}>
+            <Text style={styles.mealPremiumTitle}>{label(item)}</Text>
+            <Text style={styles.mealPremiumDetail}>{detail(item, 'Plan-first item.')}</Text>
+          </View>
+          <Text style={styles.mealPremiumChevron}>›</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function RecipeCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const chips = rows((props as Record<string, unknown>).chips);
+  return (
+    <Pressable style={styles.recipePremiumCard} onPress={() => openWidgetTarget(router, props)} disabled={!actionRoute(props) && !actionUrl(props)}>
+      <View style={styles.recipePremiumArt}><Text style={styles.recipePremiumEmoji}>{text((props as Record<string, unknown>).emoji, '🍛')}</Text></View>
+      <View style={styles.recipePremiumCopy}>
+        <Text style={styles.recipePremiumBadge}>{text(props.badge, 'Pantry match')}</Text>
+        <Text style={styles.recipePremiumTitle}>{text(props.title, 'Recipe')}</Text>
+        <Text style={styles.recipePremiumDetail}>{text(props.subtitle, text(props.body, 'Cook from what you already have.'))}</Text>
+        <View style={styles.recipePremiumChips}>
+          {(chips.length ? chips : [{ label: '25 min' }, { label: '82% match' }]).slice(0, 4).map((chip) => (
+            <Text key={label(chip)} style={styles.recipePremiumChip}>{label(chip)}</Text>
+          ))}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function ReceiptReviewCardWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  const actions = rows(props.actions);
+  return (
+    <View style={styles.receiptPremiumCard}>
+      <View style={styles.receiptPremiumHeader}>
+        <Text style={styles.receiptPremiumIcon}>🧾</Text>
+        <View style={styles.mealPremiumCopy}>
+          <Text style={styles.receiptPremiumTitle}>{text(props.title, 'Receipt draft')}</Text>
+          <Text style={styles.receiptPremiumDetail}>{text(props.subtitle, 'Source rows are matched and ready for review.')}</Text>
+        </View>
+        <Text style={styles.receiptPremiumBadge}>{text(props.badge, 'review')}</Text>
+      </View>
+      {(items.length ? items : [{ title: 'Salmon', subtitle: 'freezer · dinner', status: '+1' }]).slice(0, 5).map((item) => (
+        <View key={label(item)} style={styles.receiptPremiumLine}>
+          <Text style={styles.receiptPremiumLineTitle}>{label(item)}</Text>
+          <Text style={styles.receiptPremiumLineDetail}>{detail(item)}</Text>
+          <Text style={styles.receiptPremiumLineStatus}>{text(item.status, 'new')}</Text>
+        </View>
+      ))}
+      <View style={styles.premiumActions}>
+        {(actions.length ? actions : [{ title: 'Accept', route: '/capture' }, { title: 'Edit', route: '/capture' }, { title: 'Skip', route: '/capture' }]).slice(0, 3).map((action, index) => (
+          <Pressable key={label(action)} style={[styles.premiumAction, index === 0 ? styles.premiumActionPrimary : null]} onPress={() => openWidgetTarget(router, action)}>
+            <Text style={[styles.premiumActionText, index === 0 ? styles.premiumActionPrimaryText : null]}>{label(action)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function PantryShelfWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const items = rows(props.items);
+  return (
+    <View style={styles.premiumCard}>
+      <Text style={styles.premiumSectionTitle}>{text(props.title, 'Kitchen map')}</Text>
+      {props.subtitle ? <Text style={styles.premiumSectionSubtitle}>{text(props.subtitle)}</Text> : null}
+      <View style={styles.shelfPremiumGrid}>
+        {(items.length ? items : [{ title: 'Fridge', subtitle: '18 items', emoji: '❄️' }]).slice(0, 6).map((item) => (
+          <Pressable key={label(item)} style={styles.shelfPremiumTile} onPress={() => openWidgetTarget(router, item)}>
+            <Text style={styles.shelfPremiumEmoji}>{text(item.emoji, '🥫')}</Text>
+            <Text style={styles.shelfPremiumTitle}>{label(item)}</Text>
+            <Text style={styles.shelfPremiumDetail}>{detail(item)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AskFoodBarWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const suggestions = list(props.suggestions, ['What should we do next?', 'Use items before they expire', 'Turn source into clean updates']);
+  return (
+    <View style={styles.askPremiumCard}>
+      <Text style={styles.askPremiumTitle}>{text(props.title, 'Ask')}</Text>
+      <Text style={styles.askPremiumSubtitle}>{text(props.subtitle, 'Questions, sources, updates, decisions.')}</Text>
+      <View style={styles.suggestions}>
+        {suggestions.slice(0, 4).map((suggestion) => <Text key={suggestion} style={styles.askPremiumChip}>{suggestion}</Text>)}
+      </View>
+      <View style={styles.askPremiumInput}>
+        <Text style={styles.askPremiumPlaceholder}>{text(props.placeholder, 'Ask what to do, update, use, or change…')}</Text>
+        <Text style={styles.askPremiumSend}>Ask</Text>
+      </View>
+    </View>
+  );
+}
+
 export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   AssistantChatWidget,
   HealthConnectWidget,
@@ -634,6 +807,13 @@ export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   ChecklistCardWidget,
   PermissionCardWidget,
   ProviderStatusWidget,
+  FoodHeroWidget,
+  UseFirstCarouselWidget,
+  MealTimelineWidget,
+  RecipeCardWidget,
+  ReceiptReviewCardWidget,
+  PantryShelfWidget,
+  AskFoodBarWidget,
 };
 
 const styles = StyleSheet.create({
@@ -729,6 +909,72 @@ const styles = StyleSheet.create({
   providerActionTitle: { color: '#3F2D42', fontSize: 12, fontWeight: '900' },
   providerActionDetail: { color: '#6D6257', fontSize: 11, lineHeight: 15 },
   providerCta: { alignSelf: 'flex-start', backgroundColor: '#2F7448', borderRadius: 999, color: '#FFFFFF', fontSize: 13, fontWeight: '900', paddingHorizontal: 14, paddingVertical: 9 },
+  premiumHero: { backgroundColor: '#E4F1E8', borderRadius: 32, padding: 22, gap: 14, overflow: 'hidden', shadowColor: '#2F7448', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  premiumEmoji: { position: 'absolute', right: 20, top: 18, width: 74, height: 74, borderRadius: 26, backgroundColor: '#FFFCF5', textAlign: 'center', lineHeight: 74, fontSize: 38, overflow: 'hidden' },
+  premiumBadge: { alignSelf: 'flex-start', backgroundColor: '#FFF1B8', borderRadius: 999, color: '#9A4B2E', fontSize: 12, fontWeight: '900', paddingHorizontal: 10, paddingVertical: 5, overflow: 'hidden' },
+  premiumTitle: { color: '#142016', fontSize: 30, lineHeight: 34, fontWeight: '900', letterSpacing: -0.7, maxWidth: '76%' },
+  premiumSubtitle: { color: '#536557', fontSize: 15, lineHeight: 21, fontWeight: '700', maxWidth: '82%' },
+  premiumStats: { flexDirection: 'row', gap: 8 },
+  premiumStat: { flex: 1, backgroundColor: 'rgba(255,252,245,0.72)', borderRadius: 18, paddingHorizontal: 10, paddingVertical: 10, gap: 2 },
+  premiumStatValue: { color: '#142016', fontSize: 18, fontWeight: '900' },
+  premiumStatLabel: { color: '#6D6257', fontSize: 11, fontWeight: '800' },
+  premiumBody: { color: '#26372A', fontSize: 16, lineHeight: 23 },
+  premiumActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  premiumAction: { backgroundColor: 'rgba(36,28,22,0.08)', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
+  premiumActionPrimary: { backgroundColor: '#241C16' },
+  premiumActionText: { color: '#241C16', fontSize: 13, fontWeight: '900' },
+  premiumActionPrimaryText: { color: '#FFFFFF' },
+  premiumSection: { gap: 10 },
+  premiumSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  premiumSectionTitle: { color: '#182019', fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
+  premiumSectionCta: { color: '#2F7448', fontSize: 13, fontWeight: '900' },
+  premiumSectionSubtitle: { color: '#657066', fontSize: 14, lineHeight: 20 },
+  premiumRail: { gap: 12, paddingRight: 18 },
+  useFirstPremiumCard: { width: 174, minHeight: 190, borderRadius: 28, backgroundColor: '#F9E7D9', padding: 16, gap: 8, justifyContent: 'space-between' },
+  useFirstPremiumBlue: { backgroundColor: '#E3EFF3' },
+  useFirstPremiumYellow: { backgroundColor: '#FFF1B8' },
+  useFirstPremiumEmoji: { fontSize: 36 },
+  useFirstPremiumBadge: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,252,245,0.78)', borderRadius: 999, color: '#9A4B2E', fontSize: 11, fontWeight: '900', paddingHorizontal: 8, paddingVertical: 4, overflow: 'hidden' },
+  useFirstPremiumTitle: { color: '#241C16', fontSize: 18, fontWeight: '900', lineHeight: 22 },
+  useFirstPremiumDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  premiumCard: { backgroundColor: '#FFFCF5', borderRadius: 28, padding: 18, gap: 12, shadowColor: '#271D14', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  mealPremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, backgroundColor: '#F6F1E8', padding: 12 },
+  mealPremiumTime: { width: 58, minHeight: 48, borderRadius: 18, backgroundColor: '#E4F1E8', color: '#2F7448', textAlign: 'center', lineHeight: 48, fontSize: 11, fontWeight: '900', overflow: 'hidden' },
+  mealPremiumCopy: { flex: 1, gap: 3 },
+  mealPremiumTitle: { color: '#241C16', fontSize: 16, fontWeight: '900' },
+  mealPremiumDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  mealPremiumChevron: { color: '#B8AB9A', fontSize: 30, fontWeight: '300' },
+  recipePremiumCard: { flexDirection: 'row', gap: 14, borderRadius: 30, backgroundColor: '#241C16', padding: 16, shadowColor: '#241C16', shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 10 }, elevation: 4 },
+  recipePremiumArt: { width: 102, borderRadius: 24, backgroundColor: '#FFF1B8', alignItems: 'center', justifyContent: 'center' },
+  recipePremiumEmoji: { fontSize: 48 },
+  recipePremiumCopy: { flex: 1, gap: 8 },
+  recipePremiumBadge: { alignSelf: 'flex-start', color: '#F3B15E', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  recipePremiumTitle: { color: '#FFFFFF', fontSize: 22, lineHeight: 26, fontWeight: '900' },
+  recipePremiumDetail: { color: '#DCD2C3', fontSize: 13, lineHeight: 18 },
+  recipePremiumChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  recipePremiumChip: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 999, color: '#FFFFFF', fontSize: 11, fontWeight: '900', paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden' },
+  receiptPremiumCard: { backgroundColor: '#FFF5EA', borderRadius: 30, padding: 18, gap: 12, borderWidth: 1, borderColor: '#F2D6BE' },
+  receiptPremiumHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  receiptPremiumIcon: { width: 48, height: 48, borderRadius: 18, backgroundColor: '#FFFCF5', textAlign: 'center', lineHeight: 48, fontSize: 25, overflow: 'hidden' },
+  receiptPremiumTitle: { color: '#241C16', fontSize: 21, fontWeight: '900' },
+  receiptPremiumDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  receiptPremiumBadge: { color: '#9A4B2E', backgroundColor: '#FFF1B8', borderRadius: 999, fontSize: 11, fontWeight: '900', paddingHorizontal: 9, paddingVertical: 5, overflow: 'hidden' },
+  receiptPremiumLine: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFCF5', borderRadius: 16, padding: 11 },
+  receiptPremiumLineTitle: { flex: 0.8, color: '#241C16', fontSize: 14, fontWeight: '900' },
+  receiptPremiumLineDetail: { flex: 1.2, color: '#6D6257', fontSize: 12, lineHeight: 16 },
+  receiptPremiumLineStatus: { color: '#2F7448', fontSize: 11, fontWeight: '900' },
+  shelfPremiumGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  shelfPremiumTile: { width: '47%', minHeight: 118, borderRadius: 22, backgroundColor: '#F6F1E8', padding: 14, gap: 6 },
+  shelfPremiumEmoji: { fontSize: 28 },
+  shelfPremiumTitle: { color: '#241C16', fontSize: 16, fontWeight: '900' },
+  shelfPremiumDetail: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
+  askPremiumCard: { backgroundColor: '#FFFCF5', borderRadius: 28, padding: 18, gap: 12, borderWidth: 1, borderColor: '#E6DDCF' },
+  askPremiumTitle: { color: '#241C16', fontSize: 28, fontWeight: '900', letterSpacing: -0.4 },
+  askPremiumSubtitle: { color: '#6D6257', fontSize: 14, lineHeight: 20 },
+  askPremiumChip: { backgroundColor: '#E4F1E8', borderRadius: 999, color: '#2F7448', fontSize: 12, fontWeight: '900', paddingHorizontal: 11, paddingVertical: 8, overflow: 'hidden' },
+  askPremiumInput: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F6F1E8', borderRadius: 22, padding: 10 },
+  askPremiumPlaceholder: { flex: 1, color: '#8A8172', fontSize: 14 },
+  askPremiumSend: { backgroundColor: '#241C16', borderRadius: 16, color: '#FFFFFF', fontWeight: '900', paddingHorizontal: 16, paddingVertical: 11, overflow: 'hidden' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primaryButton: { backgroundColor: '#2F7448', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },

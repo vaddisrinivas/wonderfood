@@ -713,6 +713,13 @@ function addSurfaceComponent(
       checklistCard: 'ChecklistCardWidget',
       permissionCard: 'PermissionCardWidget',
       providerStatus: 'ProviderStatusWidget',
+      foodHero: 'FoodHeroWidget',
+      useFirstCarousel: 'UseFirstCarouselWidget',
+      mealTimeline: 'MealTimelineWidget',
+      recipeCard: 'RecipeCardWidget',
+      receiptReviewCard: 'ReceiptReviewCardWidget',
+      pantryShelf: 'PantryShelfWidget',
+      askFoodBar: 'AskFoodBarWidget',
     };
     const widgetType = component.widget ? typeByWidget[component.widget] : null;
     if (widgetType) {

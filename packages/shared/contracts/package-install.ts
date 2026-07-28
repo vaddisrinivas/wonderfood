@@ -8,6 +8,8 @@ import { sha256Canonical } from './canonical-json';
 
 export const UTOPIA_REGISTRY_SCHEMA_VERSION = 'utopia.registry.v1' as const;
 export const UTOPIA_INSTALL_PREVIEW_SCHEMA_VERSION = 'utopia.install-preview.v1' as const;
+export const UTOPIA_INSTALL_APPROVAL_SCHEMA_VERSION = 'utopia.install-approval.v1' as const;
+export const UTOPIA_APP_INSTALLATION_SCHEMA_VERSION = 'utopia.app-installation.v1' as const;
 
 export type UtopiaRegistryPackage = Readonly<{
   id: string;
@@ -58,6 +60,36 @@ export type PackageInstallPreview = Readonly<{
     computedChecksum: string | null;
   };
   validationErrors: string[];
+}>;
+
+export type PackageInstallApprovalReceipt = Readonly<{
+  schemaVersion: typeof UTOPIA_INSTALL_APPROVAL_SCHEMA_VERSION;
+  approved: true;
+  sourceUrl: string;
+  packageId: string;
+  version: string;
+  checksum: string;
+  compatibility: PackageInstallPreview['runtimeCompatibility'];
+  previewHash: string;
+  approvedBy: string;
+  approvedAt: string;
+}>;
+
+export type AppInstallation = Readonly<{
+  schemaVersion: typeof UTOPIA_APP_INSTALLATION_SCHEMA_VERSION;
+  installationId: string;
+  packageId: string;
+  version: string;
+  packageKey: string;
+  sourceUrl: string;
+  checksum: string;
+  appName: string;
+  status: 'active';
+  launchPath: string;
+  approvalHash: string;
+  approvedBy: string;
+  createdAt: string;
+  updatedAt: string;
 }>;
 
 const WONDER_INSTALL_HOST = 'install';
@@ -190,6 +222,76 @@ export function buildPackageInstallPreview(
     },
     validationErrors: [...packageErrors, ...(trust.error ? [trust.error] : [])],
   };
+}
+
+export function buildPackageInstallApprovalReceipt(
+  preview: PackageInstallPreview,
+  approvedBy: string,
+  approvedAt = new Date().toISOString(),
+): PackageInstallApprovalReceipt {
+  assertPreviewReadyForApproval(preview);
+  if (!approvedBy.trim()) throw new Error('package_install_approval_actor_required');
+  if (Number.isNaN(Date.parse(approvedAt))) throw new Error('package_install_approval_time_invalid');
+
+  return {
+    schemaVersion: UTOPIA_INSTALL_APPROVAL_SCHEMA_VERSION,
+    approved: true,
+    sourceUrl: preview.sourceUrl,
+    packageId: preview.packageId,
+    version: preview.version,
+    checksum: preview.trust.computedChecksum,
+    compatibility: {
+      status: preview.runtimeCompatibility.status,
+      reasons: [...preview.runtimeCompatibility.reasons],
+    },
+    previewHash: hashPackageInstallPreview(preview),
+    approvedBy: approvedBy.trim(),
+    approvedAt,
+  };
+}
+
+export function hashPackageInstallPreview(preview: PackageInstallPreview): string {
+  return sha256Canonical(preview);
+}
+
+export function hashPackageInstallApprovalReceipt(approval: PackageInstallApprovalReceipt): string {
+  return sha256Canonical(approval);
+}
+
+export function assertPackageInstallApprovalMatchesPreview(
+  approval: PackageInstallApprovalReceipt,
+  preview: PackageInstallPreview,
+): void {
+  assertPreviewReadyForApproval(preview);
+  if (
+    !approval
+    || approval.schemaVersion !== UTOPIA_INSTALL_APPROVAL_SCHEMA_VERSION
+    || approval.approved !== true
+    || approval.sourceUrl !== preview.sourceUrl
+    || approval.packageId !== preview.packageId
+    || approval.version !== preview.version
+    || approval.checksum !== preview.trust.computedChecksum
+    || approval.compatibility.status !== preview.runtimeCompatibility.status
+    || approval.compatibility.reasons.join('\n') !== preview.runtimeCompatibility.reasons.join('\n')
+    || approval.previewHash !== hashPackageInstallPreview(preview)
+    || !approval.approvedBy?.trim()
+    || Number.isNaN(Date.parse(approval.approvedAt))
+  ) {
+    throw new Error('package_install_approval_mismatch');
+  }
+}
+
+function assertPreviewReadyForApproval(preview: PackageInstallPreview): asserts preview is PackageInstallPreview & {
+  packageId: string;
+  version: string;
+  trust: PackageInstallPreview['trust'] & { computedChecksum: string };
+} {
+  if (preview.status !== 'ready_for_review') throw new Error('package_install_preview_blocked');
+  if (!preview.packageId || !preview.version || !preview.trust.computedChecksum) {
+    throw new Error('package_install_preview_incomplete');
+  }
+  if (preview.runtimeCompatibility.status !== 'compatible') throw new Error('package_install_compatibility_blocked');
+  if (preview.validationErrors.length > 0) throw new Error('package_install_preview_invalid');
 }
 
 function parseNestedPackageUrl(url: URL): string {

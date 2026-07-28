@@ -6,6 +6,21 @@ export * from './package';
 export * from './package-change';
 export * from './package-authoring';
 export * from './package-install';
+export {
+  DEFAULT_APP_INSTALLATION_ID,
+  DEFAULT_WORKSPACE_ID,
+  appInstallationIdSchema,
+  appInstallationSchema,
+  appInstallationStatusSchema,
+  installationPackageStateSchema,
+  parseAppInstallation,
+  parseInstallationPackageState,
+  workspaceIdSchema,
+  type AppInstallationId,
+  type AppInstallationStatus,
+  type InstallationPackageState,
+  type WorkspaceId,
+} from './app-installation';
 export * from './ui-primitives';
 export * from './ui-widgets';
 export * from './native-capability-kinds';

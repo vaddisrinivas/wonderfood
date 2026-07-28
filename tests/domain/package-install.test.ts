@@ -5,6 +5,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertPackageInstallApprovalMatchesPreview,
+  buildPackageInstallApprovalReceipt,
   buildPackageInstallPreview,
   parsePackageInstallTarget,
   validateRegistryManifest,
@@ -132,6 +134,22 @@ describe('package install link and registry contracts', () => {
       { label: 'Plugins', values: ['plugin:metricTile'] },
       { label: 'Fallbacks', values: [] },
     ]);
+
+    const approval = buildPackageInstallApprovalReceipt(result.preview, 'test-user', '2026-07-27T00:00:00.000Z');
+    expect(approval).toMatchObject({
+      schemaVersion: 'utopia.install-approval.v1',
+      approved: true,
+      sourceUrl: 'https://example.com/apps/demo.package.json',
+      packageId: 'demo.shelf',
+      version: '1.0.0',
+      checksum,
+      approvedBy: 'test-user',
+      approvedAt: '2026-07-27T00:00:00.000Z',
+    });
+    expect(() => assertPackageInstallApprovalMatchesPreview(approval, result.preview)).not.toThrow();
+    expect(() => assertPackageInstallApprovalMatchesPreview({ ...approval, version: '2.0.0' }, result.preview)).toThrow(
+      'package_install_approval_mismatch',
+    );
   });
 
   it('blocks invalid package and checksum mismatch without activating anything', () => {
@@ -147,6 +165,7 @@ describe('package install link and registry contracts', () => {
     expect(preview.trust.status).toBe('checksum_mismatch');
     expect(preview.validationErrors).toContain('id is required');
     expect(preview.validationErrors).toContain('checksum mismatch');
+    expect(() => buildPackageInstallApprovalReceipt(preview, 'test-user')).toThrow('package_install_preview_blocked');
   });
 });
 

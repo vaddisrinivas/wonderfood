@@ -1,9 +1,11 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { DEFAULT_APP_INSTALLATION_ID } from '@/packages/shared/contracts/app-installation';
 
 export type OutboxStatus = 'pending' | 'inflight' | 'failed' | 'done';
 
 export type OutboxEvent = {
   id: string;
+  app_installation_id: string;
   action_key: string;
   domain: string;
   payload_json: string;
@@ -40,20 +42,24 @@ export function isProviderWriteOutboxEvent(event: OutboxEvent): boolean {
 
 export async function enqueueOutboxEvent(
   db: SQLiteDatabase,
-  event: Omit<OutboxEvent, 'status' | 'attempts' | 'last_error' | 'created_at' | 'updated_at'>
+  event: Omit<OutboxEvent, 'status' | 'attempts' | 'last_error' | 'created_at' | 'updated_at' | 'app_installation_id'> & {
+    app_installation_id?: string | null;
+  }
 ): Promise<OutboxEvent> {
   const now = new Date().toISOString();
   const payload = event.payload_json;
   const status: OutboxStatus = 'pending';
+  const appInstallationId = event.app_installation_id?.trim() || DEFAULT_APP_INSTALLATION_ID;
   await db.runAsync(
     `
-      INSERT INTO outbox_events (id, action_key, domain, payload_json, status, attempts, last_error, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)
+      INSERT INTO outbox_events (id, app_installation_id, action_key, domain, payload_json, status, attempts, last_error, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
     `,
-    [event.id, event.action_key, event.domain, payload, status, now, now]
+    [event.id, appInstallationId, event.action_key, event.domain, payload, status, now, now]
   );
   return {
     ...event,
+    app_installation_id: appInstallationId,
     status,
     attempts: 0,
     last_error: null,

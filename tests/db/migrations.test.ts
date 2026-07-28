@@ -1,8 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DATABASE_VERSION, exportRecoverySnapshot, rollbackDatabase, runMigrations } from '@/src/db/migrations';
 
 type Row = Record<string, unknown>;
+
+const { manifest } = vi.hoisted(() => ({
+  manifest: {
+    schema_version: 'lifeos.domain.v1',
+    id: 'food',
+    label: 'Food',
+    surfaces: [],
+    collections: ['inventory'],
+    relations: [],
+    skills: [],
+    workflows: [],
+    data_homes: [],
+    mcp: { resources: [], tools: [] },
+  } as const,
+}));
+
+vi.mock('@/src/domain/catalog', () => ({
+  loadCatalog: () => ({
+    activeDomainId: manifest.id,
+    activeManifest: manifest,
+    catalog: { domains: [] },
+  }),
+}));
 
 class MigrationMemoryDb {
   userVersion = 0;
@@ -53,9 +76,57 @@ class MigrationMemoryDb {
       return;
     }
 
+    const dropIndex = compact.match(/^DROP INDEX IF EXISTS ([A-Za-z_][A-Za-z0-9_]*)$/i);
+    if (dropIndex) {
+      this.indexes.delete(dropIndex[1]);
+      return;
+    }
+
+    const insertSelect = compact.match(/^INSERT(?: OR IGNORE)? INTO ([A-Za-z_][A-Za-z0-9_]*) \((.*?)\) SELECT (.*?) FROM ([A-Za-z_][A-Za-z0-9_]*)/i);
+    if (insertSelect) {
+      const [, targetName, targetColumnsRaw, selectRaw, sourceName] = insertSelect;
+      const target = this.ensureTable(targetName);
+      const source = this.ensureTable(sourceName);
+      const targetColumns = splitSqlList(targetColumnsRaw);
+      const selectValues = splitSqlList(selectRaw);
+      for (const sourceRow of source.rows) {
+        const next: Row = {};
+        targetColumns.forEach((column, index) => {
+          next[column] = sqlSelectValue(selectValues[index]?.trim() ?? 'NULL', sourceRow);
+        });
+        target.rows.push(next);
+      }
+      return;
+    }
+
     const drop = compact.match(/^DROP TABLE IF EXISTS ([A-Za-z_][A-Za-z0-9_]*)$/i);
     if (drop) {
       this.tables.delete(drop[1]);
+      return;
+    }
+
+    const rename = compact.match(/^ALTER TABLE ([A-Za-z_][A-Za-z0-9_]*) RENAME TO ([A-Za-z_][A-Za-z0-9_]*)$/i);
+    if (rename) {
+      const [, from, to] = rename;
+      const table = this.tables.get(from);
+      if (!table) throw new Error(`missing table ${from}`);
+      this.tables.set(to, table);
+      this.tables.delete(from);
+      return;
+    }
+
+    if (compact.startsWith('INSERT OR IGNORE INTO app_installation_package_state')) {
+      const source = this.tables.get('app_package_state')?.rows.find((row) => row.id === 'default');
+      if (!source || (source.active_package_key == null && source.previous_package_key == null)) return;
+      const table = this.ensureTable('app_installation_package_state');
+      if (!table.rows.some((row) => row.installation_id === 'default')) {
+        table.rows.push({
+          installation_id: 'default',
+          active_package_key: source.active_package_key,
+          previous_package_key: source.previous_package_key,
+          updated_at: source.updated_at,
+        });
+      }
       return;
     }
 
@@ -70,6 +141,35 @@ class MigrationMemoryDb {
       const value = Array.isArray(params) ? params[1] : params.$value;
       table.rows = table.rows.filter((row) => row.key !== key);
       table.rows.push({ key, value });
+      return;
+    }
+    if (compact.startsWith('INSERT OR IGNORE INTO workspaces')) {
+      const table = this.ensureTable('workspaces');
+      const row = params as Row;
+      if (!table.rows.some((item) => item.id === row.$id)) {
+        table.rows.push({
+          id: row.$id,
+          label: row.$label,
+          created_at: row.$created_at,
+          updated_at: row.$updated_at,
+        });
+      }
+      return;
+    }
+    if (compact.startsWith('INSERT OR IGNORE INTO app_installations')) {
+      const table = this.ensureTable('app_installations');
+      const row = params as Row;
+      if (!table.rows.some((item) => item.installation_id === row.$installation_id)) {
+        table.rows.push({
+          installation_id: row.$installation_id,
+          workspace_id: row.$workspace_id,
+          app_name: row.$app_name,
+          status: 'active',
+          launch_path: row.$launch_path,
+          created_at: row.$created_at,
+          updated_at: row.$updated_at,
+        });
+      }
       return;
     }
     throw new Error(`Unsupported runAsync SQL: ${compact}`);
@@ -121,20 +221,25 @@ describe('database migrations', () => {
     expect(db.tables.has('config_conflicts')).toBe(true);
     expect(db.tables.has('app_packages')).toBe(true);
     expect(db.tables.has('app_package_state')).toBe(true);
+    expect(db.tables.has('workspaces')).toBe(true);
+    expect(db.tables.has('app_installations')).toBe(true);
+    expect(db.tables.has('app_installation_package_state')).toBe(true);
     expect(db.tables.has('app_package_receipts')).toBe(true);
     const recordColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(records)');
     expect(recordColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'app_installation_id',
       'revision',
       'schema_version',
       'deleted',
       'privacy',
       'provenance_json',
     ]));
-    expect(db.indexes.has('operations_idem_idx')).toBe(true);
-    expect(db.indexes.has('operations_record_idx')).toBe(true);
+    expect(db.indexes.has('operations_installation_idem_idx')).toBe(true);
+    expect(db.indexes.has('operations_installation_record_idx')).toBe(true);
     expect(db.indexes.has('sync_conflicts_record_idx')).toBe(true);
     expect(db.indexes.has('config_sources_enabled_precedence_idx')).toBe(true);
     expect(db.indexes.has('config_conflicts_status_idx')).toBe(true);
+    expect(db.indexes.has('app_installations_workspace_status_idx')).toBe(true);
   });
 
   it('keeps control-plane config separate from data-plane records', async () => {
@@ -195,7 +300,21 @@ describe('database migrations', () => {
       'config_conflicts',
       'app_packages',
       'app_package_state',
+      'workspaces',
+      'app_installations',
+      'app_installation_package_state',
       'app_package_receipts',
     ]));
   });
 });
+
+function splitSqlList(value: string) {
+  return value.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function sqlSelectValue(expression: string, row: Row) {
+  if (/^NULL$/i.test(expression)) return null;
+  if (/^\d+$/.test(expression)) return Number(expression);
+  if (expression.startsWith("'") && expression.endsWith("'")) return expression.slice(1, -1);
+  return row[expression];
+}

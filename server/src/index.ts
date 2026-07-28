@@ -265,6 +265,7 @@ function packageRegistry() {
 function packageRegistryState(registry = packageRegistry()) {
   return {
     active: registry.getActive(),
+    installations: registry.listAppInstallations(),
     receipts: registry.getReceipts(),
   };
 }

@@ -7,6 +7,15 @@ import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 import { getBundledDomainManifest, setActivePackageOverride } from '@/src/domain/catalog';
 import { loadAppPackage } from '@/src/domain/package-loader';
 import {
+  DEFAULT_APP_INSTALLATION_ID,
+  DEFAULT_WORKSPACE_ID,
+  parseAppInstallation,
+  type AppInstallation as LocalAppInstallation,
+  type AppInstallationId,
+  type AppInstallationStatus,
+  type WorkspaceId,
+} from '@/packages/shared/contracts/app-installation';
+import {
   collectAppPackageValidationIssues,
   formatAppPackageValidationIssues,
   type AppPackage,
@@ -14,6 +23,12 @@ import {
   type AppPackageV3,
 } from '@/packages/shared/contracts/package';
 import { isAllowedAppPackagePatchPath } from '@/packages/shared/contracts/package-change';
+import {
+  assertPackageInstallApprovalMatchesPreview,
+  hashPackageInstallApprovalReceipt,
+  type PackageInstallApprovalReceipt,
+  type PackageInstallPreview,
+} from '@/packages/shared/contracts/package-install';
 
 type AppPackageRow = {
   package_key: string;
@@ -23,6 +38,15 @@ type AppPackageRow = {
 type AppPackageStateRow = {
   active_package_key: string | null;
   previous_package_key: string | null;
+};
+
+type AppInstallationRow = {
+  installation_id: string;
+  workspace_id: string;
+  app_name: string;
+  status: AppInstallationStatus;
+  created_at: string;
+  updated_at: string;
 };
 
 type ReceiptAction = 'bootstrap' | 'activate' | 'rollback';
@@ -58,13 +82,29 @@ export type AppPackageChangePreview = Readonly<{
   errors: string[];
 }>;
 
-export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage> {
+export type ApprovedPackageInstallRequest = Readonly<{
+  packageJson: unknown;
+  preview: PackageInstallPreview;
+  approval: PackageInstallApprovalReceipt;
+  installationId?: string;
+  workspaceId?: WorkspaceId;
+  now?: string;
+}>;
+
+export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<AppPackage>;
+export async function bootstrapAppPackageRegistry(db: SQLiteDatabase, installationId: AppInstallationId): Promise<AppPackage>;
+export async function bootstrapAppPackageRegistry(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<AppPackage> {
+  const scopedInstallationId = normalizeInstallationId(installationId);
+  await ensureDefaultAppInstallation(db);
   const manifest = getBundledDomainManifest();
   const bundledPackage = loadAppPackage(buildAppPackageFromManifest(manifest).package).activePackage;
-  const active = await getActiveAppPackage(db);
+  const active = await getActiveAppPackage(db, scopedInstallationId);
   if (active) {
     if (shouldRefreshBundledPackage(active, bundledPackage)) {
-      return activateAppPackage(db, bundledPackage, 'bootstrap', { packageHash: bundledPackage.version });
+      return activateAppPackage(db, scopedInstallationId, bundledPackage, 'bootstrap', { packageHash: bundledPackage.version });
     }
     setActivePackageOverride(active);
     return active;
@@ -74,13 +114,18 @@ export async function bootstrapAppPackageRegistry(db: SQLiteDatabase): Promise<A
     throw new Error('app_package_active_missing');
   }
 
-  await activateAppPackage(db, bundledPackage, 'bootstrap');
+  await activateAppPackage(db, scopedInstallationId, bundledPackage, 'bootstrap');
   setActivePackageOverride(bundledPackage);
   return bundledPackage;
 }
 
-export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
-  const state = await getPackageState(db);
+export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackage | null>;
+export async function getActiveAppPackage(db: SQLiteDatabase, installationId: AppInstallationId): Promise<AppPackage | null>;
+export async function getActiveAppPackage(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<AppPackage | null> {
+  const state = await getPackageState(db, normalizeInstallationId(installationId));
   if (!state?.active_package_key) return null;
   const appPackage = await getPackageByKey(db, state.active_package_key);
   if (appPackage) setActivePackageOverride(appPackage);
@@ -90,43 +135,205 @@ export async function getActiveAppPackage(db: SQLiteDatabase): Promise<AppPackag
 export async function activateAppPackage(
   db: SQLiteDatabase,
   candidate: unknown,
-  action: ReceiptAction = 'activate',
-  evidence: AppPackageReceiptEvidence = {},
+  action?: ReceiptAction,
+  evidence?: AppPackageReceiptEvidence,
+): Promise<AppPackage>;
+export async function activateAppPackage(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+  candidate: unknown,
+  action?: ReceiptAction,
+  evidence?: AppPackageReceiptEvidence,
+): Promise<AppPackage>;
+export async function activateAppPackage(
+  db: SQLiteDatabase,
+  installationIdOrCandidate: AppInstallationId | unknown,
+  candidateOrAction?: unknown | ReceiptAction,
+  actionOrEvidence: ReceiptAction | AppPackageReceiptEvidence = 'activate',
+  maybeEvidence: AppPackageReceiptEvidence = {},
 ): Promise<AppPackage> {
+  const { installationId, candidate, action, evidence } = normalizeActivateArgs(
+    installationIdOrCandidate,
+    candidateOrAction,
+    actionOrEvidence,
+    maybeEvidence,
+  );
+  await ensureDefaultAppInstallation(db);
+  await assertAppInstallationExists(db, installationId);
   const appPackage = loadAppPackage(candidate).activePackage;
   const now = new Date().toISOString();
   const key = packageKey(appPackage);
-  const previous = await getPackageState(db);
+  const previous = await getPackageState(db, installationId);
 
   await db.withTransactionAsync(async () => {
+    await storeAppPackage(db, appPackage, now);
     await db.runAsync(
-      `INSERT OR REPLACE INTO app_packages
-        (package_key, package_id, version, payload_json, created_at, updated_at)
-        VALUES ($package_key, $package_id, $version, $payload_json, $created_at, $updated_at)`,
+      `INSERT OR REPLACE INTO app_installation_package_state
+        (installation_id, active_package_key, previous_package_key, updated_at)
+        VALUES ($installation_id, $active_package_key, $previous_package_key, $updated_at)`,
       {
-        $package_key: key,
-        $package_id: appPackage.id,
-        $version: appPackage.version,
-        $payload_json: JSON.stringify(appPackage),
-        $created_at: now,
-        $updated_at: now,
-      },
-    );
-    await db.runAsync(
-      `INSERT OR REPLACE INTO app_package_state
-        (id, active_package_key, previous_package_key, updated_at)
-        VALUES ('default', $active_package_key, $previous_package_key, $updated_at)`,
-      {
+        $installation_id: installationId,
         $active_package_key: key,
         $previous_package_key: previous?.active_package_key ?? null,
         $updated_at: now,
       },
     );
-    await insertReceipt(db, action, key, previous?.active_package_key ?? null, now, evidence);
+    if (installationId === DEFAULT_APP_INSTALLATION_ID) {
+      await writeLegacyDefaultPackageState(db, key, previous?.active_package_key ?? null, now);
+    }
+    await insertReceipt(db, action, key, previous?.active_package_key ?? null, now, evidence, installationId);
   });
 
   setActivePackageOverride(appPackage);
   return appPackage;
+}
+
+export async function installApprovedAppPackage(
+  db: SQLiteDatabase,
+  request: ApprovedPackageInstallRequest,
+): Promise<LocalAppInstallation> {
+  assertPackageInstallApprovalMatchesPreview(request.approval, request.preview);
+  const appPackage = loadAppPackage(request.packageJson).activePackage;
+  const packageHash = hashValue(appPackage);
+  if (
+    appPackage.id !== request.preview.packageId
+    || appPackage.version !== request.preview.version
+    || packageHash !== request.approval.checksum
+  ) {
+    throw new Error('package_install_payload_mismatch');
+  }
+
+  const now = request.now ?? new Date().toISOString();
+  if (Number.isNaN(Date.parse(now))) throw new Error('package_install_time_invalid');
+  const key = packageKey(appPackage);
+  const installationId = normalizeInstallationId(request.installationId ?? createInstallationId());
+  const workspaceId = normalizeWorkspaceId(request.workspaceId ?? DEFAULT_WORKSPACE_ID);
+  await ensureWorkspace(db, workspaceId, now);
+  const approvalHash = hashPackageInstallApprovalReceipt(request.approval);
+  const installation = buildAppInstallation({
+    preview: request.preview,
+    installationId,
+    workspaceId,
+    now,
+  });
+  const previous = await getPackageState(db, installation.id);
+
+  await db.withTransactionAsync(async () => {
+    await storeAppPackage(db, appPackage, now);
+    await db.runAsync(
+      `INSERT INTO app_installations
+        (id, workspace_id, label, status, created_at, updated_at)
+        VALUES ($id, $workspace_id, $label, $status, $created_at, $updated_at)`,
+      {
+        $id: installation.id,
+        $workspace_id: installation.workspaceId,
+        $label: installation.label,
+        $status: installation.status,
+        $created_at: installation.createdAt,
+        $updated_at: installation.updatedAt,
+      },
+    );
+    await db.runAsync(
+      `INSERT OR REPLACE INTO app_installation_package_state
+        (installation_id, active_package_key, previous_package_key, updated_at)
+        VALUES ($installation_id, $active_package_key, $previous_package_key, $updated_at)`,
+      {
+        $installation_id: installation.id,
+        $active_package_key: key,
+        $previous_package_key: previous?.active_package_key ?? null,
+        $updated_at: now,
+      },
+    );
+    if (installation.id === DEFAULT_APP_INSTALLATION_ID) {
+      await writeLegacyDefaultPackageState(db, key, previous?.active_package_key ?? null, now);
+    }
+    await insertReceipt(db, 'activate', key, previous?.active_package_key ?? null, now, {
+      packageHash,
+      approvalHash,
+      approvedBy: request.approval.approvedBy,
+    }, installation.id);
+  });
+
+  setActivePackageOverride(appPackage);
+  return installation;
+}
+
+export async function getActiveAppInstallation(db: SQLiteDatabase): Promise<LocalAppInstallation | null> {
+  const row = await db.getFirstAsync<AppInstallationRow>(
+    `SELECT installation_id, workspace_id, app_name, status, created_at, updated_at
+      FROM app_installations WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`,
+  );
+  return row ? localAppInstallationFromRow(row) : null;
+}
+
+export async function getPackageInstallAppInstallation(
+  db: SQLiteDatabase,
+  installationId: string,
+): Promise<LocalAppInstallation | null> {
+  return getAppInstallation(db, installationId);
+}
+
+export async function createAppInstallation(
+  db: SQLiteDatabase,
+  input: {
+    id: AppInstallationId;
+    workspaceId?: WorkspaceId;
+    label: string;
+    status?: AppInstallationStatus;
+    now?: string;
+  },
+): Promise<LocalAppInstallation> {
+  const now = input.now ?? new Date().toISOString();
+  const installation = parseAppInstallation({
+    id: normalizeInstallationId(input.id),
+    workspaceId: normalizeWorkspaceId(input.workspaceId ?? DEFAULT_WORKSPACE_ID),
+    label: input.label,
+    status: input.status ?? 'active',
+    createdAt: now,
+    updatedAt: now,
+  });
+  await ensureWorkspace(db, installation.workspaceId, now);
+  await db.runAsync(
+    `INSERT OR REPLACE INTO app_installations
+      (installation_id, workspace_id, app_name, status, launch_path, created_at, updated_at)
+      VALUES ($installation_id, $workspace_id, $app_name, $status, $launch_path, $created_at, $updated_at)`,
+    {
+      $installation_id: installation.id,
+      $workspace_id: installation.workspaceId,
+      $app_name: installation.label,
+      $status: installation.status,
+      $launch_path: `/apps/${encodeURIComponent(installation.id)}`,
+      $created_at: installation.createdAt,
+      $updated_at: installation.updatedAt,
+    },
+  );
+  return installation;
+}
+
+export async function listAppInstallations(
+  db: SQLiteDatabase,
+  workspaceId: WorkspaceId = DEFAULT_WORKSPACE_ID,
+): Promise<LocalAppInstallation[]> {
+  const rows = await db.getAllAsync<AppInstallationRow>(
+    `SELECT installation_id, workspace_id, app_name, status, created_at, updated_at
+      FROM app_installations
+      WHERE workspace_id = $workspace_id
+      ORDER BY created_at ASC, installation_id ASC`,
+    { $workspace_id: normalizeWorkspaceId(workspaceId) },
+  );
+  return rows.map(localAppInstallationFromRow);
+}
+
+export async function getAppInstallation(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+): Promise<LocalAppInstallation | null> {
+  const row = await db.getFirstAsync<AppInstallationRow>(
+    `SELECT installation_id, workspace_id, app_name, status, created_at, updated_at
+      FROM app_installations WHERE installation_id = $installation_id`,
+    { $installation_id: normalizeInstallationId(installationId) },
+  );
+  return row ? localAppInstallationFromRow(row) : null;
 }
 
 export async function previewAppPackageChange(
@@ -188,8 +395,14 @@ export async function activateApprovedAppPackageChange(
   });
 }
 
-export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage | null> {
-  const state = await getPackageState(db);
+export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage | null>;
+export async function rollbackAppPackage(db: SQLiteDatabase, installationId: AppInstallationId): Promise<AppPackage | null>;
+export async function rollbackAppPackage(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<AppPackage | null> {
+  const scopedInstallationId = normalizeInstallationId(installationId);
+  const state = await getPackageState(db, scopedInstallationId);
   if (!state?.previous_package_key) return null;
   const previousPackage = await getPackageByKey(db, state.previous_package_key);
   if (!previousPackage) return null;
@@ -197,15 +410,19 @@ export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage
   const now = new Date().toISOString();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT OR REPLACE INTO app_package_state
-        (id, active_package_key, previous_package_key, updated_at)
-        VALUES ('default', $active_package_key, NULL, $updated_at)`,
+      `INSERT OR REPLACE INTO app_installation_package_state
+        (installation_id, active_package_key, previous_package_key, updated_at)
+        VALUES ($installation_id, $active_package_key, NULL, $updated_at)`,
       {
+        $installation_id: scopedInstallationId,
         $active_package_key: state.previous_package_key,
         $updated_at: now,
       },
     );
-    await insertReceipt(db, 'rollback', state.previous_package_key, state.active_package_key, now, {});
+    if (scopedInstallationId === DEFAULT_APP_INSTALLATION_ID) {
+      await writeLegacyDefaultPackageState(db, state.previous_package_key, null, now);
+    }
+    await insertReceipt(db, 'rollback', state.previous_package_key, state.active_package_key, now, {}, scopedInstallationId);
   });
 
   setActivePackageOverride(previousPackage);
@@ -214,6 +431,46 @@ export async function rollbackAppPackage(db: SQLiteDatabase): Promise<AppPackage
 
 function packageKey(appPackage: AppPackage): string {
   return `${appPackage.id}@${appPackage.version}`;
+}
+
+async function storeAppPackage(db: SQLiteDatabase, appPackage: AppPackage, now: string): Promise<void> {
+  await db.runAsync(
+    `INSERT OR REPLACE INTO app_packages
+      (package_key, package_id, version, payload_json, created_at, updated_at)
+      VALUES ($package_key, $package_id, $version, $payload_json, $created_at, $updated_at)`,
+    {
+      $package_key: packageKey(appPackage),
+      $package_id: appPackage.id,
+      $version: appPackage.version,
+      $payload_json: JSON.stringify(appPackage),
+      $created_at: now,
+      $updated_at: now,
+    },
+  );
+}
+
+function buildAppInstallation(input: {
+  preview: PackageInstallPreview;
+  installationId: string;
+  workspaceId: WorkspaceId;
+  now: string;
+}): LocalAppInstallation {
+  const installationId = input.installationId.trim();
+  if (!installationId) throw new Error('package_install_installation_id_required');
+  return parseAppInstallation({
+    id: installationId,
+    workspaceId: input.workspaceId,
+    label: input.preview.appName,
+    status: 'active',
+    createdAt: input.now,
+    updatedAt: input.now,
+  });
+}
+
+function createInstallationId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  if (randomUUID) return `inst_${randomUUID()}`;
+  return `inst_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function shouldRefreshBundledPackage(active: AppPackage, bundledPackage: AppPackage): boolean {
@@ -260,9 +517,130 @@ function stableJson(value: unknown): string {
   return canonicalJson(value);
 }
 
-async function getPackageState(db: SQLiteDatabase): Promise<AppPackageStateRow | null> {
+function localAppInstallationFromRow(row: AppInstallationRow): LocalAppInstallation {
+  return parseAppInstallation({
+    id: row.installation_id,
+    workspaceId: row.workspace_id,
+    label: row.app_name,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function normalizeInstallationId(value: AppInstallationId): AppInstallationId {
+  const id = String(value ?? '').trim();
+  if (!id) throw new Error('app_installation_id_required');
+  return id;
+}
+
+function normalizeWorkspaceId(value: WorkspaceId): WorkspaceId {
+  const id = String(value ?? '').trim();
+  if (!id) throw new Error('workspace_id_required');
+  return id;
+}
+
+function normalizeActivateArgs(
+  installationIdOrCandidate: AppInstallationId | unknown,
+  candidateOrAction: unknown | ReceiptAction,
+  actionOrEvidence: ReceiptAction | AppPackageReceiptEvidence,
+  maybeEvidence: AppPackageReceiptEvidence,
+): {
+  installationId: AppInstallationId;
+  candidate: unknown;
+  action: ReceiptAction;
+  evidence: AppPackageReceiptEvidence;
+} {
+  if (typeof installationIdOrCandidate === 'string' && !isReceiptAction(candidateOrAction)) {
+    return {
+      installationId: normalizeInstallationId(installationIdOrCandidate),
+      candidate: candidateOrAction,
+      action: isReceiptAction(actionOrEvidence) ? actionOrEvidence : 'activate',
+      evidence: isReceiptAction(actionOrEvidence) ? maybeEvidence : actionOrEvidence,
+    };
+  }
+
+  return {
+    installationId: DEFAULT_APP_INSTALLATION_ID,
+    candidate: installationIdOrCandidate,
+    action: isReceiptAction(candidateOrAction) ? candidateOrAction : 'activate',
+    evidence: isReceiptAction(actionOrEvidence) ? maybeEvidence : actionOrEvidence,
+  };
+}
+
+function isReceiptAction(value: unknown): value is ReceiptAction {
+  return value === 'bootstrap' || value === 'activate' || value === 'rollback';
+}
+
+async function ensureDefaultWorkspace(db: SQLiteDatabase): Promise<void> {
+  await ensureWorkspace(db, DEFAULT_WORKSPACE_ID, new Date().toISOString());
+}
+
+async function ensureDefaultAppInstallation(db: SQLiteDatabase): Promise<void> {
+  const now = new Date().toISOString();
+  await ensureWorkspace(db, DEFAULT_WORKSPACE_ID, now);
+  const existing = await getAppInstallation(db, DEFAULT_APP_INSTALLATION_ID);
+  if (existing) return;
+  await createAppInstallation(db, {
+    id: DEFAULT_APP_INSTALLATION_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    label: 'Default app',
+    now,
+  });
+}
+
+async function ensureWorkspace(db: SQLiteDatabase, workspaceId: WorkspaceId, now: string): Promise<void> {
+  await db.runAsync(
+    `INSERT OR IGNORE INTO workspaces
+      (id, label, created_at, updated_at)
+      VALUES ($id, $label, $created_at, $updated_at)`,
+    {
+      $id: normalizeWorkspaceId(workspaceId),
+      $label: workspaceId === DEFAULT_WORKSPACE_ID ? 'Default workspace' : workspaceId,
+      $created_at: now,
+      $updated_at: now,
+    },
+  );
+}
+
+async function assertAppInstallationExists(db: SQLiteDatabase, installationId: AppInstallationId): Promise<void> {
+  const row = await getAppInstallation(db, installationId);
+  if (!row) throw new Error(`app_installation_not_found:${installationId}`);
+}
+
+async function getPackageState(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<AppPackageStateRow | null> {
+  const scoped = await db.getFirstAsync<AppPackageStateRow>(
+    `SELECT active_package_key, previous_package_key FROM app_installation_package_state WHERE installation_id = $installation_id`,
+    { $installation_id: normalizeInstallationId(installationId) },
+  );
+  if (scoped || installationId !== DEFAULT_APP_INSTALLATION_ID) return scoped;
+  return getLegacyPackageState(db);
+}
+
+async function getLegacyPackageState(db: SQLiteDatabase): Promise<AppPackageStateRow | null> {
   return db.getFirstAsync<AppPackageStateRow>(
     `SELECT active_package_key, previous_package_key FROM app_package_state WHERE id = 'default'`,
+  );
+}
+
+async function writeLegacyDefaultPackageState(
+  db: SQLiteDatabase,
+  activePackageKey: string | null,
+  previousPackageKey: string | null,
+  now: string,
+): Promise<void> {
+  await db.runAsync(
+    `INSERT OR REPLACE INTO app_package_state
+      (id, active_package_key, previous_package_key, updated_at)
+      VALUES ('default', $active_package_key, $previous_package_key, $updated_at)`,
+    {
+      $active_package_key: activePackageKey,
+      $previous_package_key: previousPackageKey,
+      $updated_at: now,
+    },
   );
 }
 
@@ -299,13 +677,14 @@ async function insertReceipt(
   previousPackageKey: string | null,
   now: string,
   evidence: AppPackageReceiptEvidence,
+  installationId: string = DEFAULT_APP_INSTALLATION_ID,
 ): Promise<void> {
   await db.runAsync(
     `INSERT INTO app_package_receipts
       (id, action, package_key, previous_package_key, created_at, request_hash, package_hash, approval_hash, approved_by)
       VALUES ($id, $action, $package_key, $previous_package_key, $created_at, $request_hash, $package_hash, $approval_hash, $approved_by)`,
     {
-      $id: `app-package:${action}:${packageKeyValue ?? 'none'}:${now}`,
+      $id: `app-package:${normalizeInstallationId(installationId)}:${action}:${packageKeyValue ?? 'none'}:${now}`,
       $action: action,
       $package_key: packageKeyValue,
       $previous_package_key: previousPackageKey,

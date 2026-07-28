@@ -585,7 +585,14 @@
             "dataTable",
             "permissionCard",
             "providerStatus",
-            "themePreview"
+            "themePreview",
+            "foodHero",
+            "useFirstCarousel",
+            "mealTimeline",
+            "recipeCard",
+            "receiptReviewCard",
+            "pantryShelf",
+            "askFoodBar"
           ]
         },
         "props": {

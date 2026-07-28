@@ -9,10 +9,37 @@ import type { Operation } from 'fast-json-patch';
 import { z } from 'zod';
 
 const PACKAGE_REGISTRY_SCHEMA_VERSION = 'wonder.package-registry.v1' as const;
+export const DEFAULT_WORKSPACE_ID = 'default-workspace' as const;
+export const DEFAULT_APP_INSTALLATION_ID = 'default' as const;
+
+export type WorkspaceState = Readonly<{
+  id: string;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+}>;
+
+export type InstallationPackageState = Readonly<{
+  installationId: string;
+  activePackageKey: string | null;
+  previousPackageKey: string | null;
+  updatedAt: string;
+}>;
+
+export type AppInstallationState = Readonly<{
+  id: string;
+  workspaceId: string;
+  label: string;
+  status: 'active' | 'archived' | 'disabled';
+  createdAt: string;
+  updatedAt: string;
+}>;
 
 export type PackageRegistryReceipt = Readonly<{
   id: string;
   action: 'activate' | 'rollback';
+  workspaceId: string;
+  installationId: string;
   packageKey: string | null;
   previousPackageKey: string | null;
   createdAt: string;
@@ -50,6 +77,9 @@ type PackageRegistryStore = Readonly<{
   schemaVersion: typeof PACKAGE_REGISTRY_SCHEMA_VERSION;
   activeKey: string | null;
   previousKey: string | null;
+  workspaces?: Readonly<Record<string, WorkspaceState>>;
+  installations?: Readonly<Record<string, AppInstallationState>>;
+  packageState?: Readonly<Record<string, InstallationPackageState>>;
   packages: Readonly<Record<string, AppPackage>>;
   receipts: readonly PackageRegistryReceipt[];
 }>;
@@ -62,6 +92,8 @@ type PackageRegistryOptions = {
 const packageRegistryReceiptSchema = z.object({
   id: z.string().min(1),
   action: z.enum(['activate', 'rollback']),
+  workspaceId: z.string().min(1).optional(),
+  installationId: z.string().min(1).optional(),
   packageKey: z.string().min(1).nullable(),
   previousPackageKey: z.string().min(1).nullable(),
   createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
@@ -71,10 +103,36 @@ const packageRegistryReceiptSchema = z.object({
   approvedBy: z.string().min(1).optional(),
 }).strict();
 
+const workspaceStateSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+  updatedAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+}).strict();
+
+const appInstallationStateSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  label: z.string().min(1),
+  status: z.enum(['active', 'archived', 'disabled']),
+  createdAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+  updatedAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+}).strict();
+
+const installationPackageStateSchema = z.object({
+  installationId: z.string().min(1),
+  activePackageKey: z.string().min(1).nullable(),
+  previousPackageKey: z.string().min(1).nullable(),
+  updatedAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp'),
+}).strict();
+
 const packageRegistryStoreSchema = z.object({
   schemaVersion: z.literal(PACKAGE_REGISTRY_SCHEMA_VERSION),
   activeKey: z.string().min(1).nullable(),
   previousKey: z.string().min(1).nullable(),
+  workspaces: z.record(z.string(), workspaceStateSchema).optional(),
+  installations: z.record(z.string(), appInstallationStateSchema).optional(),
+  packageState: z.record(z.string(), installationPackageStateSchema).optional(),
   packages: z.record(z.string(), z.unknown()),
   receipts: z.array(packageRegistryReceiptSchema),
 }).strict();
@@ -82,6 +140,9 @@ const packageRegistryStoreSchema = z.object({
 export class PackageRegistry {
   private active: AppPackage | null = null;
   private previous: AppPackage | null = null;
+  private workspaces = new Map<string, WorkspaceState>();
+  private installations = new Map<string, AppInstallationState>();
+  private packageState = new Map<string, InstallationPackageState>();
   private packages = new Map<string, AppPackage>();
   private receipts: PackageRegistryReceipt[] = [];
   private readonly path?: string;
@@ -145,7 +206,7 @@ export class PackageRegistry {
     ) {
       throw new Error('package_change_approval_mismatch');
     }
-    return this.activateInternal(preview.package, {
+    return this.activateInternal(preview.package, DEFAULT_APP_INSTALLATION_ID, {
       requestHash: preview.requestHash,
       packageHash: preview.packageHash,
       approvalHash: hashValue(approval),
@@ -156,29 +217,110 @@ export class PackageRegistry {
   activate(input: unknown): AppPackage {
     const result = this.preview(input);
     if (!result.valid) throw new Error(`package_invalid:${result.errors.join('|')}`);
-    return this.activateInternal(result.package, {});
+    return this.activateInternal(result.package, DEFAULT_APP_INSTALLATION_ID, {});
   }
 
-  private activateInternal(pkg: AppPackage, evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>): AppPackage {
-    this.previous = this.active;
-    this.active = pkg;
-    this.packages.set(packageKey(pkg), pkg);
-    this.receipts.push(this.receipt('activate', packageKey(pkg), this.previous ? packageKey(this.previous) : null, evidence));
+  activateForInstallation(installationId: string, input: unknown): AppPackage {
+    const result = this.preview(input);
+    if (!result.valid) throw new Error(`package_invalid:${result.errors.join('|')}`);
+    return this.activateInternal(result.package, installationId, {});
+  }
+
+  createAppInstallation(input: {
+    id?: string;
+    workspaceId?: string;
+    label?: string;
+    package: unknown;
+  }): AppInstallationState {
+    const result = this.preview(input.package);
+    if (!result.valid) throw new Error(`package_invalid:${result.errors.join('|')}`);
+    const now = this.now();
+    const workspaceId = input.workspaceId?.trim() || DEFAULT_WORKSPACE_ID;
+    const installationId = input.id?.trim() || `app-installation:${result.package.id}:${Date.now().toString(36)}`;
+    if (this.installations.has(installationId)) throw new Error(`app_installation_exists:${installationId}`);
+    this.ensureWorkspace(workspaceId, now);
+    this.installations.set(installationId, {
+      id: installationId,
+      workspaceId,
+      label: input.label?.trim() || packageLabel(result.package),
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    });
+    this.activateInternal(result.package, installationId, {});
+    const installation = this.installations.get(installationId);
+    if (!installation) throw new Error(`app_installation_missing:${installationId}`);
+    return installation;
+  }
+
+  private activateInternal(
+    pkg: AppPackage,
+    installationId: string,
+    evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>,
+  ): AppPackage {
+    const now = this.now();
+    const workspaceId = this.installations.get(installationId)?.workspaceId ?? DEFAULT_WORKSPACE_ID;
+    this.ensureWorkspace(workspaceId, now);
+    this.ensureInstallation(installationId, workspaceId, pkg, now);
+    const previousState = this.packageState.get(installationId) ?? null;
+    const activeKey = packageKey(pkg);
+    this.packages.set(activeKey, pkg);
+    this.packageState.set(installationId, {
+      installationId,
+      activePackageKey: activeKey,
+      previousPackageKey: previousState?.activePackageKey ?? null,
+      updatedAt: now,
+    });
+    this.refreshDefaultPackagePointers();
+    this.receipts.push(this.receipt('activate', activeKey, previousState?.activePackageKey ?? null, evidence, workspaceId, installationId, now));
     this.persist();
-    return this.active;
+    return pkg;
   }
 
   rollback(): AppPackage | null {
-    const current = this.active;
-    this.active = this.previous;
-    this.previous = current;
-    this.receipts.push(this.receipt('rollback', this.active ? packageKey(this.active) : null, this.previous ? packageKey(this.previous) : null, {}));
+    return this.rollbackInstallation(DEFAULT_APP_INSTALLATION_ID);
+  }
+
+  rollbackInstallation(installationId: string): AppPackage | null {
+    const state = this.packageState.get(installationId);
+    if (!state?.previousPackageKey) return null;
+    const active = this.packages.get(state.previousPackageKey);
+    if (!active) return null;
+    const now = this.now();
+    const workspaceId = this.installations.get(installationId)?.workspaceId ?? DEFAULT_WORKSPACE_ID;
+    this.packageState.set(installationId, {
+      installationId,
+      activePackageKey: state.previousPackageKey,
+      previousPackageKey: state.activePackageKey,
+      updatedAt: now,
+    });
+    this.refreshDefaultPackagePointers();
+    this.receipts.push(this.receipt('rollback', state.previousPackageKey, state.activePackageKey, {}, workspaceId, installationId, now));
     this.persist();
-    return this.active;
+    return active;
   }
 
   getActive(): AppPackage | null {
     return this.active;
+  }
+
+  getActiveForInstallation(installationId: string): AppPackage | null {
+    const key = this.packageState.get(installationId)?.activePackageKey;
+    return key ? this.packages.get(key) ?? null : null;
+  }
+
+  listAppInstallations(workspaceId = DEFAULT_WORKSPACE_ID): AppInstallationState[] {
+    return [...this.installations.values()]
+      .filter((installation) => installation.workspaceId === workspaceId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  }
+
+  getAppInstallation(id: string): AppInstallationState | null {
+    return this.installations.get(id) ?? null;
+  }
+
+  getInstallationPackageState(id: string): InstallationPackageState | null {
+    return this.packageState.get(id) ?? null;
   }
 
   getReceipts(): readonly PackageRegistryReceipt[] {
@@ -189,9 +331,12 @@ export class PackageRegistry {
     if (!existsSync(path)) return;
     const parsed = parsePackageRegistryStore(readFileSync(path, 'utf8'));
     this.packages = new Map(Object.entries(parsed.packages));
-    this.active = parsed.activeKey ? this.packages.get(parsed.activeKey) ?? null : null;
-    this.previous = parsed.previousKey ? this.packages.get(parsed.previousKey) ?? null : null;
+    this.workspaces = new Map(Object.entries(parsed.workspaces ?? {}));
+    this.installations = new Map(Object.entries(parsed.installations ?? {}));
+    this.packageState = new Map(Object.entries(parsed.packageState ?? {}));
     this.receipts = [...parsed.receipts];
+    this.migrateLegacySingleton(parsed.activeKey, parsed.previousKey);
+    this.refreshDefaultPackagePointers();
   }
 
   private persist(): void {
@@ -200,6 +345,9 @@ export class PackageRegistry {
       schemaVersion: PACKAGE_REGISTRY_SCHEMA_VERSION,
       activeKey: this.active ? packageKey(this.active) : null,
       previousKey: this.previous ? packageKey(this.previous) : null,
+      workspaces: Object.fromEntries([...this.workspaces.entries()].sort(([left], [right]) => left.localeCompare(right))),
+      installations: Object.fromEntries([...this.installations.entries()].sort(([left], [right]) => left.localeCompare(right))),
+      packageState: Object.fromEntries([...this.packageState.entries()].sort(([left], [right]) => left.localeCompare(right))),
       packages: Object.fromEntries([...this.packages.entries()].sort(([left], [right]) => left.localeCompare(right))),
       receipts: [...this.receipts],
     };
@@ -214,23 +362,86 @@ export class PackageRegistry {
     key: string | null,
     previousKey: string | null,
     evidence: Pick<PackageRegistryReceipt, 'requestHash' | 'packageHash' | 'approvalHash' | 'approvedBy'>,
+    workspaceId: string,
+    installationId: string,
+    now: string,
   ): PackageRegistryReceipt {
     return {
       id: `package:${action}:${key ?? 'none'}:${this.receipts.length + 1}`,
       action,
+      workspaceId,
+      installationId,
       packageKey: key,
       previousPackageKey: previousKey,
-      createdAt: this.now(),
+      createdAt: now,
       ...(evidence.requestHash ? { requestHash: evidence.requestHash } : {}),
       ...(evidence.packageHash ? { packageHash: evidence.packageHash } : {}),
       ...(evidence.approvalHash ? { approvalHash: evidence.approvalHash } : {}),
       ...(evidence.approvedBy ? { approvedBy: evidence.approvedBy } : {}),
     };
   }
+
+  private ensureWorkspace(id: string, now: string): WorkspaceState {
+    const existing = this.workspaces.get(id);
+    if (existing) return existing;
+    const workspace = {
+      id,
+      label: id === DEFAULT_WORKSPACE_ID ? 'Default workspace' : id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.workspaces.set(id, workspace);
+    return workspace;
+  }
+
+  private ensureInstallation(installationId: string, workspaceId: string, pkg: AppPackage, now: string): AppInstallationState {
+    const existing = this.installations.get(installationId);
+    if (existing) return existing;
+    const installation = {
+      id: installationId,
+      workspaceId,
+      label: installationId === DEFAULT_APP_INSTALLATION_ID ? 'Default app' : packageLabel(pkg),
+      status: 'active' as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.installations.set(installationId, installation);
+    return installation;
+  }
+
+  private migrateLegacySingleton(activeKey: string | null, previousKey: string | null): void {
+    if (!activeKey || this.packageState.has(DEFAULT_APP_INSTALLATION_ID)) return;
+    const activePackage = this.packages.get(activeKey);
+    if (!activePackage) return;
+    const now = this.receipts[0]?.createdAt ?? this.now();
+    this.ensureWorkspace(DEFAULT_WORKSPACE_ID, now);
+    this.ensureInstallation(DEFAULT_APP_INSTALLATION_ID, DEFAULT_WORKSPACE_ID, activePackage, now);
+    this.packageState.set(DEFAULT_APP_INSTALLATION_ID, {
+      installationId: DEFAULT_APP_INSTALLATION_ID,
+      activePackageKey: activeKey,
+      previousPackageKey: previousKey,
+      updatedAt: now,
+    });
+    this.receipts = this.receipts.map((receipt) => ({
+      ...receipt,
+      workspaceId: receipt.workspaceId ?? DEFAULT_WORKSPACE_ID,
+      installationId: receipt.installationId ?? DEFAULT_APP_INSTALLATION_ID,
+    }));
+  }
+
+  private refreshDefaultPackagePointers(): void {
+    const state = this.packageState.get(DEFAULT_APP_INSTALLATION_ID);
+    this.active = state?.activePackageKey ? this.packages.get(state.activePackageKey) ?? null : null;
+    this.previous = state?.previousPackageKey ? this.packages.get(state.previousPackageKey) ?? null : null;
+  }
 }
 
 function packageKey(pkg: AppPackage): string {
   return `${pkg.id}@${pkg.version}`;
+}
+
+function packageLabel(pkg: AppPackage): string {
+  return pkg.presentation?.label ?? pkg.id;
 }
 
 function normalizePackageChangeRequest(request: PackageChangeRequest): PackageChangeRequest {
@@ -290,7 +501,14 @@ function parsePackageRegistryStore(serialized: string): PackageRegistryStore {
     schemaVersion: PACKAGE_REGISTRY_SCHEMA_VERSION,
     activeKey,
     previousKey,
+    workspaces: row.data.workspaces,
+    installations: row.data.installations,
+    packageState: row.data.packageState,
     packages,
-    receipts: row.data.receipts,
+    receipts: row.data.receipts.map((receipt) => ({
+      ...receipt,
+      workspaceId: receipt.workspaceId ?? DEFAULT_WORKSPACE_ID,
+      installationId: receipt.installationId ?? DEFAULT_APP_INSTALLATION_ID,
+    })),
   };
 }

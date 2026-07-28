@@ -438,16 +438,29 @@
         "components": [
           {
             "kind": "widget",
-            "widget": "postCard",
+            "widget": "foodHero",
             "id": "kitchen_hero",
             "title": "Use these first",
             "subtitle": "Spinach · salmon · yogurt · berries",
             "tone": "moss",
             "props": {
-              "body": "Wonder keeps fragile food on top: what expires soon, what receipt drafts need review, and what can become dinner tonight.",
-              "density": "compact",
-              "summaryFirst": true,
               "badge": "Kitchen radar",
+              "emoji": "🥬",
+              "stats": [
+                {
+                  "label": "fridge",
+                  "value": "18"
+                },
+                {
+                  "label": "freezer",
+                  "value": "9"
+                },
+                {
+                  "label": "alerts",
+                  "value": "5"
+                }
+              ],
+              "body": "Wonder keeps fragile food on top: what expires soon, what receipt drafts need review, and what can become dinner tonight.",
               "actions": [
                 {
                   "title": "Cook tonight",
@@ -466,147 +479,120 @@
           },
           {
             "kind": "widget",
-            "widget": "feedList",
-            "id": "use_first_deck",
-            "title": "Use first",
-            "subtitle": "The app should tell you what to rescue, not make you inspect inventory.",
+            "widget": "useFirstCarousel",
+            "id": "kitchen_use_first",
+            "title": "Use-first shelf",
+            "subtitle": "Freshness, location, and next best use on every card.",
             "tone": "amber",
             "props": {
-              "density": "compact",
               "items": [
                 {
                   "title": "Baby spinach",
-                  "subtitle": "Fridge lot A3 · 2 days · great for wraps or eggs.",
+                  "subtitle": "2 days · fridge lot A3 · wraps or eggs",
                   "badge": "2 days",
-                  "route": "/search"
+                  "emoji": "🥬",
+                  "route": "/food"
                 },
                 {
                   "title": "Greek yogurt",
-                  "subtitle": "Opened yesterday · good for breakfast bowls and marinades.",
+                  "subtitle": "opened yesterday · breakfast bowls + marinades",
                   "badge": "reviewed",
-                  "route": "/search"
+                  "emoji": "🥣",
+                  "route": "/food"
                 },
                 {
                   "title": "Blueberries",
-                  "subtitle": "Receipt captured · use with yogurt or freeze tonight.",
-                  "badge": "$3.99",
-                  "route": "/capture"
+                  "subtitle": "$3.99 receipt · use with yogurt or freeze tonight",
+                  "badge": "tonight",
+                  "emoji": "🫐",
+                  "route": "/food"
                 },
                 {
-                  "title": "Celery + carrots",
-                  "subtitle": "Soup base ready · Wonder can draft tomorrow dinner.",
-                  "badge": "soup",
+                  "title": "Salmon",
+                  "subtitle": "thawed · rice bowls are the cleanest dinner path",
+                  "badge": "cook",
+                  "emoji": "🐟",
                   "route": "/chat"
                 }
+              ],
+              "cta": "Rescue"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "pantryShelf",
+            "id": "kitchen_shelf",
+            "title": "Kitchen map",
+            "subtitle": "Fridge, pantry, freezer, and receipt drafts.",
+            "tone": "neutral",
+            "props": {
+              "items": [
+                {
+                  "title": "Fridge",
+                  "subtitle": "18 items · 5 use first",
+                  "emoji": "❄️",
+                  "route": "/food"
+                },
+                {
+                  "title": "Pantry",
+                  "subtitle": "42 items · staples good",
+                  "emoji": "🥫",
+                  "route": "/food"
+                },
+                {
+                  "title": "Freezer",
+                  "subtitle": "9 items · salmon thawed",
+                  "emoji": "🧊",
+                  "route": "/food"
+                },
+                {
+                  "title": "Receipts",
+                  "subtitle": "3 drafts to review",
+                  "emoji": "🧾",
+                  "route": "/capture"
+                }
               ]
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "recipeCard",
+            "id": "kitchen_recipe",
+            "title": "Best recipe from what you own",
+            "subtitle": "Salmon rice bowls beat takeout tonight.",
+            "tone": "neutral",
+            "props": {
+              "emoji": "🍣",
+              "badge": "92% pantry match",
+              "chips": [
+                {
+                  "label": "24 min"
+                },
+                {
+                  "label": "high protein"
+                },
+                {
+                  "label": "uses salmon"
+                },
+                {
+                  "label": "1 shop gap"
+                }
+              ],
+              "route": "/chat"
             }
           },
           {
             "kind": "recordList",
-            "id": "pantry_records",
-            "title": "Your kitchen graph",
-            "subtitle": "Live rows below the pretty layer.",
-            "tone": "neutral",
+            "id": "kitchen_records",
+            "title": "All food records",
+            "subtitle": "Source-backed rows stay lower on the page.",
             "query": {
               "collections": [
                 "inventory",
-                "inventory_lot",
-                "product",
-                "ingredient"
+                "meal_plan",
+                "shopping_item"
               ],
-              "limit": 6
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Add food",
-              "command": "add_food_item",
-              "payload": {
-                "route": "/capture"
-              }
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "galleryGrid",
-            "id": "recipe_discovery",
-            "title": "Recipes to try",
-            "subtitle": "Like Yummly/Supper, but grounded in your actual kitchen.",
-            "tone": "amber",
-            "props": {
-              "items": [
-                {
-                  "title": "Miso salmon bowl",
-                  "emoji": "🍣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Chickpea wraps",
-                  "emoji": "🌯",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Lentil soup",
-                  "emoji": "🥣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Yogurt marinade",
-                  "emoji": "🍗",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Blueberry oats",
-                  "emoji": "🫐",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Freezer tacos",
-                  "emoji": "🌮",
-                  "route": "/chat"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "chartBlock",
-            "id": "waste_rescue",
-            "title": "Waste rescue score",
-            "subtitle": "Make the win visible.",
-            "tone": "moss",
-            "props": {
-              "points": [
-                {
-                  "label": "Used first",
-                  "value": 5
-                },
-                {
-                  "label": "Drafts reviewed",
-                  "value": 3
-                },
-                {
-                  "label": "Shopping gaps",
-                  "value": 4
-                },
-                {
-                  "label": "Meals planned",
-                  "value": 4
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "postCard",
-            "id": "inventory_context",
-            "title": "Inventory context",
-            "subtitle": "Lots, expiry, prices, notes, nutrition confidence",
-            "tone": "amber",
-            "props": {
-              "body": "Lots, expiry, prices, notes, receipt links, and nutrition confidence stay local until you export or connect a home.",
-              "density": "compact",
-              "summaryFirst": true,
-              "badge": "CSV export ready"
+              "limit": 5
             }
           }
         ]
@@ -764,72 +750,80 @@
       },
       "plan": {
         "title": "Plan",
-        "subtitle": "Meals, recipes, groceries, family decisions",
+        "subtitle": "Meals, family choices, grocery gaps",
         "components": [
           {
             "kind": "widget",
-            "widget": "calendarBlock",
-            "id": "week_plan",
-            "title": "This week",
-            "subtitle": "A simple meal-plan spine: day, dish, why it exists.",
-            "tone": "neutral",
+            "widget": "foodHero",
+            "id": "plan_hero",
+            "title": "This week can be calmer",
+            "subtitle": "4 meals planned · 7 groceries · 2 family votes",
+            "tone": "blue",
             "props": {
-              "events": [
+              "badge": "Weekly plan",
+              "emoji": "📅",
+              "stats": [
                 {
-                  "title": "Today · Salmon rice bowls",
-                  "subtitle": "Uses receipt draft + cucumber + rice.",
-                  "date": "Tonight"
+                  "label": "planned",
+                  "value": "4"
                 },
                 {
-                  "title": "Tomorrow · Lentil soup",
-                  "subtitle": "Rescues carrots, celery, stock.",
-                  "date": "Tue"
+                  "label": "gaps",
+                  "value": "7"
                 },
                 {
-                  "title": "Wednesday · Chickpea wraps",
-                  "subtitle": "Finishes spinach and yogurt sauce.",
-                  "date": "Wed"
+                  "label": "votes",
+                  "value": "2"
+                }
+              ],
+              "body": "Wonder turns pantry, preferences, and receipts into a week plan you edit instead of starting from blank.",
+              "actions": [
+                {
+                  "title": "Plan week",
+                  "route": "/chat"
                 },
                 {
-                  "title": "Thursday · Freezer tacos",
-                  "subtitle": "Clears tortillas and frozen protein.",
-                  "date": "Thu"
+                  "title": "Vote dinner",
+                  "route": "/chat"
+                },
+                {
+                  "title": "Shop list",
+                  "route": "/search"
                 }
               ]
             }
           },
           {
             "kind": "widget",
-            "widget": "feedList",
-            "id": "meal_timeline_pro",
-            "title": "Meal timeline",
-            "subtitle": "Pantry-first plan, with review badges where AI is unsure.",
+            "widget": "mealTimeline",
+            "id": "plan_meals",
+            "title": "Next meals",
+            "subtitle": "Tap any meal to ask Wonder to change it.",
             "tone": "neutral",
             "props": {
-              "density": "compact",
               "items": [
                 {
-                  "title": "Breakfast · Greek yogurt bowl",
-                  "subtitle": "Blueberries, walnuts, honey. Protein estimate needs one-tap review.",
-                  "badge": "+22g protein",
+                  "title": "Greek yogurt bowl",
+                  "subtitle": "Blueberries, walnuts, honey · protein estimate needs one tap",
+                  "time": "AM",
                   "route": "/chat"
                 },
                 {
-                  "title": "Lunch · Chickpea spinach wraps",
-                  "subtitle": "Uses spinach before Sunday. Missing tomatoes are on the shopping delta.",
-                  "badge": "use first",
+                  "title": "Chickpea spinach wraps",
+                  "subtitle": "Uses spinach before Sunday · tomatoes are shopping gap",
+                  "time": "Lunch",
                   "route": "/food"
                 },
                 {
-                  "title": "Dinner · Salmon rice bowls",
-                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar, jasmine rice.",
-                  "badge": "draft",
+                  "title": "Salmon rice bowls",
+                  "subtitle": "Receipt matched cucumber, rice vinegar, jasmine rice",
+                  "time": "Dinner",
                   "route": "/capture"
                 },
                 {
-                  "title": "Tomorrow · Lentil soup",
-                  "subtitle": "Uses carrots, celery, stock, and pantry lentils before they fade.",
-                  "badge": "low waste",
+                  "title": "Lentil soup prep",
+                  "subtitle": "Carrots, celery, stock, pantry lentils · tomorrow solved",
+                  "time": "Prep",
                   "route": "/chat"
                 }
               ]
@@ -838,118 +832,86 @@
           {
             "kind": "widget",
             "widget": "pollCard",
-            "id": "dinner_vote",
-            "title": "Dinner vote",
-            "subtitle": "Family-friendly planning without a group chat spiral.",
+            "id": "plan_dinner_vote",
+            "title": "Tonight?",
+            "subtitle": "Small family decision, no chat chaos.",
             "tone": "plum",
             "props": {
-              "density": "compact",
               "options": [
                 {
-                  "label": "Salmon rice bowls",
-                  "subtitle": "Best ingredients ready now.",
-                  "votes": 7
+                  "label": "Salmon bowls",
+                  "votes": 3
                 },
                 {
                   "label": "Chickpea wraps",
-                  "subtitle": "Fastest and lowest cleanup.",
-                  "votes": 4
+                  "votes": 1
                 },
                 {
                   "label": "Lentil soup",
-                  "subtitle": "Best waste rescue tomorrow.",
-                  "votes": 2
-                }
-              ],
-              "actions": [
-                {
-                  "title": "Plan winner",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Add missing items",
-                  "route": "/capture"
+                  "votes": 1
                 }
               ]
             }
           },
           {
             "kind": "widget",
-            "widget": "galleryGrid",
-            "id": "recipe_discovery",
-            "title": "Recipes to try",
-            "subtitle": "Like Yummly/Supper, but grounded in your actual kitchen.",
-            "tone": "amber",
-            "props": {
-              "items": [
-                {
-                  "title": "Miso salmon bowl",
-                  "emoji": "🍣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Chickpea wraps",
-                  "emoji": "🌯",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Lentil soup",
-                  "emoji": "🥣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Yogurt marinade",
-                  "emoji": "🍗",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Blueberry oats",
-                  "emoji": "🫐",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Freezer tacos",
-                  "emoji": "🌮",
-                  "route": "/chat"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "recordList",
-            "id": "meal_records",
-            "title": "Meal records",
-            "subtitle": "Plans, logs, revisions, and recipe steps.",
+            "widget": "recipeCard",
+            "id": "plan_recipe",
+            "title": "Pantry-first dinner",
+            "subtitle": "One meal, one shop gap, zero waste theater.",
             "tone": "neutral",
-            "query": {
-              "collections": [
-                "meal_plan",
-                "meal_log",
-                "recipe",
-                "recipe_step",
-                "recipe_revision"
+            "props": {
+              "emoji": "🍣",
+              "badge": "92% pantry match",
+              "chips": [
+                {
+                  "label": "24 min"
+                },
+                {
+                  "label": "high protein"
+                },
+                {
+                  "label": "uses salmon"
+                },
+                {
+                  "label": "1 shop gap"
+                }
               ],
-              "limit": 8
+              "route": "/chat"
             }
           }
         ]
       },
       "shop": {
         "title": "Shop",
-        "subtitle": "To buy 7 · Receipts 2 · Put away 4",
+        "subtitle": "Buy only what completes the plan",
         "components": [
           {
             "kind": "widget",
-            "widget": "postCard",
-            "id": "receipt_review_hero",
-            "title": "Receipt review",
-            "subtitle": "Market Basket · synthetic demo receipt",
-            "tone": "blue",
+            "widget": "receiptReviewCard",
+            "id": "shop_receipt",
+            "title": "Put groceries away",
+            "subtitle": "Receipt scan became reviewable kitchen changes.",
+            "tone": "amber",
             "props": {
-              "body": "Add salmon fillets, baby spinach, blueberries. Keep rice vinegar, tortillas, lemons, and oats on the list. Ignore dish soap for food inventory.",
-              "density": "compact",
-              "summaryFirst": true,
-              "badge": "Edit before save",
+              "badge": "ready",
+              "items": [
+                {
+                  "title": "Salmon",
+                  "subtitle": "freezer · dinner tonight",
+                  "status": "+1"
+                },
+                {
+                  "title": "Blueberries",
+                  "subtitle": "fridge · pair with yogurt",
+                  "status": "+1"
+                },
+                {
+                  "title": "Rice vinegar",
+                  "subtitle": "pantry duplicate?",
+                  "status": "review"
+                }
+              ],
               "actions": [
                 {
                   "title": "Accept",
@@ -960,7 +922,7 @@
                   "route": "/capture"
                 },
                 {
-                  "title": "Reject",
+                  "title": "Ignore",
                   "route": "/capture"
                 }
               ]
@@ -968,148 +930,87 @@
           },
           {
             "kind": "widget",
-            "widget": "kanbanBoard",
-            "id": "grocery_lanes",
-            "title": "Shop board",
-            "subtitle": "To buy, receipt review, put away. No dumb list.",
-            "tone": "blue",
+            "widget": "pantryShelf",
+            "id": "shop_gaps",
+            "title": "Shopping gaps",
+            "subtitle": "Tiny list, clear reason.",
+            "tone": "neutral",
             "props": {
-              "columns": [
+              "items": [
                 {
-                  "title": "To buy",
-                  "items": [
-                    {
-                      "title": "Tomatoes"
-                    },
-                    {
-                      "title": "Lemons"
-                    },
-                    {
-                      "title": "Oats"
-                    }
-                  ]
+                  "title": "Cucumber",
+                  "subtitle": "salmon bowls · tonight",
+                  "emoji": "🥒",
+                  "route": "/search"
                 },
                 {
-                  "title": "Review",
-                  "items": [
-                    {
-                      "title": "Salmon"
-                    },
-                    {
-                      "title": "Blueberries"
-                    }
-                  ]
+                  "title": "Tomatoes",
+                  "subtitle": "chickpea wraps · lunch",
+                  "emoji": "🍅",
+                  "route": "/search"
                 },
                 {
-                  "title": "Put away",
-                  "items": [
-                    {
-                      "title": "Spinach"
-                    },
-                    {
-                      "title": "Yogurt"
-                    }
-                  ]
+                  "title": "Eggs",
+                  "subtitle": "backup breakfast",
+                  "emoji": "🥚",
+                  "route": "/search"
+                },
+                {
+                  "title": "Lemons",
+                  "subtitle": "dressings + fish",
+                  "emoji": "🍋",
+                  "route": "/search"
                 }
               ]
             }
           },
           {
             "kind": "recordList",
-            "id": "shopping_records",
-            "title": "Shopping rows",
-            "subtitle": "Dinner-aware demand from package data.",
-            "tone": "neutral",
+            "id": "shop_records",
+            "title": "Shopping records",
+            "subtitle": "Rows for audit live below the beautiful actions.",
             "query": {
               "collections": [
                 "shopping_item",
-                "shopping_demand",
-                "shopping_list"
+                "purchase"
               ],
-              "match": "to buy|needed|shopping|cart|demand",
-              "limit": 6
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Add item",
-              "command": "add_shopping_item",
-              "payload": {
-                "route": "/capture"
-              }
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "checklistCard",
-            "id": "put_away_flow",
-            "title": "Put away flow",
-            "subtitle": "Receipt lines become inventory only after review.",
-            "tone": "moss",
-            "props": {
-              "items": [
-                {
-                  "title": "Add to inventory",
-                  "subtitle": "Salmon fillets, baby spinach, blueberries"
-                },
-                {
-                  "title": "Keep on shopping list",
-                  "subtitle": "Rice vinegar, tortillas, lemons, oats"
-                },
-                {
-                  "title": "Ignore household line",
-                  "subtitle": "Dish soap stays out of food inventory"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "postCard",
-            "id": "reviewable_ai_command",
-            "title": "Reviewable AI command",
-            "subtitle": "Never surprise-saves",
-            "tone": "blue",
-            "props": {
-              "body": "AI parsed the receipt into a typed draft. Wonder validates fields and waits for approval.",
-              "density": "compact",
-              "summaryFirst": true,
-              "actions": [
-                {
-                  "title": "Accept",
-                  "route": "/capture"
-                },
-                {
-                  "title": "Edit",
-                  "route": "/capture"
-                },
-                {
-                  "title": "Reject",
-                  "route": "/capture"
-                }
-              ]
+              "limit": 5
             }
           }
         ]
       },
       "home": {
         "title": "Today",
-        "subtitle": "Meals, reviews, use first",
+        "subtitle": "Dinner, groceries, and food rescue",
         "components": [
           {
             "kind": "widget",
-            "widget": "postCard",
-            "id": "today_hero",
+            "widget": "foodHero",
+            "id": "today_food_hero",
             "title": "Tonight is almost solved",
-            "subtitle": "Use spinach first · salmon thawed · 3 receipt drafts",
+            "subtitle": "Spinach expires soon · salmon is thawed · receipt draft is ready",
             "tone": "moss",
             "props": {
-              "body": "Wonder found a clean dinner path: salmon rice bowls, chickpea wraps for lunch, yogurt bowl tomorrow. Review the receipt draft, then cook from what you already have.",
-              "density": "compact",
-              "summaryFirst": true,
-              "badge": "AI pantry plan",
+              "badge": "Wonder pantry plan",
+              "emoji": "🍲",
+              "stats": [
+                {
+                  "label": "use first",
+                  "value": "5"
+                },
+                {
+                  "label": "drafts",
+                  "value": "3"
+                },
+                {
+                  "label": "match",
+                  "value": "92%"
+                }
+              ],
+              "body": "Best path: salmon rice bowls tonight, chickpea wraps for lunch, yogurt bowl tomorrow. Accept the receipt draft and cook from what you already have.",
               "actions": [
                 {
-                  "title": "Review changes",
+                  "title": "Review receipt",
                   "route": "/capture"
                 },
                 {
@@ -1128,7 +1029,7 @@
             "widget": "galleryGrid",
             "id": "food_quick_actions",
             "title": "Quick moves",
-            "subtitle": "Thumb-zone actions, no control-room noise.",
+            "subtitle": "Thumb-zone actions, no debug noise.",
             "tone": "neutral",
             "props": {
               "items": [
@@ -1157,73 +1058,76 @@
           },
           {
             "kind": "widget",
-            "widget": "feedList",
-            "id": "meal_timeline_pro",
-            "title": "Meal timeline",
-            "subtitle": "Pantry-first plan, with review badges where AI is unsure.",
-            "tone": "neutral",
-            "props": {
-              "density": "compact",
-              "items": [
-                {
-                  "title": "Breakfast · Greek yogurt bowl",
-                  "subtitle": "Blueberries, walnuts, honey. Protein estimate needs one-tap review.",
-                  "badge": "+22g protein",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Lunch · Chickpea spinach wraps",
-                  "subtitle": "Uses spinach before Sunday. Missing tomatoes are on the shopping delta.",
-                  "badge": "use first",
-                  "route": "/food"
-                },
-                {
-                  "title": "Dinner · Salmon rice bowls",
-                  "subtitle": "Receipt draft matched salmon, cucumber, rice vinegar, jasmine rice.",
-                  "badge": "draft",
-                  "route": "/capture"
-                },
-                {
-                  "title": "Tomorrow · Lentil soup",
-                  "subtitle": "Uses carrots, celery, stock, and pantry lentils before they fade.",
-                  "badge": "low waste",
-                  "route": "/chat"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "feedList",
-            "id": "use_first_deck",
+            "widget": "useFirstCarousel",
+            "id": "today_use_first",
             "title": "Use first",
             "subtitle": "The app should tell you what to rescue, not make you inspect inventory.",
             "tone": "amber",
             "props": {
-              "density": "compact",
               "items": [
                 {
                   "title": "Baby spinach",
-                  "subtitle": "Fridge lot A3 · 2 days · great for wraps or eggs.",
+                  "subtitle": "2 days · fridge lot A3 · wraps or eggs",
                   "badge": "2 days",
-                  "route": "/search"
+                  "emoji": "🥬",
+                  "route": "/food"
                 },
                 {
                   "title": "Greek yogurt",
-                  "subtitle": "Opened yesterday · good for breakfast bowls and marinades.",
+                  "subtitle": "opened yesterday · breakfast bowls + marinades",
                   "badge": "reviewed",
-                  "route": "/search"
+                  "emoji": "🥣",
+                  "route": "/food"
                 },
                 {
                   "title": "Blueberries",
-                  "subtitle": "Receipt captured · use with yogurt or freeze tonight.",
-                  "badge": "$3.99",
+                  "subtitle": "$3.99 receipt · use with yogurt or freeze tonight",
+                  "badge": "tonight",
+                  "emoji": "🫐",
+                  "route": "/food"
+                },
+                {
+                  "title": "Salmon",
+                  "subtitle": "thawed · rice bowls are the cleanest dinner path",
+                  "badge": "cook",
+                  "emoji": "🐟",
+                  "route": "/chat"
+                }
+              ],
+              "cta": "Plan dinner"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "mealTimeline",
+            "id": "today_meals",
+            "title": "Meal timeline",
+            "subtitle": "Pantry-first plan with review badges.",
+            "tone": "neutral",
+            "props": {
+              "items": [
+                {
+                  "title": "Greek yogurt bowl",
+                  "subtitle": "Blueberries, walnuts, honey · protein estimate needs one tap",
+                  "time": "AM",
+                  "route": "/chat"
+                },
+                {
+                  "title": "Chickpea spinach wraps",
+                  "subtitle": "Uses spinach before Sunday · tomatoes are shopping gap",
+                  "time": "Lunch",
+                  "route": "/food"
+                },
+                {
+                  "title": "Salmon rice bowls",
+                  "subtitle": "Receipt matched cucumber, rice vinegar, jasmine rice",
+                  "time": "Dinner",
                   "route": "/capture"
                 },
                 {
-                  "title": "Celery + carrots",
-                  "subtitle": "Soup base ready · Wonder can draft tomorrow dinner.",
-                  "badge": "soup",
+                  "title": "Lentil soup prep",
+                  "subtitle": "Carrots, celery, stock, pantry lentils · tomorrow solved",
+                  "time": "Prep",
                   "route": "/chat"
                 }
               ]
@@ -1231,19 +1135,60 @@
           },
           {
             "kind": "widget",
-            "widget": "postCard",
-            "id": "receipt_review_hero",
-            "title": "Receipt review",
-            "subtitle": "Market Basket · synthetic demo receipt",
-            "tone": "blue",
+            "widget": "recipeCard",
+            "id": "today_recipe",
+            "title": "Salmon rice bowls",
+            "subtitle": "Cucumber, rice vinegar, jasmine rice, greens. One shop gap.",
+            "tone": "neutral",
             "props": {
-              "body": "Add salmon fillets, baby spinach, blueberries. Keep rice vinegar, tortillas, lemons, and oats on the list. Ignore dish soap for food inventory.",
-              "density": "compact",
-              "summaryFirst": true,
-              "badge": "Edit before save",
+              "emoji": "🍣",
+              "badge": "92% pantry match",
+              "chips": [
+                {
+                  "label": "24 min"
+                },
+                {
+                  "label": "high protein"
+                },
+                {
+                  "label": "uses salmon"
+                },
+                {
+                  "label": "1 shop gap"
+                }
+              ],
+              "route": "/chat"
+            }
+          },
+          {
+            "kind": "widget",
+            "widget": "receiptReviewCard",
+            "id": "today_receipt",
+            "title": "Receipt draft",
+            "subtitle": "Wonder matched new groceries and flagged one duplicate.",
+            "tone": "amber",
+            "props": {
+              "badge": "3 changes",
+              "items": [
+                {
+                  "title": "Salmon",
+                  "subtitle": "freezer · dinner tonight",
+                  "status": "+1"
+                },
+                {
+                  "title": "Blueberries",
+                  "subtitle": "fridge · pair with yogurt",
+                  "status": "+1"
+                },
+                {
+                  "title": "Rice vinegar",
+                  "subtitle": "pantry duplicate?",
+                  "status": "review"
+                }
+              ],
               "actions": [
                 {
-                  "title": "Accept",
+                  "title": "Accept all",
                   "route": "/capture"
                 },
                 {
@@ -1251,222 +1196,10 @@
                   "route": "/capture"
                 },
                 {
-                  "title": "Reject",
+                  "title": "Skip",
                   "route": "/capture"
                 }
               ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "pollCard",
-            "id": "dinner_vote",
-            "title": "Dinner vote",
-            "subtitle": "Family-friendly planning without a group chat spiral.",
-            "tone": "plum",
-            "props": {
-              "density": "compact",
-              "options": [
-                {
-                  "label": "Salmon rice bowls",
-                  "subtitle": "Best ingredients ready now.",
-                  "votes": 7
-                },
-                {
-                  "label": "Chickpea wraps",
-                  "subtitle": "Fastest and lowest cleanup.",
-                  "votes": 4
-                },
-                {
-                  "label": "Lentil soup",
-                  "subtitle": "Best waste rescue tomorrow.",
-                  "votes": 2
-                }
-              ],
-              "actions": [
-                {
-                  "title": "Plan winner",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Add missing items",
-                  "route": "/capture"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "galleryGrid",
-            "id": "recipe_discovery",
-            "title": "Recipes to try",
-            "subtitle": "Like Yummly/Supper, but grounded in your actual kitchen.",
-            "tone": "amber",
-            "props": {
-              "items": [
-                {
-                  "title": "Miso salmon bowl",
-                  "emoji": "🍣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Chickpea wraps",
-                  "emoji": "🌯",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Lentil soup",
-                  "emoji": "🥣",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Yogurt marinade",
-                  "emoji": "🍗",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Blueberry oats",
-                  "emoji": "🫐",
-                  "route": "/chat"
-                },
-                {
-                  "title": "Freezer tacos",
-                  "emoji": "🌮",
-                  "route": "/chat"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "calendarBlock",
-            "id": "week_plan",
-            "title": "This week",
-            "subtitle": "A simple meal-plan spine: day, dish, why it exists.",
-            "tone": "neutral",
-            "props": {
-              "events": [
-                {
-                  "title": "Today · Salmon rice bowls",
-                  "subtitle": "Uses receipt draft + cucumber + rice.",
-                  "date": "Tonight"
-                },
-                {
-                  "title": "Tomorrow · Lentil soup",
-                  "subtitle": "Rescues carrots, celery, stock.",
-                  "date": "Tue"
-                },
-                {
-                  "title": "Wednesday · Chickpea wraps",
-                  "subtitle": "Finishes spinach and yogurt sauce.",
-                  "date": "Wed"
-                },
-                {
-                  "title": "Thursday · Freezer tacos",
-                  "subtitle": "Clears tortillas and frozen protein.",
-                  "date": "Thu"
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "kanbanBoard",
-            "id": "grocery_lanes",
-            "title": "Shop board",
-            "subtitle": "To buy, receipt review, put away. No dumb list.",
-            "tone": "blue",
-            "props": {
-              "columns": [
-                {
-                  "title": "To buy",
-                  "items": [
-                    {
-                      "title": "Tomatoes"
-                    },
-                    {
-                      "title": "Lemons"
-                    },
-                    {
-                      "title": "Oats"
-                    }
-                  ]
-                },
-                {
-                  "title": "Review",
-                  "items": [
-                    {
-                      "title": "Salmon"
-                    },
-                    {
-                      "title": "Blueberries"
-                    }
-                  ]
-                },
-                {
-                  "title": "Put away",
-                  "items": [
-                    {
-                      "title": "Spinach"
-                    },
-                    {
-                      "title": "Yogurt"
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            "kind": "widget",
-            "widget": "chartBlock",
-            "id": "waste_rescue",
-            "title": "Waste rescue score",
-            "subtitle": "Make the win visible.",
-            "tone": "moss",
-            "props": {
-              "points": [
-                {
-                  "label": "Used first",
-                  "value": 5
-                },
-                {
-                  "label": "Drafts reviewed",
-                  "value": 3
-                },
-                {
-                  "label": "Shopping gaps",
-                  "value": 4
-                },
-                {
-                  "label": "Meals planned",
-                  "value": 4
-                }
-              ]
-            }
-          },
-          {
-            "kind": "recordList",
-            "id": "pantry_records",
-            "title": "Your kitchen graph",
-            "subtitle": "Live rows below the pretty layer.",
-            "tone": "neutral",
-            "query": {
-              "collections": [
-                "inventory",
-                "inventory_lot",
-                "product",
-                "ingredient"
-              ],
-              "limit": 6
-            },
-            "action": {
-              "kind": "propose",
-              "label": "Add food",
-              "command": "add_food_item",
-              "payload": {
-                "route": "/capture"
-              }
             }
           }
         ]
@@ -1672,47 +1405,39 @@
       },
       "chat": {
         "title": "Ask Wonder",
-        "subtitle": "Dinner, pantry, recipes, shopping, and safe app changes.",
+        "subtitle": "Food assistant for cooking, shopping, pantry, and app changes.",
         "components": [
           {
             "kind": "widget",
-            "widget": "assistantChat",
-            "id": "chat_assistant",
-            "title": "Ask Wonder",
-            "subtitle": "Dinner, pantry, shopping, recipes, and reviewable app changes.",
-            "tone": "plum",
+            "widget": "askFoodBar",
+            "id": "ask_food_bar",
+            "title": "What should we do with the food we have?",
+            "subtitle": "Short asks. Useful actions. No context clutter.",
+            "tone": "moss",
             "props": {
-              "prompt": "Ask about dinner, pantry, shopping, recipes…",
+              "placeholder": "Ask what to cook, buy, use, or change…",
               "suggestions": [
                 "What should we cook tonight?",
                 "Use spinach before it expires",
                 "Turn receipt into inventory review",
-                "Make a grocery list from this week plan"
+                "Make this app less dense"
               ]
             }
           },
           {
             "kind": "widget",
-            "widget": "feedList",
-            "id": "chat_examples",
-            "title": "Good asks",
-            "subtitle": "Short prompts that produce useful food actions.",
+            "widget": "assistantChat",
+            "id": "ask_chat",
+            "title": "Live assistant",
+            "subtitle": "When you send, Wonder uses selected sources from settings.",
             "tone": "neutral",
             "props": {
-              "density": "compact",
-              "items": [
-                {
-                  "title": "Plan dinner from what we have",
-                  "subtitle": "Returns recipe, missing items, and confidence."
-                },
-                {
-                  "title": "Review receipt draft",
-                  "subtitle": "Shows add/keep/ignore lines before saving."
-                },
-                {
-                  "title": "Make this app cuter",
-                  "subtitle": "Creates package diff, not runtime code."
-                }
+              "prompt": "Ask about dinner, pantry, shopping, recipes…",
+              "suggestions": [
+                "Plan dinner from what we have",
+                "Find grocery gaps",
+                "Review receipt draft",
+                "Change the Food UI"
               ]
             }
           }
@@ -2057,6 +1782,27 @@
                 },
                 {
                   "title": "Package editor"
+                },
+                {
+                  "title": "Food hero"
+                },
+                {
+                  "title": "Use first carousel"
+                },
+                {
+                  "title": "Meal timeline"
+                },
+                {
+                  "title": "Recipe card"
+                },
+                {
+                  "title": "Receipt review card"
+                },
+                {
+                  "title": "Pantry shelf"
+                },
+                {
+                  "title": "Ask food bar"
                 }
               ]
             }
