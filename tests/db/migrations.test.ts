@@ -225,6 +225,9 @@ describe('database migrations', () => {
     expect(db.tables.has('app_installations')).toBe(true);
     expect(db.tables.has('app_installation_package_state')).toBe(true);
     expect(db.tables.has('app_package_receipts')).toBe(true);
+    expect(db.tables.has('cloud_accounts')).toBe(true);
+    expect(db.tables.has('cloud_devices')).toBe(true);
+    expect(db.tables.has('cloud_sessions')).toBe(true);
     const recordColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(records)');
     expect(recordColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
       'app_installation_id',
@@ -240,6 +243,10 @@ describe('database migrations', () => {
     expect(db.indexes.has('config_sources_enabled_precedence_idx')).toBe(true);
     expect(db.indexes.has('config_conflicts_status_idx')).toBe(true);
     expect(db.indexes.has('app_installations_workspace_status_idx')).toBe(true);
+    expect(db.indexes.has('cloud_accounts_workspace_status_idx')).toBe(true);
+    expect(db.indexes.has('cloud_devices_account_status_idx')).toBe(true);
+    expect(db.indexes.has('cloud_sessions_account_status_idx')).toBe(true);
+    expect(db.indexes.has('cloud_sessions_device_status_idx')).toBe(true);
   });
 
   it('keeps control-plane config separate from data-plane records', async () => {

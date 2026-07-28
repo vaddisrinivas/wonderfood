@@ -82,7 +82,7 @@ export async function sendDirectModelMessage(input: {
     body = {
       ...(profile.provider === 'azure_openai' ? {} : { model: profile.model }),
       messages,
-      temperature: 0.2,
+      ...(profile.provider === 'azure_openai' ? {} : { temperature: 0.2 }),
     };
   }
 

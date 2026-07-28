@@ -51,6 +51,7 @@ export type A2UiAction = {
 export type A2UiComponent = {
   kind: AppPackageUiComponentKind;
   id?: string;
+  placement?: 'inline' | 'top' | 'fab';
   title?: string;
   subtitle?: string;
   widget?: AppPackageWidgetKind;
@@ -68,6 +69,13 @@ export type A2UiComponent = {
 export type A2UiSurface = {
   schemaVersion?: 'a2ui.v0_9';
   openUrlAllowlist?: string[];
+  navigation?: {
+    items: Array<{
+      screen: 'home' | 'overview' | 'chat' | 'sources' | 'settings';
+      label: string;
+      icon?: 'home' | 'food' | 'sparkles' | 'sync' | 'settings';
+    }>;
+  };
   components?: A2UiComponent[];
   screens?: Record<string, { title?: string; subtitle?: string; components?: A2UiComponent[] }>;
   defaultScreen?: string;

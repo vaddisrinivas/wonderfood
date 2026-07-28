@@ -1,15 +1,18 @@
+import jsonPatch, { type Operation as JsonPatchOperation } from 'fast-json-patch';
+
 import type { AppPackage } from '@/packages/shared/contracts/package';
 import {
   PACKAGE_AUTHORING_APPROVAL_SCHEMA_VERSION,
   PACKAGE_AUTHORING_EVALUATION_SCHEMA_VERSION,
   collectPackageAuthoringChangeIssues,
+  createDefaultPackageAuthoringBounds,
   isPackageAuthoringChange,
   normalizeAuthoringSourcePath,
   type PackageAuthoringApprovalReceipt,
   type PackageAuthoringChange,
   type PackageAuthoringEvaluation,
   type PackageAuthoringIssue,
-  type PackageAuthoringSourcePatch,
+  type PackageAuthoringPatchProposal,
 } from '@/packages/shared/contracts/package-authoring';
 import {
   compileAppPackageSource,
@@ -20,6 +23,22 @@ import { sha256Canonical } from '@/packages/shared/contracts/canonical-json';
 export type PackageAuthoringEvaluationOptions = Readonly<{
   baselinePackage?: AppPackage;
 }>;
+
+export function createPackageAuthoringChange(input: {
+  baseSourceRevision: string;
+  intent: string;
+  proposedBy: string;
+  proposals: readonly PackageAuthoringPatchProposal[];
+}): PackageAuthoringChange {
+  return {
+    schemaVersion: 'utopia.authoring-change.v1',
+    baseSourceRevision: input.baseSourceRevision,
+    intent: input.intent,
+    proposedBy: input.proposedBy,
+    proposals: [...input.proposals],
+    bounds: createDefaultPackageAuthoringBounds(),
+  };
+}
 
 export function evaluatePackageAuthoringChange(
   baseSource: AppPackageSourceFolder,
@@ -48,7 +67,7 @@ export function evaluatePackageAuthoringChange(
   }
 
   const patched = cloneSource(baseSource);
-  const patchIssues = applyAuthoringPatches(patched, change.changes);
+  const patchIssues = applyAuthoringPatches(patched, change.proposals);
   if (patchIssues.length > 0) return invalid(patchIssues, changeId, change);
 
   const compiled = compileAppPackageSource(patched, {
@@ -104,66 +123,25 @@ export function computePackageAuthoringChangeId(change: PackageAuthoringChange):
   return sha256Canonical(change);
 }
 
-function applyAuthoringPatches(source: AppPackageSourceFolder, changes: readonly PackageAuthoringSourcePatch[]): PackageAuthoringIssue[] {
+function applyAuthoringPatches(source: AppPackageSourceFolder, changes: readonly PackageAuthoringPatchProposal[]): PackageAuthoringIssue[] {
   const issues: PackageAuthoringIssue[] = [];
-  for (const [index, patch] of changes.entries()) {
-    try {
-      applyAuthoringPatch(source, patch);
-    } catch (error) {
-      issues.push({
-        path: `/changes/${index}`,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+  try {
+    const patched = jsonPatch.applyPatch(source as unknown as Record<string, unknown>, changes as JsonPatchOperation[], true, true)
+      .newDocument as AppPackageSourceFolder;
+    Object.assign(source, patched);
+  } catch (error) {
+    issues.push({
+      path: '/proposals',
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
+  issues.push(...collectPostPatchIssues(source, changes));
   return issues;
-}
-
-function applyAuthoringPatch(source: AppPackageSourceFolder, patch: PackageAuthoringSourcePatch): void {
-  const parts = normalizeAuthoringSourcePath(patch.path);
-  if (patch.path === 'app.json') {
-    if (patch.op === 'remove') throw new Error('app.json cannot be removed');
-    source.app = cloneJson(patch.value) as AppPackageSourceFolder['app'];
-    return;
-  }
-
-  const [folder, fileName] = parts;
-  if (!folder || !fileName || parts.length !== 2 || !fileName.endsWith('.json')) {
-    throw new Error(`unsupported authoring source path: ${patch.path}`);
-  }
-
-  const id = fileName.replace(/\.json$/, '');
-  const map = ensureSourceMap(source, folder);
-  if (patch.op === 'remove') {
-    if (!Object.hasOwn(map, id)) throw new Error(`cannot remove missing source file: ${patch.path}`);
-    delete map[id];
-    return;
-  }
-
-  if (patch.op === 'replace' && !Object.hasOwn(map, id)) {
-    throw new Error(`cannot replace missing source file: ${patch.path}`);
-  }
-  map[id] = cloneJson(patch.value);
-}
-
-function ensureSourceMap(source: AppPackageSourceFolder, folder: string): Record<string, unknown> {
-  if (folder === 'capabilities') {
-    source.capabilities = source.capabilities ?? {};
-    return source.capabilities as Record<string, unknown>;
-  }
-  const key = folder as keyof Omit<AppPackageSourceFolder, 'app' | 'capabilities'>;
-  const current = source[key];
-  if (current === undefined) {
-    (source as unknown as Record<string, unknown>)[folder] = {};
-    return (source as unknown as Record<string, Record<string, unknown>>)[folder];
-  }
-  if (!isRecord(current)) throw new Error(`source folder is not an object map: ${folder}`);
-  return current;
 }
 
 function classifyAuthoringRisk(change: PackageAuthoringChange): string[] {
   const risks = new Set<string>(['approval_required']);
-  for (const patch of change.changes) {
+  for (const patch of change.proposals) {
     const root = normalizeAuthoringSourcePath(patch.path)[0];
     if (root === 'capabilities') risks.add('native_or_dependency_capability_change');
     if (root === 'providers') risks.add('provider_configuration_change');
@@ -197,6 +175,16 @@ function cloneJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value)) as unknown;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function collectPostPatchIssues(
+  source: AppPackageSourceFolder,
+  changes: readonly PackageAuthoringPatchProposal[],
+): PackageAuthoringIssue[] {
+  const issues: PackageAuthoringIssue[] = [];
+  if (!source.app || typeof source.app !== 'object') {
+    issues.push({ path: '/app', message: 'app source must remain an object' });
+  }
+  if (changes.some((patch) => patch.path === '/app' && patch.op === 'remove')) {
+    issues.push({ path: '/proposals', message: 'app source cannot be removed' });
+  }
+  return issues;
 }

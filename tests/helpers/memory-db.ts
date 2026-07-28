@@ -53,6 +53,12 @@ export class MemoryDb {
       this.operations.set(op_id, { op_id, app_installation_id, kind, domain, collection, record_id, expected_revision, result_revision, actor, origin, idempotency_key, changes_json, before_json, after_json, inverse_op_id, status, reject_reason, created_at });
       return;
     }
+    if (compact === 'UPDATE records SET properties = $properties WHERE app_installation_id = $installation_id AND id = $id') {
+      const row = normalizeParams(params);
+      const record = this.records.get(recordKey(row.$installation_id, row.$id));
+      if (record) record.properties = row.$properties;
+      return;
+    }
     if (compact === 'UPDATE operations SET status = ? WHERE app_installation_id = ? AND op_id = ?') {
       const [status, appInstallationId, opId] = params;
       const row = this.operations.get(opId);
@@ -161,6 +167,14 @@ export class MemoryDb {
         workspace_id: row.$workspace_id ?? 'default-workspace',
         app_name: row.$app_name ?? row.$label,
         status: row.$status ?? 'active',
+        package_key: row.$package_key ?? null,
+        package_id: row.$package_id ?? null,
+        version: row.$version ?? null,
+        source_url: row.$source_url ?? null,
+        checksum: row.$checksum ?? null,
+        launch_path: row.$launch_path ?? null,
+        approval_hash: row.$approval_hash ?? null,
+        approved_by: row.$approved_by ?? null,
         created_at: row.$created_at,
         updated_at: row.$updated_at,
       });
@@ -286,6 +300,10 @@ export class MemoryDb {
       const row = this.appPackages.get(normalizeParams(params).$package_key);
       return (row ? { package_key: row.package_key, payload_json: row.payload_json } : null) as T | null;
     }
+    if (compact === 'SELECT payload_json FROM app_packages WHERE package_key = $package_key') {
+      const row = this.appPackages.get(normalizeParams(params).$package_key);
+      return (row ? { payload_json: row.payload_json } : null) as T | null;
+    }
     if (compact === 'SELECT COUNT(*) as count FROM app_packages') {
       return { count: this.appPackages.size } as T;
     }
@@ -344,6 +362,17 @@ export class MemoryDb {
           status: row.status,
           created_at: row.created_at,
           updated_at: row.updated_at,
+        })) as T[];
+    }
+    if (compact === 'SELECT id, collection, properties FROM records WHERE app_installation_id = $installation_id ORDER BY collection ASC, id ASC') {
+      const installationId = normalizeParams(params).$installation_id;
+      return Array.from(this.records.values())
+        .filter((row) => row.app_installation_id === installationId)
+        .sort((left, right) => `${left.collection}:${left.id}`.localeCompare(`${right.collection}:${right.id}`))
+        .map((row) => ({
+          id: row.id,
+          collection: row.collection,
+          properties: row.properties,
         })) as T[];
     }
     throw new Error(`Unsupported getAllAsync SQL: ${compact}`);

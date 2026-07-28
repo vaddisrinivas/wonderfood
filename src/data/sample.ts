@@ -7,6 +7,11 @@ export type FoodRecord = {
   body: string;
   source: string;
   collection: string;
+  location?: 'fridge' | 'pantry' | 'freezer';
+  quantity?: string;
+  expires_in_days?: number;
+  opened?: boolean;
+  emoji?: string;
   relations?: Array<{ name: string; target_id: string }>;
   food_detail: {
     nutrition: Array<[string, string]>;
@@ -30,6 +35,11 @@ export function sampleRecordsAsCanonical(domain = 'food') {
       meta: sample.meta,
       body: sample.body,
       source: sample.source,
+      ...(sample.location ? { location: sample.location } : {}),
+      ...(sample.quantity ? { quantity: sample.quantity } : {}),
+      ...(sample.expires_in_days !== undefined ? { expires_in_days: sample.expires_in_days } : {}),
+      ...(sample.opened !== undefined ? { opened: sample.opened } : {}),
+      ...(sample.emoji ? { emoji: sample.emoji } : {}),
       food_detail: sample.food_detail,
     },
     source: {
@@ -56,6 +66,11 @@ export const foodRecords: FoodRecord[] = [
     body: 'Bought at Whole Foods. Use for breakfast bowls or the tandoori marinade.',
     source: 'Notion · Pantry',
     collection: 'inventory',
+    location: 'pantry',
+    quantity: '2 tubs',
+    expires_in_days: 2,
+    opened: true,
+    emoji: '🥣',
     relations: [{ name: 'supports', target_id: 'recipe-tandoori' }],
     food_detail: {
       nutrition: [
@@ -123,6 +138,11 @@ export const foodRecords: FoodRecord[] = [
     body: 'One open tub remains. First use should be tandoori marinade, then breakfast bowl.',
     source: 'SQLite · Kitchen lots',
     collection: 'inventory_lot',
+    location: 'fridge',
+    quantity: '1 tub',
+    expires_in_days: 2,
+    opened: true,
+    emoji: '🥣',
     relations: [
       { name: 'stores', target_id: 'pantry-yogurt' },
       { name: 'from_product', target_id: 'product-fage-yogurt' },
@@ -145,6 +165,89 @@ export const foodRecords: FoodRecord[] = [
         ['Next planned use', 'Sheet-pan tandoori chicken'],
       ],
       variations: ['Freeze into smoothie cubes if not used by Friday.'],
+    },
+  },
+  {
+    id: 'inventory-spinach',
+    title: 'Baby spinach',
+    meta: 'Fridge · produce drawer · 1 bag',
+    status: 'Use in 2 days',
+    tone: 'amber',
+    body: 'Use first in wraps, eggs, or green dal.',
+    source: 'SQLite · Kitchen',
+    collection: 'inventory',
+    location: 'fridge',
+    quantity: '1 bag',
+    expires_in_days: 2,
+    emoji: '🥬',
+    food_detail: {
+      nutrition: [['Fiber', 'High'], ['Iron', 'High']],
+      ingredients: [{ name: 'Baby spinach', amount: '1 bag', state: 'available' }],
+      instructions: ['Use before other greens.', 'Freeze if not used within two days.'],
+      logs: [['Location', 'Fridge'], ['Use by', '2 days']],
+      variations: ['Wraps', 'Eggs', 'Green dal'],
+    },
+  },
+  {
+    id: 'inventory-blueberries',
+    title: 'Blueberries',
+    meta: 'Fridge · fruit drawer · 1 punnet',
+    status: 'Use tonight',
+    tone: 'amber',
+    body: 'Pair with the open yogurt or freeze for smoothies.',
+    source: 'SQLite · Kitchen',
+    collection: 'inventory',
+    location: 'fridge',
+    quantity: '1 punnet',
+    expires_in_days: 1,
+    emoji: '🫐',
+    food_detail: {
+      nutrition: [['Fiber', 'Good'], ['Serving', '1 cup']],
+      ingredients: [{ name: 'Blueberries', amount: '1 punnet', state: 'available' }],
+      instructions: ['Use with yogurt tonight or freeze.'],
+      logs: [['Location', 'Fridge'], ['Use by', 'Tonight']],
+      variations: ['Yogurt bowl', 'Smoothie', 'Frozen snack'],
+    },
+  },
+  {
+    id: 'inventory-salmon',
+    title: 'Salmon fillets',
+    meta: 'Freezer · thawing shelf · 2 fillets',
+    status: 'Cook tonight',
+    tone: 'amber',
+    body: 'Thawed salmon should be the anchor for dinner tonight.',
+    source: 'SQLite · Kitchen',
+    collection: 'inventory',
+    location: 'freezer',
+    quantity: '2 fillets',
+    expires_in_days: 1,
+    emoji: '🐟',
+    food_detail: {
+      nutrition: [['Protein', 'High'], ['Omega-3', 'High']],
+      ingredients: [{ name: 'Salmon', amount: '2 fillets', state: 'available' }],
+      instructions: ['Cook tonight after thawing.', 'Do not refreeze after fully thawed.'],
+      logs: [['Location', 'Freezer'], ['State', 'Thawing']],
+      variations: ['Rice bowl', 'Sheet pan', 'Tacos'],
+    },
+  },
+  {
+    id: 'inventory-rice',
+    title: 'Jasmine rice',
+    meta: 'Pantry · grains shelf · 3 cups',
+    status: 'Available',
+    tone: 'moss',
+    body: 'Pantry staple for rice bowls, dal, and leftovers.',
+    source: 'SQLite · Kitchen',
+    collection: 'inventory',
+    location: 'pantry',
+    quantity: '3 cups',
+    emoji: '🍚',
+    food_detail: {
+      nutrition: [['Serving', '1/2 cup dry']],
+      ingredients: [{ name: 'Jasmine rice', amount: '3 cups', state: 'available' }],
+      instructions: ['Use as the base for tonight’s dinner.'],
+      logs: [['Location', 'Pantry']],
+      variations: ['Rice bowl', 'Dal', 'Fried rice'],
     },
   },
   {

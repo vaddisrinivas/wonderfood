@@ -3,7 +3,7 @@ import { DEFAULT_APP_INSTALLATION_ID, DEFAULT_WORKSPACE_ID } from '@/packages/sh
 import { loadCatalog } from '@/src/domain/catalog';
 
 export const DATABASE_NAME = 'wonderfood-lifeos.db';
-export const DATABASE_VERSION = 9;
+export const DATABASE_VERSION = 12;
 
 const TABLES = {
   meta: 'meta',
@@ -26,6 +26,10 @@ const TABLES = {
   app_package_state: 'app_package_state',
   app_installation_package_state: 'app_installation_package_state',
   app_package_receipts: 'app_package_receipts',
+  package_migration_journal: 'package_migration_journal',
+  cloud_accounts: 'cloud_accounts',
+  cloud_devices: 'cloud_devices',
+  cloud_sessions: 'cloud_sessions',
   undo_events: 'undo_events',
   workflow_runs: 'workflow_runs',
   agent_runs: 'agent_runs',
@@ -663,6 +667,270 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.relations}_installation_from_idx`);
       await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.records}_installation_id_idx`);
       await db.execAsync(`PRAGMA user_version = 8`);
+    },
+  },
+  {
+    version: 10,
+    up: async (db) => {
+      const addColumn = async (table: string, columnSql: string) => {
+        try {
+          await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
+        } catch {
+          // Existing debug/dev databases may already have these compatibility columns.
+        }
+      };
+      await addColumn(TABLES.conversations, `workspace_id TEXT NOT NULL DEFAULT '${DEFAULT_WORKSPACE_ID}'`);
+      await addColumn(TABLES.conversations, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.conversations, `package_id TEXT`);
+      await addColumn(TABLES.conversations, `package_version TEXT`);
+      await addColumn(TABLES.workflow_runs, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.provider_links, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.source_snapshots, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await addColumn(TABLES.source_snapshots_causality, `app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}'`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.provider_links}_scoped (
+          app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}',
+          id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          external_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL,
+          freshness TEXT,
+          workspace TEXT,
+          url TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (app_installation_id, id)
+        )
+      `);
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.provider_links}_scoped (
+          app_installation_id, id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at
+        )
+        SELECT app_installation_id, id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at
+        FROM ${TABLES.provider_links}
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.provider_links}`);
+      await db.execAsync(`ALTER TABLE ${TABLES.provider_links}_scoped RENAME TO ${TABLES.provider_links}`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.source_snapshots}_scoped (
+          app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}',
+          id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          external_id TEXT NOT NULL,
+          scope TEXT,
+          observed_at TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          checksum TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (app_installation_id, id)
+        )
+      `);
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.source_snapshots}_scoped (
+          app_installation_id, id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at
+        )
+        SELECT app_installation_id, id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at
+        FROM ${TABLES.source_snapshots}
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.source_snapshots}`);
+      await db.execAsync(`ALTER TABLE ${TABLES.source_snapshots}_scoped RENAME TO ${TABLES.source_snapshots}`);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.source_snapshots_causality}_scoped (
+          app_installation_id TEXT NOT NULL DEFAULT '${DEFAULT_APP_INSTALLATION_ID}',
+          snapshot_id TEXT NOT NULL,
+          record_id TEXT NOT NULL,
+          PRIMARY KEY (app_installation_id, snapshot_id, record_id)
+        )
+      `);
+      await db.execAsync(`
+        INSERT OR IGNORE INTO ${TABLES.source_snapshots_causality}_scoped (
+          app_installation_id, snapshot_id, record_id
+        )
+        SELECT app_installation_id, snapshot_id, record_id
+        FROM ${TABLES.source_snapshots_causality}
+      `);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.source_snapshots_causality}`);
+      await db.execAsync(`ALTER TABLE ${TABLES.source_snapshots_causality}_scoped RENAME TO ${TABLES.source_snapshots_causality}`);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.conversations}_installation_domain_idx
+          ON ${TABLES.conversations}(app_installation_id, domain, updated_at)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.workflow_runs}_installation_domain_idx
+          ON ${TABLES.workflow_runs}(app_installation_id, domain, updated_at)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.provider_links}_installation_provider_idx
+          ON ${TABLES.provider_links}(app_installation_id, provider, external_id)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.source_snapshots}_installation_provider_idx
+          ON ${TABLES.source_snapshots}(app_installation_id, provider, external_id, observed_at)
+      `);
+      await db.execAsync(`PRAGMA user_version = 10`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.source_snapshots}_installation_provider_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.provider_links}_installation_provider_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.workflow_runs}_installation_domain_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.conversations}_installation_domain_idx`);
+      await db.execAsync(`PRAGMA user_version = 9`);
+    },
+  },
+  {
+    version: 11,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.package_migration_journal} (
+          id TEXT PRIMARY KEY,
+          installation_id TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          state TEXT NOT NULL
+            CHECK(state IN ('planned','approved','applying','activated','rolled_back','recovered','failed','manual_review')),
+          plan_hash TEXT NOT NULL,
+          operation_hash TEXT NOT NULL,
+          snapshot_hash TEXT NOT NULL,
+          from_package_key TEXT NOT NULL,
+          to_package_key TEXT NOT NULL,
+          from_checksum TEXT NOT NULL,
+          to_checksum TEXT NOT NULL,
+          affected_record_count INTEGER NOT NULL DEFAULT 0,
+          plan_json TEXT NOT NULL,
+          snapshot_json TEXT NOT NULL,
+          approval_json TEXT,
+          receipt_json TEXT,
+          package_hash TEXT NOT NULL,
+          actor_hash TEXT,
+          policy_category TEXT,
+          approval_expires_at TEXT,
+          approval_nonce TEXT,
+          consumed_receipt_hash TEXT,
+          error_reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (installation_id) REFERENCES ${TABLES.app_installations}(installation_id) ON DELETE CASCADE,
+          FOREIGN KEY (workspace_id) REFERENCES ${TABLES.workspaces}(id) ON DELETE CASCADE
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.package_migration_journal}_installation_state_idx
+          ON ${TABLES.package_migration_journal}(installation_id, state, updated_at DESC)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.package_migration_journal}_approval_nonce_idx
+          ON ${TABLES.package_migration_journal}(approval_nonce, installation_id)
+      `);
+      await db.execAsync(`PRAGMA user_version = 11`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.package_migration_journal}_approval_nonce_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.package_migration_journal}_installation_state_idx`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.package_migration_journal}`);
+      await db.execAsync(`PRAGMA user_version = 10`);
+    },
+  },
+  {
+    version: 12,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.cloud_accounts} (
+          account_id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          issuer TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          email TEXT,
+          email_verified INTEGER NOT NULL DEFAULT 0 CHECK(email_verified IN (0, 1)),
+          display_name TEXT,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled', 'pending_delete')),
+          profile_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (workspace_id, issuer, subject),
+          FOREIGN KEY (workspace_id) REFERENCES ${TABLES.workspaces}(id) ON DELETE CASCADE
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.cloud_devices} (
+          device_id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          app_installation_id TEXT,
+          platform TEXT NOT NULL CHECK(platform IN ('ios', 'android', 'web', 'desktop', 'server')),
+          device_label TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('pending', 'active', 'revoked', 'lost')),
+          proof_key_id TEXT NOT NULL,
+          proof_public_key TEXT NOT NULL,
+          proof_alg TEXT NOT NULL,
+          attestation_format TEXT,
+          metadata_json TEXT NOT NULL,
+          last_seen_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (workspace_id, account_id, proof_key_id),
+          UNIQUE (workspace_id, app_installation_id),
+          FOREIGN KEY (workspace_id) REFERENCES ${TABLES.workspaces}(id) ON DELETE CASCADE,
+          FOREIGN KEY (account_id) REFERENCES ${TABLES.cloud_accounts}(account_id) ON DELETE CASCADE,
+          FOREIGN KEY (app_installation_id) REFERENCES ${TABLES.app_installations}(installation_id) ON DELETE SET NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ${TABLES.cloud_sessions} (
+          session_id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          device_id TEXT NOT NULL,
+          app_installation_id TEXT,
+          issuer TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'expired', 'revoked', 'rotated')),
+          auth_flow TEXT NOT NULL CHECK(auth_flow IN ('oidc_code_pkce', 'refresh_token', 'device_rebind')),
+          scope TEXT NOT NULL,
+          proof_binding_id TEXT NOT NULL,
+          proof_key_id TEXT NOT NULL,
+          proof_alg TEXT NOT NULL,
+          refresh_family_id TEXT,
+          claims_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          access_expires_at TEXT,
+          refresh_expires_at TEXT,
+          last_proof_at TEXT,
+          UNIQUE (workspace_id, proof_binding_id),
+          FOREIGN KEY (workspace_id) REFERENCES ${TABLES.workspaces}(id) ON DELETE CASCADE,
+          FOREIGN KEY (account_id) REFERENCES ${TABLES.cloud_accounts}(account_id) ON DELETE CASCADE,
+          FOREIGN KEY (device_id) REFERENCES ${TABLES.cloud_devices}(device_id) ON DELETE CASCADE,
+          FOREIGN KEY (app_installation_id) REFERENCES ${TABLES.app_installations}(installation_id) ON DELETE SET NULL
+        )
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.cloud_accounts}_workspace_status_idx
+          ON ${TABLES.cloud_accounts}(workspace_id, status, updated_at DESC)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.cloud_devices}_account_status_idx
+          ON ${TABLES.cloud_devices}(workspace_id, account_id, status, updated_at DESC)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.cloud_sessions}_account_status_idx
+          ON ${TABLES.cloud_sessions}(workspace_id, account_id, status, updated_at DESC)
+      `);
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS ${TABLES.cloud_sessions}_device_status_idx
+          ON ${TABLES.cloud_sessions}(workspace_id, device_id, status, updated_at DESC)
+      `);
+      await db.execAsync(`PRAGMA user_version = 12`);
+    },
+    down: async (db) => {
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.cloud_sessions}_device_status_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.cloud_sessions}_account_status_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.cloud_devices}_account_status_idx`);
+      await db.execAsync(`DROP INDEX IF EXISTS ${TABLES.cloud_accounts}_workspace_status_idx`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.cloud_sessions}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.cloud_devices}`);
+      await db.execAsync(`DROP TABLE IF EXISTS ${TABLES.cloud_accounts}`);
+      await db.execAsync(`PRAGMA user_version = 11`);
     },
   },
 ];

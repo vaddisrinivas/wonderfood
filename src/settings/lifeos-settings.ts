@@ -487,6 +487,66 @@ export function useLifeOSSettingsSnapshot(): LifeOSSettings {
   return settings;
 }
 
+export function updateLifeOSRuntimePreferences(
+  settings: LifeOSSettings,
+  input: Partial<Pick<LifeOSSettings['runtime'], 'theme' | 'density'>>,
+): LifeOSSettings {
+  return normalizeSettings({
+    ...settings,
+    runtime: {
+      ...settings.runtime,
+      ...(input.theme ? { theme: input.theme } : {}),
+      ...(input.density ? { density: input.density } : {}),
+    },
+  });
+}
+
+export async function saveLifeOSRuntimePreferences(
+  input: Partial<Pick<LifeOSSettings['runtime'], 'theme' | 'density'>>,
+): Promise<LifeOSSettings> {
+  return saveLifeOSSettings(updateLifeOSRuntimePreferences(await loadLifeOSSettings(), input));
+}
+
+export type AiProviderProfileUpdate = Partial<Omit<AiProviderProfile, 'id' | 'apiKey'>> & {
+  apiKey?: string;
+  clearApiKey?: boolean;
+};
+
+export function updateLifeOSAiProviderProfile(
+  settings: LifeOSSettings,
+  id: AiProviderProfile['id'],
+  patch: AiProviderProfileUpdate,
+): LifeOSSettings {
+  const current = settings.ai[id];
+  const nextApiKey = patch.clearApiKey ? '' : typeof patch.apiKey === 'string' && patch.apiKey.trim().length > 0 ? patch.apiKey.trim() : current.apiKey;
+  return normalizeSettings({
+    ...settings,
+    ai: {
+      ...settings.ai,
+      [id]: {
+        ...current,
+        ...patch,
+        id,
+        apiKey: nextApiKey,
+      },
+    },
+  });
+}
+
+export async function saveLifeOSAiProviderProfile(
+  id: AiProviderProfile['id'],
+  patch: AiProviderProfileUpdate,
+): Promise<LifeOSSettings> {
+  return saveLifeOSSettings(updateLifeOSAiProviderProfile(await loadLifeOSSettings(), id, patch));
+}
+
+export function maskSecret(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Not set';
+  if (trimmed.length <= 8) return '••••';
+  return `${trimmed.slice(0, 3)}••••${trimmed.slice(-4)}`;
+}
+
 export function usableAiProfiles(settings: LifeOSSettings): AiProviderProfile[] {
   return [settings.ai.primary, settings.ai.fallback].filter(
     (profile) =>

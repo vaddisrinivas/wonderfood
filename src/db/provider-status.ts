@@ -124,7 +124,10 @@ function buildProviderStatus(provider: RemoteProviderStatusKey, links: ProviderL
 }
 
 function providerForWriteEvent(event: OutboxEvent): RemoteProviderStatusKey | null {
-  const fromKey = event.action_key.match(/^provider-write:([^:]+):/)?.[1];
+  const keyParts = event.action_key.split(':');
+  const fromKey = keyParts[0] === 'provider-write'
+    ? keyParts.length >= 4 ? keyParts[2] : keyParts[1]
+    : null;
   if (fromKey === 'notion' || fromKey === 'google_sheets') return fromKey;
   try {
     const payload = JSON.parse(event.payload_json) as { provider?: unknown };

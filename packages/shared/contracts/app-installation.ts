@@ -7,11 +7,34 @@ export type WorkspaceId = string;
 export type AppInstallationId = string;
 export type AppInstallationStatus = 'active' | 'archived' | 'disabled';
 
+export type AppInstallationPackageBinding = Readonly<{
+  packageKey: string | null;
+  packageId: string | null;
+  version: string | null;
+  sourceUrl: string | null;
+  checksum: string | null;
+}>;
+
+export type AppInstallationApproval = Readonly<{
+  approvalHash: string | null;
+  approvedBy: string | null;
+}>;
+
+export type AppInstallationActivation = Readonly<{
+  launchPath: string;
+  activePackageKey: string | null;
+  previousPackageKey: string | null;
+  updatedAt: string | null;
+}>;
+
 export type AppInstallation = Readonly<{
   id: AppInstallationId;
   workspaceId: WorkspaceId;
   label: string;
   status: AppInstallationStatus;
+  packageBinding?: AppInstallationPackageBinding;
+  approval?: AppInstallationApproval;
+  activation?: AppInstallationActivation;
   createdAt: string;
   updatedAt: string;
 }>;
@@ -36,6 +59,23 @@ export const appInstallationSchema = z.object({
   workspaceId: workspaceIdSchema,
   label: z.string().trim().min(1).max(160),
   status: appInstallationStatusSchema,
+  packageBinding: z.object({
+    packageKey: z.string().trim().min(1).max(256).nullable(),
+    packageId: z.string().trim().min(1).max(256).nullable(),
+    version: z.string().trim().min(1).max(128).nullable(),
+    sourceUrl: z.string().trim().url().nullable(),
+    checksum: z.string().trim().min(1).max(256).nullable(),
+  }).optional(),
+  approval: z.object({
+    approvalHash: z.string().trim().min(1).max(256).nullable(),
+    approvedBy: z.string().trim().min(1).max(256).nullable(),
+  }).optional(),
+  activation: z.object({
+    launchPath: z.string().trim().min(1).max(256),
+    activePackageKey: z.string().trim().min(1).max(256).nullable(),
+    previousPackageKey: z.string().trim().min(1).max(256).nullable(),
+    updatedAt: timestampSchema.nullable(),
+  }).optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });

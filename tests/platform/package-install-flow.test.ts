@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   buildPackageInstallApprovalReceipt,
   buildPackageInstallPreview,
+  hashPackageInstallApprovalReceipt,
   type PackageInstallApprovalReceipt,
 } from '@/packages/shared/contracts/package-install';
 import {
@@ -12,6 +13,7 @@ import {
   installApprovedAppPackage,
   listAppInstallations,
 } from '@/src/db/app-package-registry';
+import { runMigrations } from '@/src/db/migrations';
 import {
   createPackageInstallFetcher,
   fetchPackageInstallCandidate,
@@ -19,7 +21,9 @@ import {
 } from '@/src/domain/package-install';
 import { loadAppPackage } from '@/src/domain/package-loader';
 import { MemoryDb } from '@/tests/helpers/memory-db';
-import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -28,6 +32,14 @@ const validPackage = JSON.parse(readFileSync(path.join(fixtureDir, 'valid-packag
 const registryFixture = JSON.parse(readFileSync(path.join(fixtureDir, 'registry.json'), 'utf8'));
 
 describe('package install launcher flow', () => {
+  const dbs: FileSqliteDb[] = [];
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const db of dbs.splice(0)) db.close();
+    for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
   it('keeps install-from-link review-gated before creating an installation', async () => {
     const db = new MemoryDb() as any;
     const fetcher = createPackageInstallFetcher(async (url) => {
@@ -56,9 +68,119 @@ describe('package install launcher flow', () => {
       label: 'Demo Shelf',
       status: 'active',
     });
+    expect(installation.activation?.launchPath).toBe('/apps/link-install-one');
     const reopened = reopen(db) as any;
     expect((await getAppInstallation(reopened, 'link-install-one'))?.label).toBe('Demo Shelf');
     expect((await getActiveAppPackage(reopened, 'link-install-one'))?.id).toBe('demo.shelf');
+  });
+
+  it('persists approved link install binding across restart and creates distinct installs', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'wonderfood-link-install-'));
+    tempDirs.push(dir);
+    const dbPath = path.join(dir, 'lifeos.db');
+    const db = new FileSqliteDb(dbPath);
+    dbs.push(db);
+    await runMigrations(db as any);
+
+    const preview = buildPackageInstallPreview(validPackage, {
+      sourceUrl: 'https://example.com/apps/demo.package.json',
+    });
+    const approval = buildPackageInstallApprovalReceipt(preview, 'test-user', '2026-07-27T00:00:00.000Z');
+    const expectedApprovalHash = hashPackageInstallApprovalReceipt(approval);
+    const first = await installApprovedAppPackage(db as any, {
+      packageJson: validPackage,
+      preview,
+      approval,
+      installationId: 'restart-link-one',
+      now: '2026-07-27T00:00:01.000Z',
+    });
+    const second = await installApprovedAppPackage(db as any, {
+      packageJson: validPackage,
+      preview,
+      approval,
+      installationId: 'restart-link-two',
+      now: '2026-07-27T00:00:02.000Z',
+    });
+
+    expect(first.id).toBe('restart-link-one');
+    expect(second.id).toBe('restart-link-two');
+    expect(first.id).not.toBe(second.id);
+    db.close();
+    dbs.splice(dbs.indexOf(db), 1);
+
+    const reopened = new FileSqliteDb(dbPath);
+    dbs.push(reopened);
+    await runMigrations(reopened as any);
+
+    const installs = await reopened.getAllAsync<{
+      installation_id: string;
+      package_id: string;
+      version: string;
+      source_url: string;
+      checksum: string;
+      launch_path: string;
+      approval_hash: string;
+      approved_by: string;
+    }>(
+      `SELECT installation_id, package_id, version, source_url, checksum, launch_path, approval_hash, approved_by
+        FROM app_installations
+        WHERE installation_id IN ('restart-link-one', 'restart-link-two')
+        ORDER BY installation_id`,
+    );
+    expect(installs).toEqual([
+      {
+        installation_id: 'restart-link-one',
+        package_id: approval.packageId,
+        version: approval.version,
+        source_url: approval.sourceUrl,
+        checksum: approval.checksum,
+        launch_path: '/apps/restart-link-one',
+        approval_hash: expectedApprovalHash,
+        approved_by: approval.approvedBy,
+      },
+      {
+        installation_id: 'restart-link-two',
+        package_id: approval.packageId,
+        version: approval.version,
+        source_url: approval.sourceUrl,
+        checksum: approval.checksum,
+        launch_path: '/apps/restart-link-two',
+        approval_hash: expectedApprovalHash,
+        approved_by: approval.approvedBy,
+      },
+    ]);
+    expect(approval.compatibility).toEqual(preview.runtimeCompatibility);
+    expect((await getActiveAppPackage(reopened as any, 'restart-link-one'))?.id).toBe(approval.packageId);
+    expect((await getActiveAppPackage(reopened as any, 'restart-link-two'))?.id).toBe(approval.packageId);
+
+    const receipts = await reopened.getAllAsync<{
+      id: string;
+      package_hash: string;
+      approval_hash: string;
+      approved_by: string;
+    }>(
+      `SELECT id, package_hash, approval_hash, approved_by
+        FROM app_package_receipts
+        WHERE id LIKE 'app-package:restart-link-%'
+        ORDER BY id`,
+    );
+    expect(receipts).toHaveLength(2);
+    expect(receipts.map((receipt) => ({
+      package_hash: receipt.package_hash,
+      approval_hash: receipt.approval_hash,
+      approved_by: receipt.approved_by,
+    }))).toEqual([
+      {
+        package_hash: approval.checksum,
+        approval_hash: expectedApprovalHash,
+        approved_by: approval.approvedBy,
+      },
+      {
+        package_hash: approval.checksum,
+        approval_hash: expectedApprovalHash,
+        approved_by: approval.approvedBy,
+      },
+    ]);
   });
 
   it('loads registry choices and installs through app-installation activation', async () => {
@@ -152,6 +274,8 @@ describe('package install launcher flow', () => {
 
     expect(first.id).not.toBe(second.id);
     expect((await listAppInstallations(db)).map((item) => item.id)).toEqual(['same-app-one', 'same-app-two']);
+    expect(first.activation?.launchPath).toBe('/apps/same-app-one');
+    expect(second.activation?.launchPath).toBe('/apps/same-app-two');
     expect((await getActiveAppPackage(db, 'same-app-one'))?.id).toBe('demo.shelf');
     expect((await getActiveAppPackage(db, 'same-app-two'))?.id).toBe('demo.shelf');
   });
@@ -203,4 +327,52 @@ function forgedApproval(): PackageInstallApprovalReceipt {
     approvedBy: 'test-user',
     approvedAt: '2026-07-27T00:00:00.000Z',
   };
+}
+
+class FileSqliteDb {
+  private readonly db: DatabaseSync;
+
+  constructor(filePath: string) {
+    this.db = new DatabaseSync(filePath);
+    this.db.exec('PRAGMA foreign_keys = ON');
+  }
+
+  async execAsync(sql: string) {
+    this.db.exec(sql);
+  }
+
+  async withTransactionAsync(fn: () => Promise<void>) {
+    this.db.exec('BEGIN');
+    try {
+      await fn();
+      this.db.exec('COMMIT');
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        // Ignore rollback failures after the original error.
+      }
+      throw error;
+    }
+  }
+
+  async runAsync(sql: string, params: any[] | Record<string, unknown> = []) {
+    const statement = this.db.prepare(sql);
+    return Array.isArray(params) ? statement.run(...params) : statement.run(params as Record<string, any>);
+  }
+
+  async getFirstAsync<T>(sql: string, params: any[] | Record<string, unknown> = []): Promise<T | null> {
+    const statement = this.db.prepare(sql);
+    const row = Array.isArray(params) ? statement.get(...params) : statement.get(params as Record<string, any>);
+    return (row ?? null) as T | null;
+  }
+
+  async getAllAsync<T>(sql: string, params: any[] | Record<string, unknown> = []): Promise<T[]> {
+    const statement = this.db.prepare(sql);
+    return (Array.isArray(params) ? statement.all(...params) : statement.all(params as Record<string, any>)) as T[];
+  }
+
+  close() {
+    this.db.close();
+  }
 }

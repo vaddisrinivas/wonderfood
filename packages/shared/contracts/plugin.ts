@@ -2,8 +2,10 @@ import { sha256Canonical } from './canonical-json';
 
 export const PLUGIN_SCHEMA_VERSION = 'utopia.plugin.v1' as const;
 export const PLUGIN_LOCK_SCHEMA_VERSION = 'utopia.plugin-lock.v1' as const;
+export const PLUGIN_RESOLVER_CONSUMERS = ['runtime', 'build', 'server'] as const;
 
 export type PluginClass = 'runtime' | 'build' | 'server' | 'specialized';
+export type PluginResolverConsumer = (typeof PLUGIN_RESOLVER_CONSUMERS)[number];
 
 export type PluginRuntimeTarget = string;
 
@@ -45,6 +47,7 @@ export type PluginCompatibilityStatus =
   | 'unsupported';
 
 export type PluginCompatibilityRequest = {
+  consumer?: PluginResolverConsumer;
   runtimeTarget: PluginRuntimeTarget;
   requiredCapabilities: readonly string[];
   optionalCapabilities?: readonly string[];
@@ -53,6 +56,7 @@ export type PluginCompatibilityRequest = {
 };
 
 export type PluginCompatibilityResult = {
+  consumer: PluginResolverConsumer;
   status: PluginCompatibilityStatus;
   reason: string;
   missingCapabilities: string[];
@@ -168,6 +172,20 @@ export function resolvePluginCompatibility(
   manifest: PluginManifest,
   request: PluginCompatibilityRequest,
 ): PluginCompatibilityResult {
+  const consumer = request.consumer ?? 'runtime';
+  if (consumer === 'build') {
+    return resolveBuildPluginCompatibility(manifest, request);
+  }
+  if (consumer === 'server') {
+    return resolveServerPluginCompatibility(manifest, request);
+  }
+  return resolveRuntimePluginCompatibility(manifest, request);
+}
+
+export function resolveRuntimePluginCompatibility(
+  manifest: PluginManifest,
+  request: PluginCompatibilityRequest,
+): PluginCompatibilityResult {
   const lock = lockPluginManifest(manifest);
   const capabilities = new Set(lock.capabilities);
   const missingCapabilities = request.requiredCapabilities.filter((capability) => !capabilities.has(capability));
@@ -176,6 +194,7 @@ export function resolvePluginCompatibility(
 
   if (manifest.pluginClass === 'build') {
     return {
+      consumer: 'runtime',
       status: 'requires_new_build',
       reason: 'plugin requires a new native build',
       missingCapabilities,
@@ -188,6 +207,7 @@ export function resolvePluginCompatibility(
   if (manifest.pluginClass === 'server' && request.serverAvailable !== true) {
     return canFallback
       ? {
+        consumer: 'runtime',
         status: 'compatible_with_fallback',
         reason: 'server plugin is unavailable in this runtime, using declared fallback',
         missingCapabilities,
@@ -196,6 +216,7 @@ export function resolvePluginCompatibility(
         fallback,
       }
       : {
+        consumer: 'runtime',
         status: 'unsupported',
         reason: 'server plugin requires a trusted service boundary',
         missingCapabilities,
@@ -207,6 +228,7 @@ export function resolvePluginCompatibility(
   if (!manifest.runtimeTargets.includes(request.runtimeTarget)) {
     return canFallback
       ? {
+        consumer: 'runtime',
         status: 'compatible_with_fallback',
         reason: `runtime target ${request.runtimeTarget} is not declared, using fallback`,
         missingCapabilities,
@@ -215,6 +237,7 @@ export function resolvePluginCompatibility(
         fallback,
       }
       : {
+        consumer: 'runtime',
         status: 'unsupported',
         reason: `runtime target ${request.runtimeTarget} is not supported`,
         missingCapabilities,
@@ -226,6 +249,7 @@ export function resolvePluginCompatibility(
   if (missingCapabilities.length > 0) {
     return canFallback
       ? {
+        consumer: 'runtime',
         status: 'compatible_with_fallback',
         reason: `missing capabilities: ${missingCapabilities.join(', ')}`,
         missingCapabilities,
@@ -234,6 +258,7 @@ export function resolvePluginCompatibility(
         fallback,
       }
       : {
+        consumer: 'runtime',
         status: 'unsupported',
         reason: `missing capabilities: ${missingCapabilities.join(', ')}`,
         missingCapabilities,
@@ -243,11 +268,122 @@ export function resolvePluginCompatibility(
   }
 
   return {
+    consumer: 'runtime',
     status: 'compatible',
     reason: 'plugin and capabilities are compatible with the current runtime',
     missingCapabilities: [],
     lock,
     manifest,
+  };
+}
+
+export function resolveBuildPluginCompatibility(
+  manifest: PluginManifest,
+  request: PluginCompatibilityRequest,
+): PluginCompatibilityResult {
+  const lock = lockPluginManifest(manifest);
+  const missingCapabilities = request.requiredCapabilities.filter((capability) => !lock.capabilities.includes(capability));
+  const fallback = manifest.fallback;
+  const canFallback = Boolean(fallback && (request.allowFallback ?? true));
+
+  if (manifest.pluginClass === 'server') {
+    return canFallback
+      ? {
+        consumer: 'build',
+        status: 'compatible_with_fallback',
+        reason: 'server plugin cannot be bundled into a client build, using declared fallback',
+        missingCapabilities,
+        lock,
+        manifest,
+        fallback,
+      }
+      : {
+        consumer: 'build',
+        status: 'unsupported',
+        reason: 'server plugin cannot be bundled into a client build',
+        missingCapabilities,
+        lock,
+        manifest,
+      };
+  }
+
+  if (!manifest.runtimeTargets.includes(request.runtimeTarget)) {
+    return canFallback
+      ? {
+        consumer: 'build',
+        status: 'compatible_with_fallback',
+        reason: `build target ${request.runtimeTarget} is not declared, using fallback`,
+        missingCapabilities,
+        lock,
+        manifest,
+        fallback,
+      }
+      : {
+        consumer: 'build',
+        status: 'unsupported',
+        reason: `build target ${request.runtimeTarget} is not supported`,
+        missingCapabilities,
+        lock,
+        manifest,
+      };
+  }
+
+  if (missingCapabilities.length > 0) {
+    return canFallback
+      ? {
+        consumer: 'build',
+        status: 'compatible_with_fallback',
+        reason: `missing capabilities: ${missingCapabilities.join(', ')}`,
+        missingCapabilities,
+        lock,
+        manifest,
+        fallback,
+      }
+      : {
+        consumer: 'build',
+        status: 'unsupported',
+        reason: `missing capabilities: ${missingCapabilities.join(', ')}`,
+        missingCapabilities,
+        lock,
+        manifest,
+      };
+  }
+
+  return {
+    consumer: 'build',
+    status: 'compatible',
+    reason: manifest.pluginClass === 'build'
+      ? 'plugin is compatible for the requested build target'
+      : 'plugin is runtime-compatible and needs no new build work',
+    missingCapabilities: [],
+    lock,
+    manifest,
+  };
+}
+
+export function resolveServerPluginCompatibility(
+  manifest: PluginManifest,
+  request: PluginCompatibilityRequest,
+): PluginCompatibilityResult {
+  const normalized = {
+    ...request,
+    serverAvailable: request.serverAvailable ?? true,
+  };
+  const runtimeResult = resolveRuntimePluginCompatibility(manifest, normalized);
+  if (manifest.pluginClass === 'build' && runtimeResult.status === 'requires_new_build') {
+    return {
+      ...runtimeResult,
+      consumer: 'server',
+      status: 'unsupported',
+      reason: 'build-only plugin cannot execute inside the server resolver',
+    };
+  }
+  return {
+    ...runtimeResult,
+    consumer: 'server',
+    reason: manifest.pluginClass === 'server' && runtimeResult.status === 'compatible'
+      ? 'plugin and capabilities are compatible with the trusted server runtime'
+      : runtimeResult.reason,
   };
 }
 

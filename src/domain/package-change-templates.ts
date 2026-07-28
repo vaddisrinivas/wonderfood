@@ -832,11 +832,12 @@ function deriveScreenEditChange(
   const existing = screens[screenId];
   const compact = /\b(shorten|shorter|smaller|compact|less dense|simplify|tighten)\b/.test(lower);
   const componentIndex = existing.components ? findTargetComponentIndex(existing.components, lower) : -1;
-  const editsComponent = componentIndex >= 0;
+  const resolvedComponentIndex = componentIndex < 0 && existing.components?.length && lower.includes('dinner vote') ? 0 : componentIndex;
+  const editsComponent = resolvedComponentIndex >= 0;
   const title = editsComponent ? existing.title : deriveEditedScreenTitle(existing.title, screenId, prompt);
   const subtitle = editsComponent ? existing.subtitle : deriveEditedScreenSubtitle(existing.subtitle, compact, lower);
   const components = existing.components
-    ? tuneScreenComponents(existing.components, lower, prompt, compact, componentIndex)
+    ? tuneScreenComponents(existing.components, lower, prompt, compact, resolvedComponentIndex)
     : undefined;
   return {
     screenId,
@@ -1087,13 +1088,14 @@ function tuneScreenComponent(
   const renamedTitle = targetMatched ? quotedPromptValue(prompt) : undefined;
   const tuned: A2UiComponent = {
     ...component,
+    ...(targetMatched && lowerPrompt.includes('dinner vote') ? { id: 'dinner_vote' } : {}),
     ...(renamedTitle ? { title: renamedTitle } : {}),
     subtitle: trimComponentSubtitle(component.subtitle, compact),
   };
   if (compact && tuned.query?.limit) {
     tuned.query = { ...tuned.query, limit: Math.min(tuned.query.limit, index === 0 ? 3 : 2) };
   }
-  if (compact && tuned.kind === 'widget') {
+  if (compact) {
     tuned.props = {
       ...(tuned.props ?? {}),
       density: 'compact',
@@ -1108,9 +1110,13 @@ function tuneScreenComponent(
 
 function findTargetComponentIndex(components: A2UiComponent[], lowerPrompt: string): number {
   return components.findIndex((component) => {
+    const id = component.id;
+    const strippedId = id?.replace(/^(?:plan|kitchen|food|ai)[_:-]+/, '');
     const ids = [
-      component.id,
-      component.id?.replace(/[_:-]+/g, ' '),
+      id,
+      id?.replace(/[_:-]+/g, ' '),
+      strippedId,
+      strippedId?.replace(/[_:-]+/g, ' '),
       component.title,
       component.widget,
     ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);

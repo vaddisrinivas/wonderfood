@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { DEFAULT_APP_INSTALLATION_ID } from '@/packages/shared/contracts/app-installation';
 import type { CanonicalRecord } from '@/src/domain/runtime';
 import { enqueueOutboxEvent, getOutboxEventByActionKey, markOutboxEvent, type OutboxEvent } from '@/src/db/outbox';
 import type { DirectSyncProvider } from '@/src/providers/provider-local-copy';
@@ -9,6 +10,7 @@ export type ProviderWriteOperation = 'create_record' | 'update_record' | 'archiv
 
 export type ProviderWritePayload = {
   schema_version: 'lifeos.provider-write.v1';
+  app_installation_id: string;
   provider: DirectSyncProvider;
   operation: ProviderWriteOperation;
   op_id: string;
@@ -39,6 +41,7 @@ type FetchLike = (url: string, init: {
 
 type OperationRow = {
   op_id: string;
+  app_installation_id: string;
   kind: string;
   domain: string;
   collection: string;
@@ -52,6 +55,11 @@ type OperationRow = {
 
 function safeId(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 180);
+}
+
+function normalizeInstallationId(value?: string | null): string {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : DEFAULT_APP_INSTALLATION_ID;
 }
 
 function parseRecord(value: string | null): CanonicalRecord | null {
@@ -84,8 +92,13 @@ export async function enqueueProviderWriteForOperation(input: {
   db: SQLiteDatabase;
   provider: DirectSyncProvider;
   opId: string;
+  appInstallationId?: string | null;
 }): Promise<ProviderWritebackResult> {
-  const row = await input.db.getFirstAsync<OperationRow>('SELECT * FROM operations WHERE op_id = ?', [input.opId]);
+  const appInstallationId = normalizeInstallationId(input.appInstallationId);
+  const row = await input.db.getFirstAsync<OperationRow>(
+    'SELECT * FROM operations WHERE app_installation_id = ? AND op_id = ?',
+    [appInstallationId, input.opId],
+  );
   if (!row) return { status: 'rejected', op_id: input.opId, reject_reason: 'operation_not_found' };
   if (row.status !== 'applied') return { status: 'rejected', op_id: input.opId, reject_reason: `operation_not_applied:${row.status}` };
 
@@ -96,6 +109,7 @@ export async function enqueueProviderWriteForOperation(input: {
   const record = after ?? before;
   const payload: ProviderWritePayload = {
     schema_version: 'lifeos.provider-write.v1',
+    app_installation_id: appInstallationId,
     provider: input.provider,
     operation: providerOperation(row, after),
     op_id: row.op_id,
@@ -106,7 +120,7 @@ export async function enqueueProviderWriteForOperation(input: {
     external_id: externalIdFor(input.provider, record),
     endpoint: endpointFor(input.provider),
   };
-  const actionKey = `provider-write:${input.provider}:${row.op_id}`;
+  const actionKey = `provider-write:${appInstallationId}:${input.provider}:${row.op_id}`;
   const duplicate = await getOutboxEventByActionKey(input.db, actionKey);
   if (duplicate) return { status: 'duplicate', event: duplicate, payload };
 
@@ -114,6 +128,7 @@ export async function enqueueProviderWriteForOperation(input: {
     id: `provider-write-${safeId(input.provider)}-${safeId(row.op_id)}`,
     action_key: actionKey,
     domain: row.domain,
+    app_installation_id: appInstallationId,
     payload_json: JSON.stringify(payload),
   });
   return { status: 'queued', event, payload };

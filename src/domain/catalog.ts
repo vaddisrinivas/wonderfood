@@ -412,6 +412,12 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
   if (raw.tone !== undefined && !isAppPackageUiTone(raw.tone)) {
     throw new Error(`${path}.tone must be neutral|moss|amber|plum|blue`);
   }
+  if (raw.placement !== undefined && !['inline', 'top', 'fab'].includes(String(raw.placement))) {
+    throw new Error(`${path}.placement must be inline|top|fab`);
+  }
+  if (raw.placement !== undefined && kind !== 'action') {
+    throw new Error(`${path}.placement is only valid for action components`);
+  }
   if (raw.action !== undefined) {
     parseUiAction(raw.action, `${path}.action`);
   }
@@ -434,7 +440,7 @@ function parseUiComponent(value: unknown, path: string, packageCollections: Set<
       }
     }
     if (q.limit !== undefined) {
-      assertCondition(typeof q.limit === 'number' && Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 20, `${path}.query.limit must be 1..20`);
+      assertCondition(typeof q.limit === 'number' && Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= 200, `${path}.query.limit must be 1..200`);
     }
   }
   return parseUiValue(raw) as A2UiComponent;
@@ -481,10 +487,33 @@ function parseUi(value: unknown, path: string, packageCollections: Set<string>):
   const parsed: A2UiSurface = {
     schemaVersion: raw.schemaVersion === 'a2ui.v0_9' ? 'a2ui.v0_9' : undefined,
     openUrlAllowlist: raw.openUrlAllowlist === undefined ? undefined : parseOptionalStringArray(raw.openUrlAllowlist, `${path}.openUrlAllowlist`),
+    navigation: undefined,
     components: undefined,
     screens: undefined,
     defaultScreen: raw.defaultScreen === undefined ? undefined : parseString(raw.defaultScreen, `${path}.defaultScreen`),
   };
+  if (raw.navigation !== undefined) {
+    assertCondition(isObject(raw.navigation), `${path}.navigation must be an object`);
+    const items = (raw.navigation as Record<string, unknown>).items;
+    assertCondition(Array.isArray(items) && items.length >= 1 && items.length <= 5, `${path}.navigation.items must contain 1..5 items`);
+    const seen = new Set<string>();
+    parsed.navigation = {
+      items: items.map((item, index) => {
+        assertCondition(isObject(item), `${path}.navigation.items[${index}] must be an object`);
+        const screen = parseString(item.screen, `${path}.navigation.items[${index}].screen`);
+        assertCondition(['home', 'overview', 'chat', 'sources', 'settings'].includes(screen), `${path}.navigation.items[${index}].screen is invalid`);
+        assertCondition(!seen.has(screen), `${path}.navigation.items contains duplicate ${screen}`);
+        seen.add(screen);
+        const icon = item.icon === undefined ? undefined : parseString(item.icon, `${path}.navigation.items[${index}].icon`);
+        assertCondition(icon === undefined || ['home', 'food', 'sparkles', 'sync', 'settings'].includes(icon), `${path}.navigation.items[${index}].icon is invalid`);
+        return {
+          screen: screen as 'home' | 'overview' | 'chat' | 'sources' | 'settings',
+          label: parseString(item.label, `${path}.navigation.items[${index}].label`),
+          icon: icon as 'home' | 'food' | 'sparkles' | 'sync' | 'settings' | undefined,
+        };
+      }),
+    };
+  }
 
   if (raw.components !== undefined) {
     const components = raw.components;

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_WORKSPACE_ID } from '@/packages/shared/contracts/app-installation';
+import { buildPackageInstallApprovalReceipt, buildPackageInstallPreview } from '@/packages/shared/contracts/package-install';
+import { getAppInstallation, installApprovedAppPackage } from '@/src/db/app-package-registry';
 import { runMigrations } from '@/src/db/migrations';
 import { createInstallationRepository } from '@/src/db/records';
 import type { DomainManifest } from '@/src/domain/catalog';
@@ -28,6 +30,7 @@ vi.mock('@/src/domain/catalog', () => ({
     catalog: { domains: [] },
   }),
   getDomainManifest: () => manifest,
+  setActivePackageOverride: () => {},
 }));
 
 function record(id: string, title: string) {
@@ -114,5 +117,71 @@ describe('app installation data isolation', () => {
     const crossUndo = await appA.undoOperation(manifest, bCreateOp!.op_id);
     expect(crossUndo.status).toBe('rejected');
     expect(crossUndo.reject_reason).toBe('operation_not_found');
+  });
+
+  it('returns persisted package binding, approval, and activation state for installed apps', async () => {
+    const db = new NodeSqliteDb();
+    dbs.push(db);
+    await runMigrations(db as any);
+
+    const packageJson = {
+      schemaVersion: 'wonder.app-package.v2',
+      id: 'portable.demo',
+      version: '1.2.3',
+      collections: {
+        pantry: {
+          id: 'pantry',
+          fields: {
+            id: { type: 'text', required: true, indexed: true },
+            title: { type: 'text', required: true, indexed: true },
+            updated_at: { type: 'timestamp', required: true, indexed: true },
+          },
+        },
+      },
+      queries: {},
+      views: {},
+      presentation: {
+        label: 'Portable Demo',
+        homeSurface: 'home',
+        surfaces: [{ id: 'home', label: 'Home', collections: ['pantry'], views: [] }],
+      },
+      rules: [],
+      capabilities: [],
+      acceptanceTests: [],
+    };
+    const preview = buildPackageInstallPreview(packageJson, {
+      sourceUrl: 'https://example.com/apps/portable-demo.package.json',
+    });
+    const approval = buildPackageInstallApprovalReceipt(preview, 'tester@example.test', '2026-07-28T00:00:00.000Z');
+
+    await installApprovedAppPackage(db as any, {
+      packageJson,
+      preview,
+      approval,
+      installationId: 'portable-demo-install',
+      workspaceId: 'workspace-portable',
+      now: '2026-07-28T00:00:01.000Z',
+    });
+
+    await expect(getAppInstallation(db as any, 'portable-demo-install')).resolves.toMatchObject({
+      id: 'portable-demo-install',
+      workspaceId: 'workspace-portable',
+      label: 'Portable Demo',
+      packageBinding: {
+        packageKey: 'portable.demo@1.2.3',
+        packageId: 'portable.demo',
+        version: '1.2.3',
+        sourceUrl: 'https://example.com/apps/portable-demo.package.json',
+      },
+      approval: {
+        approvedBy: 'tester@example.test',
+      },
+      activation: {
+        launchPath: '/apps/portable-demo-install',
+        activePackageKey: 'portable.demo@1.2.3',
+        previousPackageKey: null,
+        updatedAt: '2026-07-28T00:00:01.000Z',
+      },
+    });
   });
 });

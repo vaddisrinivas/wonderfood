@@ -7,6 +7,7 @@ import {
   getAppInstallation,
   listAppInstallations,
   activateAppPackage,
+  installApprovedAppPackage,
   rollbackAppPackage,
 } from '@/src/db/app-package-registry';
 import {
@@ -15,6 +16,7 @@ import {
   runMigrations,
 } from '@/src/db/migrations';
 import { DEFAULT_WORKSPACE_ID } from '@/packages/shared/contracts/app-installation';
+import { buildPackageInstallApprovalReceipt, buildPackageInstallPreview } from '@/packages/shared/contracts/package-install';
 import type { AppPackage } from '@/packages/shared/contracts/package';
 import { setActivePackageOverride } from '@/src/domain/catalog';
 import { NodeSqliteDb } from '@/tests/helpers/node-sqlite-db';
@@ -127,10 +129,62 @@ async function proveInstallationIsolation(): Promise<void> {
   });
 }
 
+async function proveInstallationMetadataPersistence(): Promise<void> {
+  await withDb(async (db) => {
+    await runMigrations(db as never);
+    const packageJson = {
+      schemaVersion: 'wonder.app-package.v2',
+      id: 'portable.demo',
+      version: '1.2.3',
+      collections: {
+        pantry: {
+          id: 'pantry',
+          fields: {
+            id: { type: 'text', required: true, indexed: true },
+            title: { type: 'text', required: true, indexed: true },
+            updated_at: { type: 'timestamp', required: true, indexed: true },
+          },
+        },
+      },
+      queries: {},
+      views: {},
+      presentation: {
+        label: 'Portable Demo',
+        homeSurface: 'home',
+        surfaces: [{ id: 'home', label: 'Home', collections: ['pantry'], views: [] }],
+      },
+      rules: [],
+      capabilities: [],
+      acceptanceTests: [],
+    } as const;
+    const preview = buildPackageInstallPreview(packageJson, {
+      sourceUrl: 'https://example.com/apps/portable-demo.package.json',
+    });
+    const approval = buildPackageInstallApprovalReceipt(preview, 'tester@example.test', '2026-07-28T00:00:00.000Z');
+
+    await installApprovedAppPackage(db as never, {
+      packageJson,
+      preview,
+      approval,
+      installationId: 'portable-demo-install',
+      workspaceId: 'workspace-portable',
+      now: '2026-07-28T00:00:01.000Z',
+    });
+
+    const installation = await getAppInstallation(db as never, 'portable-demo-install');
+    assert(installation?.packageBinding?.packageKey === 'portable.demo@1.2.3', 'missing package binding');
+    assert(installation?.approval?.approvedBy === 'tester@example.test', 'missing approval actor');
+    assert(installation?.activation?.launchPath === '/apps/portable-demo-install', 'missing launch path');
+    assert(installation?.activation?.activePackageKey === 'portable.demo@1.2.3', 'missing active package key');
+    assert(installation?.activation?.updatedAt === '2026-07-28T00:00:01.000Z', 'missing activation timestamp');
+  });
+}
+
 async function main(): Promise<void> {
   await proveFreshDbDefaults();
   await proveLegacySingletonMigration();
   await proveInstallationIsolation();
+  await proveInstallationMetadataPersistence();
   console.log('app installation foundation ok');
 }
 

@@ -65,14 +65,16 @@ export async function fetchPackageInstallCandidate(
 ): Promise<PackageInstallCandidate> {
   const target = parsePackageInstallTarget(input);
   const packageJson = await fetchJson(target.packageUrl, fetcher);
+  const preview = buildPackageInstallPreview(packageJson, {
+    sourceUrl: target.packageUrl,
+    registryPackage: options.registryPackage,
+    expectedChecksum: options.expectedChecksum,
+  });
+  assertInstallDescriptorMatchesPreview(options.registryPackage, preview);
   return {
     target,
     packageJson,
-    preview: buildPackageInstallPreview(packageJson, {
-      sourceUrl: target.packageUrl,
-      registryPackage: options.registryPackage,
-      expectedChecksum: options.expectedChecksum,
-    }),
+    preview,
   };
 }
 
@@ -155,4 +157,14 @@ function jsonResponse(value: unknown): PackageInstallFetchResponse {
     },
     json: async () => value,
   };
+}
+
+function assertInstallDescriptorMatchesPreview(
+  registryPackage: UtopiaRegistryPackage | undefined,
+  preview: PackageInstallPreview,
+): void {
+  if (!registryPackage) return;
+  if (preview.packageId !== registryPackage.id || preview.version !== registryPackage.version) {
+    throw new Error(`package_descriptor_identity_mismatch:${registryPackage.id}@${registryPackage.version}`);
+  }
 }

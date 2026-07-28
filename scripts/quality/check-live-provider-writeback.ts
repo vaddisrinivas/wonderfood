@@ -6,6 +6,7 @@ import { enqueueOutboxEvent } from '../../src/db/outbox';
 import { deliverProviderWriteEvent, type ProviderWritePayload } from '../../src/providers/writeback';
 import { defaultLifeOSSettings, type LifeOSSettings } from '../../src/settings/lifeos-settings';
 import { MemoryDb } from '../../tests/helpers/memory-db';
+import { DEFAULT_APP_INSTALLATION_ID } from '../../packages/shared/contracts/app-installation';
 
 type Json = Record<string, unknown>;
 
@@ -115,6 +116,7 @@ async function runNotionProof() {
 
   const payload: ProviderWritePayload = {
     schema_version: 'lifeos.provider-write.v1',
+    app_installation_id: DEFAULT_APP_INSTALLATION_ID,
     provider: 'notion',
     operation: 'create_record',
     op_id: `live-notion-writeback-${stamp}`,
@@ -364,6 +366,7 @@ async function runSheetsProof() {
   const updatedRanges: string[] = [];
   const payload: ProviderWritePayload = {
     schema_version: 'lifeos.provider-write.v1',
+    app_installation_id: DEFAULT_APP_INSTALLATION_ID,
     provider: 'google_sheets',
     operation: 'create_record',
     op_id: `live-sheets-writeback-${stamp}`,

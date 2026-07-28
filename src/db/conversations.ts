@@ -1,4 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import {
+  DEFAULT_APP_INSTALLATION_ID,
+  DEFAULT_WORKSPACE_ID,
+} from '@/packages/shared/contracts/app-installation';
 
 export type ConversationRole = 'user' | 'assistant';
 
@@ -13,6 +17,10 @@ export type Message = {
 
 export type Conversation = {
   id: string;
+  workspace_id: string;
+  app_installation_id: string;
+  package_id: string | null;
+  package_version: string | null;
   domain: string;
   title: string;
   detail: string;
@@ -27,18 +35,45 @@ export type ConversationEnvelope = Conversation & {
 
 type ConversationRow = Omit<Conversation, 'messages'>;
 type MessageRow = Message;
+type ConversationScope = {
+  workspaceId?: string | null;
+  installationId?: string | null;
+  packageId?: string | null;
+  packageVersion?: string | null;
+};
+
+function normalizeScope(scope?: ConversationScope | null) {
+  return {
+    workspaceId: scope?.workspaceId?.trim() || DEFAULT_WORKSPACE_ID,
+    installationId: scope?.installationId?.trim() || DEFAULT_APP_INSTALLATION_ID,
+    packageId: scope?.packageId?.trim() || null,
+    packageVersion: scope?.packageVersion?.trim() || null,
+  };
+}
 
 export async function listConversations(
   db: SQLiteDatabase,
   domain: string,
-  includeArchived = false
+  includeArchived = false,
+  scope?: ConversationScope | null,
 ): Promise<Conversation[]> {
-  const whereClause = includeArchived ? 'domain = ? ORDER BY updated_at DESC' : 'domain = ? AND archived_at IS NULL ORDER BY updated_at DESC';
-  return db.getAllAsync<ConversationRow>(`SELECT * FROM conversations WHERE ${whereClause}`, [domain]);
+  const scoped = normalizeScope(scope);
+  const whereClause = includeArchived
+    ? 'app_installation_id = ? AND domain = ? ORDER BY updated_at DESC'
+    : 'app_installation_id = ? AND domain = ? AND archived_at IS NULL ORDER BY updated_at DESC';
+  return db.getAllAsync<ConversationRow>(`SELECT * FROM conversations WHERE ${whereClause}`, [scoped.installationId, domain]);
 }
 
-export async function getConversation(db: SQLiteDatabase, conversationId: string): Promise<ConversationEnvelope | null> {
-  const conversation = await db.getFirstAsync<ConversationRow>('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+export async function getConversation(
+  db: SQLiteDatabase,
+  conversationId: string,
+  scope?: ConversationScope | null,
+): Promise<ConversationEnvelope | null> {
+  const scoped = normalizeScope(scope);
+  const conversation = await db.getFirstAsync<ConversationRow>(
+    'SELECT * FROM conversations WHERE app_installation_id = ? AND id = ?',
+    [scoped.installationId, conversationId],
+  );
   if (!conversation) return null;
 
   const messages = await db.getAllAsync<MessageRow>(
@@ -56,21 +91,32 @@ export async function createConversation(
   db: SQLiteDatabase,
   input: {
     id: string;
+    workspaceId?: string | null;
+    installationId?: string | null;
+    packageId?: string | null;
+    packageVersion?: string | null;
     domain: string;
     title: string;
     detail: string;
   }
 ): Promise<Conversation> {
+  const scoped = normalizeScope(input);
   const now = new Date().toISOString();
   await db.runAsync(
     `
-      INSERT INTO conversations (id, domain, title, detail, created_at, updated_at, archived_at)
-      VALUES (?, ?, ?, ?, ?, ?, NULL)
+      INSERT INTO conversations (
+        id, workspace_id, app_installation_id, package_id, package_version, domain, title, detail, created_at, updated_at, archived_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
     `,
-    [input.id, input.domain, input.title, input.detail, now, now]
+    [input.id, scoped.workspaceId, scoped.installationId, scoped.packageId, scoped.packageVersion, input.domain, input.title, input.detail, now, now]
   );
   return {
     id: input.id,
+    workspace_id: scoped.workspaceId,
+    app_installation_id: scoped.installationId,
+    package_id: scoped.packageId,
+    package_version: scoped.packageVersion,
     domain: input.domain,
     title: input.title,
     detail: input.detail,
@@ -84,27 +130,42 @@ export async function upsertConversation(
   db: SQLiteDatabase,
   input: {
     id: string;
+    workspaceId?: string | null;
+    installationId?: string | null;
+    packageId?: string | null;
+    packageVersion?: string | null;
     domain: string;
     title: string;
     detail: string;
   }
 ): Promise<Conversation> {
+  const scoped = normalizeScope(input);
   const now = new Date().toISOString();
   await db.runAsync(
     `
-      INSERT INTO conversations (id, domain, title, detail, created_at, updated_at, archived_at)
-      VALUES (?, ?, ?, ?, ?, ?, NULL)
+      INSERT INTO conversations (
+        id, workspace_id, app_installation_id, package_id, package_version, domain, title, detail, created_at, updated_at, archived_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
       ON CONFLICT(id) DO UPDATE SET
+        workspace_id = excluded.workspace_id,
+        app_installation_id = excluded.app_installation_id,
+        package_id = excluded.package_id,
+        package_version = excluded.package_version,
         title = excluded.title,
         detail = excluded.detail,
         updated_at = excluded.updated_at,
         domain = excluded.domain
     `,
-    [input.id, input.domain, input.title, input.detail, now, now]
+    [input.id, scoped.workspaceId, scoped.installationId, scoped.packageId, scoped.packageVersion, input.domain, input.title, input.detail, now, now]
   );
 
   return {
     id: input.id,
+    workspace_id: scoped.workspaceId,
+    app_installation_id: scoped.installationId,
+    package_id: scoped.packageId,
+    package_version: scoped.packageVersion,
     domain: input.domain,
     title: input.title,
     detail: input.detail,

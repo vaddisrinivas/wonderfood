@@ -183,6 +183,7 @@ export async function upsertRecord(
     provenance?: CanonicalProvenance | null;
     operation_origin?: OperationOrigin;
     operation_actor?: OperationActor;
+    operation_id?: string;
     idempotency_key?: string;
     app_installation_id?: string | null;
   }
@@ -204,7 +205,7 @@ export async function upsertRecord(
 
   const current = await getRecordForInstallation(db, appInstallationId, validated.id);
   const result = await applyOperation(db, manifest, {
-    op_id: operationId([validated.id]),
+    op_id: input.operation_id?.trim() || operationId([validated.id]),
     app_installation_id: appInstallationId,
     kind: current ? 'update' : 'create',
     domain: manifest.id,

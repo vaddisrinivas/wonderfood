@@ -10,9 +10,11 @@ import {
   DEFAULT_APP_INSTALLATION_ID,
   DEFAULT_WORKSPACE_ID,
   parseAppInstallation,
+  parseInstallationPackageState,
   type AppInstallation as LocalAppInstallation,
   type AppInstallationId,
   type AppInstallationStatus,
+  type InstallationPackageState,
   type WorkspaceId,
 } from '@/packages/shared/contracts/app-installation';
 import {
@@ -45,6 +47,14 @@ type AppInstallationRow = {
   workspace_id: string;
   app_name: string;
   status: AppInstallationStatus;
+  package_key?: string | null;
+  package_id?: string | null;
+  version?: string | null;
+  source_url?: string | null;
+  checksum?: string | null;
+  launch_path?: string | null;
+  approval_hash?: string | null;
+  approved_by?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -222,13 +232,23 @@ export async function installApprovedAppPackage(
     await storeAppPackage(db, appPackage, now);
     await db.runAsync(
       `INSERT INTO app_installations
-        (id, workspace_id, label, status, created_at, updated_at)
-        VALUES ($id, $workspace_id, $label, $status, $created_at, $updated_at)`,
+        (installation_id, workspace_id, package_key, package_id, version, source_url, checksum,
+          app_name, status, launch_path, approval_hash, approved_by, created_at, updated_at)
+        VALUES ($installation_id, $workspace_id, $package_key, $package_id, $version, $source_url, $checksum,
+          $app_name, $status, $launch_path, $approval_hash, $approved_by, $created_at, $updated_at)`,
       {
-        $id: installation.id,
+        $installation_id: installation.id,
         $workspace_id: installation.workspaceId,
-        $label: installation.label,
+        $package_key: key,
+        $package_id: appPackage.id,
+        $version: appPackage.version,
+        $source_url: request.preview.sourceUrl,
+        $checksum: packageHash,
+        $app_name: installation.label,
         $status: installation.status,
+        $launch_path: `/apps/${encodeURIComponent(installation.id)}`,
+        $approval_hash: approvalHash,
+        $approved_by: request.approval.approvedBy,
         $created_at: installation.createdAt,
         $updated_at: installation.updatedAt,
       },
@@ -255,7 +275,7 @@ export async function installApprovedAppPackage(
   });
 
   setActivePackageOverride(appPackage);
-  return installation;
+  return (await getAppInstallation(db, installation.id)) ?? installation;
 }
 
 export async function getActiveAppInstallation(db: SQLiteDatabase): Promise<LocalAppInstallation | null> {
@@ -263,7 +283,7 @@ export async function getActiveAppInstallation(db: SQLiteDatabase): Promise<Loca
     `SELECT installation_id, workspace_id, app_name, status, created_at, updated_at
       FROM app_installations WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`,
   );
-  return row ? localAppInstallationFromRow(row) : null;
+  return row ? hydrateAppInstallation(db, row) : null;
 }
 
 export async function getPackageInstallAppInstallation(
@@ -321,7 +341,7 @@ export async function listAppInstallations(
       ORDER BY created_at ASC, installation_id ASC`,
     { $workspace_id: normalizeWorkspaceId(workspaceId) },
   );
-  return rows.map(localAppInstallationFromRow);
+  return Promise.all(rows.map((row) => hydrateAppInstallation(db, row)));
 }
 
 export async function getAppInstallation(
@@ -333,14 +353,29 @@ export async function getAppInstallation(
       FROM app_installations WHERE installation_id = $installation_id`,
     { $installation_id: normalizeInstallationId(installationId) },
   );
-  return row ? localAppInstallationFromRow(row) : null;
+  return row ? hydrateAppInstallation(db, row) : null;
 }
 
 export async function previewAppPackageChange(
   db: SQLiteDatabase,
   request: AppPackageChangeRequest,
+): Promise<AppPackageChangePreview>;
+export async function previewAppPackageChange(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+  request: AppPackageChangeRequest,
+): Promise<AppPackageChangePreview>;
+export async function previewAppPackageChange(
+  db: SQLiteDatabase,
+  installationIdOrRequest: AppInstallationId | AppPackageChangeRequest,
+  maybeRequest?: AppPackageChangeRequest,
 ): Promise<AppPackageChangePreview> {
-  const active = await getActiveAppPackage(db);
+  const installationId = typeof installationIdOrRequest === 'string'
+    ? normalizeInstallationId(installationIdOrRequest)
+    : DEFAULT_APP_INSTALLATION_ID;
+  const request = typeof installationIdOrRequest === 'string' ? maybeRequest : installationIdOrRequest;
+  if (!request) throw new Error('package_change_request_invalid');
+  const active = await getActiveAppPackage(db, installationId);
   if (!active) throw new Error('package_change_no_active_package');
   validatePackageChangeRequest(request, active);
 
@@ -372,8 +407,30 @@ export async function activateApprovedAppPackageChange(
   db: SQLiteDatabase,
   request: AppPackageChangeRequest,
   approval: AppPackageChangeApprovalReceipt,
+): Promise<AppPackage>;
+export async function activateApprovedAppPackageChange(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+  request: AppPackageChangeRequest,
+  approval: AppPackageChangeApprovalReceipt,
+): Promise<AppPackage>;
+export async function activateApprovedAppPackageChange(
+  db: SQLiteDatabase,
+  installationIdOrRequest: AppInstallationId | AppPackageChangeRequest,
+  requestOrApproval: AppPackageChangeRequest | AppPackageChangeApprovalReceipt,
+  maybeApproval?: AppPackageChangeApprovalReceipt,
 ): Promise<AppPackage> {
-  const preview = await previewAppPackageChange(db, request);
+  const installationId = typeof installationIdOrRequest === 'string'
+    ? normalizeInstallationId(installationIdOrRequest)
+    : DEFAULT_APP_INSTALLATION_ID;
+  const request = typeof installationIdOrRequest === 'string'
+    ? requestOrApproval as AppPackageChangeRequest
+    : installationIdOrRequest;
+  const approval = typeof installationIdOrRequest === 'string'
+    ? maybeApproval
+    : requestOrApproval as AppPackageChangeApprovalReceipt;
+  if (!approval) throw new Error('package_change_approval_mismatch');
+  const preview = await previewAppPackageChange(db, installationId, request);
   if (preview.status !== 'valid' || !preview.packageHash || !preview.package) {
     throw new Error(`package_change_invalid:${preview.errors.join('|') || 'package_change_invalid'}`);
   }
@@ -387,7 +444,7 @@ export async function activateApprovedAppPackageChange(
   ) {
     throw new Error('package_change_approval_mismatch');
   }
-  return activateAppPackage(db, preview.package, 'activate', {
+  return activateAppPackage(db, installationId, preview.package, 'activate', {
     requestHash: preview.requestHash,
     packageHash: preview.packageHash,
     approvalHash: hashValue(approval),
@@ -523,6 +580,31 @@ function localAppInstallationFromRow(row: AppInstallationRow): LocalAppInstallat
     workspaceId: row.workspace_id,
     label: row.app_name,
     status: row.status,
+    ...(row.package_key !== undefined || row.package_id !== undefined || row.version !== undefined || row.source_url !== undefined || row.checksum !== undefined
+      ? {
+          packageBinding: {
+            packageKey: row.package_key ?? null,
+            packageId: row.package_id ?? null,
+            version: row.version ?? null,
+            sourceUrl: row.source_url ?? null,
+            checksum: row.checksum ?? null,
+          },
+        }
+      : {}),
+    ...(row.launch_path !== undefined || row.approval_hash !== undefined || row.approved_by !== undefined
+      ? {
+          approval: {
+            approvalHash: row.approval_hash ?? null,
+            approvedBy: row.approved_by ?? null,
+          },
+          activation: {
+            launchPath: row.launch_path ?? `/apps/${encodeURIComponent(row.installation_id)}`,
+            activePackageKey: null,
+            previousPackageKey: null,
+            updatedAt: null,
+          },
+        }
+      : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -606,6 +688,110 @@ async function ensureWorkspace(db: SQLiteDatabase, workspaceId: WorkspaceId, now
 async function assertAppInstallationExists(db: SQLiteDatabase, installationId: AppInstallationId): Promise<void> {
   const row = await getAppInstallation(db, installationId);
   if (!row) throw new Error(`app_installation_not_found:${installationId}`);
+}
+
+export async function getInstallationPackageState(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+): Promise<InstallationPackageState | null> {
+  const scopedInstallationId = normalizeInstallationId(installationId);
+  const state = await getPackageState(db, scopedInstallationId);
+  if (!state) return null;
+
+  const updatedAt = await getPackageStateUpdatedAt(db, scopedInstallationId);
+  return parseInstallationPackageState({
+    installationId: scopedInstallationId,
+    activePackageKey: state.active_package_key,
+    previousPackageKey: state.previous_package_key,
+    updatedAt: updatedAt ?? new Date(0).toISOString(),
+  });
+}
+
+async function hydrateAppInstallation(db: SQLiteDatabase, row: AppInstallationRow): Promise<LocalAppInstallation> {
+  const metadata = await getAppInstallationMetadata(db, row.installation_id);
+  const state = await getInstallationPackageState(db, row.installation_id);
+  const base = localAppInstallationFromRow({ ...row, ...metadata });
+  return parseAppInstallation({
+    ...base,
+    ...(base.approval || metadata.approval_hash !== undefined || metadata.approved_by !== undefined
+      ? {
+          approval: {
+            approvalHash: base.approval?.approvalHash ?? metadata.approval_hash ?? null,
+            approvedBy: base.approval?.approvedBy ?? metadata.approved_by ?? null,
+          },
+        }
+      : {}),
+    activation: {
+      launchPath: base.activation?.launchPath ?? metadata.launch_path ?? `/apps/${encodeURIComponent(row.installation_id)}`,
+      activePackageKey: state?.activePackageKey ?? base.activation?.activePackageKey ?? null,
+      previousPackageKey: state?.previousPackageKey ?? base.activation?.previousPackageKey ?? null,
+      updatedAt: state?.updatedAt ?? base.activation?.updatedAt ?? null,
+    },
+    ...(base.packageBinding ? { packageBinding: base.packageBinding } : {}),
+  });
+}
+
+async function getAppInstallationMetadata(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+): Promise<Partial<AppInstallationRow>> {
+  const direct = await tryGetAppInstallationMetadata(db, installationId);
+  if (direct) return direct;
+
+  const appInstallations = (db as { appInstallations?: Map<string, Record<string, unknown>> }).appInstallations;
+  if (!(appInstallations instanceof Map)) return {};
+  const row = appInstallations.get(installationId);
+  if (!row) return {};
+  return {
+    package_key: asNullableString(row.package_key),
+    package_id: asNullableString(row.package_id),
+    version: asNullableString(row.version),
+    source_url: asNullableString(row.source_url),
+    checksum: asNullableString(row.checksum),
+    launch_path: asNullableString(row.launch_path),
+    approval_hash: asNullableString(row.approval_hash),
+    approved_by: asNullableString(row.approved_by),
+  };
+}
+
+async function tryGetAppInstallationMetadata(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+): Promise<Partial<AppInstallationRow> | null> {
+  try {
+    return await db.getFirstAsync<Partial<AppInstallationRow>>(
+      `SELECT package_key, package_id, version, source_url, checksum, launch_path, approval_hash, approved_by
+        FROM app_installations WHERE installation_id = $installation_id`,
+      { $installation_id: normalizeInstallationId(installationId) },
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function getPackageStateUpdatedAt(
+  db: SQLiteDatabase,
+  installationId: AppInstallationId,
+): Promise<string | null> {
+  try {
+    const row = await db.getFirstAsync<{ updated_at: string | null }>(
+      `SELECT updated_at FROM app_installation_package_state WHERE installation_id = $installation_id`,
+      { $installation_id: installationId },
+    );
+    if (row?.updated_at) return row.updated_at;
+  } catch {
+    // Fall through to in-memory compatibility path.
+  }
+
+  const stateMap = (db as { appInstallationPackageState?: Map<string, Record<string, unknown>> }).appInstallationPackageState;
+  if (!(stateMap instanceof Map)) return null;
+  return asNullableString(stateMap.get(installationId)?.updated_at);
+}
+
+function asNullableString(value: unknown): string | null {
+  if (typeof value !== 'string') return value == null ? null : String(value);
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 async function getPackageState(

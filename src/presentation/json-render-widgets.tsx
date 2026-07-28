@@ -1,9 +1,12 @@
 import type { ComponentRegistry, ComponentRenderProps } from '@json-render/react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { sendChatMessage } from '@/src/chat/client';
+import { resolveChatServerConfig, sendChatMessage, undoChatAction } from '@/src/chat/client';
 import type { ChatMessage, ChatThread } from '@/src/chat/types';
 import {
   activateApprovedAppPackageChange,
@@ -12,8 +15,11 @@ import {
   type AppPackageChangePreview,
   type AppPackageChangeRequest,
 } from '@/src/db/app-package-registry';
+import { getRecord, upsertRecord } from '@/src/db/records';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { buildSafePackageChangeRequest } from '@/src/domain/package-change-templates';
+import type { DomainRecordViewModel } from '@/src/domain/renderer';
+import { undoOperation } from '@/src/ops/undo';
 import {
   getLifeOSHealthStatus,
   openLifeOSHealthSettings,
@@ -22,13 +28,28 @@ import {
 } from '@/src/health/connect';
 import type { ProviderSyncStatus } from '@/src/db/provider-status';
 import { useAppRuntime } from '@/src/domain/runtime-context';
+import {
+  maskSecret,
+  providerLabel,
+  saveLifeOSAiProviderProfile,
+  saveLifeOSRuntimePreferences,
+  useLifeOSSettingsSnapshot,
+  type AiProviderKind,
+  type AiProviderProfile,
+} from '@/src/settings/lifeos-settings';
 
 type WidgetProps = {
   widget?: string;
+  label?: string;
   title?: string;
   subtitle?: string;
   prompt?: string;
   placeholder?: string;
+  eyebrow?: string;
+  actionLabel?: string;
+  actionRoute?: string;
+  route?: string;
+  showBack?: boolean;
   examples?: unknown[];
   suggestions?: string[];
   body?: string;
@@ -47,9 +68,23 @@ type WidgetProps = {
   status?: string;
   badge?: string;
   cta?: string;
+  ctaRoute?: string;
   homes?: unknown[];
   steps?: unknown[];
   actions?: unknown[];
+  showHeader?: boolean;
+  fullPage?: boolean;
+  initialPrompt?: string;
+  autoSubmitPrompt?: boolean;
+  records?: unknown[];
+  dataBound?: boolean;
+  searchable?: boolean;
+  detail?: boolean;
+  emptyTitle?: string;
+  emptyCopy?: string;
+  emptyActionLabel?: string;
+  emptyActionRoute?: string;
+  saveOutcome?: unknown;
 };
 
 const DEFAULT_PROMPTS = [
@@ -141,28 +176,189 @@ function numberValue(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function WidgetShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function WidgetShell({
+  title,
+  subtitle,
+  children,
+  showHeader = true,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  showHeader?: boolean;
+}) {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {showHeader ? <Text style={styles.title}>{title}</Text> : null}
+      {showHeader && subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {children}
     </View>
   );
 }
 
-function Bubble({ message }: { message: ChatMessage }) {
+function Bubble({
+  contextPrompt,
+  message,
+  onFollowUp,
+  saveOutcome,
+}: {
+  contextPrompt?: string;
+  message: ChatMessage;
+  onFollowUp: (prompt: string) => void;
+  saveOutcome?: Record<string, unknown>;
+}) {
   const assistant = message.role === 'assistant';
+  const db = useLifeOSDatabase();
+  const runtime = useAppRuntime();
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [savedPlan, setSavedPlan] = useState<{ id: string; operationId: string } | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const saveCollection = text(saveOutcome?.collection);
+  const answerPattern = text(saveOutcome?.when, '.+');
+  let planningAnswer = false;
+  try {
+    planningAnswer = assistant && Boolean(saveCollection) && new RegExp(answerPattern, 'i').test(contextPrompt ?? '');
+  } catch {
+    planningAnswer = assistant && Boolean(saveCollection);
+  }
+
+  const savePlan = useCallback(async () => {
+    if (!db || !runtime.activeManifest || saving) return;
+    setSaving(true);
+    setOutcome(null);
+    try {
+      const now = new Date().toISOString();
+      const id = `saved-outcome-${Date.now().toString(36)}`;
+      const operationId = `op-chat-outcome-${message.id.replace(/[^A-Za-z0-9_-]/g, '-')}-${Date.now().toString(36)}`;
+      await upsertRecord(db, runtime.activeManifest, {
+        id,
+        collection: saveCollection,
+        title: text(message.answer?.title, text(saveOutcome?.title, 'Saved result')),
+        properties: {
+          status: text(saveOutcome?.status, 'saved'),
+          body: message.text,
+          saved_for: now.slice(0, 10),
+          generated_from: 'assistant',
+          source_record_ids: message.answer?.recordCards?.map((record) => record.id) ?? [],
+        },
+        source: {
+          provider: 'user',
+          external_id: `assistant:${message.id}`,
+          url: null,
+          observed_at: now,
+          content_hash: null,
+        },
+        archived_at: null,
+        created_at: now,
+        updated_at: now,
+        operation_actor: 'user',
+        operation_origin: 'chat',
+        operation_id: operationId,
+        idempotency_key: `chat-outcome:${message.id}`,
+      });
+      setSavedPlan({ id, operationId });
+      setOutcome(text(saveOutcome?.successMessage, 'Saved.'));
+    } catch (error) {
+      setOutcome(error instanceof Error ? error.message : 'Could not save this plan.');
+    } finally {
+      setSaving(false);
+    }
+  }, [db, message, runtime.activeManifest, saveCollection, saveOutcome, saving]);
+
+  const undoSavedPlan = useCallback(async () => {
+    if (!db || !runtime.activeManifest || !savedPlan || saving) return;
+    setSaving(true);
+    try {
+      const result = await undoOperation(db, runtime.activeManifest, savedPlan.operationId);
+      if (result.status === 'applied' || result.status === 'duplicate') {
+        setSavedPlan(null);
+        setOutcome('Saved result removed.');
+      } else {
+        setOutcome(`Could not undo: ${result.reject_reason ?? 'unknown error'}`);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [db, runtime.activeManifest, savedPlan, saving]);
+
+  const undoReceipt = useCallback(async () => {
+    if (!message.actionReceipt || saving) return;
+    setSaving(true);
+    try {
+      const config = await resolveChatServerConfig();
+      const result = await undoChatAction({
+        db,
+        receipt: message.actionReceipt,
+        domainId: runtime.catalog?.activeDomainId ?? runtime.activeManifest?.id ?? 'app',
+        baseUrl: config.serverUrl,
+        token: config.serverToken,
+        actor: 'mobile-json-render',
+      });
+      setOutcome(result.undo_result?.message ?? (result.status === 'completed' ? 'Undo completed.' : 'Undo failed.'));
+    } finally {
+      setSaving(false);
+    }
+  }, [db, message.actionReceipt, runtime.activeManifest?.id, runtime.catalog?.activeDomainId, saving]);
+
   return (
     <View style={[styles.bubble, assistant ? styles.assistantBubble : styles.userBubble]}>
       <Text style={assistant ? styles.assistantText : styles.userText}>{message.text}</Text>
       {message.answer?.recordCards?.length ? (
         <View style={styles.sources}>
           {message.answer.recordCards.slice(0, 3).map((record) => (
-            <Text key={record.id} style={styles.sourceText}>• {record.title} · {record.detail}</Text>
+            <Pressable
+              accessibilityRole="button"
+              key={record.id}
+              onPress={() => router.push(`/record/${encodeURIComponent(record.id)}` as never)}
+              style={styles.sourceRow}
+            >
+              <Text style={styles.sourceText}>• {record.title} · {record.detail}</Text>
+              <Text style={styles.sourceArrow}>›</Text>
+            </Pressable>
           ))}
         </View>
       ) : null}
+      {message.actionReceipt ? (
+        <View style={styles.outcomeCard}>
+          <Text style={styles.outcomeTitle}>
+            {message.actionReceipt.status === 'completed' ? 'Saved and verified' : `Action ${message.actionReceipt.status}`}
+          </Text>
+          <Text style={styles.outcomeCopy}>{message.actionReceipt.record_ids.length} record change{message.actionReceipt.record_ids.length === 1 ? '' : 's'}</Text>
+          {message.actionReceipt.status === 'completed' ? (
+            <Pressable accessibilityRole="button" disabled={saving} onPress={() => void undoReceipt()} style={styles.outcomeSecondary}>
+              <Text style={styles.outcomeSecondaryText}>Undo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {planningAnswer ? (
+        <View style={styles.outcomeActions}>
+          {savedPlan ? (
+            <>
+              <Pressable accessibilityRole="button" onPress={() => router.push(`/record/${encodeURIComponent(savedPlan.id)}` as never)} style={styles.outcomePrimary}>
+                <Text style={styles.outcomePrimaryText}>Open saved plan</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" disabled={saving} onPress={() => void undoSavedPlan()} style={styles.outcomeSecondary}>
+                <Text style={styles.outcomeSecondaryText}>Undo</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable accessibilityRole="button" disabled={saving} onPress={() => void savePlan()} style={styles.outcomePrimary}>
+              <Text style={styles.outcomePrimaryText}>{saving ? 'Saving…' : text(saveOutcome?.label, 'Save result')}</Text>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            disabled={saving}
+            onPress={() => onFollowUp(text(saveOutcome?.followUpPrompt, 'What should I do next with this result?'))}
+            style={styles.outcomeSecondary}
+          >
+            <Text style={styles.outcomeSecondaryText}>{text(saveOutcome?.followUpLabel, 'Next step')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {outcome ? <Text style={styles.outcomeMessage}>{outcome}</Text> : null}
     </View>
   );
 }
@@ -175,6 +371,9 @@ function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'offline' | 'direct' | 'server' | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [submittedInitialPrompt, setSubmittedInitialPrompt] = useState(false);
   const suggestions = useMemo(() => list(props.suggestions, DEFAULT_PROMPTS), [props.suggestions]);
   const domainId = runtime.catalog?.activeDomainId ?? runtime.activeManifest?.id ?? 'app';
 
@@ -193,6 +392,7 @@ function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
         actor: 'mobile-json-render',
       });
       setThread(result.thread);
+      setMode(result.mode);
       if (result.serverError) setError(result.serverError);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Assistant request failed.');
@@ -201,43 +401,101 @@ function AssistantChatWidget({ element }: ComponentRenderProps<WidgetProps>) {
     }
   }, [busy, db, domainId, thread?.id]);
 
+  useEffect(() => {
+    const initialPrompt = text(props.initialPrompt);
+    if (!initialPrompt || submittedInitialPrompt) return;
+    setInput(initialPrompt);
+    if (props.autoSubmitPrompt === true) {
+      setSubmittedInitialPrompt(true);
+      void submit(initialPrompt);
+    }
+  }, [props.autoSubmitPrompt, props.initialPrompt, submit, submittedInitialPrompt]);
+
+  useEffect(() => {
+    if (props.fullPage !== true) return;
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      const obscuredHeight = Dimensions.get('screen').height - event.endCoordinates.screenY;
+      setKeyboardHeight(Math.max(event.endCoordinates.height, obscuredHeight) + 8);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [props.fullPage]);
+
   const messages = thread?.messages ?? [];
+  const fullPage = props.fullPage === true;
+
+  const content = (
+    <>
+      <ScrollView
+        style={[styles.chatLog, fullPage ? styles.chatLogFullPage : null]}
+        contentContainerStyle={[styles.chatLogContent, fullPage ? styles.chatLogContentFullPage : null]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {messages.length ? messages.map((message, index) => (
+          <Bubble
+            contextPrompt={message.role === 'assistant' ? messages.slice(0, index).reverse().find((item) => item.role === 'user')?.text : undefined}
+            key={message.id}
+            message={message}
+            onFollowUp={(prompt) => void submit(prompt)}
+            saveOutcome={props.saveOutcome && typeof props.saveOutcome === 'object' && !Array.isArray(props.saveOutcome)
+              ? props.saveOutcome as Record<string, unknown>
+              : undefined}
+          />
+        )) : (
+          <View style={styles.emptyChat}>
+            <Text style={styles.emptyTitle}>{text(props.emptyTitle, 'What should this app do next?')}</Text>
+            <Text style={styles.emptyCopy}>{text(props.emptyCopy, 'Ask for record help, summaries, or app changes. The assistant falls back to local records when live AI is unavailable.')}</Text>
+          </View>
+        )}
+        {busy ? <ActivityIndicator color="#2F7448" /> : null}
+      </ScrollView>
+      <View style={fullPage ? [styles.chatComposerDock, { bottom: keyboardHeight }] : null}>
+        {mode ? (
+          <View style={styles.chatMode}>
+            <Text style={styles.chatModeText}>{mode === 'offline' ? 'On-device answer' : mode === 'direct' ? 'Direct AI' : 'Connected AI'}</Text>
+          </View>
+        ) : null}
+        {error ? <Text style={styles.warning}>{error}</Text> : null}
+        {!messages.length && keyboardHeight === 0 ? (
+          <View style={styles.suggestions}>
+            {suggestions.slice(0, 4).map((suggestion) => (
+              <Pressable key={suggestion} style={styles.suggestion} onPress={() => submit(suggestion)}>
+                <Text style={styles.suggestionText}>{suggestion}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.inputRow}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder={text(props.prompt, 'Ask anything…')}
+            placeholderTextColor="#8A8172"
+            style={styles.input}
+            multiline
+          />
+          <Pressable style={[styles.send, busy ? styles.disabled : null]} onPress={() => submit(input)} disabled={busy}>
+            <Text style={styles.sendText}>{busy ? '…' : 'Send'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </>
+  );
+
+  if (fullPage) {
+    return <View style={styles.chatFullPage}>{content}</View>;
+  }
 
   return (
     <WidgetShell
       title={text(props.title, 'Assistant')}
       subtitle={text(props.subtitle, 'Source-backed chat, editor, and proposal surface.')}
+      showHeader={props.showHeader !== false}
     >
-      <ScrollView style={styles.chatLog} contentContainerStyle={styles.chatLogContent}>
-        {messages.length ? messages.map((message) => <Bubble key={message.id} message={message} />) : (
-          <View style={styles.emptyChat}>
-            <Text style={styles.emptyTitle}>What should this app do next?</Text>
-            <Text style={styles.emptyCopy}>Ask for record help, summaries, or app changes. The assistant falls back to local records when live AI is unavailable.</Text>
-          </View>
-        )}
-        {busy ? <ActivityIndicator color="#2F7448" /> : null}
-      </ScrollView>
-      {error ? <Text style={styles.warning}>{error}</Text> : null}
-      <View style={styles.suggestions}>
-        {suggestions.slice(0, 4).map((suggestion) => (
-          <Pressable key={suggestion} style={styles.suggestion} onPress={() => submit(suggestion)}>
-            <Text style={styles.suggestionText}>{suggestion}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <View style={styles.inputRow}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder={text(props.prompt, 'Ask anything…')}
-          placeholderTextColor="#8A8172"
-          style={styles.input}
-          multiline
-        />
-        <Pressable style={[styles.send, busy ? styles.disabled : null]} onPress={() => submit(input)} disabled={busy}>
-          <Text style={styles.sendText}>{busy ? '…' : 'Send'}</Text>
-        </Pressable>
-      </View>
+      {content}
     </WidgetShell>
   );
 }
@@ -294,9 +552,165 @@ function HealthConnectWidget({ element }: ComponentRenderProps<WidgetProps>) {
   );
 }
 
+function ThemeDensitySelectorWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const settings = useLifeOSSettingsSnapshot();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const theme = settings.runtime.theme;
+  const density = settings.runtime.density;
+
+  const update = useCallback(async (next: Partial<{ theme: typeof theme; density: typeof density }>) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const saved = await saveLifeOSRuntimePreferences(next);
+      setMessage(`Saved ${saved.runtime.theme} · ${saved.runtime.density}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save appearance.');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  return (
+    <WidgetShell
+      title={text(props.title, 'Appearance')}
+      subtitle={text(props.subtitle, 'Persistent theme and density for this device.')}
+    >
+      <Text style={styles.bodyText}>Current: {theme} · {density}</Text>
+      <View style={styles.preferenceGroup}>
+        <Text style={styles.formLabel}>Theme</Text>
+        <View style={styles.segmentedRow}>
+          {(['system', 'light', 'dark'] as const).map((item) => (
+            <Pressable key={item} style={[styles.segment, theme === item ? styles.segmentActive : null]} onPress={() => update({ theme: item })} disabled={busy}>
+              <Text style={[styles.segmentText, theme === item ? styles.segmentTextActive : null]}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      <View style={styles.preferenceGroup}>
+        <Text style={styles.formLabel}>Density</Text>
+        <View style={styles.segmentedRow}>
+          {(['comfortable', 'compact'] as const).map((item) => (
+            <Pressable key={item} style={[styles.segment, density === item ? styles.segmentActive : null]} onPress={() => update({ density: item })} disabled={busy}>
+              <Text style={[styles.segmentText, density === item ? styles.segmentTextActive : null]}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {message ? <Text style={message.startsWith('Saved') ? styles.success : styles.warning}>{message}</Text> : null}
+    </WidgetShell>
+  );
+}
+
+function providerKind(value: string): AiProviderKind {
+  if (value === 'azure_openai' || value === 'anthropic' || value === 'openai_compatible') return value;
+  return 'openai_compatible';
+}
+
+function AiProviderProfileEditor({
+  profile,
+  onSaved,
+}: {
+  profile: AiProviderProfile;
+  onSaved(message: string): void;
+}) {
+  const [enabled, setEnabled] = useState(profile.enabled);
+  const [provider, setProvider] = useState<AiProviderKind>(profile.provider);
+  const [baseUrl, setBaseUrl] = useState(profile.baseUrl);
+  const [model, setModel] = useState(profile.model);
+  const [apiVersion, setApiVersion] = useState(profile.apiVersion);
+  const [apiKey, setApiKey] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setEnabled(profile.enabled);
+    setProvider(profile.provider);
+    setBaseUrl(profile.baseUrl);
+    setModel(profile.model);
+    setApiVersion(profile.apiVersion);
+    setApiKey('');
+  }, [profile]);
+
+  const save = useCallback(async () => {
+    setBusy(true);
+    try {
+      const saved = await saveLifeOSAiProviderProfile(profile.id, {
+        enabled,
+        provider,
+        baseUrl,
+        model,
+        apiVersion,
+        ...(apiKey.trim() ? { apiKey } : {}),
+      });
+      onSaved(`Saved ${providerLabel(saved.ai[profile.id])}.`);
+      setApiKey('');
+    } catch (error) {
+      onSaved(error instanceof Error ? error.message : 'Could not save AI provider.');
+    } finally {
+      setBusy(false);
+    }
+  }, [apiKey, apiVersion, baseUrl, enabled, model, onSaved, profile.id, provider]);
+
+  return (
+    <View style={styles.providerEditor}>
+      <View style={styles.permissionHeading}>
+        <Text style={styles.providerEditorTitle}>{profile.id === 'primary' ? 'Primary model' : 'Fallback model'}</Text>
+        <Pressable style={[styles.statusPill, enabled ? null : styles.statusPillAttention]} onPress={() => setEnabled((value) => !value)}>
+          <Text style={[styles.statusText, enabled ? null : styles.statusTextAttention]}>{enabled ? 'Enabled' : 'Off'}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.sourceHomeDetail}>Key: {maskSecret(profile.apiKey)}</Text>
+      <View style={styles.segmentedRow}>
+        {(['openai_compatible', 'azure_openai', 'anthropic'] as const).map((item) => (
+          <Pressable key={item} style={[styles.segment, provider === item ? styles.segmentActive : null]} onPress={() => setProvider(providerKind(item))}>
+            <Text style={[styles.segmentText, provider === item ? styles.segmentTextActive : null]}>{item.replace('_', ' ')}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <TextInput value={baseUrl} onChangeText={setBaseUrl} placeholder="Base URL" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+      <TextInput value={model} onChangeText={setModel} placeholder="Model or deployment" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+      {provider === 'azure_openai' ? (
+        <TextInput value={apiVersion} onChangeText={setApiVersion} placeholder="Azure API version" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+      ) : null}
+      <TextInput
+        value={apiKey}
+        onChangeText={setApiKey}
+        placeholder={profile.apiKey ? 'Leave blank to keep saved key' : 'Paste API key'}
+        placeholderTextColor="#9A8D7D"
+        autoCapitalize="none"
+        secureTextEntry
+        style={styles.formInput}
+      />
+      <Pressable style={[styles.primaryButton, busy ? styles.disabled : null]} onPress={save} disabled={busy}>
+        <Text style={styles.primaryButtonText}>{busy ? 'Saving…' : `Save ${profile.id}`}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function AiProviderSettingsWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const settings = useLifeOSSettingsSnapshot();
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <WidgetShell
+      title={text(props.title, 'AI model settings')}
+      subtitle={text(props.subtitle, 'Choose provider, model, and API key. Keys are masked and stored in device secure storage on native.')}
+    >
+      <Text style={styles.bodyText}>Active profiles: {settings.ai.primary.enabled ? providerLabel(settings.ai.primary) : 'primary off'} · {settings.ai.fallback.enabled ? providerLabel(settings.ai.fallback) : 'fallback off'}</Text>
+      <AiProviderProfileEditor profile={settings.ai.primary} onSaved={setMessage} />
+      <AiProviderProfileEditor profile={settings.ai.fallback} onSaved={setMessage} />
+      {message ? <Text style={message.startsWith('Saved') ? styles.success : styles.warning}>{message}</Text> : null}
+    </WidgetShell>
+  );
+}
+
 function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const props = element.props ?? {};
   const db = useLifeOSDatabase();
+  const { installationId } = useAppRuntime();
   const [prompt, setPrompt] = useState(text(props.prompt, 'Add a notes table with a cute card list'));
   const examples = rows(props.examples).map((item) => ({
     title: label(item),
@@ -314,11 +728,11 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
     setError(null);
     setMessage(null);
     try {
-      if (!db) throw new Error('Database is not ready yet.');
-      const active = await getActiveAppPackage(db);
+      if (!db || !installationId) throw new Error('Database is not ready yet.');
+      const active = await getActiveAppPackage(db, installationId);
       if (!active) throw new Error('No active app package yet.');
       const nextRequest = buildSafePackageChangeRequest(active, prompt);
-      const nextPreview = await previewAppPackageChange(db, nextRequest);
+      const nextPreview = await previewAppPackageChange(db, installationId, nextRequest);
       setRequest(nextRequest);
       setPreview(nextPreview);
       setMessage(nextPreview.status === 'valid' ? 'Preview ready. Review, then approve.' : 'Preview blocked. Nothing changed.');
@@ -329,7 +743,7 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
     } finally {
       setBusy(false);
     }
-  }, [db, prompt]);
+  }, [db, installationId, prompt]);
 
   const applyPreview = useCallback(async () => {
     if (!request || !preview?.packageHash || preview.status !== 'valid') return;
@@ -337,8 +751,8 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
     setError(null);
     setMessage(null);
     try {
-      if (!db) throw new Error('Database is not ready yet.');
-      const applied = await activateApprovedAppPackageChange(db, request, {
+      if (!db || !installationId) throw new Error('Database is not ready yet.');
+      const applied = await activateApprovedAppPackageChange(db, installationId, request, {
         schemaVersion: 'wonder.package-change-approval.v1',
         approved: true,
         requestHash: preview.requestHash,
@@ -354,7 +768,7 @@ function SchemaEditorWidget({ element }: ComponentRenderProps<WidgetProps>) {
     } finally {
       setBusy(false);
     }
-  }, [db, preview, request]);
+  }, [db, installationId, preview, request]);
 
   return (
     <WidgetShell
@@ -471,6 +885,251 @@ function KanbanBoardWidget({ element }: ComponentRenderProps<WidgetProps>) {
           </View>
         ))}
       </ScrollView>
+    </WidgetShell>
+  );
+}
+
+type CaptureAsset = {
+  uri: string;
+  mimeType: string | null;
+  width: number | null;
+  height: number | null;
+};
+
+async function persistCaptureAsset(asset: ImagePicker.ImagePickerAsset): Promise<CaptureAsset> {
+  const base = FileSystem.documentDirectory;
+  if (!base) {
+    return {
+      uri: asset.uri,
+      mimeType: asset.mimeType ?? null,
+      width: asset.width ?? null,
+      height: asset.height ?? null,
+    };
+  }
+  const directory = `${base}wonder-captures/`;
+  await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  const extension = (() => {
+    const fromName = asset.fileName?.match(/\.([a-zA-Z0-9]+)$/)?.[1];
+    if (fromName) return fromName.toLowerCase();
+    if (asset.mimeType === 'image/png') return 'png';
+    if (asset.mimeType === 'image/webp') return 'webp';
+    return 'jpg';
+  })();
+  const destination = `${directory}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  await FileSystem.copyAsync({ from: asset.uri, to: destination });
+  return {
+    uri: destination,
+    mimeType: asset.mimeType ?? null,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+  };
+}
+
+function SmartCaptureWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const db = useLifeOSDatabase();
+  const runtime = useAppRuntime();
+  const router = useRouter();
+  const modes = rows(props.items);
+  const availableModes = (modes.length ? modes : [
+    { id: 'photo', title: 'Photo', emoji: '▧', input: 'image', collection: 'attachment' },
+    { id: 'note', title: 'Note', emoji: '✎', input: 'note', collection: 'source_record' },
+  ]).slice(0, 6);
+  const [modeId, setModeId] = useState(text(availableModes[0]?.id, 'photo'));
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [url, setUrl] = useState('');
+  const [asset, setAsset] = useState<CaptureAsset | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const activeMode = availableModes.find((mode) => text(mode.id) === modeId) ?? availableModes[0];
+  const inputKind = text(activeMode?.input, 'note');
+  const needsImage = inputKind === 'image' || inputKind === 'camera' || inputKind === 'receipt';
+  const needsUrl = inputKind === 'url';
+
+  const chooseMode = useCallback((nextMode: Record<string, unknown>) => {
+    setModeId(text(nextMode.id, label(nextMode)));
+    setPreviewing(false);
+    setMessage(null);
+    setAsset(null);
+    setTitle('');
+    setNotes('');
+    setUrl('');
+  }, []);
+
+  const pickImage = useCallback(async (source: 'camera' | 'library') => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setMessage('Camera access was not granted.');
+          return;
+        }
+      }
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+      if (result.canceled || !result.assets[0]) return;
+      const saved = await persistCaptureAsset(result.assets[0]);
+      setAsset(saved);
+      setPreviewing(false);
+      if (!title.trim()) {
+        setTitle(inputKind === 'receipt' ? 'Receipt' : 'Food photo');
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not capture image.');
+    } finally {
+      setBusy(false);
+    }
+  }, [inputKind, title]);
+
+  const preview = useCallback(() => {
+    if (!title.trim()) {
+      setMessage('Add a name first.');
+      return;
+    }
+    if (needsImage && !asset) {
+      setMessage('Take or choose a photo first.');
+      return;
+    }
+    if (needsUrl && !/^https?:\/\//i.test(url.trim())) {
+      setMessage('Add a full http or https link.');
+      return;
+    }
+    setMessage(null);
+    setPreviewing(true);
+  }, [asset, needsImage, needsUrl, title, url]);
+
+  const save = useCallback(async () => {
+    if (!db || !runtime.activeManifest || !activeMode) {
+      setMessage('Food storage is not ready.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const id = `capture-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const collection = text(activeMode.collection, 'source_record');
+      const saved = await upsertRecord(db, runtime.activeManifest, {
+        id,
+        collection,
+        title: title.trim(),
+        properties: {
+          status: 'captured',
+          body: notes.trim(),
+          capture_mode: text(activeMode.id, inputKind),
+          capture_label: label(activeMode),
+          ...(asset ? {
+            attachment_uri: asset.uri,
+            attachment_mime_type: asset.mimeType,
+            attachment_width: asset.width,
+            attachment_height: asset.height,
+          } : {}),
+          ...(needsUrl ? { source_url: url.trim() } : {}),
+        },
+        source: {
+          provider: 'user',
+          external_id: id,
+          url: needsUrl ? url.trim() : asset?.uri ?? null,
+          observed_at: now,
+          content_hash: null,
+        },
+        archived_at: null,
+        created_at: now,
+        updated_at: now,
+        operation_actor: 'user',
+        operation_origin: 'manual',
+        idempotency_key: `capture:${id}`,
+      });
+      router.push(`/record/${encodeURIComponent(saved.id)}` as never);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save this capture.');
+    } finally {
+      setBusy(false);
+    }
+  }, [activeMode, asset, db, inputKind, needsUrl, notes, router, runtime.activeManifest, title, url]);
+
+  return (
+    <WidgetShell title={text(props.title, 'Add')} subtitle={text(props.subtitle, 'Capture something useful.')}>
+      <View style={styles.captureModes}>
+        {availableModes.map((mode) => {
+          const id = text(mode.id, label(mode));
+          const selected = id === modeId;
+          return (
+            <Pressable key={id} style={[styles.captureMode, selected ? styles.captureModeActive : null]} onPress={() => chooseMode(mode)}>
+              <Text style={[styles.captureModeText, selected ? styles.captureModeTextActive : null]}>{text(mode.emoji)} {label(mode)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {needsImage ? (
+        <>
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.primaryButton} onPress={() => void pickImage('camera')} disabled={busy}>
+              <Text style={styles.primaryButtonText}>{busy ? 'Opening…' : 'Take photo'}</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={() => void pickImage('library')} disabled={busy}>
+              <Text style={styles.secondaryButtonText}>Choose photo</Text>
+            </Pressable>
+          </View>
+          {asset ? <Image source={{ uri: asset.uri }} style={styles.capturePreviewImage} resizeMode="cover" /> : null}
+        </>
+      ) : null}
+      <View style={styles.formField}>
+        <Text style={styles.formLabel}>Name</Text>
+        <TextInput
+          style={styles.formInput}
+          value={title}
+          onChangeText={(value) => { setTitle(value); setPreviewing(false); }}
+          placeholder={text(activeMode?.placeholder, needsUrl ? 'Recipe name' : 'What is this?')}
+          placeholderTextColor="#9A8D7D"
+        />
+      </View>
+      {needsUrl ? (
+        <View style={styles.formField}>
+          <Text style={styles.formLabel}>Link</Text>
+          <TextInput
+            style={styles.formInput}
+            value={url}
+            onChangeText={(value) => { setUrl(value); setPreviewing(false); }}
+            placeholder="https://…"
+            placeholderTextColor="#9A8D7D"
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+        </View>
+      ) : null}
+      <View style={styles.formField}>
+        <Text style={styles.formLabel}>Notes</Text>
+        <TextInput
+          style={[styles.formInput, styles.formInputMultiline]}
+          value={notes}
+          onChangeText={(value) => { setNotes(value); setPreviewing(false); }}
+          placeholder={text(activeMode?.notesPlaceholder, 'Anything useful to remember?')}
+          placeholderTextColor="#9A8D7D"
+          multiline
+        />
+      </View>
+      {message ? <Text style={styles.warning}>{message}</Text> : null}
+      {previewing ? (
+        <View style={styles.previewBox}>
+          <Text style={styles.previewTitle}>{title.trim()}</Text>
+          <Text style={styles.previewText}>{label(activeMode)} · {text(activeMode.collection, 'source record')}</Text>
+          {notes.trim() ? <Text style={styles.previewText}>{notes.trim()}</Text> : null}
+          {needsUrl ? <Text style={styles.previewText}>{url.trim()}</Text> : null}
+          <Pressable style={styles.primaryButton} onPress={() => void save()} disabled={busy}>
+            <Text style={styles.primaryButtonText}>{busy ? 'Saving…' : 'Save to Food'}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={styles.primaryButton} onPress={preview} disabled={busy}>
+          <Text style={styles.primaryButtonText}>Review</Text>
+        </Pressable>
+      )}
     </WidgetShell>
   );
 }
@@ -660,19 +1319,43 @@ function FoodHeroWidget({ element }: ComponentRenderProps<WidgetProps>) {
 function UseFirstCarouselWidget({ element }: ComponentRenderProps<WidgetProps>) {
   const router = useRouter();
   const props = element.props ?? {};
-  const items = rows(props.items);
+  const boundItems = rows(props.records)
+    .sort((left, right) => {
+      const leftProperties = rows([left.properties])[0] ?? {};
+      const rightProperties = rows([right.properties])[0] ?? {};
+      return numberValue(leftProperties.expires_in_days, 999) - numberValue(rightProperties.expires_in_days, 999);
+    })
+    .map((record) => {
+      const properties = rows([record.properties])[0] ?? {};
+      const expiresInDays = numberValue(properties.expires_in_days, -1);
+      return {
+        title: text(record.title, 'Food item'),
+        subtitle: [text(record.status), text(record.meta)].filter(Boolean).join(' · '),
+        badge: expiresInDays >= 0 ? (expiresInDays === 0 ? 'today' : `${expiresInDays}d`) : text(record.status, 'use first'),
+        emoji: text(properties.emoji, text(properties.icon, '◉')),
+        route: `/record/${encodeURIComponent(text(record.id))}`,
+      };
+    });
+  const configuredItems = rows(props.items);
+  const items = props.dataBound === true ? boundItems : configuredItems;
   return (
     <View style={styles.premiumSection}>
       <View style={styles.premiumSectionHeader}>
         <Text style={styles.premiumSectionTitle}>{text(props.title, 'Use first')}</Text>
-        <Text style={styles.premiumSectionCta}>{text(props.cta, 'Cook')}</Text>
+        {text(props.ctaRoute) ? (
+          <Pressable onPress={() => openWidgetTarget(router, { route: props.ctaRoute })}>
+            <Text style={styles.premiumSectionCta}>{text(props.cta, 'Cook')}</Text>
+          </Pressable>
+        ) : null}
       </View>
       {props.subtitle ? <Text style={styles.premiumSectionSubtitle}>{text(props.subtitle)}</Text> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.premiumRail}>
-        {(items.length ? items : [{ title: 'Baby spinach', subtitle: '2 days · wraps or eggs', emoji: '🥬', badge: '2 days' }]).slice(0, 8).map((item, index) => (
+        {(items.length ? items : props.dataBound === true
+          ? [{ title: 'Nothing urgent', subtitle: 'No expiring kitchen items need attention.', emoji: '✓', badge: 'clear' }]
+          : [{ title: 'Baby spinach', subtitle: '2 days · wraps or eggs', emoji: '🥬', badge: '2 days' }]).slice(0, 8).map((item, index) => (
           <Pressable key={label(item)} style={[styles.useFirstPremiumCard, index % 3 === 1 ? styles.useFirstPremiumBlue : index % 3 === 2 ? styles.useFirstPremiumYellow : null]} onPress={() => openWidgetTarget(router, item)}>
             <Text style={styles.useFirstPremiumEmoji}>{text(item.emoji, '🥬')}</Text>
-            <Text style={styles.useFirstPremiumBadge}>{text(item.badge, text(item.status, 'use first'))}</Text>
+            <Text style={styles.useFirstPremiumBadge}>{text(item.badge, text((item as Record<string, unknown>).status, 'use first'))}</Text>
             <Text style={styles.useFirstPremiumTitle}>{label(item)}</Text>
             <Text style={styles.useFirstPremiumDetail}>{detail(item, 'Ready to use.')}</Text>
           </Pressable>
@@ -780,29 +1463,356 @@ function PantryShelfWidget({ element }: ComponentRenderProps<WidgetProps>) {
 }
 
 function AskFoodBarWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
   const props = element.props ?? {};
   const suggestions = list(props.suggestions, ['What should we do next?', 'Use items before they expire', 'Turn source into clean updates']);
+  const ask = (prompt?: string) => {
+    const route = prompt
+      ? `/(tabs)/chat?prompt=${encodeURIComponent(prompt)}&run=1`
+      : '/(tabs)/chat';
+    router.push(route as never);
+  };
   return (
     <View style={styles.askPremiumCard}>
       <Text style={styles.askPremiumTitle}>{text(props.title, 'Ask')}</Text>
       <Text style={styles.askPremiumSubtitle}>{text(props.subtitle, 'Questions, sources, updates, decisions.')}</Text>
       <View style={styles.suggestions}>
-        {suggestions.slice(0, 4).map((suggestion) => <Text key={suggestion} style={styles.askPremiumChip}>{suggestion}</Text>)}
+        {suggestions.slice(0, 4).map((suggestion) => (
+          <Pressable accessibilityRole="button" key={suggestion} onPress={() => ask(suggestion)}>
+            <Text style={styles.askPremiumChip}>{suggestion}</Text>
+          </Pressable>
+        ))}
       </View>
-      <View style={styles.askPremiumInput}>
+      <Pressable accessibilityRole="button" onPress={() => ask()} style={styles.askPremiumInput}>
         <Text style={styles.askPremiumPlaceholder}>{text(props.placeholder, 'Ask what to do, update, use, or change…')}</Text>
         <Text style={styles.askPremiumSend}>Ask</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function SearchableRecordListWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  const records = (Array.isArray(props.records) ? props.records : []) as DomainRecordViewModel[];
+  const [query, setQuery] = useState('');
+  const [collection, setCollection] = useState('all');
+  const collections = useMemo(
+    () => Array.from(new Set(records.map((record) => record.collection))).sort(),
+    [records],
+  );
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return records.filter((record) => {
+      if (collection !== 'all' && record.collection !== collection) return false;
+      if (!needle) return true;
+      return [
+        record.title,
+        record.body,
+        record.meta,
+        record.status,
+        ...Object.values(record.properties).map((value) => String(value ?? '')),
+      ].some((value) => value.toLowerCase().includes(needle));
+    });
+  }, [collection, query, records]);
+
+  return (
+    <View style={styles.recordSearch}>
+      <View style={styles.searchInputShell}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          accessibilityLabel="Search records"
+          autoCapitalize="none"
+          onChangeText={setQuery}
+          placeholder={text(props.placeholder, 'Search names, locations, notes…')}
+          placeholderTextColor="#8C8175"
+          style={styles.searchInput}
+          value={query}
+        />
+        {query ? (
+          <Pressable accessibilityLabel="Clear search" accessibilityRole="button" hitSlop={10} onPress={() => setQuery('')}>
+            <Text style={styles.searchClear}>×</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.searchFilters}>
+        {['all', ...collections].map((item) => (
+          <Pressable
+            accessibilityRole="button"
+            key={item}
+            onPress={() => setCollection(item)}
+            style={[styles.searchFilter, collection === item ? styles.searchFilterActive : null]}
+          >
+            <Text style={[styles.searchFilterText, collection === item ? styles.searchFilterTextActive : null]}>
+              {item === 'all' ? 'All' : item.replaceAll('_', ' ')}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <Text style={styles.searchCount}>{filtered.length} result{filtered.length === 1 ? '' : 's'}</Text>
+      {filtered.length ? (
+        <View style={styles.compactRecordList}>
+          {filtered.slice(0, 100).map((record) => (
+            <Pressable
+              accessibilityRole="button"
+              key={record.id}
+              onPress={() => router.push(`/record/${encodeURIComponent(record.id)}` as never)}
+              style={styles.compactRecordRow}
+            >
+              <Text style={styles.compactRecordEmoji}>{text(record.properties.emoji, '•')}</Text>
+              <View style={styles.compactRecordCopy}>
+                <Text numberOfLines={1} style={styles.compactRecordTitle}>{record.title}</Text>
+                <Text numberOfLines={2} style={styles.compactRecordDetail}>{record.body || record.meta}</Text>
+              </View>
+              <Text style={styles.compactRecordArrow}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.searchEmpty}>
+          <Text style={styles.searchEmptyTitle}>{text(props.emptyTitle, 'Nothing matches yet')}</Text>
+          <Text style={styles.searchEmptyCopy}>Try another word, change the filter, or add a new item.</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push(text(props.emptyActionRoute, '/capture') as never)} style={styles.outcomePrimary}>
+            <Text style={styles.outcomePrimaryText}>{text(props.emptyActionLabel, 'Add item')}</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function RecordDetailWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const db = useLifeOSDatabase();
+  const runtime = useAppRuntime();
+  const record = ((Array.isArray(props.records) ? props.records : [])[0] ?? null) as DomainRecordViewModel | null;
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState(record?.title ?? '');
+  const [body, setBody] = useState(record?.body ?? '');
+  const [location, setLocation] = useState(text(record?.properties.location));
+  const [quantity, setQuantity] = useState(text(record?.properties.quantity));
+  const [expiry, setExpiry] = useState(text(record?.properties.expires_at, text(record?.properties.expiry_date)));
+  const [message, setMessage] = useState<string | null>(null);
+  const [lastOperationId, setLastOperationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTitle(record?.title ?? '');
+    setBody(record?.body ?? '');
+    setLocation(text(record?.properties.location));
+    setQuantity(text(record?.properties.quantity));
+    setExpiry(text(record?.properties.expires_at, text(record?.properties.expiry_date)));
+  }, [record?.id, record?.title, record?.body, record?.properties]);
+
+  const save = useCallback(async () => {
+    if (!db || !runtime.activeManifest || !record || !title.trim()) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const canonical = await getRecord(db, record.id);
+      if (!canonical) throw new Error('This record no longer exists.');
+      const now = new Date().toISOString();
+      const operationId = `op-record-edit-${record.id.replace(/[^A-Za-z0-9_-]/g, '-')}-${Date.now().toString(36)}`;
+      const expiryKey = Object.hasOwn(canonical.properties, 'expires_at') ? 'expires_at' : 'expiry_date';
+      await upsertRecord(db, runtime.activeManifest, {
+        id: canonical.id,
+        collection: canonical.collection,
+        title: title.trim(),
+        properties: {
+          ...canonical.properties,
+          body: body.trim(),
+          location: location.trim(),
+          quantity: quantity.trim(),
+          [expiryKey]: expiry.trim(),
+        },
+        relations: canonical.relations.map((relation) => ({ name: relation.name, target_id: relation.target_id })),
+        source: canonical.source,
+        archived_at: canonical.archived_at,
+        created_at: canonical.created_at,
+        updated_at: now,
+        operation_actor: 'user',
+        operation_origin: 'manual',
+        operation_id: operationId,
+        idempotency_key: `record-edit:${canonical.id}:${now}`,
+      });
+      setLastOperationId(operationId);
+      setEditing(false);
+      setMessage('Saved.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save changes.');
+    } finally {
+      setBusy(false);
+    }
+  }, [body, db, expiry, location, quantity, record, runtime.activeManifest, title]);
+
+  const undo = useCallback(async () => {
+    if (!db || !runtime.activeManifest || !lastOperationId) return;
+    setBusy(true);
+    try {
+      const result = await undoOperation(db, runtime.activeManifest, lastOperationId);
+      if (result.status === 'applied' || result.status === 'duplicate') {
+        const restored = await getRecord(db, record?.id ?? '');
+        if (restored) {
+          setTitle(restored.title);
+          setBody(text(restored.properties.body));
+          setLocation(text(restored.properties.location));
+          setQuantity(text(restored.properties.quantity));
+          setExpiry(text(restored.properties.expires_at, text(restored.properties.expiry_date)));
+        }
+        setLastOperationId(null);
+        setMessage('Changes undone.');
+      } else {
+        setMessage(`Could not undo: ${result.reject_reason ?? 'unknown error'}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [db, lastOperationId, record?.id, runtime.activeManifest]);
+
+  if (!record) {
+    return (
+      <View style={styles.searchEmpty}>
+        <ActivityIndicator color="#2F7448" />
+        <Text style={styles.searchEmptyCopy}>Loading this item…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.recordDetail}>
+      <View style={styles.recordDetailHero}>
+        <Text style={styles.recordDetailEmoji}>{text(record.properties.emoji, '🍽️')}</Text>
+        <View style={styles.recordDetailHeroCopy}>
+          <Text style={styles.recordDetailTitle}>{title || record.title}</Text>
+          <Text style={styles.recordDetailMeta}>{record.collection.replaceAll('_', ' ')} · {record.status}</Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => setEditing((value) => !value)} style={styles.recordEditButton}>
+          <Text style={styles.recordEditButtonText}>{editing ? 'Close' : 'Edit'}</Text>
+        </Pressable>
+      </View>
+      {editing ? (
+        <View style={styles.recordEditForm}>
+          {[
+            { label: 'Name', value: title, set: setTitle, placeholder: 'Name' },
+            { label: 'Location', value: location, set: setLocation, placeholder: 'Location' },
+            { label: 'Quantity', value: quantity, set: setQuantity, placeholder: '1 bag, 2 tubs…' },
+            { label: 'Expiry', value: expiry, set: setExpiry, placeholder: 'YYYY-MM-DD' },
+          ].map((field) => (
+            <View key={field.label} style={styles.formField}>
+              <Text style={styles.formLabel}>{field.label}</Text>
+              <TextInput onChangeText={field.set} placeholder={field.placeholder} placeholderTextColor="#9A8D7D" style={styles.formInput} value={field.value} />
+            </View>
+          ))}
+          <View style={styles.formField}>
+            <Text style={styles.formLabel}>Notes</Text>
+            <TextInput multiline onChangeText={setBody} placeholder="Useful details" placeholderTextColor="#9A8D7D" style={[styles.formInput, styles.formInputMultiline]} value={body} />
+          </View>
+          <Pressable accessibilityRole="button" disabled={busy || !title.trim()} onPress={() => void save()} style={styles.outcomePrimary}>
+            <Text style={styles.outcomePrimaryText}>{busy ? 'Saving…' : 'Save changes'}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          {body ? <Text style={styles.recordDetailBody}>{body}</Text> : null}
+          <View style={styles.recordFacts}>
+            {[
+              ['Location', location || 'Not set'],
+              ['Quantity', quantity || 'Not set'],
+              ['Expiry', expiry || 'Not set'],
+              ['Source', record.source ? 'Connected' : 'On device'],
+            ].map(([labelValue, value]) => (
+              <View key={labelValue} style={styles.recordFact}>
+                <Text style={styles.recordFactLabel}>{labelValue}</Text>
+                <Text style={styles.recordFactValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+      {message ? (
+        <View style={styles.recordSaveState}>
+          <Text style={styles.outcomeMessage}>{message}</Text>
+          {lastOperationId ? (
+            <Pressable accessibilityRole="button" disabled={busy} onPress={() => void undo()} style={styles.outcomeSecondary}>
+              <Text style={styles.outcomeSecondaryText}>Undo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ScreenHeaderWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const props = element.props ?? {};
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
+  };
+  return (
+    <View style={[styles.screenHeader, { paddingTop: Math.max(insets.top + 6, 10) }]}>
+      <View style={styles.screenHeaderTitleRow}>
+        {props.showBack ? (
+          <Pressable
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={goBack}
+            style={styles.screenHeaderBack}
+          >
+            <Text style={styles.screenHeaderBackText}>‹</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.screenHeaderCopy}>
+          {props.eyebrow ? <Text style={styles.screenHeaderEyebrow}>{text(props.eyebrow)}</Text> : null}
+          <Text numberOfLines={1} style={styles.screenHeaderTitle}>{text(props.title, 'App')}</Text>
+        </View>
+        {props.actionLabel && props.actionRoute ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(props.actionRoute as never)}
+            style={styles.screenHeaderAction}
+          >
+            <Text style={styles.screenHeaderActionText}>{text(props.actionLabel)}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
+function FloatingActionWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const router = useRouter();
+  const props = element.props ?? {};
+  if (!props.route) return null;
+  return (
+    <Pressable
+      accessibilityLabel={text(props.label, 'Add')}
+      accessibilityRole="button"
+      onPress={() => router.push(props.route as never)}
+      style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
+    >
+      <Text style={styles.fabPlus}>＋</Text>
+      <Text style={styles.fabLabel}>{text(props.label, 'Add')}</Text>
+    </Pressable>
+  );
+}
+
 export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
+  ScreenHeaderWidget,
+  FloatingActionWidget,
+  SearchableRecordListWidget,
+  RecordDetailWidget,
   AssistantChatWidget,
   HealthConnectWidget,
+  ThemeDensitySelectorWidget,
+  AiProviderSettingsWidget,
   SchemaEditorWidget,
   PollCardWidget,
   KanbanBoardWidget,
+  SmartCaptureWidget,
   FormCardWidget,
   ChecklistCardWidget,
   PermissionCardWidget,
@@ -817,6 +1827,85 @@ export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
 };
 
 const styles = StyleSheet.create({
+  screenHeader: {
+    backgroundColor: '#FBF7EE',
+    borderBottomColor: '#E8DFD1',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  screenHeaderTitleRow: { alignItems: 'center', flexDirection: 'row', minHeight: 42 },
+  screenHeaderBack: {
+    alignItems: 'center',
+    backgroundColor: '#F0E9DE',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    marginRight: 10,
+    width: 36,
+  },
+  screenHeaderBackText: { color: '#241C16', fontSize: 32, fontWeight: '500', lineHeight: 34 },
+  screenHeaderCopy: { flex: 1 },
+  screenHeaderEyebrow: { color: '#2F7448', fontSize: 10, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
+  screenHeaderTitle: { color: '#241C16', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  screenHeaderAction: { backgroundColor: '#2F7448', borderRadius: 18, paddingHorizontal: 15, paddingVertical: 9 },
+  screenHeaderActionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  fab: {
+    alignItems: 'center',
+    backgroundColor: '#2F7448',
+    borderRadius: 26,
+    bottom: 16,
+    elevation: 8,
+    flexDirection: 'row',
+    gap: 5,
+    minHeight: 52,
+    paddingHorizontal: 18,
+    position: 'absolute',
+    right: 16,
+    shadowColor: '#102716',
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+  },
+  fabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  fabPlus: { color: '#FFFFFF', fontSize: 23, fontWeight: '500', lineHeight: 25 },
+  fabLabel: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
+  recordSearch: { gap: 12 },
+  searchInputShell: { alignItems: 'center', backgroundColor: '#F0E9DE', borderRadius: 18, flexDirection: 'row', minHeight: 52, paddingHorizontal: 14 },
+  searchIcon: { color: '#2F7448', fontSize: 24, marginRight: 8 },
+  searchInput: { color: '#241C16', flex: 1, fontSize: 16, minHeight: 48, paddingVertical: 10 },
+  searchClear: { color: '#756A5E', fontSize: 26 },
+  searchFilters: { gap: 8, paddingRight: 16 },
+  searchFilter: { backgroundColor: '#F0E9DE', borderRadius: 15, minHeight: 36, justifyContent: 'center', paddingHorizontal: 12 },
+  searchFilterActive: { backgroundColor: '#2F7448' },
+  searchFilterText: { color: '#62584E', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
+  searchFilterTextActive: { color: '#FFFFFF' },
+  searchCount: { color: '#756A5E', fontSize: 12, fontWeight: '800' },
+  compactRecordList: { backgroundColor: '#FFFCF5', borderRadius: 20, overflow: 'hidden' },
+  compactRecordRow: { alignItems: 'center', borderBottomColor: '#ECE4D8', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 14, paddingVertical: 10 },
+  compactRecordEmoji: { fontSize: 24, width: 32 },
+  compactRecordCopy: { flex: 1, gap: 2 },
+  compactRecordTitle: { color: '#241C16', fontSize: 16, fontWeight: '800' },
+  compactRecordDetail: { color: '#756A5E', fontSize: 13, lineHeight: 18 },
+  compactRecordArrow: { color: '#2F7448', fontSize: 24 },
+  searchEmpty: { alignItems: 'flex-start', backgroundColor: '#FFFCF5', borderRadius: 20, gap: 10, padding: 20 },
+  searchEmptyTitle: { color: '#241C16', fontSize: 18, fontWeight: '900' },
+  searchEmptyCopy: { color: '#756A5E', fontSize: 14, lineHeight: 20 },
+  recordDetail: { backgroundColor: '#FFFCF5', borderRadius: 22, gap: 16, padding: 16 },
+  recordDetailHero: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  recordDetailEmoji: { backgroundColor: '#F0E9DE', borderRadius: 20, fontSize: 34, overflow: 'hidden', padding: 12 },
+  recordDetailHeroCopy: { flex: 1, gap: 3 },
+  recordDetailTitle: { color: '#241C16', fontSize: 22, fontWeight: '900' },
+  recordDetailMeta: { color: '#756A5E', fontSize: 12, textTransform: 'capitalize' },
+  recordEditButton: { backgroundColor: '#E4F1E8', borderRadius: 16, minHeight: 44, justifyContent: 'center', paddingHorizontal: 14 },
+  recordEditButtonText: { color: '#2F7448', fontSize: 13, fontWeight: '900' },
+  recordDetailBody: { color: '#4E463E', fontSize: 15, lineHeight: 22 },
+  recordFacts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  recordFact: { backgroundColor: '#F6F1E8', borderRadius: 16, minWidth: '47%', padding: 12 },
+  recordFactLabel: { color: '#8A7E71', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  recordFactValue: { color: '#241C16', fontSize: 14, fontWeight: '800', marginTop: 4 },
+  recordEditForm: { gap: 12 },
+  recordSaveState: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   card: {
     backgroundColor: '#FFFCF5',
     borderRadius: 20,
@@ -833,6 +1922,21 @@ const styles = StyleSheet.create({
   bodyText: { color: '#4E463E', fontSize: 14, lineHeight: 20 },
   chatLog: { maxHeight: 420 },
   chatLogContent: { gap: 10, paddingBottom: 4 },
+  chatFullPage: { backgroundColor: '#FBF7EE', flex: 1 },
+  chatLogFullPage: { flex: 1, maxHeight: undefined },
+  chatLogContentFullPage: { flexGrow: 1, padding: 14, paddingBottom: 190 },
+  chatComposerDock: {
+    backgroundColor: '#FFFCF5',
+    borderTopColor: '#E8DFD1',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
   emptyChat: { backgroundColor: '#F6F1E8', borderRadius: 18, padding: 16, gap: 6 },
   emptyTitle: { color: '#241C16', fontSize: 18, fontWeight: '800' },
   emptyCopy: { color: '#6D6257', fontSize: 14, lineHeight: 20 },
@@ -843,8 +1947,29 @@ const styles = StyleSheet.create({
   userText: { color: '#FFFFFF', fontSize: 15, lineHeight: 21 },
   sources: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2', paddingTop: 8, gap: 4 },
   sourceText: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
+  sourceRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minHeight: 44 },
+  sourceArrow: { color: '#2F7448', fontSize: 22, fontWeight: '800', marginLeft: 'auto' },
+  outcomeCard: { backgroundColor: '#E4F1E8', borderRadius: 16, gap: 4, padding: 12 },
+  outcomeTitle: { color: '#214F32', fontSize: 14, fontWeight: '900' },
+  outcomeCopy: { color: '#4A6450', fontSize: 13 },
+  outcomeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4 },
+  outcomePrimary: { backgroundColor: '#2F7448', borderRadius: 16, minHeight: 44, justifyContent: 'center', paddingHorizontal: 14 },
+  outcomePrimaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  outcomeSecondary: { backgroundColor: '#F0E9DE', borderRadius: 16, minHeight: 44, justifyContent: 'center', paddingHorizontal: 14 },
+  outcomeSecondaryText: { color: '#3E352D', fontSize: 13, fontWeight: '900' },
+  outcomeMessage: { color: '#2F7448', fontSize: 13, fontWeight: '800' },
+  chatMode: { alignSelf: 'flex-start', backgroundColor: '#E4F1E8', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  chatModeText: { color: '#2F7448', fontSize: 11, fontWeight: '900' },
   warning: { color: '#9A4B2E', fontSize: 12 },
   success: { color: '#2F7448', fontSize: 12, fontWeight: '800' },
+  preferenceGroup: { gap: 8 },
+  segmentedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  segment: { borderRadius: 999, backgroundColor: '#F6F1E8', paddingHorizontal: 11, paddingVertical: 8 },
+  segmentActive: { backgroundColor: '#241C16' },
+  segmentText: { color: '#6D6257', fontSize: 12, fontWeight: '900', textTransform: 'capitalize' },
+  segmentTextActive: { color: '#FFFFFF' },
+  providerEditor: { borderRadius: 18, backgroundColor: '#F6F1E8', padding: 12, gap: 10 },
+  providerEditorTitle: { color: '#241C16', fontSize: 15, fontWeight: '900' },
   editorInput: {
     minHeight: 84,
     borderRadius: 18,
@@ -930,13 +2055,13 @@ const styles = StyleSheet.create({
   premiumSectionCta: { color: '#2F7448', fontSize: 13, fontWeight: '900' },
   premiumSectionSubtitle: { color: '#657066', fontSize: 14, lineHeight: 20 },
   premiumRail: { gap: 12, paddingRight: 18 },
-  useFirstPremiumCard: { width: 174, minHeight: 190, borderRadius: 28, backgroundColor: '#F9E7D9', padding: 16, gap: 8, justifyContent: 'space-between' },
+  useFirstPremiumCard: { width: 144, minHeight: 152, borderRadius: 22, backgroundColor: '#F9E7D9', padding: 13, gap: 6, justifyContent: 'space-between' },
   useFirstPremiumBlue: { backgroundColor: '#E3EFF3' },
   useFirstPremiumYellow: { backgroundColor: '#FFF1B8' },
-  useFirstPremiumEmoji: { fontSize: 36 },
+  useFirstPremiumEmoji: { fontSize: 28 },
   useFirstPremiumBadge: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,252,245,0.78)', borderRadius: 999, color: '#9A4B2E', fontSize: 11, fontWeight: '900', paddingHorizontal: 8, paddingVertical: 4, overflow: 'hidden' },
-  useFirstPremiumTitle: { color: '#241C16', fontSize: 18, fontWeight: '900', lineHeight: 22 },
-  useFirstPremiumDetail: { color: '#6D6257', fontSize: 13, lineHeight: 18 },
+  useFirstPremiumTitle: { color: '#241C16', fontSize: 16, fontWeight: '900', lineHeight: 20 },
+  useFirstPremiumDetail: { color: '#6D6257', fontSize: 12, lineHeight: 16 },
   premiumCard: { backgroundColor: '#FFFCF5', borderRadius: 28, padding: 18, gap: 12, shadowColor: '#271D14', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   mealPremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, backgroundColor: '#F6F1E8', padding: 12 },
   mealPremiumTime: { width: 58, minHeight: 48, borderRadius: 18, backgroundColor: '#E4F1E8', color: '#2F7448', textAlign: 'center', lineHeight: 48, fontSize: 11, fontWeight: '900', overflow: 'hidden' },
@@ -1017,6 +2142,12 @@ const styles = StyleSheet.create({
   formHint: { color: '#6D6257', fontSize: 12 },
   formInput: { minHeight: 42, borderRadius: 12, backgroundColor: '#FFFFFF', color: '#241C16', paddingHorizontal: 11, paddingVertical: 9, fontSize: 14 },
   formInputMultiline: { minHeight: 82, textAlignVertical: 'top' },
+  captureModes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  captureMode: { borderRadius: 999, backgroundColor: '#F6F1E8', paddingHorizontal: 12, paddingVertical: 9 },
+  captureModeActive: { backgroundColor: '#241C16' },
+  captureModeText: { color: '#6D6257', fontSize: 13, fontWeight: '900' },
+  captureModeTextActive: { color: '#FFFFFF' },
+  capturePreviewImage: { width: '100%', height: 220, borderRadius: 18, backgroundColor: '#F6F1E8' },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14, backgroundColor: '#F6F1E8', padding: 12 },
   checkBox: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: '#B8AB9A', textAlign: 'center', color: '#FFFFFF', fontWeight: '900', overflow: 'hidden' },
   checkBoxOn: { backgroundColor: '#2F7448', borderColor: '#2F7448' },

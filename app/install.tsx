@@ -2,7 +2,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { buildPackageInstallApprovalReceipt } from '@/packages/shared/contracts/package-install';
 import type { UtopiaRegistryManifest, UtopiaRegistryPackage } from '@/packages/shared/contracts/package-install';
+import { installApprovedAppPackage, listAppInstallations } from '@/src/db/app-package-registry';
+import { useLifeOSDatabase } from '@/src/db/provider';
 import {
   BUNDLED_DEMO_PACKAGE_URL,
   BUNDLED_UTOPIA_REGISTRY_URL,
@@ -19,8 +22,9 @@ import { colors } from '@/src/theme';
 
 export default function InstallScreen() {
   const router = useRouter();
+  const db = useLifeOSDatabase();
   const params = useLocalSearchParams<{ url?: string }>();
-  const { activateAppPackage } = useAppRuntime();
+  const { installationId } = useAppRuntime();
   const fetcher = useMemo(() => createPackageInstallFetcher(), []);
   const bundledRegistry = useMemo(() => getBundledRegistryManifest(), []);
   const [packageUrl, setPackageUrl] = useState('');
@@ -28,6 +32,7 @@ export default function InstallScreen() {
   const [registry, setRegistry] = useState<UtopiaRegistryManifest>(bundledRegistry);
   const [candidate, setCandidate] = useState<PackageInstallCandidate | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<UtopiaRegistryPackage | null>(null);
+  const [installations, setInstallations] = useState<{ id: string; label: string; launchPath?: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +44,26 @@ export default function InstallScreen() {
     // Run only for first route param load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.url]);
+
+  useEffect(() => {
+    if (!db) return;
+    let cancelled = false;
+    void listAppInstallations(db).then((items) => {
+      if (cancelled) return;
+      setInstallations(items
+        .filter((item) => item.id !== installationId)
+        .map((item) => ({
+          id: item.id,
+          label: item.label,
+          launchPath: item.activation?.launchPath,
+        })));
+    }).catch(() => {
+      if (!cancelled) setInstallations([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [db, installationId, busy]);
 
   async function previewPackage(url: string, registryPackage?: UtopiaRegistryPackage) {
     setBusy(true);
@@ -70,12 +95,17 @@ export default function InstallScreen() {
   }
 
   async function installCandidate() {
-    if (!candidate || candidate.preview.status !== 'ready_for_review') return;
+    if (!db || !candidate || candidate.preview.status !== 'ready_for_review') return;
     setBusy(true);
     setError(null);
     try {
-      await activateAppPackage(candidate.packageJson);
-      router.replace('/');
+      const approval = buildPackageInstallApprovalReceipt(candidate.preview, 'local-user');
+      const installation = await installApprovedAppPackage(db, {
+        packageJson: candidate.packageJson,
+        preview: candidate.preview,
+        approval,
+      });
+      router.replace({ pathname: '/apps/[installationId]', params: { installationId: installation.id } });
     } catch (installError) {
       setError(errorMessage(installError));
     } finally {
@@ -146,6 +176,23 @@ export default function InstallScreen() {
         ))}
       </View>
 
+      {installations.length ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Installed apps</Text>
+          {installations.map((item) => (
+            <Pressable
+              key={item.id}
+              style={styles.packageRow}
+              onPress={() => router.push({ pathname: '/apps/[installationId]', params: { installationId: item.id } })}
+              disabled={busy}
+            >
+              <Text style={styles.packageName}>{item.label}</Text>
+              <Text style={styles.packageMeta}>{item.id}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       {busy ? (
         <View style={styles.loading}><ActivityIndicator /><Text style={styles.muted}>Loading</Text></View>
       ) : null}
@@ -171,7 +218,7 @@ export default function InstallScreen() {
             <Pressable
               style={[styles.primaryButton, preview.status !== 'ready_for_review' ? styles.disabled : null]}
               onPress={() => void installCandidate()}
-              disabled={busy || preview.status !== 'ready_for_review'}
+              disabled={busy || !db || preview.status !== 'ready_for_review'}
             >
               <Text style={styles.primaryText}>Install</Text>
             </Pressable>

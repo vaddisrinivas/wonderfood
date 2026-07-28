@@ -29,6 +29,29 @@ describe('AppRuntimeProvider', () => {
     expect(html).toContain('left:reference-app:Reference App:reference-app');
     expect(html).toContain('right:second-app:Second App:second-app');
   });
+
+  it('fails closed when a database-backed runtime is missing installation scope', async () => {
+    let captured: ReturnType<typeof useAppRuntime> | undefined;
+
+    const { renderToStaticMarkup } = require('react-dom/server') as {
+      renderToStaticMarkup(node: ReturnType<typeof createElement>): string;
+    };
+    renderToStaticMarkup(
+      createElement(
+        AppRuntimeProvider,
+        { db: {} as never },
+        createElement(CaptureRuntime, { onCapture: (value) => { captured = value; } }),
+      ),
+    );
+
+    expect(captured).toBeDefined();
+    expect(captured!.installationId).toBeNull();
+    await expect(captured!.refreshRuntime()).rejects.toThrow('app_runtime_installation_scope_required');
+    await expect(captured!.activateAppPackage(makeReferencePackage('blocked', '1.0.0', 'Blocked'))).rejects.toThrow(
+      'app_runtime_installation_scope_required',
+    );
+    await expect(captured!.rollbackAppPackage()).rejects.toThrow('app_runtime_installation_scope_required');
+  });
 });
 
 function RuntimeProbe({ name }: { name: string }) {
@@ -38,6 +61,13 @@ function RuntimeProbe({ name }: { name: string }) {
     null,
     `${name}:${runtime.activePackage?.id ?? 'none'}:${runtime.activeManifest?.label ?? 'none'}:${runtime.catalog?.activeDomainId ?? 'none'}`,
   );
+}
+
+function CaptureRuntime(
+  { onCapture }: { onCapture(value: ReturnType<typeof useAppRuntime>): void },
+) {
+  onCapture(useAppRuntime());
+  return null;
 }
 
 function makeReferencePackage(id: string, version: string, label: string): AppPackage {

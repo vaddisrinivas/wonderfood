@@ -1,0 +1,38 @@
+appId: com.wonderfood.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Today"
+    timeout: 15000
+- assertVisible: "＋ Add"
+- tapOn: "＋ Add"
+- assertVisible: "Add to Food"
+- assertVisible: ".*Food photo.*"
+- assertVisible: ".*Receipt.*"
+- back
+- tapOn: "Kitchen"
+- assertVisible: "Search kitchen"
+- tapOn: "Search kitchen"
+- assertVisible: "Search"
+- tapOn: "Search food, shelves, recipes, notes…"
+- inputText: "Blueberries"
+- assertVisible: "1 result"
+- assertVisible: "Blueberries"
+- back
+- openLink: "wonderfood://collection/inventory,inventory_lot?title=Fridge&match=fridge"
+- extendedWaitUntil:
+    visible: "Fridge"
+    timeout: 10000
+- assertVisible: "Add"
+- tapOn: "Blueberries"
+- assertVisible: "Edit"
+- assertVisible: "Ask Wonder"
+- tapOn: "Edit"
+- assertVisible: "Location"
+- assertVisible: "Save changes"
+- tapOn: "Close"
+- tapOn: "Ask Wonder"
+- extendedWaitUntil:
+    visible: "Help me use Blueberries.*"
+    timeout: 15000

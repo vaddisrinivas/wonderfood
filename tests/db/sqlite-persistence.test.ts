@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadCatalog } from '@/src/domain/catalog';
-import { getDatabaseVersion, runMigrations } from '@/src/db/migrations';
+import { DATABASE_VERSION, getDatabaseVersion, runMigrations } from '@/src/db/migrations';
 import { getRecord, upsertRecord } from '@/src/db/records';
+import { undoOperation } from '@/src/ops/undo';
 import { appendMessage, createConversation, getConversation } from '@/src/db/conversations';
 import { NodeSqliteDb } from '@/tests/helpers/node-sqlite-db';
 
@@ -23,7 +24,7 @@ describe('real SQLite persistence', () => {
     dbs.push(db);
 
     await runMigrations(db as any);
-    expect(await getDatabaseVersion(db as any)).toBe(7);
+    expect(await getDatabaseVersion(db as any)).toBe(DATABASE_VERSION);
 
     const created = await upsertRecord(db as any, manifest, {
       id: 'sqlite-persistence-record',
@@ -48,6 +49,7 @@ describe('real SQLite persistence', () => {
     });
     const updated = await upsertRecord(db as any, manifest, {
       ...created,
+      operation_id: 'op-explicit-record-edit',
       properties: {
         ...created.properties,
         body: 'Updated body',
@@ -65,6 +67,15 @@ describe('real SQLite persistence', () => {
       [created.id],
     );
     expect(jsonRow?.nested_value).toBe('json-two');
+
+    expect(await db.getFirstAsync<{ op_id: string }>(
+      'SELECT op_id FROM operations WHERE op_id = ?',
+      ['op-explicit-record-edit'],
+    )).toEqual({ op_id: 'op-explicit-record-edit' });
+    expect((await undoOperation(db as any, manifest, 'op-explicit-record-edit')).status).toBe('applied');
+    expect(await getRecord(db as any, created.id)).toMatchObject({
+      properties: { body: 'Initial body', nested: { value: 'json-one' } },
+    });
   });
 
   it('rolls back explicit transactions on failure', async () => {

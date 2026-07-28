@@ -152,6 +152,20 @@ describe('package install link and registry contracts', () => {
     );
   });
 
+  it('rejects registry descriptors whose bound identity does not match the fetched package', async () => {
+    const fetcher = jsonFetcher({
+      'https://example.com/apps/demo.package.json': packageFixture,
+    });
+
+    await expect(fetchPackageInstallCandidate(
+      'https://example.com/apps/demo.package.json',
+      fetcher,
+      {
+        registryPackage: { ...registryFixture.packages[0], id: 'wrong.app', version: '9.9.9' },
+      },
+    )).rejects.toThrow('package_descriptor_identity_mismatch:wrong.app@9.9.9');
+  });
+
   it('blocks invalid package and checksum mismatch without activating anything', () => {
     const invalid = { schemaVersion: 'wonder.app-package.v2' };
     const preview = buildPackageInstallPreview(invalid, {

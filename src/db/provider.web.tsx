@@ -6,6 +6,7 @@ import { bootstrapAppPackageRegistry } from '@/src/db/app-package-registry';
 import { seedDatabase } from '@/src/db/seed';
 import { AppRuntimeProvider } from '@/src/domain/runtime-context';
 import type { AppPackage } from '@/packages/shared/contracts/package';
+import { DEFAULT_APP_INSTALLATION_ID } from '@/packages/shared/contracts/app-installation';
 
 export type LifeOSDatabase = SQLiteDatabase | null;
 
@@ -51,7 +52,7 @@ export function LifeOSDatabaseProvider({ children, seedInDev = false }: { childr
   return (
     <DatabaseContext.Provider value={db}>
       {db ? (
-        <AppRuntimeProvider db={db} initialPackage={activePackage}>
+        <AppRuntimeProvider db={db} installationId={DEFAULT_APP_INSTALLATION_ID} initialPackage={activePackage}>
           {children}
         </AppRuntimeProvider>
       ) : null}

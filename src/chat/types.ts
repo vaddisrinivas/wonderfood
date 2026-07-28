@@ -82,6 +82,10 @@ export type ChatSendInput = {
   text: string;
   conversationId?: string;
   domainId: string;
+  workspaceId?: string;
+  installationId?: string;
+  packageId?: string;
+  packageVersion?: string;
   actor?: string;
   serverUrl?: string;
   serverToken?: string;
@@ -107,4 +111,5 @@ export type ChatSendResult = {
 export type ChatListInput = {
   db: SQLiteDatabase | null;
   domainId: string;
+  installationId?: string;
 };

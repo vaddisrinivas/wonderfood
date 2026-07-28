@@ -78,8 +78,12 @@ export default function RootLayout() {
         <Stack.Screen name="record/[id]" />
         <Stack.Screen name="collection/[id]" />
         <Stack.Screen name="search" />
+        <Stack.Screen name="account" />
         <Stack.Screen name="capture" />
         <Stack.Screen name="install" />
+        <Stack.Screen name="vault" />
+        <Stack.Screen name="package-control-room" />
+        <Stack.Screen name="apps/[installationId]" />
         <Stack.Screen name="system" />
         <Stack.Screen name="config" />
         <Stack.Screen name="health-diagnostics" />

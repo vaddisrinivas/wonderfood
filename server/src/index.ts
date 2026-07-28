@@ -13,6 +13,7 @@ import { type NormalizedChatSend } from './chat';
 import { assertServerStartupSecurity, authorizeServerRequest, type RequestAuthorizationResult } from './security/auth';
 import { handleHonoReadRoute, isHonoReadRoute } from './hono-read-routes';
 import { handleMcpRequest } from './mcp/official-server';
+import { buildNotionWebhookResponse, buildSheetsWebhookResponse } from './provider-webhook-response';
 import { ProviderOperation } from './providers/contracts';
 import { discoverNotionDataSources } from './providers/notion/discovery';
 import { readNotionConfig } from './providers/notion/client';
@@ -699,36 +700,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       // refetching the configured data source before acknowledging ingress.
       const reconciliation = await syncNotionFromWebhook({ event: parsed });
       const replayAfterSync = getWebhookReplayState();
-      const replayEntry = replayAfterSync.events.find((entry) => entry.event_id === reconciliation.eventId);
-
-      ok(res, {
-        status: reconciliation.status === 'duplicate' ? 'duplicate' : 'accepted',
-        duplicate: reconciliation.status === 'duplicate',
-        event_id: reconciliation.eventId || null,
-        event_type: normalized.event_type || null,
-        out_of_order: replayEntry?.out_of_order ?? false,
-        replay_queue_size: replayAfterSync.events.length,
-        duplicate_store: reconciliation.status === 'duplicate',
-        data_source_id: reconciliation.dataSourceId || normalized.data_source_id || null,
-        page_id: reconciliation.pageId || normalized.page_id || null,
-        sync_status: reconciliation.status,
-        sync_ok: reconciliation.ok && reconciliation.canonicalApplied !== false,
-        sync_message: reconciliation.message,
-        records_synced: reconciliation.records.length,
-        canonical_applied: reconciliation.canonicalApplied ?? false,
-        canonical_blocked_reason: reconciliation.canonicalBlockedReason || null,
-        source_snapshot: reconciliation.sourceSnapshot,
-        order_hint: {
-          before: ((): string | undefined => {
-            const hints = normalized.data && typeof normalized.data === 'object' && !Array.isArray(normalized.data) ? normalized.data : null;
-            return typeof hints?.before === 'string' ? hints.before : undefined;
-          })(),
-          after: ((): string | undefined => {
-            const hints = normalized.data && typeof normalized.data === 'object' && !Array.isArray(normalized.data) ? normalized.data : null;
-            return typeof hints?.after === 'string' ? hints.after : undefined;
-          })(),
-        },
-      });
+      ok(res, buildNotionWebhookResponse(normalized, reconciliation, replayAfterSync));
       return;
     }
 
@@ -866,28 +838,7 @@ const server = createServer({ maxHeaderSize: MAX_HEADER_BYTES }, async (req: any
       // before returning, while the persisted replay marker makes retries safe.
       const reconciliation = await syncSheetsFromWebhook({ event: normalized });
       const replayStore = getSheetsWebhookReplayState();
-      ok(res, {
-        status: reconciliation.status === 'duplicate' ? 'duplicate' : 'accepted',
-        duplicate: reconciliation.status === 'duplicate',
-        event_id: reconciliation.eventId || null,
-        spreadsheet_id: reconciliation.spreadsheetId || normalized.spreadsheet_id || null,
-        data_source_id: reconciliation.dataSourceId || normalized.data_source_id || null,
-        range: reconciliation.range || normalized.range || null,
-        row: reconciliation.row || normalized.row || null,
-        out_of_order: replayStore.events.some((entry) => entry.event_id === reconciliation.eventId && entry.out_of_order),
-        replay_queue_size: replayStore.events.length,
-        sync_status: reconciliation.status,
-        sync_ok: reconciliation.ok && reconciliation.canonicalApplied !== false,
-        sync_message: reconciliation.message,
-        records_synced: reconciliation.records.length,
-        canonical_applied: reconciliation.canonicalApplied ?? false,
-        canonical_blocked_reason: reconciliation.canonicalBlockedReason || null,
-        source_snapshot: reconciliation.sourceSnapshot,
-        order_hint: {
-          before: normalized.before || undefined,
-          after: normalized.after || undefined,
-        },
-      });
+      ok(res, buildSheetsWebhookResponse(normalized, reconciliation, replayStore));
       return;
     }
 

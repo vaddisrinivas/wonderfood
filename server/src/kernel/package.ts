@@ -1,9 +1,3 @@
-import { validateJsonSchema } from './validation';
-import { appPackageSchemaV2, appPackageSchemaV3 } from './package-schema';
-import {
-  collectAppPackageValidationIssues,
-  formatAppPackageValidationIssues,
-} from '@/packages/shared/contracts/package';
 import type {
   AppPackage,
   AppPackageContractLock,
@@ -21,12 +15,12 @@ import type {
   RuleSpec,
   ViewSpec,
 } from '@/packages/shared/contracts/package';
+import { canonicalArtifactHash, canonicalArtifactJson, validateArtifact } from '@/packages/schemas/src';
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import { nativeCapabilitySupportErrors } from '@/packages/shared/contracts/native-capabilities';
 import { isAppPackageNativeIntentKind } from '@/packages/shared/contracts/native-capability-kinds';
 import { APP_PACKAGE_UI_ACTION_KIND_SET, APP_PACKAGE_UI_COMPONENT_KIND_SET, APP_PACKAGE_UI_TONE_SET } from '@/packages/shared/contracts/ui-primitives';
 import { APP_PACKAGE_WIDGET_KIND_SET } from '@/packages/shared/contracts/ui-widgets';
-import { canonicalJson, sha256Canonical } from '@/src/domain/canonical-json';
 
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -95,6 +89,12 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
   if (component.tone !== undefined && !APP_PACKAGE_UI_TONE_SET.has(String(component.tone))) {
     throw new Error(`${path}.tone is invalid`);
   }
+  if (component.placement !== undefined && !['inline', 'top', 'fab'].includes(String(component.placement))) {
+    throw new Error(`${path}.placement is invalid`);
+  }
+  if (component.placement !== undefined && component.kind !== 'action') {
+    throw new Error(`${path}.placement is only valid for action components`);
+  }
   if (component.action !== undefined) {
     const { tool, command } = isUiAction(component.action, `${path}.action`);
     if (command && !UI_ACTION_TOOL_PATTERN.test(command)) {
@@ -123,9 +123,9 @@ function isUiComponent(value: unknown, path: string, packageCollections: Record<
       || typeof rawQuery.limit !== 'number'
       || !Number.isInteger(rawQuery.limit)
       || rawQuery.limit < 1
-      || rawQuery.limit > 20
+      || rawQuery.limit > 200
     ) {
-      throw new Error(`${path}.query.limit must be 1..20`);
+      throw new Error(`${path}.query.limit must be 1..200`);
     }
   }
   if (rawQuery.match !== undefined && !text(rawQuery.match)) {
@@ -158,17 +158,12 @@ export {
 export type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 
 export function validateAppPackage(input: unknown): PackageValidation {
+  const result = validateArtifact({ value: input });
+  if (!result.ok) return { valid: false, errors: result.issues.map((issue) => issue.message) };
   const errors: string[] = [];
-  if (!input || typeof input !== 'object') return { valid: false, errors: ['package must be an object'] };
-  const schemaVersion = (input as { schemaVersion?: unknown }).schemaVersion;
-  const schema = schemaVersion === 'wonder.app-package.v3' ? appPackageSchemaV3 : appPackageSchemaV2;
-  const schemaResult = validateJsonSchema(schema, input);
-  if (!schemaResult.valid) errors.push(...schemaResult.errors.map((error) => `schema:${error}`));
-  const value = input as Partial<AppPackage>;
-  errors.push(...formatAppPackageValidationIssues(collectAppPackageValidationIssues(input)));
+  const value = result.value as Partial<AppPackage>;
   if (value.presentation !== undefined && !object(value.presentation)) errors.push('presentation must be an object');
   if (value.computedFields !== undefined && !Array.isArray(value.computedFields)) errors.push('computedFields must be an array');
-  if (hasExecutableCode(input)) errors.push('executable package code is forbidden');
 
   const presentation = value.presentation as Partial<PackagePresentationSpec> | undefined;
   if (presentation) {
@@ -448,7 +443,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function expectedContractLockChecksum(lock: AppPackageContractLock): string {
-  return sha256Canonical({
+  return canonicalArtifactHash({
     schemaVersion: lock.schemaVersion,
     algorithm: lock.algorithm,
     pinnedAt: lock.pinnedAt,
@@ -458,5 +453,5 @@ function expectedContractLockChecksum(lock: AppPackageContractLock): string {
 }
 
 function stableJson(value: unknown): string {
-  return canonicalJson(value);
+  return canonicalArtifactJson(value);
 }

@@ -3,8 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { QueryPredicate, QuerySort } from '@/packages/shared/contracts/query';
 import type { CanonicalRecord } from '@/src/domain/runtime';
 import { getDomainManifest, loadCatalog } from '@/src/domain/catalog';
-import { listRecordsForDomain } from '@/src/db/records';
+import { listRecordsForDomainAndInstallation } from '@/src/db/records';
 import { canonicalJson } from '@/src/domain/canonical-json';
+import { DEFAULT_APP_INSTALLATION_ID } from '@/packages/shared/contracts/app-installation';
 
 export const LOCAL_QUERY_SCHEMA_VERSION = 'wonder.local-query.v1' as const;
 export const LOCAL_QUERY_RESULT_SCHEMA_VERSION = 'wonder.local-query-result.v1' as const;
@@ -282,12 +283,17 @@ export async function executeLocalQueryRows(input: {
 export async function executeLocalQueryForChat(input: {
   db: SQLiteDatabase | null;
   domainId: string;
+  installationId?: string | null;
   request: LocalQueryRequest;
 }): Promise<LocalQueryExecution> {
   if (!input.db) return { ok: false, error: 'local_query_database_missing' };
   const catalog = loadCatalog();
   const manifest = getDomainManifest(catalog.catalog.domains, input.domainId) ?? catalog.activeManifest;
-  const records = await listRecordsForDomain(input.db, input.domainId);
+  const records = await listRecordsForDomainAndInstallation(
+    input.db,
+    input.installationId?.trim() || DEFAULT_APP_INSTALLATION_ID,
+    input.domainId,
+  );
   return executeLocalQueryRows({
     request: input.request,
     records,

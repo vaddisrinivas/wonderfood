@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { getProviderSyncSummary, type ProviderSyncSummary } from '@/src/db/provider-status';
-import { listRecordsForDomain } from '@/src/db/records';
+import { listRecordsForDomainAndInstallation } from '@/src/db/records';
 import { recordsToViews, type DomainRecordViewModel } from '@/src/domain/renderer';
 import { useAppRuntime } from '@/src/domain/runtime-context';
 import { JsonRenderSurface } from '@/src/presentation/json-render-surface';
@@ -14,27 +14,66 @@ type JsonRenderRouteProps = {
   subtitle?: string;
   emptyTitle?: string;
   recordId?: string;
+  collectionIds?: string[];
+  recordMatch?: string;
+  screenTitle?: string;
+  screenSubtitle?: string;
+  initialPrompt?: string;
+  autoSubmitPrompt?: boolean;
+  showBack?: boolean;
 };
 
-export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, recordId }: JsonRenderRouteProps) {
+function matchesRouteRecord(record: DomainRecordViewModel, match?: string) {
+  const needle = match?.trim().toLowerCase();
+  if (!needle) return true;
+  return [
+    record.title,
+    record.body,
+    record.meta,
+    record.status,
+    record.collection,
+    record.source,
+    ...Object.values(record.properties).map((value) => String(value ?? '')),
+  ].some((value) => value.toLowerCase().includes(needle));
+}
+
+export function JsonRenderRoute({
+  screen,
+  eyebrow,
+  title,
+  subtitle,
+  emptyTitle,
+  recordId,
+  collectionIds,
+  recordMatch,
+  screenTitle,
+  screenSubtitle,
+  initialPrompt,
+  autoSubmitPrompt,
+  showBack,
+}: JsonRenderRouteProps) {
   const db = useLifeOSDatabase();
-  const { activeManifest, activePackage, catalog } = useAppRuntime();
+  const { activeManifest, activePackage, catalog, installationId } = useAppRuntime();
   const [records, setRecords] = useState<DomainRecordViewModel[]>([]);
   const [providerSync, setProviderSync] = useState<ProviderSyncSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const domainId = catalog?.activeDomainId ?? activeManifest?.id ?? null;
-    if (!db || !domainId) {
+    if (!db || !domainId || !installationId) {
       setRecords([]);
       return () => {
         cancelled = true;
       };
     }
-    void listRecordsForDomain(db, domainId).then((items) => {
+    void listRecordsForDomainAndInstallation(db, installationId, domainId).then((items) => {
       if (!cancelled) {
         const next = recordsToViews(items);
-        setRecords(recordId ? next.filter((item) => item.id === recordId) : next);
+        setRecords(next.filter((item) => {
+          if (recordId && item.id !== recordId) return false;
+          if (collectionIds?.length && !collectionIds.includes(item.collection)) return false;
+          return matchesRouteRecord(item, recordMatch);
+        }));
       }
     }).catch(() => {
       if (!cancelled) {
@@ -44,7 +83,7 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, 
     return () => {
       cancelled = true;
     };
-  }, [activeManifest?.id, catalog?.activeDomainId, db, recordId]);
+  }, [activeManifest?.id, catalog?.activeDomainId, collectionIds?.join(','), db, installationId, recordId, recordMatch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +109,11 @@ export function JsonRenderRoute({ screen, eyebrow, title, subtitle, emptyTitle, 
         : activeManifest?.native_capabilities?.permissions}
       providerSync={providerSync}
       emptyTitle={emptyTitle}
+      screenTitle={screenTitle}
+      screenSubtitle={screenSubtitle}
+      initialPrompt={initialPrompt}
+      autoSubmitPrompt={autoSubmitPrompt}
+      showBack={showBack}
     />
   );
 }

@@ -4,9 +4,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { readAppPackageSourceFolder } from '@/packages/app-compiler';
-import type { PackageAuthoringChange } from '@/packages/shared/contracts/package-authoring';
 import {
   approvePackageAuthoringEvaluation,
+  createPackageAuthoringChange,
   computePackageSourceRevision,
   evaluatePackageAuthoringChange,
 } from '@/src/domain/package-authoring';
@@ -18,34 +18,25 @@ function loadSource() {
 }
 
 describe('package authoring', () => {
-  it('evaluates source-file patches through the compiler and returns preview/diff', () => {
+  it('evaluates bounded RFC6902 source proposals through the compiler and returns preview/diff', () => {
     const source = loadSource();
-    const change: PackageAuthoringChange = {
-      schemaVersion: 'utopia.authoring-change.v1',
+    const change = createPackageAuthoringChange({
       baseSourceRevision: computePackageSourceRevision(source),
       intent: 'Add grocery notes to chores',
       proposedBy: 'ai:wonder',
-      changes: [
+      proposals: [
         {
-          op: 'replace',
-          path: 'collections/chore.json',
-          value: {
-            fields: {
-              ...source.collections!.chore.fields,
-              grocery_note: { type: 'text' },
-            },
-          },
+          op: 'add',
+          path: '/collections/chore/fields/grocery_note',
+          value: { type: 'text' },
         },
         {
-          op: 'replace',
-          path: 'screens/chores.json',
-          value: {
-            ...source.screens!.chores,
-            fields: [...source.screens!.chores.fields, 'grocery_note'],
-          },
+          op: 'add',
+          path: '/screens/chores/fields/-',
+          value: 'grocery_note',
         },
       ],
-    };
+    });
 
     const evaluation = evaluatePackageAuthoringChange(source, change);
 
@@ -64,7 +55,8 @@ describe('package authoring', () => {
       baseSourceRevision: 'sha256:deadbeef',
       intent: 'stale change',
       proposedBy: 'ai:wonder',
-      changes: [{ op: 'add', path: 'screens/stale.json', value: {} }],
+      proposals: [{ op: 'add', path: '/screens/stale', value: {} }],
+      bounds: { maxOperations: 24, maxBytes: 32 * 1024, maxPointerDepth: 8 },
     });
     expect(stale.valid).toBe(false);
     if (stale.valid) throw new Error('expected stale proposal to fail');
@@ -75,7 +67,8 @@ describe('package authoring', () => {
       baseSourceRevision: computePackageSourceRevision(source),
       intent: 'run code',
       proposedBy: 'ai:wonder',
-      changes: [{ op: 'add', path: 'screens/hack.tsx', value: 'import fs from "node:fs"' }],
+      proposals: [{ op: 'add', path: '/screens/hack.tsx', value: 'import fs from "node:fs"' }],
+      bounds: { maxOperations: 24, maxBytes: 32 * 1024, maxPointerDepth: 8 },
     });
     expect(executable.valid).toBe(false);
     if (executable.valid) throw new Error('expected executable proposal to fail');
@@ -84,13 +77,12 @@ describe('package authoring', () => {
 
   it('requires non-self approval before activation receipt exists', () => {
     const source = loadSource();
-    const evaluation = evaluatePackageAuthoringChange(source, {
-      schemaVersion: 'utopia.authoring-change.v1',
+    const evaluation = evaluatePackageAuthoringChange(source, createPackageAuthoringChange({
       baseSourceRevision: computePackageSourceRevision(source),
       intent: 'Add theme token',
       proposedBy: 'ai:wonder',
-      changes: [{ op: 'add', path: 'theme/calm.json', value: { accent: '#7c6f57' } }],
-    });
+      proposals: [{ op: 'add', path: '/app/visualIdentity', value: { accent: '#7c6f57' } }],
+    }));
     expect(evaluation.valid).toBe(true);
     if (!evaluation.valid) throw new Error(evaluation.errors.map((error) => error.message).join(', '));
 

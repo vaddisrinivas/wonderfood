@@ -1,8 +1,10 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { DEFAULT_APP_INSTALLATION_ID } from '@/packages/shared/contracts/app-installation';
 import { RecordProvider } from '@/packages/shared/contracts/records';
 
 export type ProviderLink = {
   id: string;
+  app_installation_id?: string;
   provider: RecordProvider;
   external_id: string;
   name: string;
@@ -17,10 +19,12 @@ export type ProviderLink = {
 type ProviderLinkRow = Omit<ProviderLink, 'freshness' | 'workspace'> & {
   freshness: string | null;
   workspace: string | null;
+  app_installation_id: string;
 };
 
 export type SourceSnapshot = {
   id: string;
+  app_installation_id?: string;
   provider: RecordProvider;
   external_id: string;
   scope: string | null;
@@ -32,16 +36,24 @@ export type SourceSnapshot = {
 };
 
 export type SourceCausality = {
+  app_installation_id?: string;
   snapshot_id: string;
   record_id: string;
 };
 
+function normalizeInstallationId(value?: string | null): string {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : DEFAULT_APP_INSTALLATION_ID;
+}
+
 export async function upsertProviderLink(db: SQLiteDatabase, link: ProviderLink): Promise<void> {
+  const appInstallationId = normalizeInstallationId(link.app_installation_id);
   await db.runAsync(
     `
-      INSERT INTO provider_links (id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
+      INSERT INTO provider_links (id, app_installation_id, provider, external_id, name, status, freshness, workspace, url, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(app_installation_id, id) DO UPDATE SET
+        app_installation_id = excluded.app_installation_id,
         provider = excluded.provider,
         external_id = excluded.external_id,
         name = excluded.name,
@@ -53,6 +65,7 @@ export async function upsertProviderLink(db: SQLiteDatabase, link: ProviderLink)
     `,
     [
       link.id,
+      appInstallationId,
       link.provider,
       link.external_id,
       link.name,
@@ -67,24 +80,43 @@ export async function upsertProviderLink(db: SQLiteDatabase, link: ProviderLink)
 }
 
 export async function listProviderLinks(db: SQLiteDatabase): Promise<ProviderLink[]> {
-  return db.getAllAsync<ProviderLinkRow>('SELECT * FROM provider_links ORDER BY updated_at DESC');
+  return listProviderLinksForInstallation(db, DEFAULT_APP_INSTALLATION_ID);
+}
+
+export async function listProviderLinksForInstallation(
+  db: SQLiteDatabase,
+  installationId: string,
+): Promise<ProviderLink[]> {
+  return db.getAllAsync<ProviderLinkRow>(
+    'SELECT * FROM provider_links WHERE app_installation_id = ? ORDER BY updated_at DESC',
+    [normalizeInstallationId(installationId)],
+  );
 }
 
 export async function getAllProviderLinks(db: SQLiteDatabase): Promise<ProviderLink[]> {
   return listProviderLinks(db);
 }
 
-export async function getProviderLink(db: SQLiteDatabase, id: string): Promise<ProviderLink | null> {
-  return db.getFirstAsync<ProviderLinkRow>('SELECT * FROM provider_links WHERE id = ?', [id]);
+export async function getProviderLink(
+  db: SQLiteDatabase,
+  id: string,
+  installationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<ProviderLink | null> {
+  return db.getFirstAsync<ProviderLinkRow>(
+    'SELECT * FROM provider_links WHERE app_installation_id = ? AND id = ?',
+    [normalizeInstallationId(installationId), id],
+  );
 }
 
 export async function upsertSourceSnapshot(db: SQLiteDatabase, snapshot: SourceSnapshot): Promise<void> {
+  const appInstallationId = normalizeInstallationId(snapshot.app_installation_id);
   await db.runAsync(
     `
       INSERT INTO source_snapshots (
-        id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
+        id, app_installation_id, provider, external_id, scope, observed_at, payload_json, checksum, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(app_installation_id, id) DO UPDATE SET
+        app_installation_id = excluded.app_installation_id,
         provider = excluded.provider,
         external_id = excluded.external_id,
         scope = excluded.scope,
@@ -95,6 +127,7 @@ export async function upsertSourceSnapshot(db: SQLiteDatabase, snapshot: SourceS
     `,
     [
       snapshot.id,
+      appInstallationId,
       snapshot.provider,
       snapshot.external_id,
       snapshot.scope,
@@ -107,26 +140,45 @@ export async function upsertSourceSnapshot(db: SQLiteDatabase, snapshot: SourceS
   );
 }
 
-export async function getSnapshot(db: SQLiteDatabase, id: string): Promise<SourceSnapshot | null> {
-  return db.getFirstAsync<SourceSnapshot>('SELECT * FROM source_snapshots WHERE id = ?', [id]);
+export async function getSnapshot(
+  db: SQLiteDatabase,
+  id: string,
+  installationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<SourceSnapshot | null> {
+  return db.getFirstAsync<SourceSnapshot>(
+    'SELECT * FROM source_snapshots WHERE app_installation_id = ? AND id = ?',
+    [normalizeInstallationId(installationId), id],
+  );
 }
 
 export async function getLatestSourceSnapshotForExternalId(
   db: SQLiteDatabase,
   provider: RecordProvider,
   externalId: string,
+  installationId = DEFAULT_APP_INSTALLATION_ID,
 ): Promise<SourceSnapshot | null> {
   return db.getFirstAsync<SourceSnapshot>(
-    'SELECT * FROM source_snapshots WHERE provider = ? AND external_id = ? ORDER BY observed_at DESC LIMIT 1',
-    [provider, externalId],
+    'SELECT * FROM source_snapshots WHERE app_installation_id = ? AND provider = ? AND external_id = ? ORDER BY observed_at DESC LIMIT 1',
+    [normalizeInstallationId(installationId), provider, externalId],
   );
 }
 
-export async function listSourceSnapshots(db: SQLiteDatabase, provider?: RecordProvider): Promise<SourceSnapshot[]> {
+export async function listSourceSnapshots(
+  db: SQLiteDatabase,
+  provider?: RecordProvider,
+  installationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<SourceSnapshot[]> {
+  const appInstallationId = normalizeInstallationId(installationId);
   if (provider) {
-    return db.getAllAsync<SourceSnapshot>('SELECT * FROM source_snapshots WHERE provider = ? ORDER BY observed_at DESC', [provider]);
+    return db.getAllAsync<SourceSnapshot>(
+      'SELECT * FROM source_snapshots WHERE app_installation_id = ? AND provider = ? ORDER BY observed_at DESC',
+      [appInstallationId, provider],
+    );
   }
-  return db.getAllAsync<SourceSnapshot>('SELECT * FROM source_snapshots ORDER BY observed_at DESC');
+  return db.getAllAsync<SourceSnapshot>(
+    'SELECT * FROM source_snapshots WHERE app_installation_id = ? ORDER BY observed_at DESC',
+    [appInstallationId],
+  );
 }
 
 export async function linkSnapshotToRecord(
@@ -134,21 +186,28 @@ export async function linkSnapshotToRecord(
   linkage: SourceCausality
 ): Promise<void> {
   await db.runAsync(
-    `INSERT OR IGNORE INTO source_snapshot_relations (snapshot_id, record_id) VALUES (?, ?)`,
-    [linkage.snapshot_id, linkage.record_id]
+    `INSERT OR IGNORE INTO source_snapshot_relations (app_installation_id, snapshot_id, record_id) VALUES (?, ?, ?)`,
+    [normalizeInstallationId(linkage.app_installation_id), linkage.snapshot_id, linkage.record_id]
   );
 }
 
-export async function listRecordSourceSnapshots(db: SQLiteDatabase, recordId: string): Promise<SourceSnapshot[]> {
+export async function listRecordSourceSnapshots(
+  db: SQLiteDatabase,
+  recordId: string,
+  installationId = DEFAULT_APP_INSTALLATION_ID,
+): Promise<SourceSnapshot[]> {
   const rows = await db.getAllAsync<SourceSnapshot>(
     `
       SELECT s.*
       FROM source_snapshots s
-      INNER JOIN source_snapshot_relations r ON r.snapshot_id = s.id
-      WHERE r.record_id = ?
+      INNER JOIN source_snapshot_relations r
+        ON r.app_installation_id = s.app_installation_id
+       AND r.snapshot_id = s.id
+      WHERE s.app_installation_id = ?
+        AND r.record_id = ?
       ORDER BY s.observed_at DESC
     `,
-    [recordId]
+    [normalizeInstallationId(installationId), recordId]
   );
   return rows;
 }

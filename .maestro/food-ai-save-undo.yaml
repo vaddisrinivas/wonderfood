@@ -1,0 +1,17 @@
+appId: com.wonderfood.app
+---
+- launchApp:
+    clearState: true
+- openLink: "wonderfood://collection/inventory,inventory_lot?title=Fridge&match=fridge"
+- extendedWaitUntil:
+    visible: "Fridge"
+    timeout: 15000
+- tapOn: "Blueberries"
+- tapOn: "Ask Wonder"
+- extendedWaitUntil:
+    visible: "Save as tonight’s plan"
+    timeout: 15000
+- tapOn: "Save as tonight’s plan"
+- assertVisible: "Open saved plan"
+- tapOn: "Undo"
+- assertVisible: "Saved result removed."

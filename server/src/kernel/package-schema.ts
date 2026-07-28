@@ -1,3 +1,5 @@
+import { APP_PACKAGE_WIDGET_KINDS } from '@/packages/shared/contracts/ui-widgets';
+
 /** JSON Schema for the executable-data package boundary. No code fields are permitted. */
 export const appPackageSchemaV2 = {
   $schema: 'http://json-schema.org/draft-07/schema#',
@@ -144,6 +146,7 @@ export const appPackageSchemaV2 = {
       properties: {
         schemaVersion: { const: 'a2ui.v0_9' },
         openUrlAllowlist: { type: 'array', items: { type: 'string', minLength: 1 } },
+        navigation: { $ref: '#/$defs/presentationNavigation' },
         components: {
           type: 'array',
           items: { $ref: '#/$defs/presentationUiComponent' },
@@ -153,6 +156,28 @@ export const appPackageSchemaV2 = {
           additionalProperties: { $ref: '#/$defs/presentationScreen' },
         },
         defaultScreen: { type: 'string', minLength: 1 },
+      },
+    },
+    presentationNavigation: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['items'],
+      properties: {
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['screen', 'label'],
+            properties: {
+              screen: { enum: ['home', 'overview', 'chat', 'sources', 'settings'] },
+              label: { type: 'string', minLength: 1 },
+              icon: { enum: ['home', 'food', 'sparkles', 'sync', 'settings'] },
+            },
+          },
+        },
       },
     },
     presentationUiAction: {
@@ -189,7 +214,7 @@ export const appPackageSchemaV2 = {
       properties: {
         collections: { type: 'array', items: { type: 'string', minLength: 1 } },
         match: { type: 'string', minLength: 1 },
-        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        limit: { type: 'integer', minimum: 1, maximum: 200 },
       },
     },
     presentationUiComponent: {
@@ -202,33 +227,12 @@ export const appPackageSchemaV2 = {
         title: { type: 'string', minLength: 1 },
         subtitle: { type: 'string', minLength: 1 },
         widget: {
-          enum: [
-            'assistantChat',
-            'healthConnect',
-            'schemaEditor',
-            'widgetCatalog',
-            'postCard',
-            'pollCard',
-            'linkPreview',
-            'feedList',
-            'kanbanBoard',
-            'chartBlock',
-            'mediaBlock',
-            'mapBlock',
-            'formCard',
-            'checklistCard',
-            'calendarBlock',
-            'timelineBlock',
-            'galleryGrid',
-            'dataTable',
-            'permissionCard',
-            'providerStatus',
-            'themePreview',
-          ],
+          enum: APP_PACKAGE_WIDGET_KINDS,
         },
         props: { type: 'object', additionalProperties: { $ref: '#/$defs/jsonValue' } },
         view: { type: 'string', minLength: 1 },
         tone: { enum: ['neutral', 'moss', 'amber', 'plum', 'blue'] },
+        placement: { enum: ['inline', 'top', 'fab'] },
         query: { $ref: '#/$defs/presentationUiQuery' },
         action: { $ref: '#/$defs/presentationUiAction' },
       },
