@@ -646,6 +646,14 @@ function addRecordListBlock(add: ReturnType<typeof createBuilder>['add'], compon
 }
 
 function addUnsupportedWidgetBlock(add: ReturnType<typeof createBuilder>['add'], component: A2UiComponent, palette: Palette) {
+  const props = componentProps(component);
+  const fallbackText = widgetText(
+    props.fallbackText,
+    widgetText(
+      props.fallback,
+      'This package component is unavailable in this runtime.',
+    ),
+  );
   return add('Card', {
     title: component.title ?? 'Unsupported component',
     subtitle: component.subtitle ?? null,
@@ -655,7 +663,7 @@ function addUnsupportedWidgetBlock(add: ReturnType<typeof createBuilder>['add'],
     elevated: false,
   }, [
     add('Paragraph', {
-      text: 'This package component is unavailable in this runtime.',
+      text: fallbackText,
       color: palette.muted,
       fontSize: 15,
     }),
