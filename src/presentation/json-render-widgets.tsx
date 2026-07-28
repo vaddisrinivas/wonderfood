@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveChatServerConfig, sendChatMessage, undoChatAction } from '@/src/chat/client';
@@ -19,6 +19,7 @@ import { getRecord, upsertRecord } from '@/src/db/records';
 import { useLifeOSDatabase } from '@/src/db/provider';
 import { buildSafePackageChangeRequest } from '@/src/domain/package-change-templates';
 import type { DomainRecordViewModel } from '@/src/domain/renderer';
+import { extractMarkdownLinks, parseMarkdownBlocks, type MarkdownBlock } from '@/src/presentation/markdown';
 import { undoOperation } from '@/src/ops/undo';
 import {
   getLifeOSHealthStatus,
@@ -33,9 +34,11 @@ import {
   providerLabel,
   saveLifeOSAiProviderProfile,
   saveLifeOSRuntimePreferences,
+  saveLifeOSSourceProviderSettings,
   useLifeOSSettingsSnapshot,
   type AiProviderKind,
   type AiProviderProfile,
+  type SourceProviderSettingsUpdate,
 } from '@/src/settings/lifeos-settings';
 
 type WidgetProps = {
@@ -148,7 +151,7 @@ function permissionMeta(value: Record<string, unknown>): string {
 }
 
 function actionRoute(value: Record<string, unknown>): string {
-  return text(value.route, text(value.path));
+  return normalizeWidgetRoute(text(value.route, text(value.path)));
 }
 
 function actionUrl(value: Record<string, unknown>): string {
@@ -165,6 +168,69 @@ function openWidgetTarget(router: ReturnType<typeof useRouter>, target: Record<s
   if (url) {
     void Linking.openURL(url);
   }
+}
+
+function normalizeWidgetRoute(route: string) {
+  if (!route) return '';
+  const [path, query] = route.split('?');
+  const suffix = query ? `?${query}` : '';
+  if (path === '/' || path === '/home') return `/(tabs)${suffix}`;
+  if (path === '/chat' || path === '/ask') return `/(tabs)/chat${suffix}`;
+  if (path === `/${'fo'}${'od'}` || path === '/kitchen') return `/(tabs)/${'fo'}${'od'}${suffix}`;
+  if (path === '/sources') return `/(tabs)/sources${suffix}`;
+  if (path === '/settings') return `/(tabs)/settings${suffix}`;
+  return route;
+}
+
+function MarkdownText({
+  colorStyle,
+  blocks,
+}: {
+  colorStyle: StyleProp<TextStyle>;
+  blocks: MarkdownBlock[];
+}) {
+  return (
+    <View style={styles.markdown}>
+      {blocks.map((block, blockIndex) => {
+        if (block.kind === 'paragraph') {
+          return <Text key={`p-${blockIndex}`} style={colorStyle}>{block.text}</Text>;
+        }
+        if (block.kind === 'code') {
+          return <Text key={`code-${blockIndex}`} style={[colorStyle, styles.markdownCode]}>{block.text}</Text>;
+        }
+        if (block.kind === 'list') {
+          return (
+            <View key={`list-${blockIndex}`} style={styles.markdownList}>
+              {block.items.map((item, itemIndex) => (
+                <View key={`${item}-${itemIndex}`} style={styles.markdownListRow}>
+                  <Text style={[colorStyle, styles.markdownListMarker]}>{block.ordered ? `${itemIndex + 1}.` : '•'}</Text>
+                  <Text style={[colorStyle, styles.markdownListText]}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        }
+        return (
+          <ScrollView key={`table-${blockIndex}`} horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.markdownTable}>
+              <View style={[styles.markdownTableRow, styles.markdownTableHeaderRow]}>
+                {block.headers.map((header, headerIndex) => (
+                  <Text key={`${header}-${headerIndex}`} style={[colorStyle, styles.markdownTableCell, styles.markdownTableHeader]}>{header}</Text>
+                ))}
+              </View>
+              {block.rows.map((row, rowIndex) => (
+                <View key={`row-${rowIndex}`} style={styles.markdownTableRow}>
+                  {block.headers.map((_, cellIndex) => (
+                    <Text key={`${rowIndex}-${cellIndex}`} style={[colorStyle, styles.markdownTableCell]}>{row[cellIndex] ?? ''}</Text>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        );
+      })}
+    </View>
+  );
 }
 
 function fieldKey(value: Record<string, unknown>, index: number): string {
@@ -300,10 +366,22 @@ function Bubble({
       setSaving(false);
     }
   }, [db, message.actionReceipt, runtime.activeManifest?.id, runtime.catalog?.activeDomainId, saving]);
+  const markdownBlocks = useMemo(() => parseMarkdownBlocks(message.text), [message.text]);
+  const markdownLinks = useMemo(() => extractMarkdownLinks(message.text), [message.text]);
 
   return (
     <View style={[styles.bubble, assistant ? styles.assistantBubble : styles.userBubble]}>
-      <Text style={assistant ? styles.assistantText : styles.userText}>{message.text}</Text>
+      <MarkdownText colorStyle={assistant ? styles.assistantText : styles.userText} blocks={markdownBlocks} />
+      {assistant && markdownLinks.length ? (
+        <View style={styles.linkPreviewStack}>
+          {markdownLinks.map((link) => (
+            <Pressable key={link.url} style={styles.linkPreviewChip} onPress={() => void Linking.openURL(link.url)}>
+              <Text style={styles.linkPreviewTitle}>{link.label || 'Open link'}</Text>
+              <Text numberOfLines={1} style={styles.linkPreviewUrl}>{link.url}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {message.answer?.recordCards?.length ? (
         <View style={styles.sources}>
           {message.answer.recordCards.slice(0, 3).map((record) => (
@@ -703,6 +781,109 @@ function AiProviderSettingsWidget({ element }: ComponentRenderProps<WidgetProps>
       <AiProviderProfileEditor profile={settings.ai.primary} onSaved={setMessage} />
       <AiProviderProfileEditor profile={settings.ai.fallback} onSaved={setMessage} />
       {message ? <Text style={message.startsWith('Saved') ? styles.success : styles.warning}>{message}</Text> : null}
+    </WidgetShell>
+  );
+}
+
+function DataHomeEditor({
+  provider,
+  onSaved,
+}: {
+  provider: 'notion' | 'sheets';
+  onSaved(message: string): void;
+}) {
+  const settings = useLifeOSSettingsSnapshot();
+  const current = settings[provider];
+  const [enabled, setEnabled] = useState(current.enabled);
+  const [token, setToken] = useState('');
+  const [pageId, setPageId] = useState(provider === 'notion' ? settings.notion.pageId : '');
+  const [dataSourceIds, setDataSourceIds] = useState(provider === 'notion' ? settings.notion.dataSourceIds : '');
+  const [workbookId, setWorkbookId] = useState(provider === 'sheets' ? settings.sheets.workbookId : '');
+  const [sheetName, setSheetName] = useState(provider === 'sheets' ? settings.sheets.sheetName : 'App');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setEnabled(current.enabled);
+    setToken('');
+    if (provider === 'notion') {
+      setPageId(settings.notion.pageId);
+      setDataSourceIds(settings.notion.dataSourceIds);
+    } else {
+      setWorkbookId(settings.sheets.workbookId);
+      setSheetName(settings.sheets.sheetName);
+    }
+  }, [current.enabled, provider, settings.notion.dataSourceIds, settings.notion.pageId, settings.sheets.sheetName, settings.sheets.workbookId]);
+
+  const save = useCallback(async () => {
+    setBusy(true);
+    try {
+      const patch: SourceProviderSettingsUpdate = {
+        enabled,
+        ...(token.trim() ? { token } : {}),
+        ...(provider === 'notion' ? { pageId, dataSourceIds } : { workbookId, sheetName }),
+      };
+      const saved = await saveLifeOSSourceProviderSettings(provider, patch);
+      const next = saved[provider];
+      onSaved(`${provider === 'notion' ? 'Notion' : 'Sheets'} ${next.enabled ? 'enabled' : 'saved off'} · token ${maskSecret(next.token)}.`);
+      setToken('');
+    } catch (error) {
+      onSaved(error instanceof Error ? error.message : `Could not save ${provider}.`);
+    } finally {
+      setBusy(false);
+    }
+  }, [dataSourceIds, enabled, onSaved, pageId, provider, sheetName, token, workbookId]);
+
+  return (
+    <View style={styles.providerEditor}>
+      <View style={styles.permissionHeading}>
+        <Text style={styles.providerEditorTitle}>{provider === 'notion' ? 'Notion home' : 'Sheets home'}</Text>
+        <Pressable style={[styles.statusPill, enabled ? null : styles.statusPillAttention]} onPress={() => setEnabled((value) => !value)}>
+          <Text style={[styles.statusText, enabled ? null : styles.statusTextAttention]}>{enabled ? 'Enabled' : 'Off'}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.sourceHomeDetail}>Token: {maskSecret(current.token)}</Text>
+      {provider === 'notion' ? (
+        <>
+          <TextInput value={pageId} onChangeText={setPageId} placeholder="Notion page ID" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+          <TextInput value={dataSourceIds} onChangeText={setDataSourceIds} placeholder="Notion data source IDs, comma separated" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+        </>
+      ) : (
+        <>
+          <TextInput value={workbookId} onChangeText={setWorkbookId} placeholder="Google Sheet workbook ID" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+          <TextInput value={sheetName} onChangeText={setSheetName} placeholder="Sheet tab name" placeholderTextColor="#9A8D7D" autoCapitalize="none" style={styles.formInput} />
+        </>
+      )}
+      <TextInput
+        value={token}
+        onChangeText={setToken}
+        placeholder={current.token ? 'Leave blank to keep saved token' : 'Paste access token'}
+        placeholderTextColor="#9A8D7D"
+        autoCapitalize="none"
+        secureTextEntry
+        style={styles.formInput}
+      />
+      <Pressable style={[styles.primaryButton, busy ? styles.disabled : null]} onPress={save} disabled={busy}>
+        <Text style={styles.primaryButtonText}>{busy ? 'Saving…' : 'Save home'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function DataHomeSettingsWidget({ element }: ComponentRenderProps<WidgetProps>) {
+  const props = element.props ?? {};
+  const settings = useLifeOSSettingsSnapshot();
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <WidgetShell
+      title={text(props.title, 'Data homes')}
+      subtitle={text(props.subtitle, 'Bind Notion or Sheets once. Local still works without them.')}
+    >
+      <Text style={styles.bodyText}>
+        Notion {settings.notion.enabled ? 'on' : 'off'} · Sheets {settings.sheets.enabled ? 'on' : 'off'}
+      </Text>
+      <DataHomeEditor provider="notion" onSaved={setMessage} />
+      <DataHomeEditor provider="sheets" onSaved={setMessage} />
+      {message ? <Text style={message.includes('Could not') ? styles.warning : styles.success}>{message}</Text> : null}
     </WidgetShell>
   );
 }
@@ -1809,6 +1990,7 @@ export const JSON_RENDER_WIDGET_REGISTRY: ComponentRegistry = {
   HealthConnectWidget,
   ThemeDensitySelectorWidget,
   AiProviderSettingsWidget,
+  DataHomeSettingsWidget,
   SchemaEditorWidget,
   PollCardWidget,
   KanbanBoardWidget,
@@ -1945,6 +2127,44 @@ const styles = StyleSheet.create({
   userBubble: { backgroundColor: '#2F7448', alignSelf: 'flex-end', maxWidth: '88%' },
   assistantText: { color: '#241C16', fontSize: 15, lineHeight: 21 },
   userText: { color: '#FFFFFF', fontSize: 15, lineHeight: 21 },
+  markdown: { gap: 8 },
+  markdownCode: {
+    backgroundColor: 'rgba(36,28,22,0.08)',
+    borderRadius: 10,
+    fontFamily: 'monospace',
+    padding: 10,
+  },
+  markdownList: { gap: 5 },
+  markdownListRow: { flexDirection: 'row', gap: 8 },
+  markdownListMarker: { minWidth: 22, opacity: 0.72 },
+  markdownListText: { flex: 1 },
+  markdownTable: {
+    borderColor: '#D8CFC2',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minWidth: 280,
+  },
+  markdownTableRow: { flexDirection: 'row' },
+  markdownTableHeaderRow: { backgroundColor: 'rgba(47,116,72,0.1)' },
+  markdownTableCell: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D8CFC2',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    minWidth: 112,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  markdownTableHeader: { fontWeight: '900' },
+  linkPreviewStack: { gap: 7 },
+  linkPreviewChip: {
+    backgroundColor: '#E3EFF3',
+    borderRadius: 14,
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  linkPreviewTitle: { color: '#214F32', fontSize: 13, fontWeight: '900' },
+  linkPreviewUrl: { color: '#52685F', fontSize: 12, fontWeight: '700' },
   sources: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#D8CFC2', paddingTop: 8, gap: 4 },
   sourceText: { color: '#6D6257', fontSize: 12, lineHeight: 17 },
   sourceRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minHeight: 44 },

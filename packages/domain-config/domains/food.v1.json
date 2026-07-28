@@ -466,19 +466,6 @@
         "subtitle": "Everything you own, organized by where it lives",
         "components": [
           {
-            "kind": "action",
-            "id": "kitchen_add",
-            "placement": "top",
-            "action": {
-              "kind": "propose",
-              "label": "＋ Add",
-              "command": "open_capture",
-              "payload": {
-                "route": "/capture"
-              }
-            }
-          },
-          {
             "kind": "widget",
             "widget": "foodHero",
             "id": "kitchen_hero",
@@ -666,7 +653,7 @@
                   "title": "Celery + carrots",
                   "subtitle": "Soup base ready · Wonder can draft tomorrow dinner.",
                   "badge": "soup",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Plan%20a%20simple%20soup%20or%20prep%20base%20using%20celery%2C%20carrots%2C%20and%20my%20current%20pantry.%20Show%20missing%20items%20and%20use-first%20reasoning.&run=1"
                 }
               ]
             }
@@ -707,32 +694,32 @@
                 {
                   "title": "Miso salmon bowl",
                   "emoji": "🍣",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20a%20miso%20salmon%20bowl%20from%20my%20current%20inventory.%20Show%20coverage%2C%20missing%20items%2C%20and%20steps.&run=1"
                 },
                 {
                   "title": "Chickpea wraps",
                   "emoji": "🌯",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20chickpea%20wraps%20from%20my%20current%20inventory.%20Prioritize%20use-first%20produce%20and%20show%20shopping%20gaps.&run=1"
                 },
                 {
                   "title": "Lentil soup",
                   "emoji": "🥣",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20lentil%20soup%20from%20my%20current%20inventory.%20Use%20pantry%20items%20first%20and%20show%20prep%20steps.&run=1"
                 },
                 {
                   "title": "Yogurt marinade",
                   "emoji": "🍗",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20a%20yogurt%20marinade%20recipe%20from%20my%20current%20inventory.%20Show%20what%20to%20use%20first%20and%20what%20to%20buy.&run=1"
                 },
                 {
                   "title": "Blueberry oats",
                   "emoji": "🫐",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20blueberry%20oats%20from%20my%20current%20inventory.%20Use%20opened%20yogurt%20or%20fruit%20first%20if%20available.&run=1"
                 },
                 {
                   "title": "Freezer tacos",
                   "emoji": "🌮",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20freezer%20tacos%20from%20my%20current%20inventory.%20Show%20freezer%20items%2C%20pantry%20coverage%2C%20and%20grocery%20gaps.&run=1"
                 }
               ]
             }
@@ -813,11 +800,11 @@
               "actions": [
                 {
                   "title": "Plan week",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Plan%20this%20week%27s%20meals%20from%20my%20current%20inventory%2C%20preferences%2C%20and%20use-first%20items.%20Return%20a%20day-by-day%20plan%20and%20shopping%20gaps.&run=1"
                 },
                 {
                   "title": "Vote dinner",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Create%20a%20quick%20family%20dinner%20vote%20from%20three%20realistic%20options%20based%20on%20my%20current%20inventory.&run=1"
                 },
                 {
                   "title": "Shop list",
@@ -839,7 +826,7 @@
                   "title": "Greek yogurt bowl",
                   "subtitle": "Blueberries, walnuts, honey · protein estimate needs one tap",
                   "time": "AM",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Estimate%20protein%20and%20nutrition%20for%20the%20Greek%20yogurt%20bowl%20using%20my%20food%20records%20where%20possible.&run=1"
                 },
                 {
                   "title": "Chickpea spinach wraps",
@@ -857,7 +844,7 @@
                   "title": "Lentil soup prep",
                   "subtitle": "Carrots, celery, stock, pantry lentils · tomorrow solved",
                   "time": "Prep",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Plan%20tomorrow%27s%20lentil%20soup%20prep%20from%20my%20current%20inventory.%20Use%20carrots%2C%20celery%2C%20stock%2C%20and%20pantry%20lentils%20if%20present.&run=1"
                 }
               ]
             }
@@ -910,7 +897,7 @@
                   "label": "1 shop gap"
                 }
               ],
-              "route": "/chat"
+              "route": "/chat?prompt=Create%20a%20pantry-first%20dinner%20from%20my%20current%20inventory.%20Prioritize%20salmon%2C%20show%20the%20single%20shopping%20gap%2C%20and%20return%20clear%20steps.&run=1"
             }
           }
         ]
@@ -1016,19 +1003,6 @@
         "title": "Today",
         "subtitle": "One useful decision, then get on with your day",
         "components": [
-          {
-            "kind": "action",
-            "id": "today_add",
-            "placement": "top",
-            "action": {
-              "kind": "propose",
-              "label": "＋ Add",
-              "command": "open_capture",
-              "payload": {
-                "route": "/capture"
-              }
-            }
-          },
           {
             "kind": "widget",
             "widget": "foodHero",
@@ -1173,13 +1147,12 @@
         "components": [
           {
             "kind": "widget",
-            "widget": "providerStatus",
+            "widget": "dataHomeSettings",
             "id": "settings_sync_status",
             "title": "Data homes",
-            "subtitle": "On-device, Notion, and Sheets",
+            "subtitle": "Set Notion and Sheets once; Wonder uses selected homes quietly.",
             "tone": "blue",
             "props": {
-              "provider": "summary",
               "actions": [
                 {
                   "title": "Manage homes",
@@ -1563,7 +1536,7 @@
               "label": "Ask Wonder",
               "command": "ask_search",
               "payload": {
-                "route": "/chat"
+                "route": "/chat?prompt=Search%20my%20food%20records%20and%20answer%20with%20only%20source-backed%20items%2C%20recipes%2C%20shelves%2C%20or%20shopping%20rows.&run=1"
               }
             }
           }
@@ -1653,6 +1626,9 @@
                 },
                 {
                   "title": "AI provider settings"
+                },
+                {
+                  "title": "Data home settings"
                 },
                 {
                   "title": "Record list"
@@ -1806,7 +1782,7 @@
                 },
                 {
                   "title": "Ask Wonder",
-                  "route": "/chat"
+                  "route": "/chat?prompt=Help%20me%20change%20the%20Food%20app%20package.%20Ask%20for%20the%20specific%20screen%2C%20widget%2C%20schema%20field%2C%20or%20workflow%20I%20want%20to%20edit%20before%20proposing%20changes.&run=1"
                 }
               ]
             }
@@ -2067,6 +2043,9 @@
                 },
                 {
                   "title": "AI provider settings"
+                },
+                {
+                  "title": "Data home settings"
                 },
                 {
                   "title": "Record list"

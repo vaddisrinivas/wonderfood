@@ -163,11 +163,17 @@ function actionRoute(action?: A2UiAction, records: DomainRecordViewModel[] = [])
     ? rawRoute.replace(/\{\{record\.([A-Za-z0-9_]+)\}\}/g, (_match, field: string) => encodeURIComponent(recordValue(records[0], field)))
     : rawRoute;
   if (typeof route !== 'string' || !route.startsWith('/')) return null;
-  if (route === '/' || route === '/home') return '/(tabs)';
-  if (route === `/${'fo'}${'od'}`) return `/(tabs)/${'fo'}${'od'}`;
-  if (route === '/chat' || route === '/ask') return '/(tabs)/chat';
-  if (route === '/sources') return '/(tabs)/sources';
-  if (route === '/settings') return '/(tabs)/settings';
+  return normalizeActionRoute(route);
+}
+
+function normalizeActionRoute(route: string) {
+  const [path, query] = route.split('?');
+  const suffix = query ? `?${query}` : '';
+  if (path === '/' || path === '/home') return `/(tabs)${suffix}`;
+  if (path === `/${'fo'}${'od'}` || path === '/kitchen') return `/(tabs)/${'fo'}${'od'}${suffix}`;
+  if (path === '/chat' || path === '/ask') return `/(tabs)/chat${suffix}`;
+  if (path === '/sources') return `/(tabs)/sources${suffix}`;
+  if (path === '/settings') return `/(tabs)/settings${suffix}`;
   return route;
 }
 
@@ -271,11 +277,13 @@ function widgetNumber(value: unknown, fallback = 0): number {
 function widgetActionRoute(value: Record<string, unknown>): string | null {
   const route = widgetText(value.route, widgetText(value.path));
   if (!route.startsWith('/')) return null;
-  if (route === '/' || route === '/home') return '/(tabs)';
-  if (route === `/${'fo'}${'od'}`) return `/(tabs)/${'fo'}${'od'}`;
-  if (route === '/chat' || route === '/ask') return '/(tabs)/chat';
-  if (route === '/sources') return '/(tabs)/sources';
-  if (route === '/settings') return '/(tabs)/settings';
+  const [path, query] = route.split('?');
+  const suffix = query ? `?${query}` : '';
+  if (path === '/' || path === '/home') return `/(tabs)${suffix}`;
+  if (path === `/${'fo'}${'od'}` || path === '/kitchen') return `/(tabs)/${'fo'}${'od'}${suffix}`;
+  if (path === '/chat' || path === '/ask') return `/(tabs)/chat${suffix}`;
+  if (path === '/sources') return `/(tabs)/sources${suffix}`;
+  if (path === '/settings') return `/(tabs)/settings${suffix}`;
   return route;
 }
 
@@ -744,6 +752,7 @@ function addSurfaceComponent(
       providerStatus: 'ProviderStatusWidget',
       themeDensitySelector: 'ThemeDensitySelectorWidget',
       aiProviderSettings: 'AiProviderSettingsWidget',
+      dataHomeSettings: 'DataHomeSettingsWidget',
       foodHero: 'FoodHeroWidget',
       useFirstCarousel: 'UseFirstCarouselWidget',
       mealTimeline: 'MealTimelineWidget',

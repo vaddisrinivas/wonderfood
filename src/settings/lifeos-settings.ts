@@ -540,6 +540,39 @@ export async function saveLifeOSAiProviderProfile(
   return saveLifeOSSettings(updateLifeOSAiProviderProfile(await loadLifeOSSettings(), id, patch));
 }
 
+export type SourceProviderSettingsUpdate = Partial<TokenProviderSettings> & {
+  clearToken?: boolean;
+  pageId?: string;
+  dataSourceIds?: string;
+  workbookId?: string;
+  sheetName?: string;
+};
+
+export function updateLifeOSSourceProviderSettings(
+  settings: LifeOSSettings,
+  provider: 'notion' | 'sheets',
+  patch: SourceProviderSettingsUpdate,
+): LifeOSSettings {
+  const current = settings[provider];
+  const nextToken = patch.clearToken ? '' : typeof patch.token === 'string' && patch.token.trim().length > 0 ? patch.token.trim() : current.token;
+  return normalizeSettings({
+    ...settings,
+    [provider]: {
+      ...current,
+      ...patch,
+      enabled: patch.enabled ?? current.enabled,
+      token: nextToken,
+    },
+  });
+}
+
+export async function saveLifeOSSourceProviderSettings(
+  provider: 'notion' | 'sheets',
+  patch: SourceProviderSettingsUpdate,
+): Promise<LifeOSSettings> {
+  return saveLifeOSSettings(updateLifeOSSourceProviderSettings(await loadLifeOSSettings(), provider, patch));
+}
+
 export function maskSecret(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return 'Not set';

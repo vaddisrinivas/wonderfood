@@ -5,6 +5,7 @@ import {
   maskSecret,
   updateLifeOSAiProviderProfile,
   updateLifeOSRuntimePreferences,
+  updateLifeOSSourceProviderSettings,
 } from '@/src/settings/lifeos-settings';
 
 describe('LifeOS settings helpers', () => {
@@ -54,5 +55,39 @@ describe('LifeOS settings helpers', () => {
     });
     expect(cleared.ai.primary.apiKey).toBe('');
     expect(maskSecret(cleared.ai.primary.apiKey)).toBe('Not set');
+  });
+
+  it('keeps, replaces, and clears Notion and Sheets tokens safely', () => {
+    const notion = updateLifeOSSourceProviderSettings(defaultLifeOSSettings, 'notion', {
+      enabled: true,
+      token: ' notion-token ',
+      pageId: ' page-id ',
+      dataSourceIds: ' ds-one, ds-two ',
+    });
+
+    expect(notion.notion.enabled).toBe(true);
+    expect(notion.notion.token).toBe('notion-token');
+    expect(notion.notion.pageId).toBe('page-id');
+    expect(notion.notion.dataSourceIds).toBe('ds-one, ds-two');
+
+    const kept = updateLifeOSSourceProviderSettings(notion, 'notion', {
+      token: '',
+      pageId: 'next-page',
+    });
+    expect(kept.notion.token).toBe('notion-token');
+    expect(kept.notion.pageId).toBe('next-page');
+
+    const sheets = updateLifeOSSourceProviderSettings(kept, 'sheets', {
+      enabled: true,
+      token: ' sheets-token ',
+      workbookId: ' workbook ',
+      sheetName: ' Food ',
+    });
+    expect(sheets.sheets.token).toBe('sheets-token');
+    expect(sheets.sheets.workbookId).toBe('workbook');
+    expect(sheets.sheets.sheetName).toBe('Food');
+
+    const cleared = updateLifeOSSourceProviderSettings(sheets, 'sheets', { clearToken: true });
+    expect(cleared.sheets.token).toBe('');
   });
 });

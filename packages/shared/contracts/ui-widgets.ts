@@ -23,6 +23,7 @@ export const APP_PACKAGE_WIDGET_KINDS = [
   'themePreview',
   'themeDensitySelector',
   'aiProviderSettings',
+  'dataHomeSettings',
   'foodHero',
   'useFirstCarousel',
   'mealTimeline',

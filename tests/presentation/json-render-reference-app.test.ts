@@ -238,6 +238,47 @@ describe('reference app renderer', () => {
     expect(Object.values(spec.elements).filter((element) => element.type === 'Card')).toHaveLength(0);
   });
 
+  it('preserves chat query params when package actions target Ask', () => {
+    const spec = buildJsonRenderSpec({
+      title: 'Actions',
+      screen: 'actions',
+      records: [],
+      ui: {
+        schemaVersion: 'a2ui.v0_9',
+        defaultScreen: 'actions',
+        screens: {
+          actions: {
+            title: 'Kitchen',
+            components: [
+              {
+                kind: 'action',
+                id: 'ask',
+                action: {
+                  kind: 'propose',
+                  label: 'Plan dinner',
+                  command: 'ask_food',
+                  payload: { route: '/chat?prompt=Plan%20dinner&run=1' },
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const button = Object.values(spec.elements).find((element) => element.type === 'Button');
+    expect(button?.on?.press).toEqual({
+      action: 'navigate',
+      params: { screen: '/(tabs)/chat?prompt=Plan%20dinner&run=1' },
+    });
+  });
+
+  it('keeps the Food overview free of a global top Add button', async () => {
+    const food = (await import('@/packages/domain-config/domains/food.v1.json')).default as any;
+    const overview = food.ui.screens.overview.components;
+    expect(overview.some((component: any) => component.placement === 'top' && component.action?.label?.includes('Add'))).toBe(false);
+  });
+
   it('keeps installation launch routes scoped under /apps/:installationId', async () => {
     const { getAppInstallation, installApprovedAppPackage } = await import('@/src/db/app-package-registry');
     const { buildPackageInstallApprovalReceipt, buildPackageInstallPreview } = await import('@/packages/shared/contracts/package-install');
